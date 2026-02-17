@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "modbus-core"
+, "modbus-rs"]
+resolver = "2"
+
+[workspace.package]
+name = "modbus-rs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
+license = "GPL-3"
+repository = "https://github.com/Raghava-Ch/modbus-rs"
+homepage = "https://github.com/Raghava-Ch/modbus-rs"
+readme = "README.md"
+keywords = ["modbus", "embedded", "no-std", "device"]
+categories = ["embedded", "no-std"]
+description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+
+[workspace.dependencies]
+# Shared dependencies across workspace
+
+# Macro dependencies
+proc-macro2 = { version = "1.0" }
+quote = { version = "1.0" }
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+
+[workspace.metadata]
+description = "Complete modbus application protocol stack for embedded first"
