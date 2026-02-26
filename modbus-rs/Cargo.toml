@@ -12,3 +12,4 @@ categories = ["embedded", "no-std"]
 description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
 
 [dependencies]
+mbus-core ={ workspace = true }

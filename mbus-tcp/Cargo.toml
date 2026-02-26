@@ -12,3 +12,6 @@ categories.workspace = true
 description.workspace = true
 
 [dependencies]
+mbus-core = { workspace = true }
+
+heapless = { workspace = true }

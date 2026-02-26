@@ -16,6 +16,10 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [workspace.dependencies]
 # Shared dependencies across workspace
+mbus-core ={ path = "./mbus-core" }
+
+heapless = { version = "0.8.0" }
+bitfields = { version = "1.0.0" }
 
 # Macro dependencies
 proc-macro2 = { version = "1.0" }
