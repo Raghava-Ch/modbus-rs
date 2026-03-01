@@ -1,5 +1,5 @@
 [workspace]
-members = ["mbus-core", "mbus-rtu", "mbus-tcp", "modbus-rs"]
+members = ["mbus-core", "mbus-rtu", "mbus-tcp", "modbus-rs", "integration_tests"]
 resolver = "2"
 
 [workspace.package]
@@ -16,6 +16,10 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [workspace.dependencies]
 # Shared dependencies across workspace
+mbus-core ={ path = "./mbus-core" }
+
+heapless = { version = "0.8.0" }
+bitfields = { version = "1.0.0" }
 
 # Macro dependencies
 proc-macro2 = { version = "1.0" }
