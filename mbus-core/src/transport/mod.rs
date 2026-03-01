@@ -1,8 +1,24 @@
-pub mod tcp;
-pub mod serial;
 
-use heapless::Vec;
-use crate::errors::MbusError;
+use core::str::FromStr;
+
+use heapless::{String, Vec};
+use crate::{errors::MbusError};
+
+pub struct ModbusTcpConfig {
+    pub host: heapless::String<16>,
+    pub port: u16,
+}
+
+impl ModbusTcpConfig {
+    pub fn new(host: &str, port: u16) -> Self {
+        Self {
+            host: String::from_str(host).unwrap_or_else(|_| String::new()), // Convert &str to heapless String, fallback to empty String on error
+            port,
+        }
+    }
+}
+
+use core::fmt;
 
 /// Represents errors that can occur at the Modbus TCP transport layer.
 #[derive(Debug, PartialEq, Eq)]
@@ -21,6 +37,21 @@ pub enum TransportError {
     Unexpected,
     // Add more specific errors as needed
 }
+
+impl fmt::Display for TransportError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TransportError::ConnectionFailed => write!(f, "Connection failed"),
+            TransportError::ConnectionClosed => write!(f, "Connection closed"),
+            TransportError::IoError => write!(f, "I/O error"),
+            TransportError::Timeout => write!(f, "Timeout"),
+            TransportError::BufferTooSmall => write!(f, "Buffer too small"),
+            TransportError::Unexpected => write!(f, "An unexpected error occurred"),
+        }
+    }
+}
+
+impl core::error::Error for TransportError {}
 
 /// An enumeration to specify the type of transport to use.
 #[derive(Debug, PartialEq, Eq)]
@@ -64,7 +95,7 @@ pub trait Transport {
     ///
     /// # Returns
     /// `Ok(())` if the connection is successfully established, or an error otherwise.
-    fn connect(&mut self, addr: &str) -> Result<(), Self::Error>;
+    fn connect(&mut self, config: &ModbusTcpConfig) -> Result<(), Self::Error>;
 
     /// Closes the active TCP connection.
     fn disconnect(&mut self) -> Result<(), Self::Error>;
@@ -78,5 +109,6 @@ pub trait Transport {
     /// Checks if the transport is currently connected to a remote host.
     fn is_connected(&self) -> bool;
 
-    fn is_what(&self) -> TransportType;
+    /// Returns the type of transport being used (e.g., TCP, Serial).
+    fn transport_type(&self) -> TransportType;
 }

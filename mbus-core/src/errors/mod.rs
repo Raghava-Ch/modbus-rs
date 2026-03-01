@@ -25,4 +25,12 @@ pub enum MbusError {
     ConnectionClosed,
     /// The data was too large for the buffer
     BufferTooSmall,
+    /// Buffer length is not matching
+    BufferLenMissmatch,
+    /// Failed to send data
+    SendFailed,
+    /// Invalid address
+    InvalidAddress,
+    /// Too many requests in flight, expected responses buffer is full
+    TooManyRequests,
 }

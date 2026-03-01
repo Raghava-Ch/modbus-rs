@@ -6,3 +6,4 @@ pub mod client;
 pub mod errors;
 pub mod data_unit;
 pub mod transport;
+pub mod app;

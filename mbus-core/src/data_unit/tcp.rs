@@ -1,6 +1,7 @@
-use crate::data_unit::common::{AdditionalAddress, MbapHeader, ModbusMessage, Pdu};
+use crate::data_unit::common::{AdditionalAddress, MbapHeader, ModbusMessage, Pdu, MAX_PDU_DATA_LEN};
 use crate::errors::MbusError;
-use heapless::Vec;
+use crate::function_codes::public::FunctionCode;
+use heapless::Vec; // Ensure Vec is imported
 
 /// Modbus TCP Message Structure
 #[derive(Debug, Clone)]
@@ -114,12 +115,59 @@ impl ModbusTcpMessage {
 
         Ok(ModbusTcpMessage::new(mbap_header, pdu))
     }
+
+    /// Returns a reference to the MBAP header of the Modbus TCP message.
+    ///
+    /// This method assumes that the `additional_address` field of the underlying `ModbusMessage`
+    /// is of type `AdditionalAddress::MbapHeader`. If this is not the case, it will panic, as this should never happen for a properly constructed `ModbusTcpMessage`.
+    ///
+    /// # Returns
+    /// A reference to the MBAP header.
+    pub fn mbap_header(&self) -> &MbapHeader {
+        if let AdditionalAddress::MbapHeader(mbap_header) = &self.modbus_message.additional_address
+        {
+            mbap_header
+        } else {
+            panic!("Expected MbapHeader: This should never happen, \nApplication developer error if this occurs");
+        }
+    }
+
+    /// Returns a reference to the PDU of the Modbus TCP message.
+    /// 
+    /// # Returns
+    /// A reference to the data payload of the PDU.
+    pub fn data(&self) -> &Vec<u8, MAX_PDU_DATA_LEN> {
+        self.modbus_message.data()
+    }
+
+    /// Returns the function code of the Modbus TCP message.
+    ///
+    /// # Returns
+    /// The function code of the Modbus TCP message.
+    pub fn pdu(&self) -> &Pdu {
+        &self.modbus_message.pdu
+    }
+
+    /// Returns the function code of the Modbus TCP message.
+    ///
+    /// # Returns
+    /// The function code of the Modbus TCP message.
+    pub fn function_code(&self) -> FunctionCode {
+        self.modbus_message.function_code()
+    }
+
+    /// Returns the length of the data payload in the PDU.
+    ///
+    /// # Returns
+    /// The length of the data payload in the PDU.
+    pub fn data_len(&self) -> u8 {
+        self.modbus_message.data_len()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data_unit::common::Data;
     use crate::errors::MbusError;
     use crate::function_codes::public::FunctionCode;
     use heapless::Vec;
@@ -141,14 +189,14 @@ mod tests {
             unit_id: 0x01,
         };
 
-        let mut pdu_data_array = [0u8; 252];
-        pdu_data_array[0] = 0x00; // Example data bytes
-        pdu_data_array[1] = 0x00;
-        pdu_data_array[2] = 0x00;
+        let mut pdu_data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        pdu_data_vec.push(0x00).unwrap(); // Example data bytes
+        pdu_data_vec.push(0x00).unwrap();
+        pdu_data_vec.push(0x00).unwrap();
 
         let pdu = Pdu::new(
             FunctionCode::ReadHoldingRegisters,
-            Data::Bytes(pdu_data_array),
+            pdu_data_vec,
             3, // 3 data bytes
         );
 
@@ -159,7 +207,7 @@ mod tests {
         let expected_adu: [u8; 11] = [
             0x12, 0x34, // Transaction ID
             0x00, 0x00, // Protocol ID
-            0x00, 0x05, // Length (1 byte Unit ID + 1 byte FC + 3 bytes Data = 5 bytes. Wait, length is PDU length + 1 byte Unit ID. So 3 (data) + 1 (FC) + 1 (Unit ID) = 5. The test has 0x00, 0x04. This implies PDU length is 3. So 3 (PDU data) + 1 (Unit ID) = 4. This is correct for the current test setup.)
+            0x00, 0x05, // Length (PDU length (FC + Data) + 1 byte Unit ID = (1 + 3) + 1 = 5)
             0x01,       // Unit ID
             0x03,       // Function Code (Read Holding Registers)
             0x00, 0x00, 0x00, // Data
@@ -183,14 +231,15 @@ mod tests {
             unit_id: 0xFF,
         };
 
-        let mut pdu_data_array = [0u8; 252];
-        for i in 0..252 {
-            pdu_data_array[i] = i as u8;
+        let mut pdu_data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        for i in 0..MAX_PDU_DATA_LEN {
+            pdu_data_vec.push(i as u8).unwrap();
         }
+        let pdu_data_slice = pdu_data_vec.as_slice();
 
         let pdu = Pdu::new(
             FunctionCode::WriteMultipleRegisters, // Example FC
-            Data::Bytes(pdu_data_array),
+            pdu_data_vec.clone(),
             252, // Max data bytes
         );
 
@@ -206,18 +255,14 @@ mod tests {
         assert_eq!(&adu_bytes[0..2], &[0x00, 0x01]);
         // Protocol ID
         assert_eq!(&adu_bytes[2..4], &[0x00, 0x00]);
-        // Length (1 Unit ID + 1 FC + 252 Data = 254 = 0x00FE. Wait, length is PDU length + 1 byte Unit ID. So 252 (data) + 1 (FC) + 1 (Unit ID) = 254. The length field should be 254 (0x00FE). Let's re-evaluate the length field calculation in `to_adu_bytes`.
-        // `length_field = pdu_len + 1;` where `pdu_len` is `pdu_bytes.len()`.
-        // `pdu_bytes.len()` will be 1 (FC) + 252 (data) = 253.
-        // So `length_field` will be 253 + 1 = 254 (0x00FE).
-        // The expected value should be 0x00, 0xFE.
+        // Length (PDU length (FC + Data) + 1 byte Unit ID = (1 + 252) + 1 = 254 = 0x00FE)
         // Length (0x00FE = 254)
         assert_eq!(&adu_bytes[4..6], &[0x00, 0xFE]);
         assert_eq!(adu_bytes[6], 0xFF); // Unit ID
 
         // Verify PDU
         assert_eq!(adu_bytes[7], FunctionCode::WriteMultipleRegisters as u8); // FC
-        assert_eq!(&adu_bytes[8..260], &pdu_data_array[..]); // Data
+        assert_eq!(&adu_bytes[8..260], pdu_data_slice); // Data
     }
 
     /// Test case: `ModbusTcpMessage::to_adu_bytes` with a PDU containing only a function code (no data).
@@ -236,7 +281,7 @@ mod tests {
 
         let pdu = Pdu::new(
             FunctionCode::ReportServerId,
-            Data::Bytes([0u8; 252]), // No actual data used
+            Vec::new(), // No actual data used
             0,                       // 0 data bytes
         );
 
@@ -295,11 +340,8 @@ mod tests {
             FunctionCode::ReadHoldingRegisters
         );
         assert_eq!(tcp_message.modbus_message.data_len(), 3);
-        if let Data::Bytes(data_array) = tcp_message.modbus_message.data() {
-            assert_eq!(&data_array[..3], &[0x00, 0x00, 0x00]);
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert_eq!(tcp_message.modbus_message.data().as_slice(), &[0x00, 0x00, 0x00]);
+
     }
 
     /// Test case: `ModbusTcpMessage::from_adu_bytes` with maximum PDU data length.
@@ -319,13 +361,14 @@ mod tests {
             FunctionCode::WriteMultipleRegisters as u8, // FC
         ]).expect("Failed to extend ADU bytes");
 
-        let mut pdu_data_expected = [0u8; 252];
-        for i in 0..252 {
-            pdu_data_expected[i] = i as u8;
+        let mut pdu_data_expected_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        for i in 0..MAX_PDU_DATA_LEN {
+            pdu_data_expected_vec.push(i as u8).unwrap();
             adu_bytes_vec
                 .push(i as u8)
                 .expect("Failed to push data byte");
         }
+        let pdu_data_expected_slice = pdu_data_expected_vec.as_slice();
 
         let tcp_message = ModbusTcpMessage::from_adu_bytes(&adu_bytes_vec)
             .expect("Failed to deserialize max ADU");
@@ -346,11 +389,7 @@ mod tests {
             FunctionCode::WriteMultipleRegisters
         );
         assert_eq!(tcp_message.modbus_message.data_len(), 252);
-        if let Data::Bytes(data_array) = tcp_message.modbus_message.data() {
-            assert_eq!(&data_array[..252], &pdu_data_expected[..]);
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert_eq!(tcp_message.modbus_message.data().as_slice(), pdu_data_expected_slice);
     }
 
     /// Test case: `ModbusTcpMessage::from_adu_bytes` with a PDU containing only a function code (no data).
@@ -405,16 +444,16 @@ mod tests {
             unit_id: 0xEE,
         };
 
-        let mut pdu_data_array = [0u8; 252];
-        pdu_data_array[0] = 0x01;
-        pdu_data_array[1] = 0x02;
-        pdu_data_array[2] = 0x03;
-        pdu_data_array[3] = 0x04;
-        pdu_data_array[4] = 0x05;
+        let mut pdu_data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        pdu_data_vec.push(0x01).unwrap();
+        pdu_data_vec.push(0x02).unwrap();
+        pdu_data_vec.push(0x03).unwrap();
+        pdu_data_vec.push(0x04).unwrap();
+        pdu_data_vec.push(0x05).unwrap();
 
         let original_pdu = Pdu::new(
             FunctionCode::ReadWriteMultipleRegisters,
-            Data::Bytes(pdu_data_array),
+            pdu_data_vec,
             5,
         );
 
@@ -439,8 +478,8 @@ mod tests {
         ) {
             assert_eq!(orig_mbap.transaction_id, deser_mbap.transaction_id);
             assert_eq!(orig_mbap.protocol_id, deser_mbap.protocol_id);
-            // The length field is recalculated during serialization, so compare the actual length.
-            assert_eq!(adu_bytes.len() as u16 - 6, deser_mbap.length); // ADU length - 6 bytes (TID, PID, Length field itself) = length field value
+            // The length field is recalculated during serialization, so compare the actual length of the PDU + Unit ID.
+            assert_eq!(original_message.modbus_message.pdu.to_bytes().unwrap().len() as u16 + 1, deser_mbap.length);
             assert_eq!(orig_mbap.unit_id, deser_mbap.unit_id);
         } else {
             panic!("Expected MbapHeader for both original and deserialized messages");
@@ -456,17 +495,10 @@ mod tests {
             deserialized_message.modbus_message.data_len()
         );
 
-        if let (Data::Bytes(orig_data), Data::Bytes(deser_data)) = (
-            original_message.modbus_message.data(),
-            deserialized_message.modbus_message.data(),
-        ) {
-            assert_eq!(
-                &orig_data[..original_message.modbus_message.data_len() as usize],
-                &deser_data[..deserialized_message.modbus_message.data_len() as usize]
-            );
-        } else {
-            panic!("Expected Data::Bytes variant for PDU data");
-        }
+        assert_eq!(
+            original_message.modbus_message.data().as_slice(),
+            deserialized_message.modbus_message.data().as_slice()
+        );
     }
 
     /// Test case: `ModbusTcpMessage::from_adu_bytes` with an invalid ADU (too short).

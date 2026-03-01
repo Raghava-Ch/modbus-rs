@@ -1,5 +1,7 @@
 use crate::errors::MbusError;
 
+pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
+
 /// Modbus Public Function Codes.
 ///
 /// These are the standardized function codes defined in
@@ -10,12 +12,19 @@ use crate::errors::MbusError;
 /// - Section 6.x for individual function behaviors
 ///
 /// Reference: :contentReference[oaicite:1]{index=1}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum FunctionCode {
     // ============================================================
     // Bit Access (Single-bit data)
     // ============================================================
+
+    /// 0x00 — Undefined
+    /// This value is not defined in the specification and can be used as a placeholder
+    /// for uninitialized or unknown function codes.
+    /// It is not a valid function code for actual Modbus transactions.
+    #[default]
+    Default = 0x00, // Placeholder for uninitialized or unknown function code
 
     /// 0x01 — Read Coils
     ///

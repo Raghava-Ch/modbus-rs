@@ -4,13 +4,15 @@ use crate::function_codes::public::{
 };
 use heapless::Vec;
 
+pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
+
 /// Represents sub-function codes used by specific Modbus function codes.
 ///
 /// This union allows treating the sub-code as either a 16-bit Diagnostic sub-function
 /// (FC 0x08) or an 8-bit Encapsulated Interface type (FC 0x2B).
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
-enum SubCode {
+pub enum SubCode {
     /// Sub-function code for Diagnostics (Function Code 0x08).
     DiagnosticSubFunction(DiagnosticSubFunction),
     /// MEI type for Encapsulated Interface Transport (Function Code 0x2B).
@@ -20,11 +22,11 @@ enum SubCode {
 /// A structure combining a sub-function code with its associated payload.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
-struct SubCodeBytes {
+pub struct SubCodeBytes {
     /// The specific sub-function or MEI type.
     pub sub_code: SubCode,
     /// The remaining payload bytes for the sub-function.
-    pub bytes: [u8; 250],
+    pub bytes: [u8; MAX_PDU_DATA_LEN - 2], // Subtract 2 bytes for the sub-code itself
 }
 
 /// The data payload of a Modbus PDU.
@@ -33,9 +35,10 @@ struct SubCodeBytes {
 /// the function code uses sub-function codes or raw byte arrays.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 pub enum Data {
     /// Raw byte access to the data field (Max 252 bytes).
-    Bytes([u8; 252]),
+    Bytes([u8; MAX_PDU_DATA_LEN]),
     /// Structured access for functions using sub-codes (e.g., FC 0x08, 0x2B).
     SubCodeBytes(SubCodeBytes),
 }
@@ -49,7 +52,7 @@ pub struct Pdu {
     /// The Modbus function code identifying the operation.
     function_code: FunctionCode,
     /// The data payload associated with the function code.
-    data: Data,
+    data: heapless::Vec<u8, MAX_PDU_DATA_LEN>,
     /// The actual length of the data payload (excluding the function code).
     data_len: u8,
 }
@@ -134,7 +137,7 @@ impl ModbusMessage {
     }
 
     /// Accessor for the data payload from the PDU.
-    pub fn data(&self) -> &Data {
+    pub fn data(&self) -> &heapless::Vec<u8, MAX_PDU_DATA_LEN> {
         self.pdu.data()
     }
 
@@ -198,10 +201,10 @@ impl Pdu {
     ///
     /// # Returns
     /// A new `Pdu` instance.
-    pub fn new(function_code: FunctionCode, data: Data, data_len: u8) -> Self {
+    pub fn new(function_code: FunctionCode, data: heapless::Vec<u8, MAX_PDU_DATA_LEN>, data_len: u8) -> Self {
         Self {
             function_code,
-            data: data,
+            data: data, // Ensure the heapless::Vec is moved here
             data_len,
         }
     }
@@ -212,7 +215,7 @@ impl Pdu {
     }
 
     /// Accessor for the data payload.
-    pub fn data(&self) -> &Data {
+    pub fn data(&self) -> &Vec<u8, MAX_PDU_DATA_LEN> {
         &self.data
     }
 
@@ -233,37 +236,18 @@ impl Pdu {
     /// the PDU cannot be serialized (e.g., due to buffer overflow).
     pub fn to_bytes(&self) -> Result<Vec<u8, 253>, MbusError> {
         let mut pdu_bytes = Vec::new(); // Capacity is 253 (1 byte FC + 252 bytes data)
-        pdu_bytes
-            .push(self.function_code as u8)
-            .map_err(|_| MbusError::Unexpected)?; // Function code (1 byte)
+        pdu_bytes.push(self.function_code as u8).map_err(|_| MbusError::Unexpected)?; // Function code (1 byte)
 
-        if self.data_len > 0 {
-            // SAFETY: We assume `data_len` correctly reflects the valid bytes in `self.data.bytes`.
-            // This is a critical assumption based on how the Pdu is expected to be constructed.
-            match &self.data {
-                Data::Bytes(bytes) => {
-                    pdu_bytes
-                        .extend_from_slice(&bytes[..self.data_len as usize])
-                        .map_err(|_| MbusError::Unexpected)?;
-                }
-                Data::SubCodeBytes(sub) => {
-                    pdu_bytes
-                        .extend_from_slice(&sub.bytes[..self.data_len as usize])
-                        .map_err(|_| MbusError::Unexpected)?;
-                }
-            }
-        }
+        pdu_bytes
+            .extend_from_slice(&self.data.as_slice()[..self.data_len as usize])
+            .map_err(|_| MbusError::BufferLenMissmatch)?; // Data bytes (variable length)
+
         Ok(pdu_bytes)
     }
-}
 
-impl Pdu {
     /// Creates a PDU from its byte representation.
     ///
     /// This method parses the function code and data payload from the given byte slice.
-    /// It assumes that the data payload, if any, is represented as raw bytes.
-    /// Specific interpretation of sub-function codes (e.g., for FC 0x08 or 0x2B)
-    /// would need to be handled at a higher layer based on the `function_code`.
     ///
     /// # Arguments
     /// * `bytes` - A byte slice containing the PDU (Function Code + Data).
@@ -280,16 +264,17 @@ impl Pdu {
         let data_slice = &bytes[1..];
         let data_len = data_slice.len();
 
-        if data_len > 252 {
+        if data_len > MAX_PDU_DATA_LEN {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let mut data_array = [0u8; 252];
-        data_array[..data_len].copy_from_slice(data_slice);
+        let mut data = heapless::Vec::new();
+        data.extend_from_slice(data_slice)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
 
         Ok(Pdu {
             function_code,
-            data: Data::Bytes(data_array),
+            data,
             data_len: data_len as u8,
         })
     }
@@ -298,8 +283,7 @@ impl Pdu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::function_codes::public::{DiagnosticSubFunction, FunctionCode};
-    use MbusError;
+    use crate::function_codes::public::FunctionCode;
     use heapless::Vec;
 
     // --- Tests for Pdu::from_bytes ---
@@ -317,11 +301,8 @@ mod tests {
 
         assert_eq!(pdu.function_code, FunctionCode::ReportServerId);
         assert_eq!(pdu.data_len, 0);
-        if let Data::Bytes(data_array) = pdu.data {
-            assert!(data_array.iter().all(|&b| b == 0)); // All 252 bytes should be zero
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert!(pdu.data.is_empty());
+        assert_eq!(pdu.data.len(), 0);
     }
 
     /// Test case: `Pdu::from_bytes` with a valid `Read Coils` request PDU.
@@ -338,12 +319,7 @@ mod tests {
 
         assert_eq!(pdu.function_code, FunctionCode::ReadCoils);
         assert_eq!(pdu.data_len, 4);
-        if let Data::Bytes(data_array) = pdu.data {
-            assert_eq!(&data_array[..4], &[0x00, 0x00, 0x00, 0x0A]);
-            assert!(data_array[4..].iter().all(|&b| b == 0)); // Remaining bytes should be zero
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert_eq!(pdu.data.as_slice(), &[0x00, 0x00, 0x00, 0x0A]);
     }
 
     /// Test case: `Pdu::from_bytes` with a valid `Read Holding Registers` response PDU.
@@ -361,11 +337,7 @@ mod tests {
 
         assert_eq!(pdu.function_code, FunctionCode::ReadHoldingRegisters);
         assert_eq!(pdu.data_len, 5); // Byte Count (0x04) + 4 data bytes
-        if let Data::Bytes(data_array) = pdu.data {
-            assert_eq!(&data_array[..5], &[0x04, 0x12, 0x34, 0x56, 0x78]);
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert_eq!(pdu.data.as_slice(), &[0x04, 0x12, 0x34, 0x56, 0x78]);
     }
 
     /// Test case: `Pdu::from_bytes` with a PDU containing the maximum allowed data length.
@@ -386,11 +358,7 @@ mod tests {
 
         assert_eq!(pdu.function_code, FunctionCode::ReadHoldingRegisters);
         assert_eq!(pdu.data_len, 252);
-        if let Data::Bytes(data_array) = pdu.data {
-            assert_eq!(&data_array[..252], &bytes[1..]);
-        } else {
-            panic!("Expected Data::Bytes variant");
-        }
+        assert_eq!(pdu.data.as_slice(), &bytes[1..]);
     }
 
     /// Test case: `Pdu::from_bytes` with an empty byte slice.
@@ -407,7 +375,6 @@ mod tests {
     ///
     /// This checks for `MbusError::UnsupportedFunction` when the function code is not recognized.
     /// Modbus Specification Reference: V1.1b3, Section 5.1 (Public Function Code Definition).
-
     #[test]
     fn test_pdu_from_bytes_invalid_function_code_error() {
         // 0x00 is not a valid public function code
@@ -440,7 +407,7 @@ mod tests {
         assert_eq!(err, MbusError::InvalidPduLength);
     }
 
-    // --- Tests for Pdu::to_bytes (assuming Data::Bytes is used, as Pdu::from_bytes always produces it) ---
+    // --- Tests for Pdu::to_bytes ---
 
     /// Test case: `Pdu::to_bytes` with a PDU that has no data bytes.
     ///
@@ -449,11 +416,7 @@ mod tests {
     /// Modbus Specification Reference: V1.1b3, Section 6.13 (Report Server ID).
     #[test]
     fn test_pdu_to_bytes_no_data() {
-        let pdu = Pdu {
-            function_code: FunctionCode::ReportServerId,
-            data: Data::Bytes([0; 252]), // Default state for Data::Bytes
-            data_len: 0,
-        };
+        let pdu = Pdu::new(FunctionCode::ReportServerId, Vec::new(), 0);
         let bytes = pdu.to_bytes().expect("Should convert PDU to bytes");
         assert_eq!(bytes.as_slice(), &[0x11]);
     }
@@ -465,17 +428,10 @@ mod tests {
     /// Modbus Specification Reference: V1.1b3, Section 6.1 (Read Coils).
     #[test]
     fn test_pdu_to_bytes_with_data() {
-        let mut data_array = [0; 252];
-        data_array[0] = 0x00;
-        data_array[1] = 0x00;
-        data_array[2] = 0x00;
-        data_array[3] = 0x0A; // Read 10 coils
+        let mut data_vec = Vec::new();
+        data_vec.extend_from_slice(&[0x00, 0x00, 0x00, 0x0A]).unwrap(); // Read 10 coils
 
-        let pdu = Pdu {
-            function_code: FunctionCode::ReadCoils,
-            data: Data::Bytes(data_array),
-            data_len: 4,
-        };
+        let pdu = Pdu::new(FunctionCode::ReadCoils, data_vec, 4);
         let bytes = pdu.to_bytes().expect("Should convert PDU to bytes");
         assert_eq!(bytes.as_slice(), &[0x01, 0x00, 0x00, 0x00, 0x0A]);
     }
@@ -487,16 +443,12 @@ mod tests {
     /// Modbus Specification Reference: V1.1b3, Section 4.1 (PDU Size).
     #[test]
     fn test_pdu_to_bytes_max_data() {
-        let mut data_array = [0; 252];
+        let mut data_vec = Vec::new();
         for i in 0..252 {
-            data_array[i] = i as u8;
+            data_vec.push(i as u8).unwrap();
         }
 
-        let pdu = Pdu {
-            function_code: FunctionCode::ReadHoldingRegisters,
-            data: Data::Bytes(data_array),
-            data_len: 252,
-        };
+        let pdu = Pdu::new(FunctionCode::ReadHoldingRegisters, data_vec, 252);
         let bytes = pdu
             .to_bytes()
             .expect("Should convert PDU to bytes with max data");
@@ -508,48 +460,11 @@ mod tests {
         assert_eq!(bytes.as_slice(), expected_bytes_vec.as_slice());
     }
 
-    // --- Tests for Pdu::to_bytes with Data::SubCodeBytes (demonstrating current behavior) ---
-    /// Test case: `Pdu::to_bytes` with a PDU using `Data::SubCodeBytes`.
-    ///
-    /// This test highlights the current behavior where `Pdu::to_bytes` only serializes
-    /// the function code and the `bytes` field of `SubCodeBytes`, based on `data_len`.
-    /// It does *not* automatically include the `sub_code` itself (e.g., 0x0000 for Diagnostics)
-    /// in the serialized output. This is a known discrepancy with the Modbus specification for sub-function codes.
-    #[test]
-    fn test_pdu_to_bytes_with_subcode_bytes_current_behavior() {
-        // Manually construct a Pdu with Data::SubCodeBytes to test its serialization path.
-        // For FC 0x08 (Diagnostics), the sub-function code (u16) should be part of the data.
-        // Example: Diagnostics, sub-function 0x0000 (Return Query Data), with 2 data bytes 0x12 0x34
-        // Expected PDU bytes: 0x08, 0x00, 0x00, 0x12, 0x34
-        // The `SubCodeBytes` struct stores the `sub_code` separately from `bytes`.
-        // The `bytes` field in `SubCodeBytes` would typically hold the *remaining* data after the sub-code.
-
-        let diagnostic_sub_code = DiagnosticSubFunction::ReturnQueryData; // 0x0000
-        let mut sub_data_bytes = [0; 250];
-        sub_data_bytes[0] = 0x12;
-        sub_data_bytes[1] = 0x34;
-
-        let pdu = Pdu {
-            function_code: FunctionCode::Diagnostics,
-            data: Data::SubCodeBytes(SubCodeBytes {
-                sub_code: SubCode::DiagnosticSubFunction(diagnostic_sub_code),
-                bytes: sub_data_bytes,
-            }),
-            data_len: 2, // Only 2 bytes from `sub_data_bytes` are considered by `to_bytes`
-        };
-
-        let bytes = pdu.to_bytes().expect("Should convert PDU to bytes");
-        // Current implementation only serializes function code and `sub.bytes` based on `data_len`.
-        // It *does not* include the `diagnostic_sub_code` (0x0000) itself in the output.
-        assert_eq!(bytes.as_slice(), &[0x08, 0x12, 0x34]); // This is missing 0x00, 0x00 for the sub-function
-    }
-
     // --- Tests for FunctionCode::try_from ---
     /// Test case: `FunctionCode::try_from` with valid `u8` values.
     ///
     /// Verifies that known public function codes are correctly converted to their `FunctionCode` enum variants.
     /// Modbus Specification Reference: V1.1b3, Section 5.1 (Public Function Code Definition).
-
     #[test]
     fn test_function_code_try_from_valid() {
         assert_eq!(
@@ -593,7 +508,6 @@ mod tests {
     }
 
     // --- Round-trip tests (from_bytes -> to_bytes) ---
-    // These implicitly test Pdu::to_bytes with Data::Bytes, as Pdu::from_bytes always produces Data::Bytes.
 
     /// Test case: Round-trip serialization/deserialization for a PDU with no data.
     ///

@@ -1,5 +1,5 @@
 [workspace]
-members = ["mbus-core", "mbus-rtu", "mbus-tcp", "modbus-rs"]
+members = ["mbus-core", "mbus-rtu", "mbus-tcp", "modbus-rs", "integration_tests"]
 resolver = "2"
 
 [workspace.package]
