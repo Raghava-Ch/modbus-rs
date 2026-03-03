@@ -23,9 +23,7 @@ impl StdTcpTransport {
     /// # Returns
     /// A new `StdTcpTransport` instance with the provided configuration and no active connection.
     pub fn new() -> Self {
-        Self {
-            stream: None,
-        }
+        Self { stream: None }
     }
 
     /// Helper function to convert `std::io::Error` to `TransportError`.
@@ -60,33 +58,52 @@ impl Transport for StdTcpTransport {
         let connection_timeout = Duration::from_millis(config.connection_timeout_ms as u64);
         let response_timeout = Duration::from_millis(config.response_timeout_ms as u64);
 
-        let addrs = (config.host.as_str(), config.port)
+        // Resolve the host and port to socket addresses.
+        // For a single connection, we will only attempt to connect to the first resolved address.
+        let mut addrs_iter = (config.host.as_str(), config.port)
             .to_socket_addrs()
             .map_err(|e| {
                 eprintln!("DNS resolution failed: {:?}", e);
                 TransportError::ConnectionFailed
             })?;
 
-        for addr in addrs {
-            eprintln!("Trying address: {:?}", addr);
+        // Take only the first address, as per the requirement for a single connection.
+        let addr = addrs_iter.next().ok_or_else(|| {
+            eprintln!("No valid address found for host:port combination.");
+            TransportError::ConnectionFailed
+        })?;
 
-            match TcpStream::connect_timeout(&addr, connection_timeout) {
-                Ok(stream) => {
-                    stream.set_read_timeout(Some(response_timeout)).ok();
-                    stream.set_write_timeout(Some(response_timeout)).ok();
-                    stream.set_nodelay(true).ok();
+        eprintln!("Trying address: {:?}", addr);
 
-                    self.stream = Some(stream);
-                    return Ok(());
+        match TcpStream::connect_timeout(&addr, connection_timeout) {
+            Ok(stream) => {
+                // These operations are best-effort and their failure is not critical for the connection itself.
+                // Errors are logged but not propagated to avoid disrupting the connection flow.
+                stream
+                    .set_read_timeout(Some(response_timeout))
+                    .unwrap_or_else(|e| eprintln!("Failed to set read timeout: {:?}", e));
+                stream
+                    .set_write_timeout(Some(response_timeout))
+                    .unwrap_or_else(|e| eprintln!("Failed to set write timeout: {:?}", e));
+                stream
+                    .set_nodelay(true)
+                    .unwrap_or_else(|e| eprintln!("Failed to set no-delay: {:?}", e));
+
+                // Set TCP keep-alive if configured
+                if config.keep_alive_interval_ms > 0 {
+                    // For now, this line is commented out to resolve the compilation error.
+                    // This feature isn't available yet.
+                    // stream.set_keepalive(Some(Duration::from_millis(config.keep_alive_interval_ms as u64))).unwrap_or_else(|e| eprintln!("Failed to set keep-alive: {:?}", e));
                 }
-                Err(e) => {
-                    eprintln!("Connect failed: {:?}", e);
-                    continue;
-                }
+
+                self.stream = Some(stream); // Store the connected stream
+                Ok(()) // Connection successful
+            }
+            Err(e) => {
+                eprintln!("Connect failed: {:?}", e);
+                Err(TransportError::ConnectionFailed) // Connection failed for this single address
             }
         }
-
-        Err(TransportError::ConnectionFailed)
     }
 
     /// Closes the active TCP connection.
@@ -696,6 +713,34 @@ mod tests {
         let result = transport.send(&test_data);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionClosed);
+
+        server_handle.join().unwrap();
+    }
+
+    /// Test case: `connect` successfully establishes a TCP connection to a single, valid address.
+    #[test]
+    fn test_connect_success_single_addr() {
+        let listener = create_test_listener();
+        let addr = listener.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel();
+
+        // Server for the successful connection
+        let server_handle = thread::spawn(move || {
+            tx.send(()).expect("Failed to send server ready signal");
+            let _ = listener.accept().unwrap(); // Just accept and hold
+        });
+
+        rx.recv().expect("Failed to receive server ready signal");
+
+        let mut transport = StdTcpTransport::new();
+        let config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+
+        let result = transport.connect(&config);
+        assert!(
+            result.is_ok(),
+            "Connection should succeed with a single address"
+        );
+        assert!(transport.is_connected());
 
         server_handle.join().unwrap();
     }

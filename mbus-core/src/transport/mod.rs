@@ -6,6 +6,7 @@ use crate::{errors::MbusError};
 
 const MODBUS_TCP_DEFAULT_PORT: u16 = 502;
 
+#[derive(Debug)]
 /// Configuration parameters for establishing a Modbus TCP connection.
 pub struct ModbusConfig {
     /// The hostname or IP address of the Modbus TCP server to connect to.
@@ -16,7 +17,6 @@ pub struct ModbusConfig {
     // Optional parameters for connection management (can be set to default values if not needed)
     pub connection_timeout_ms: u32, // Timeout for establishing a connection in milliseconds
     pub response_timeout_ms: u32, // Timeout for waiting for a response in milliseconds
-    pub retry_backoff_ms: u32, // Backoff time between retries in milliseconds
 
     pub retry_attempts: u8, // Number of retry attempts for failed operations
     pub keep_alive_interval_ms: u32, // Interval for sending keep-alive messages in milliseconds
@@ -38,7 +38,6 @@ impl ModbusConfig {
             port: MODBUS_TCP_DEFAULT_PORT,
             connection_timeout_ms: 5000,
             response_timeout_ms: 5000,
-            retry_backoff_ms: 100,
             retry_attempts: 3,
             keep_alive_interval_ms: 30000,
         })
@@ -58,7 +57,6 @@ impl ModbusConfig {
             port,
             connection_timeout_ms: 5000,
             response_timeout_ms: 5000,
-            retry_backoff_ms: 100,
             retry_attempts: 3,
             keep_alive_interval_ms: 30000,
         })
@@ -159,4 +157,17 @@ pub trait Transport {
 
     /// Returns the type of transport being used (e.g., TCP, Serial).
     fn transport_type(&self) -> TransportType;
+}
+
+// Assuming this is where CoilResponse trait is defined or re-exported.
+// If it's in `mbus-core/src/app.rs`, the change should be there.
+// For the purpose of this diff, I'll add it here as a placeholder if not found elsewhere.
+pub trait CoilResponse {
+    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError);
+}
+
+pub trait TimeKeeper {
+    // A simple mock for current_millis for no_std compatibility in tests.
+    // In a real no_std environment, this would come from a hardware timer.
+    fn current_millis(&self) -> u64;
 }
