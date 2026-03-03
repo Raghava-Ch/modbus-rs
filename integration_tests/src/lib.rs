@@ -5,8 +5,9 @@ mod tests {
     use mbus_core;
     use anyhow::Result;
     use mbus_core::client::services::ClientServices;
-    use mbus_core::transport::{ModbusTcpConfig};
+    use mbus_core::transport::{ModbusConfig};
     use mbus_tcp::management::std_transport::StdTcpTransport;
+    use mbus_core::errors::MbusError;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
@@ -54,9 +55,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -65,7 +67,7 @@ mod tests {
         let address = 1;
         client.read_single_coil(txn_id, unit_id, address).unwrap(); // Send read request
         client.poll(); // Process read response
-
+        
         // Assert that the MockApp received the correct response
         let received_responses = client.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
@@ -120,9 +122,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 100;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -132,7 +135,7 @@ mod tests {
         let quantity = 3;
 
         client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
-        client.poll();
+        client.poll(); // Process read response
 
         let received_responses = client.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
@@ -189,9 +192,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -203,7 +207,7 @@ mod tests {
         client
             .write_single_coil(txn_id, unit_id, address, value)
             .unwrap();
-        client.poll();
+        client.poll(); // Process write response
 
         let received_responses = client.app.received_write_single_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
@@ -260,9 +264,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -273,7 +278,7 @@ mod tests {
         let values = [true, false, true, false, true, false, true, false, true, false];
 
         client.write_multiple_coils(txn_id, unit_id, address, quantity, &values).unwrap();
-        client.poll();
+        client.poll(); // Process write response
 
         let received_responses = client.app.received_write_multiple_coils_responses.borrow();
         assert_eq!(received_responses.len(), 1);
@@ -283,6 +288,134 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(*rcv_address, address);
         assert_eq!(*rcv_quantity, quantity);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    /// Test case: Client handles a Modbus exception response from the server.
+    #[test]
+    fn test_client_services_server_exception_response() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0; 12]; // Expect a Read Coils request
+            stream.read_exact(&mut buf)?;
+
+            // Send a Modbus exception response (e.g., Illegal Data Value, FC 0x81, Exception Code 0x03)
+            #[rustfmt::skip]
+            stream.write_all(&[
+                0x00, 0x01, // Transaction ID (matches request)
+                0x00, 0x00, // Protocol ID
+                0x00, 0x03, // Length (Unit ID + FC + Exception Code)
+                0x01,       // Unit ID
+                0x81,       // Function Code (Read Coils + 0x80 for exception)
+                0x03,       // Exception Code (Illegal Data Value)
+            ])?;
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 1;
+        let unit_id = 1;
+        let address = 10;
+        let quantity = 3;
+
+        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        client.poll(); // Process the exception response
+
+        // The client should receive an error, not a successful response
+        assert!(client.app.received_coil_responses.borrow().is_empty());
+        // In a real application, the `request_failed` callback would be checked.
+        // For this mock, we just ensure no successful response was processed.
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    /// Test case: Client handles the server closing the connection unexpectedly.
+    #[test]
+    fn test_client_services_server_closes_connection() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0; 12]; // Expect a Read Coils request
+            stream.read_exact(&mut buf)?;
+            // Server closes connection immediately after receiving request, without sending a response
+            drop(stream);
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.response_timeout_ms = 100; // Short timeout
+        config.retry_attempts = 0; // No retries for this test
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 1;
+        let unit_id = 1;
+        let address = 10;
+        let quantity = 3;
+
+        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        // Poll multiple times to allow for connection closed error detection and timeout
+        std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
+        client.poll();
+        client.poll();
+
+        // The client should eventually report a connection closed or timeout error.
+        assert!(client.app.received_coil_responses.borrow().is_empty());
+        // In a real application, the `request_failed` callback would be checked for MbusError::ConnectionClosed or MbusError::Timeout.
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    /// Test case: Client times out waiting for a response from a non-responsive server.
+    #[test]
+    fn test_client_services_server_timeout() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (_stream, _) = listener.accept()?;
+            // Server accepts connection but sends no data, causing client to timeout
+            std::thread::sleep(std::time::Duration::from_secs(5)); // Ensure client times out first
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.response_timeout_ms = 100; // Short timeout for test
+        config.retry_attempts = 0; // No retries for this test
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 1;
+        let unit_id = 1;
+        let address = 10;
+        let quantity = 3;
+
+        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
+        client.poll(); // This poll should detect the timeout
+
+        // The client should eventually report a timeout error.
+        assert!(client.app.received_coil_responses.borrow().is_empty());
+        // In a real application, the `request_failed` callback would be checked for MbusError::Timeout.
 
         server_handle.join().unwrap()?;
         Ok(())

@@ -4,7 +4,7 @@ use mbus_core::app::{CoilResponse, Coils};
 use mbus_core::errors::MbusError;
 use mbus_core::client::services::ClientServices;
 use mbus_core::client::services::coils::MAX_COIL_BYTES; // Import MAX_COIL_BYTES
-use mbus_core::transport::{ModbusTcpConfig};
+use mbus_core::transport::{ModbusConfig, TimeKeeper};
 use mbus_tcp::management::std_transport::StdTcpTransport;
 use std::cell::RefCell;
 
@@ -46,13 +46,28 @@ impl CoilResponse for ClientMockApp {
             .push((txn_id, unit_id, address, quantity))
             .unwrap();
     }
+
+    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
+
+    }
+}
+
+impl TimeKeeper for ClientMockApp {
+    fn current_millis(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+    
 }
 
 fn main() -> Result<()> {
     // --- Modbus Client Operations ---
-    let transport = StdTcpTransport::new(None);
+    let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let config = ModbusTcpConfig::new("192.168.55.101", 1235).map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+    let mut config = ModbusConfig::default("192.168.55.101").map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+    config.connection_timeout_ms = 500;
 
     let mut client =
         ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;

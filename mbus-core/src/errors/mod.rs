@@ -37,6 +37,8 @@ pub enum MbusError {
     TooManyRequests,
     /// Invalid function code
     InvalidFunctionCode,
+    /// No retries left for the transaction
+    NoRetriesLeft,
 }
 
 impl fmt::Display for MbusError {
@@ -59,6 +61,7 @@ impl fmt::Display for MbusError {
             MbusError::InvalidAddress => write!(f, "Invalid address"),
             MbusError::TooManyRequests => write!(f, "Too many requests: Expected responses buffer is full"),
             MbusError::InvalidFunctionCode => write!(f, "Invalid function code"),
+            MbusError::NoRetriesLeft => write!(f, "No retries left for the transaction"),
         }
     }
 }

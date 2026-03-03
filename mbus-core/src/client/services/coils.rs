@@ -1,5 +1,5 @@
 use crate::data_unit::common::{
-    AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu,
+    AdditionalAddress, MbapHeader, ModbusMessage, Pdu, MAX_ADU_FRAME_LEN,
 };
 use crate::errors::MbusError;
 use crate::function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN};
@@ -86,6 +86,11 @@ pub trait CoilResponse {
     /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
     /// and quantity of the coils that were written.
     fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16);
+
+    /// Handles a failed request by invoking the appropriate application callback with the error information.
+    /// This method will be called when a Modbus request related to coils fails, allowing application developers to log the error, 
+    /// update their application state, or take other appropriate actions based on the error information.
+    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError);
 }
 
 /// Service for handling Modbus coil operations, including creating request PDUs and parsing responses.
