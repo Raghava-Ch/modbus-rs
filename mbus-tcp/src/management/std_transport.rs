@@ -3,16 +3,13 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
-use mbus_core::transport::{ModbusTcpConfig, Transport, TransportError, TransportType};
+use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
 ///
 /// This struct manages a standard TCP connection for Modbus TCP communication.
 pub struct StdTcpTransport {
-    /// The underlying TCP stream.
     stream: Option<TcpStream>,
-    /// The timeout duration for read and write operations.
-    timeout: Option<Duration>,
 }
 
 impl StdTcpTransport {
@@ -21,12 +18,12 @@ impl StdTcpTransport {
     /// Initially, there is no active connection.
     ///
     /// # Arguments
-    /// * `timeout` - An optional `Duration` for read and write timeouts.
-    pub fn new(timeout: Option<Duration>) -> Self {
-        Self {
-            stream: None,
-            timeout,
-        }
+    /// * `config` - The `ModbusConfig` to use for this transport.
+    ///
+    /// # Returns
+    /// A new `StdTcpTransport` instance with the provided configuration and no active connection.
+    pub fn new() -> Self {
+        Self { stream: None }
     }
 
     /// Helper function to convert `std::io::Error` to `TransportError`.
@@ -57,36 +54,56 @@ impl Transport for StdTcpTransport {
     ///
     /// # Returns
     /// `Ok(())` if the connection is successfully established, or an error otherwise.
-    fn connect(&mut self, config: &ModbusTcpConfig) -> Result<(), Self::Error> {
-        let timeout = self.timeout.unwrap_or(Duration::from_secs(5));
+    fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
+        let connection_timeout = Duration::from_millis(config.connection_timeout_ms as u64);
+        let response_timeout = Duration::from_millis(config.response_timeout_ms as u64);
 
-        let addrs = (config.host.as_str(), config.port)
+        // Resolve the host and port to socket addresses.
+        // For a single connection, we will only attempt to connect to the first resolved address.
+        let mut addrs_iter = (config.host.as_str(), config.port)
             .to_socket_addrs()
             .map_err(|e| {
                 eprintln!("DNS resolution failed: {:?}", e);
                 TransportError::ConnectionFailed
             })?;
 
-        for addr in addrs {
-            eprintln!("Trying address: {:?}", addr);
+        // Take only the first address, as per the requirement for a single connection.
+        let addr = addrs_iter.next().ok_or_else(|| {
+            eprintln!("No valid address found for host:port combination.");
+            TransportError::ConnectionFailed
+        })?;
 
-            match TcpStream::connect_timeout(&addr, timeout) {
-                Ok(stream) => {
-                    stream.set_read_timeout(self.timeout).ok();
-                    stream.set_write_timeout(self.timeout).ok();
-                    stream.set_nodelay(true).ok();
+        eprintln!("Trying address: {:?}", addr);
 
-                    self.stream = Some(stream);
-                    return Ok(());
+        match TcpStream::connect_timeout(&addr, connection_timeout) {
+            Ok(stream) => {
+                // These operations are best-effort and their failure is not critical for the connection itself.
+                // Errors are logged but not propagated to avoid disrupting the connection flow.
+                stream
+                    .set_read_timeout(Some(response_timeout))
+                    .unwrap_or_else(|e| eprintln!("Failed to set read timeout: {:?}", e));
+                stream
+                    .set_write_timeout(Some(response_timeout))
+                    .unwrap_or_else(|e| eprintln!("Failed to set write timeout: {:?}", e));
+                stream
+                    .set_nodelay(true)
+                    .unwrap_or_else(|e| eprintln!("Failed to set no-delay: {:?}", e));
+
+                // Set TCP keep-alive if configured
+                if config.keep_alive_interval_ms > 0 {
+                    // For now, this line is commented out to resolve the compilation error.
+                    // This feature isn't available yet.
+                    // stream.set_keepalive(Some(Duration::from_millis(config.keep_alive_interval_ms as u64))).unwrap_or_else(|e| eprintln!("Failed to set keep-alive: {:?}", e));
                 }
-                Err(e) => {
-                    eprintln!("Connect failed: {:?}", e);
-                    continue;
-                }
+
+                self.stream = Some(stream); // Store the connected stream
+                Ok(()) // Connection successful
+            }
+            Err(e) => {
+                eprintln!("Connect failed: {:?}", e);
+                Err(TransportError::ConnectionFailed) // Connection failed for this single address
             }
         }
-
-        Err(TransportError::ConnectionFailed)
     }
 
     /// Closes the active TCP connection.
@@ -218,7 +235,7 @@ impl StdTcpTransport {
 #[cfg(test)]
 mod tests {
     use super::super::std_transport::StdTcpTransport;
-    use mbus_core::transport::{ModbusTcpConfig, Transport, TransportError};
+    use mbus_core::transport::{ModbusConfig, Transport, TransportError};
     use std::io::{self, Read, Write};
     use std::net::TcpListener;
     use std::sync::mpsc;
@@ -239,7 +256,7 @@ mod tests {
     /// Test case: `StdTcpTransport::new` creates an instance with no active connection.
     #[test]
     fn test_new_std_tcp_transport() {
-        let transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let transport = StdTcpTransport::new();
         assert!(!transport.is_connected());
     }
 
@@ -260,9 +277,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal"); // Wait for the server to be ready
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -273,8 +290,8 @@ mod tests {
     /// Test case: `connect` fails with an invalid address string.
     #[test]
     fn test_connect_failure_invalid_addr() {
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
-        let config = ModbusTcpConfig::new("invalid-address", 502).unwrap(); // Invalid host, but short enough
+        let mut transport = StdTcpTransport::new();
+        let config = ModbusConfig::new("invalid-address", 502).unwrap(); // Invalid host, but short enough
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -290,8 +307,8 @@ mod tests {
         let listener = create_test_listener(); // Just to get an unused port
         let port = listener.local_addr().unwrap().port();
         drop(listener); // Explicitly drop the listener to ensure the port is free
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let mut transport = StdTcpTransport::new();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -312,9 +329,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
         assert!(transport.is_connected());
 
@@ -345,9 +362,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.send(&test_data);
@@ -359,7 +376,7 @@ mod tests {
     /// Test case: `send` fails when the transport is not connected.
     #[test]
     fn test_send_failure_not_connected() {
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let test_data = [0x01, 0x02];
         let result = transport.send(&test_data);
         assert!(result.is_err());
@@ -385,9 +402,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
 
         transport.connect(&config).unwrap();
 
@@ -400,7 +417,7 @@ mod tests {
     /// Test case: `recv` fails when the transport is not connected.
     #[test]
     fn test_recv_failure_not_connected() {
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let result = transport.recv();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionClosed);
@@ -424,9 +441,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -455,9 +472,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -488,9 +505,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -516,9 +533,10 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_millis(100))); // Very short timeout for test
+        let mut transport = StdTcpTransport::new(); // Very short timeout for test
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        config.response_timeout_ms = 100; // Set short response timeout for test
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -543,11 +561,11 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
         assert!(!transport.is_connected());
 
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         assert!(transport.is_connected());
@@ -623,9 +641,10 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_millis(500))); // Custom timeout
+        let mut transport = StdTcpTransport::new(); // Custom timeout
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        config.connection_timeout_ms = 500; // Set custom connection timeout for test
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -647,9 +666,10 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(None); // No timeout
+        let mut transport = StdTcpTransport::new(); // No timeout
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        config.connection_timeout_ms = 500; // No timeout
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -673,9 +693,9 @@ mod tests {
 
         rx.recv().expect("Failed to receive server ready signal");
 
-        let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
+        let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
 
         transport.connect(&config).unwrap();
 
@@ -693,6 +713,34 @@ mod tests {
         let result = transport.send(&test_data);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionClosed);
+
+        server_handle.join().unwrap();
+    }
+
+    /// Test case: `connect` successfully establishes a TCP connection to a single, valid address.
+    #[test]
+    fn test_connect_success_single_addr() {
+        let listener = create_test_listener();
+        let addr = listener.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel();
+
+        // Server for the successful connection
+        let server_handle = thread::spawn(move || {
+            tx.send(()).expect("Failed to send server ready signal");
+            let _ = listener.accept().unwrap(); // Just accept and hold
+        });
+
+        rx.recv().expect("Failed to receive server ready signal");
+
+        let mut transport = StdTcpTransport::new();
+        let config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+
+        let result = transport.connect(&config);
+        assert!(
+            result.is_ok(),
+            "Connection should succeed with a single address"
+        );
+        assert!(transport.is_connected());
 
         server_handle.join().unwrap();
     }
