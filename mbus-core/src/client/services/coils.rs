@@ -1,21 +1,32 @@
-use crate::data_unit::common::Pdu;
+use crate::data_unit::common::{
+    AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu,
+};
 use crate::errors::MbusError;
 use crate::function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN};
+use crate::transport::TransportType;
 use heapless::Vec;
 
 use core::usize;
 
+/// Maximum number of coils that can be read/written in a single Modbus PDU (2000 coils).
 const MAX_COILS_PER_PDU: usize = 2000;
+/// Maximum number of bytes needed to represent the coil states for 2000 coils (250 bytes).
 pub const MAX_COIL_BYTES: usize = (MAX_COILS_PER_PDU + 7) / 8; // 250 bytes for 2000 coils
 
+/// Represents the state of a block of coils read from a Modbus server.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Coils {
+    /// The starting address of the first coil in this block.
     from_address: u16,
+    /// The number of coils in this block.
     quantity: u16,
+    /// The coil states packed into bytes, where each bit represents a coil (1 for ON, 0 for OFF).
     values: Vec<u8, MAX_COIL_BYTES>, // Each bit represents a coil state
 }
 
+/// Provides operations for reading and writing Modbus coils.
 impl Coils {
+    /// Creates a new `Coils` instance with the given starting address, quantity, and coil states.
     pub fn new(from_address: u16, quantity: u16, values: Vec<u8, MAX_COIL_BYTES>) -> Self {
         Self {
             from_address,
@@ -24,18 +35,22 @@ impl Coils {
         }
     }
 
+    /// Returns the starting address of the first coil in this block.
     pub fn from_address(&self) -> u16 {
         self.from_address
     }
 
+    /// Returns the number of coils in this block.
     pub fn quantity(&self) -> u16 {
         self.quantity
     }
 
+    /// Returns a reference to the vector of bytes representing the coil states.
     pub fn values(&self) -> &Vec<u8, MAX_COIL_BYTES> {
         &self.values
     }
 
+    /// Retrieves the boolean state of a specific coil by its address.
     pub fn value(&self, address: u16) -> Result<bool, MbusError> {
         if address < self.from_address || address >= self.from_address + self.quantity {
             return Err(MbusError::InvalidAddress);
@@ -43,22 +58,218 @@ impl Coils {
         let bit_index = (address - self.from_address) as usize;
         let byte_index = bit_index / 8;
         let bit_mask = 1u8 << (bit_index % 8);
+
         Ok(self.values[byte_index] & bit_mask != 0)
     }
 }
 
+/// Trait defining the expected response handling for coil-related Modbus operations.
+/// Implementors of this trait to deliver the responses to the application layer,
+/// allowing application developers to process the coil data and update their application state accordingly.
 pub trait CoilResponse {
+    /// Handles a Read Coils response by invoking the appropriate application callback with the coil states.
+    /// This method will be called when a Read Coils response is received, 
+    /// and application developers can use it to process the coil data and update their application state accordingly.
     fn read_coils_response(&self, txn_id: u16, unit_id: u8, coils: &Coils, quantity: u16);
+
+    /// Handles a Write Single Coil response by invoking the appropriate application callback with the address and
+    /// value of the coil that was written.
+    /// This method will be called when a Write Single Coil response is received, 
     fn read_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool);
+
+    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
+    /// and quantity of the coils that were written.
+    /// This method will be called when a Write Multiple Coils response is received, 
+    /// and application developers can use it to update their application state accordingly.
+    fn write_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool);
+
+    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
+    /// and quantity of the coils that were written.
+    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16);
+}
+
+/// Service for handling Modbus coil operations, including creating request PDUs and parsing responses.
+#[derive(Debug, Clone)]
+pub struct CoilService;
+
+/// Provides operations for reading and writing Modbus coils, as well as parsing responses for coil-related function codes.
+impl CoilService {
+    /// Creates a new `CoilService` instance.
+    ///
+    /// # Returns
+    /// A new `CoilService` instance.
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Sends a Read Coils request to a Modbus server and registers the expected response.
+    ///
+    /// # Arguments
+    /// * `txn_id` - The transaction ID for the request.
+    /// * `unit_id` - The unit ID (slave address) of the Modbus server.
+    /// * `address` - The starting address of the first coil to read (0-65535).
+    /// * `quantity` - The number of coils to read (1-2000).
+    /// * `single_read` - Whether this is a single coil read or multiple coils read.
+    ///
+    pub fn read_coils(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let pdu = CoilReqPdu::read_coils_request(address, quantity);
+        let pdu_request = pdu?; // Unwrap the PDU request here
+        let adu = match transport_type {
+            // adu is a ModbusMessage, not raw bytes yet
+            TransportType::StdTcp | TransportType::CustomTcp => {
+                // Construct Modbus TCP ADU
+                // The length field is PDU length (FC + Data) + 1 (Unit ID)
+                let pdu_bytes_len = pdu_request.to_bytes()?.len() as u16;
+                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
+                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu_request)
+            }
+            TransportType::StdSerial | TransportType::CustomSerial => {
+                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
+                todo!("Serial transport is not yet implemented for Read Coils.")
+            }
+        };
+
+        Ok(adu.to_bytes()?)
+    }
+
+    /// Sends a Write Single Coil request to a Modbus server and registers the expected response.
+    ///
+    /// # Arguments
+    /// * `txn_id` - The transaction ID for the request.
+    /// * `unit_id` - The unit ID (slave address) of the Modbus server.
+    /// * `address` - The address of the coil to write (0-65535).
+    /// * `value` - The state to write to the coil (`true` for ON, `false` for OFF).
+    /// # Returns
+    /// A `Result` containing the raw bytes of the Modbus ADU to be sent, or an `MbusError` if the request could not be created.
+    pub fn write_single_coil(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        value: bool,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let pdu = CoilReqPdu::write_single_coil_request(address, value)?;
+        let adu = match transport_type {
+            // adu is a ModbusMessage, not raw bytes yet
+            TransportType::StdTcp | TransportType::CustomTcp => {
+                // Construct Modbus TCP ADU
+                // The length field is PDU length (FC + Data) + 1 (Unit ID)
+                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
+                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
+                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu)
+            }
+            TransportType::StdSerial | TransportType::CustomSerial => {
+                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
+                todo!("Serial transport is not yet implemented for Write Single Coil.")
+            }
+        };
+        Ok(adu.to_bytes()?)
+    }
+
+    /// Sends a Write Multiple Coils request to a Modbus server and registers the expected response.
+    pub fn write_multiple_coils(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+        values: &[bool],
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let pdu = CoilReqPdu::write_multiple_coils_request(address, quantity, values)?;
+        let adu = match transport_type {
+            // adu is a ModbusMessage, not raw bytes yet
+            TransportType::StdTcp | TransportType::CustomTcp => {
+                // Construct Modbus TCP ADU
+                // The length field is PDU length (FC + Data) + 1 (Unit ID)
+                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
+                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
+                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu)
+            }
+            TransportType::StdSerial | TransportType::CustomSerial => {
+                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
+                todo!("Serial transport is not yet implemented for Write Multiple Coils.")
+            }
+        };
+        Ok(adu.to_bytes()?)
+    }
+
+    /// Handles a Read Coils response by invoking the appropriate application callback.
+    pub fn handle_read_coil_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_quantity: u16,
+        from_address: u16,
+    ) -> Result<Coils, MbusError> {
+        if function_code != FunctionCode::ReadCoils {
+            return Err(MbusError::InvalidFunctionCode); // Mismatch in function code
+        }
+        let coil_response =
+            match CoilReqPdu::handle_coil_response(pdu, expected_quantity, from_address) {
+                Some(response) => response,
+                None => {
+                    // Parsing failed within CoilReqPdu.
+                    return Err(MbusError::ParseError);
+                }
+            };
+
+        Ok(coil_response)
+    }
+
+    /// Handles a Read Coils response for a single coil read by invoking the appropriate application callback.
+    pub fn handle_write_single_coil_rsp(
+        &mut self,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        address: u16,
+        value: bool,
+    ) -> Result<(), MbusError> {
+        if function_code != FunctionCode::WriteSingleCoil {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        if CoilReqPdu::parse_write_single_coil_response(pdu, address, value).is_ok() {
+            Ok(())
+        } else {
+            Err(MbusError::ParseError)
+        }
+    }
+
+    /// Handles a Write Multiple Coils response by invoking the appropriate application callback.
+    pub fn handle_write_multiple_coils_rsp(
+        &mut self,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        if function_code != FunctionCode::WriteMultipleCoils {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        if CoilReqPdu::parse_write_multiple_coils_response(pdu, address, quantity).is_ok() {
+            Ok(())
+        } else {
+            Err(MbusError::ParseError)
+        }
+    }
 }
 
 /// Provides operations for reading and writing Modbus coils.
 ///
 /// This struct is stateless and provides static methods to create request PDUs
 /// and parse response PDUs for coil-related Modbus function codes.
-pub struct CoilService{}
+pub struct CoilReqPdu {}
 
-impl CoilService {
+/// Provides operations for reading and writing Modbus coils, as well as parsing responses for coil-related function codes.
+impl CoilReqPdu {
     /// Creates a new `CoilService` instance.
     ///
     /// # Returns
@@ -85,8 +296,12 @@ impl CoilService {
         }
 
         let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec.extend_from_slice(&address.to_be_bytes()).map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec.extend_from_slice(&quantity.to_be_bytes()).map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
 
         Ok(Pdu::new(
             FunctionCode::ReadCoils,
@@ -163,6 +378,15 @@ impl CoilService {
         Ok(coils)
     }
 
+    /// Parses a Modbus PDU response for a Read Coils (FC 0x01) request for a single coil.
+    /// This is a convenience wrapper around `parse_read_coils_response` that extracts the state of a single coil.
+    /// # Arguments
+    /// * `pdu` - The received `Pdu` from the Modbus server.
+    /// * `expected_address` - The address of the single coil that was originally requested.
+    /// # Returns
+    /// A `Result` containing the boolean state of the coil, or an `MbusError` if the PDU is malformed, 
+    /// contains an unexpected function code, the data length does not match the expected quantity, 
+    /// or the coil address is out of range.
     pub fn parse_read_single_coil_response(
         pdu: &Pdu,
         expected_address: u16,
@@ -184,10 +408,19 @@ impl CoilService {
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
     pub fn write_single_coil_request(address: u16, value: bool) -> Result<Pdu, MbusError> {
+        macro_rules! push_be {
+            ($vec:expr, $val:expr) => {
+                $vec.extend_from_slice(&$val.to_be_bytes())
+                    .map_err(|_| MbusError::BufferLenMissmatch)
+            };
+        }
+
         let mut data_bytes: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_bytes.extend_from_slice(&address.to_be_bytes()).map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_bytes.extend_from_slice(&(if value { 0xFF00u16 } else { 0x0000u16 }).to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        push_be!(data_bytes, address)?;
+
+        // Modbus protocol uses 0xFF00 for ON and 0x0000 for OFF
+        let coil_value: u16 = if value { 0xFF00 } else { 0x0000 };
+        push_be!(data_bytes, coil_value)?;
 
         Ok(Pdu::new(
             FunctionCode::WriteSingleCoil,
@@ -271,13 +504,21 @@ impl CoilService {
         let byte_count = ((quantity + 7) / 8) as u8;
         let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
 
-        data_vec.extend_from_slice(&address.to_be_bytes()).map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec.extend_from_slice(&quantity.to_be_bytes()).map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec.push(byte_count).map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .push(byte_count)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
 
         // Initialize bytes for coil data
         let num_coil_bytes = byte_count as usize;
-        data_vec.resize(data_vec.len() + num_coil_bytes, 0).map_err(|_| MbusError::BufferLenMissmatch)?;
+        data_vec
+            .resize(data_vec.len() + num_coil_bytes, 0)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
 
         for (i, &value) in values.iter().enumerate() {
             if value {
@@ -332,13 +573,23 @@ impl CoilService {
         Ok(())
     }
 
+    /// Handles a Read Coils response by invoking the appropriate application callback.
+    /// This function parses the PDU received from a Modbus server in response to a Read Coils request,
+    /// extracting the coil states and returning a `Coils` struct that can be used by the application layer.
+    /// # Arguments
+    /// * `pdu` - The received `Pdu` from the Modbus server.
+    /// * `expected_quantity` - The quantity of coils that was originally requested.
+    /// * `from_address` - The starting address of the coils that were requested.
+    /// # Returns
+    /// An `Option<Coils>` containing the parsed coil states if the response is valid, or 
+    /// `None` if the response is malformed or does not match the expected quantity.
     pub fn handle_coil_response(
         pdu: &Pdu,
         expected_quantity: u16,
         from_address: u16,
     ) -> Option<Coils> {
         let coil_response: Coils = if let Ok(coil_response) =
-            CoilService::parse_read_coils_response(pdu, expected_quantity)
+            CoilReqPdu::parse_read_coils_response(pdu, expected_quantity)
         {
             Coils::new(from_address, expected_quantity, coil_response)
         } else {
@@ -360,7 +611,7 @@ mod tests {
     fn test_read_coils_request_valid() {
         let address = 0x0001;
         let quantity = 0x000A; // 10 coils
-        let pdu = CoilService::read_coils_request(address, quantity).unwrap();
+        let pdu = CoilReqPdu::read_coils_request(address, quantity).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::ReadCoils);
         assert_eq!(pdu.data_len(), 4);
@@ -370,14 +621,14 @@ mod tests {
     /// Test case: `read_coils_request` returns an error for an invalid quantity (too low).
     #[test]
     fn test_read_coils_request_invalid_quantity_low() {
-        let result = CoilService::read_coils_request(0x0001, 0);
+        let result = CoilReqPdu::read_coils_request(0x0001, 0);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
     /// Test case: `read_coils_request` returns an error for an invalid quantity (too high).
     #[test]
     fn test_read_coils_request_invalid_quantity_high() {
-        let result = CoilService::read_coils_request(0x0001, 2001);
+        let result = CoilReqPdu::read_coils_request(0x0001, 2001);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -390,7 +641,7 @@ mod tests {
         // PDU: FC (0x01), Byte Count (0x01), Coil Data (0xB3)
         let response_bytes = [0x01, 0x01, 0xB3];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let coils_data = CoilService::parse_read_coils_response(&pdu, 8).unwrap();
+        let coils_data = CoilReqPdu::parse_read_coils_response(&pdu, 8).unwrap();
 
         // The function returns a Vec<u8> containing the raw coil data bytes.
         // For 8 coils with value 0xB3, the expected data is just [0xB3].
@@ -406,7 +657,7 @@ mod tests {
         // PDU: FC (0x01), Byte Count (0x02), Coil Data (0xB3, 0x03)
         let response_bytes = [0x01, 0x02, 0xB3, 0x03];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let coils_data = CoilService::parse_read_coils_response(&pdu, 10).unwrap();
+        let coils_data = CoilReqPdu::parse_read_coils_response(&pdu, 10).unwrap();
 
         // The function returns a Vec<u8> containing the raw coil data bytes.
         // For 10 coils, 2 bytes are expected: [0xB3, 0x03].
@@ -421,7 +672,7 @@ mod tests {
         // PDU: FC (0x01), Byte Count (0x01), Coil Data (0x05)
         let response_bytes = [0x01, 0x01, 0x05];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let coils_data = CoilService::parse_read_coils_response(&pdu, 3).unwrap();
+        let coils_data = CoilReqPdu::parse_read_coils_response(&pdu, 3).unwrap();
 
         assert_eq!(coils_data.as_slice(), &[0x05]);
         assert_eq!(coils_data.len(), 1);
@@ -433,7 +684,7 @@ mod tests {
         // PDU with FC 0x03 (Read Holding Registers) instead of 0x01 (Read Coils)
         let response_bytes = [0x03, 0x01, 0xB3];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_read_coils_response(&pdu, 8);
+        let result = CoilReqPdu::parse_read_coils_response(&pdu, 8);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -443,7 +694,7 @@ mod tests {
         // PDU: FC (0x01) only, no byte count or coil data
         let response_bytes = [0x01];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_read_coils_response(&pdu, 8);
+        let result = CoilReqPdu::parse_read_coils_response(&pdu, 8);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -453,7 +704,7 @@ mod tests {
         // PDU: FC (0x01), Byte Count (0x01), but provides two data bytes (0xB3, 0x00)
         let response_bytes = [0x01, 0x01, 0xB3, 0x00];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_read_coils_response(&pdu, 8);
+        let result = CoilReqPdu::parse_read_coils_response(&pdu, 8);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -464,7 +715,7 @@ mod tests {
         // But `expected_quantity` is 16, which would require 2 bytes of coil data.
         let response_bytes = [0x01, 0x01, 0xB3];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_read_coils_response(&pdu, 16);
+        let result = CoilReqPdu::parse_read_coils_response(&pdu, 16);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -475,14 +726,16 @@ mod tests {
         let expected_byte_count = ((max_quantity + 7) / 8) as u8; // 250 bytes
 
         let mut response_bytes_vec: Vec<u8, 253> = Vec::new(); // FC + Byte Count + 250 data bytes
-        response_bytes_vec.push(FunctionCode::ReadCoils as u8).unwrap();
+        response_bytes_vec
+            .push(FunctionCode::ReadCoils as u8)
+            .unwrap();
         response_bytes_vec.push(expected_byte_count).unwrap();
         for i in 0..expected_byte_count as usize {
             response_bytes_vec.push(i as u8).unwrap(); // Fill with some dummy data
         }
 
         let pdu = Pdu::from_bytes(&response_bytes_vec).unwrap();
-        let coils_data = CoilService::parse_read_coils_response(&pdu, max_quantity).unwrap();
+        let coils_data = CoilReqPdu::parse_read_coils_response(&pdu, max_quantity).unwrap();
 
         assert_eq!(coils_data.len(), expected_byte_count as usize);
         assert_eq!(coils_data.as_slice(), &response_bytes_vec.as_slice()[2..]); // Skip FC and Byte Count
@@ -496,14 +749,16 @@ mod tests {
         let byte_count_in_pdu = ((expected_quantity + 7) / 8) as u8; // This would be 251 for 2001 coils
 
         let mut response_bytes_vec: Vec<u8, 253> = Vec::new();
-        response_bytes_vec.push(FunctionCode::ReadCoils as u8).unwrap();
+        response_bytes_vec
+            .push(FunctionCode::ReadCoils as u8)
+            .unwrap();
         response_bytes_vec.push(byte_count_in_pdu).unwrap(); // Byte count = 251
         for _i in 0..byte_count_in_pdu as usize {
             response_bytes_vec.push(0x00).unwrap(); // Fill with dummy data
         }
 
         let pdu = Pdu::from_bytes(&response_bytes_vec).unwrap();
-        let result = CoilService::parse_read_coils_response(&pdu, expected_quantity);
+        let result = CoilReqPdu::parse_read_coils_response(&pdu, expected_quantity);
         assert_eq!(result.unwrap_err(), MbusError::BufferLenMissmatch);
     }
 
@@ -514,7 +769,7 @@ mod tests {
     fn test_write_single_coil_request_on() {
         let address = 0x0005;
         let value = true;
-        let pdu = CoilService::write_single_coil_request(address, value).unwrap();
+        let pdu = CoilReqPdu::write_single_coil_request(address, value).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteSingleCoil);
         assert_eq!(pdu.data_len(), 4);
@@ -526,7 +781,7 @@ mod tests {
     fn test_write_single_coil_request_off() {
         let address = 0x0005;
         let value = false;
-        let pdu = CoilService::write_single_coil_request(address, value).unwrap();
+        let pdu = CoilReqPdu::write_single_coil_request(address, value).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteSingleCoil);
         assert_eq!(pdu.data_len(), 4);
@@ -540,7 +795,7 @@ mod tests {
     fn test_parse_write_single_coil_response_valid() {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF, 0x00]; // FC, Address, Value
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = CoilReqPdu::parse_write_single_coil_response(&pdu, 0x0005, true);
         assert!(result.is_ok());
     }
 
@@ -549,7 +804,7 @@ mod tests {
     fn test_parse_write_single_coil_response_wrong_fc() {
         let response_bytes = [0x03, 0x00, 0x05, 0xFF, 0x00]; // Wrong FC
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = CoilReqPdu::parse_write_single_coil_response(&pdu, 0x0005, true);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -558,7 +813,7 @@ mod tests {
     fn test_parse_write_single_coil_response_address_mismatch() {
         let response_bytes = [0x05, 0x00, 0x06, 0xFF, 0x00]; // Address 0x0006, expected 0x0005
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = CoilReqPdu::parse_write_single_coil_response(&pdu, 0x0005, true);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -567,7 +822,7 @@ mod tests {
     fn test_parse_write_single_coil_response_value_mismatch() {
         let response_bytes = [0x05, 0x00, 0x05, 0x00, 0x00]; // Value OFF, expected ON
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = CoilReqPdu::parse_write_single_coil_response(&pdu, 0x0005, true);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -576,7 +831,7 @@ mod tests {
     fn test_parse_write_single_coil_response_invalid_len() {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = CoilReqPdu::parse_write_single_coil_response(&pdu, 0x0005, true);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -590,18 +845,21 @@ mod tests {
         let values = [
             true, false, true, false, true, false, true, false, true, false,
         ]; // 0xAA, 0x02
-        let pdu = CoilService::write_multiple_coils_request(address, quantity, &values).unwrap();
+        let pdu = CoilReqPdu::write_multiple_coils_request(address, quantity, &values).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteMultipleCoils);
         assert_eq!(pdu.data_len(), 5 + 2); // Addr (2) + Qty (2) + Byte Count (1) + Data (2) = 7
-        assert_eq!(pdu.data().as_slice(), &[0x00, 0x01, 0x00, 0x0A, 0x02, 0x55, 0x01]);
+        assert_eq!(
+            pdu.data().as_slice(),
+            &[0x00, 0x01, 0x00, 0x0A, 0x02, 0x55, 0x01]
+        );
     }
 
     /// Test case: `write_multiple_coils_request` returns an error for invalid quantity (too low).
     #[test]
     fn test_write_multiple_coils_request_invalid_quantity_low() {
         let values = [true];
-        let result = CoilService::write_multiple_coils_request(0x0001, 0, &values);
+        let result = CoilReqPdu::write_multiple_coils_request(0x0001, 0, &values);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -609,7 +867,7 @@ mod tests {
     #[test]
     fn test_write_multiple_coils_request_invalid_quantity_high() {
         let values = [true; 1969]; // Too many
-        let result = CoilService::write_multiple_coils_request(0x0001, 1969, &values);
+        let result = CoilReqPdu::write_multiple_coils_request(0x0001, 1969, &values);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -617,7 +875,7 @@ mod tests {
     #[test]
     fn test_write_multiple_coils_request_quantity_values_mismatch() {
         let values = [true, false];
-        let result = CoilService::write_multiple_coils_request(0x0001, 3, &values); // Quantity 3, but only 2 values
+        let result = CoilReqPdu::write_multiple_coils_request(0x0001, 3, &values); // Quantity 3, but only 2 values
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -628,7 +886,7 @@ mod tests {
     fn test_parse_write_multiple_coils_response_valid() {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00, 0x0A]; // FC, Address, Quantity
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
+        let result = CoilReqPdu::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
         assert!(result.is_ok());
     }
 
@@ -637,7 +895,7 @@ mod tests {
     fn test_parse_write_multiple_coils_response_wrong_fc() {
         let response_bytes = [0x03, 0x00, 0x01, 0x00, 0x0A]; // Wrong FC
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
+        let result = CoilReqPdu::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -646,7 +904,7 @@ mod tests {
     fn test_parse_write_multiple_coils_response_address_mismatch() {
         let response_bytes = [0x0F, 0x00, 0x02, 0x00, 0x0A]; // Address 0x0002, expected 0x0001
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
+        let result = CoilReqPdu::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -655,7 +913,7 @@ mod tests {
     fn test_parse_write_multiple_coils_response_quantity_mismatch() {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00, 0x0B]; // Quantity 11, expected 10
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
+        let result = CoilReqPdu::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
         assert_eq!(result.unwrap_err(), MbusError::ParseError);
     }
 
@@ -664,7 +922,7 @@ mod tests {
     fn test_parse_write_multiple_coils_response_invalid_len() {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = CoilService::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
+        let result = CoilReqPdu::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 }

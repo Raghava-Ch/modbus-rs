@@ -4,17 +4,29 @@ use core::str::FromStr;
 use heapless::{String, Vec};
 use crate::{errors::MbusError};
 
+/// Configuration parameters for establishing a Modbus TCP connection.
 pub struct ModbusTcpConfig {
-    pub host: heapless::String<16>,
+    /// The hostname or IP address of the Modbus TCP server to connect to.
+    pub host: heapless::String<64>, // Increased capacity for host string to accommodate longer IP addresses/hostnames
+    /// The TCP port number on which the Modbus server is listening (default is typically 502).
     pub port: u16,
 }
 
+/// The transport module defines the `Transport` trait and related types for managing Modbus TCP communication.
 impl ModbusTcpConfig {
-    pub fn new(host: &str, port: u16) -> Self {
-        Self {
-            host: String::from_str(host).unwrap_or_else(|_| String::new()), // Convert &str to heapless String, fallback to empty String on error
+    /// Creates a new `ModbusTcpConfig` instance with the specified host and port.
+    /// # Arguments
+    /// * `host` - The hostname or IP address of the Modbus TCP server to connect to.
+    /// * `port` - The TCP port number on which the Modbus server is listening.
+    /// # Returns
+    /// A new `ModbusTcpConfig` instance with the provided host and port.
+    pub fn new(host: &str, port: u16) -> Result<Self, MbusError> {
+        let host_string = String::from_str(host)
+            .map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
+        Ok(Self {
+            host: host_string,
             port,
-        }
+        })
     }
 }
 
@@ -51,6 +63,7 @@ impl fmt::Display for TransportError {
     }
 }
 
+/// Implements the core standard `Error` trait for `TransportError`, allowing it to be used with Rust's error handling ecosystem.
 impl core::error::Error for TransportError {}
 
 /// An enumeration to specify the type of transport to use.

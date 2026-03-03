@@ -1,4 +1,6 @@
 
+use core::fmt;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MbusError {
     /// An error occurred while parsing the Modbus ADU.
@@ -33,4 +35,32 @@ pub enum MbusError {
     InvalidAddress,
     /// Too many requests in flight, expected responses buffer is full
     TooManyRequests,
+    /// Invalid function code
+    InvalidFunctionCode,
 }
+
+impl fmt::Display for MbusError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MbusError::ParseError => write!(f, "Parse error: An error occurred while parsing the Modbus ADU"),
+            MbusError::Timeout => write!(f, "Timeout: The transaction timed out waiting for a response"),
+            MbusError::ModbusException(code) => write!(f, "Modbus exception: The server responded with exception code 0x{:02X}", code),
+            MbusError::IoError => write!(f, "I/O error: An I/O error occurred during TCP communication"),
+            MbusError::Unexpected => write!(f, "Unexpected error: An unexpected error occurred"),
+            MbusError::ConnectionLost => write!(f, "Connection lost: The connection was lost during an active transaction"),
+            MbusError::UnsupportedFunction(code) => write!(f, "Unsupported function: Function code 0x{:02X} is not supported", code),
+            MbusError::ReservedSubFunction(code) => write!(f, "Reserved sub-function: Sub-function code 0x{:04X} is not available", code),
+            MbusError::InvalidPduLength => write!(f, "Invalid PDU length: The PDU length is invalid"),
+            MbusError::ConnectionFailed => write!(f, "Connection failed"),
+            MbusError::ConnectionClosed => write!(f, "Connection closed"),
+            MbusError::BufferTooSmall => write!(f, "Buffer too small: The data was too large for the buffer"),
+            MbusError::BufferLenMissmatch => write!(f, "Buffer length mismatch: Buffer length is not matching"),
+            MbusError::SendFailed => write!(f, "Send failed: Failed to send data"),
+            MbusError::InvalidAddress => write!(f, "Invalid address"),
+            MbusError::TooManyRequests => write!(f, "Too many requests: Expected responses buffer is full"),
+            MbusError::InvalidFunctionCode => write!(f, "Invalid function code"),
+        }
+    }
+}
+
+impl core::error::Error for MbusError {}

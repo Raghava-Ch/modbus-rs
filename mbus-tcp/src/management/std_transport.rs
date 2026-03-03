@@ -2,8 +2,8 @@ use std::io::{self, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use mbus_core::transport::{Transport, TransportError, TransportType, ModbusTcpConfig};
 use heapless::Vec;
+use mbus_core::transport::{ModbusTcpConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
 ///
@@ -34,8 +34,12 @@ impl StdTcpTransport {
     /// This maps common I/O error kinds to specific Modbus transport errors.
     fn map_io_error(err: io::Error) -> TransportError {
         match err.kind() {
-            io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound => TransportError::ConnectionFailed,
-            io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset | io::ErrorKind::UnexpectedEof => TransportError::ConnectionClosed,
+            io::ErrorKind::ConnectionRefused | io::ErrorKind::NotFound => {
+                TransportError::ConnectionFailed
+            }
+            io::ErrorKind::BrokenPipe
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::UnexpectedEof => TransportError::ConnectionClosed,
             io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => TransportError::Timeout,
             _ => TransportError::IoError,
         }
@@ -54,23 +58,35 @@ impl Transport for StdTcpTransport {
     /// # Returns
     /// `Ok(())` if the connection is successfully established, or an error otherwise.
     fn connect(&mut self, config: &ModbusTcpConfig) -> Result<(), Self::Error> {
-        // Resolve the address
-        let mut addrs = format!("{}:{}", config.host, config.port).to_socket_addrs()
-            .map_err(|_| TransportError::ConnectionFailed)?;
+        let timeout = self.timeout.unwrap_or(Duration::from_secs(5));
 
-        let stream = addrs.next()
-            .ok_or(TransportError::ConnectionFailed)
-            .and_then(|addr| {
-                TcpStream::connect_timeout(&addr, self.timeout.unwrap_or(Duration::from_secs(5)))
-                    .map_err(Self::map_io_error)
+        let addrs = (config.host.as_str(), config.port)
+            .to_socket_addrs()
+            .map_err(|e| {
+                eprintln!("DNS resolution failed: {:?}", e);
+                TransportError::ConnectionFailed
             })?;
 
-        stream.set_read_timeout(self.timeout).map_err(Self::map_io_error)?;
-        stream.set_write_timeout(self.timeout).map_err(Self::map_io_error)?;
-        stream.set_nodelay(true).map_err(Self::map_io_error)?; // Disable Nagle's algorithm for better latency
+        for addr in addrs {
+            eprintln!("Trying address: {:?}", addr);
 
-        self.stream = Some(stream);
-        Ok(())
+            match TcpStream::connect_timeout(&addr, timeout) {
+                Ok(stream) => {
+                    stream.set_read_timeout(self.timeout).ok();
+                    stream.set_write_timeout(self.timeout).ok();
+                    stream.set_nodelay(true).ok();
+
+                    self.stream = Some(stream);
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Connect failed: {:?}", e);
+                    continue;
+                }
+            }
+        }
+
+        Err(TransportError::ConnectionFailed)
     }
 
     /// Closes the active TCP connection.
@@ -93,8 +109,11 @@ impl Transport for StdTcpTransport {
     /// # Returns
     /// `Ok(())` if the ADU is successfully sent, or an error otherwise.
     fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
-        let stream = self.stream.as_mut().ok_or(TransportError::ConnectionClosed)?;
-        
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or(TransportError::ConnectionClosed)?;
+
         let result = stream.write_all(adu).and_then(|()| stream.flush());
 
         if let Err(err) = result {
@@ -117,8 +136,11 @@ impl Transport for StdTcpTransport {
     /// # Returns
     /// `Ok(Vec<u8, 260>)` containing the received ADU, or an error otherwise.
     fn recv(&mut self) -> Result<Vec<u8, 260>, Self::Error> {
-        let stream = self.stream.as_mut().ok_or(TransportError::ConnectionClosed)?;
-        
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or(TransportError::ConnectionClosed)?;
+
         // Helper closure to handle errors and update state
         let handle_error = |err: TransportError, stream_opt: &mut Option<TcpStream>| {
             if err == TransportError::ConnectionClosed {
@@ -128,13 +150,20 @@ impl Transport for StdTcpTransport {
         };
 
         let mut buffer = Vec::new();
-        buffer.resize(260, 0).map_err(|_| TransportError::BufferTooSmall)?;
+        buffer
+            .resize(260, 0)
+            .map_err(|_| TransportError::BufferTooSmall)?;
 
         // 1. Read MBAP header (7 bytes)
         let mut bytes_read_total = 0;
         while bytes_read_total < 7 {
             match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..7]) {
-                Ok(0) => return Err(handle_error(TransportError::ConnectionClosed, &mut self.stream)),
+                Ok(0) => {
+                    return Err(handle_error(
+                        TransportError::ConnectionClosed,
+                        &mut self.stream,
+                    ));
+                }
                 Ok(n) => bytes_read_total += n,
                 Err(e) => return Err(handle_error(Self::map_io_error(e), &mut self.stream)),
             }
@@ -151,7 +180,12 @@ impl Transport for StdTcpTransport {
         // 2. Read remaining bytes
         while bytes_read_total < total_adu_len {
             match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..total_adu_len]) {
-                Ok(0) => return Err(handle_error(TransportError::ConnectionClosed, &mut self.stream)),
+                Ok(0) => {
+                    return Err(handle_error(
+                        TransportError::ConnectionClosed,
+                        &mut self.stream,
+                    ));
+                }
                 Ok(n) => bytes_read_total += n,
                 Err(e) => return Err(handle_error(Self::map_io_error(e), &mut self.stream)),
             }
@@ -183,13 +217,13 @@ impl StdTcpTransport {
 
 #[cfg(test)]
 mod tests {
-    use super::super::std_transport::{StdTcpTransport};
+    use super::super::std_transport::StdTcpTransport;
     use mbus_core::transport::{ModbusTcpConfig, Transport, TransportError};
     use std::io::{self, Read, Write};
-    use std::net::{TcpListener};
-    use std::time::Duration;
-    use std::thread;
+    use std::net::TcpListener;
     use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
 
     /// Helper function to create a TcpListener on an available port.
     /// This listener is then passed to the server thread.
@@ -228,7 +262,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -240,7 +274,7 @@ mod tests {
     #[test]
     fn test_connect_failure_invalid_addr() {
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
-        let config = ModbusTcpConfig::new("invalid-address", 502); // Invalid host
+        let config = ModbusTcpConfig::new("invalid-address", 502).unwrap(); // Invalid host, but short enough
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -257,7 +291,7 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         drop(listener); // Explicitly drop the listener to ensure the port is free
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -280,7 +314,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
         assert!(transport.is_connected());
 
@@ -313,7 +347,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.send(&test_data);
@@ -353,7 +387,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
 
         transport.connect(&config).unwrap();
 
@@ -392,7 +426,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -423,7 +457,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -436,7 +470,8 @@ mod tests {
     /// Test case: `recv` returns `BufferTooSmall` if the ADU length indicated by MBAP header
     /// exceeds the maximum capacity of `Vec<u8, 260>`.
     #[test]
-    fn test_recv_failure_buffer_too_small() { // Corrected function name
+    fn test_recv_failure_buffer_too_small() {
+        // Corrected function name
         let listener = create_test_listener();
         let addr = listener.local_addr().unwrap();
         let (tx, rx) = mpsc::channel();
@@ -455,7 +490,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -483,7 +518,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_millis(100))); // Very short timeout for test
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -512,7 +547,7 @@ mod tests {
         let port = get_host_port(addr);
         assert!(!transport.is_connected());
 
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         transport.connect(&config).unwrap();
 
         assert!(transport.is_connected());
@@ -528,23 +563,38 @@ mod tests {
     fn test_map_io_error() {
         // ConnectionRefused
         let err = io::Error::new(io::ErrorKind::ConnectionRefused, "test");
-        assert_eq!(StdTcpTransport::map_io_error(err), TransportError::ConnectionFailed);
+        assert_eq!(
+            StdTcpTransport::map_io_error(err),
+            TransportError::ConnectionFailed
+        );
 
         // NotFound (often used for address resolution issues)
         let err = io::Error::new(io::ErrorKind::NotFound, "test");
-        assert_eq!(StdTcpTransport::map_io_error(err), TransportError::ConnectionFailed);
+        assert_eq!(
+            StdTcpTransport::map_io_error(err),
+            TransportError::ConnectionFailed
+        );
 
         // BrokenPipe
         let err = io::Error::new(io::ErrorKind::BrokenPipe, "test");
-        assert_eq!(StdTcpTransport::map_io_error(err), TransportError::ConnectionClosed);
+        assert_eq!(
+            StdTcpTransport::map_io_error(err),
+            TransportError::ConnectionClosed
+        );
 
         // ConnectionReset
         let err = io::Error::new(io::ErrorKind::ConnectionReset, "test");
-        assert_eq!(StdTcpTransport::map_io_error(err), TransportError::ConnectionClosed);
+        assert_eq!(
+            StdTcpTransport::map_io_error(err),
+            TransportError::ConnectionClosed
+        );
 
         // UnexpectedEof
         let err = io::Error::new(io::ErrorKind::UnexpectedEof, "test");
-        assert_eq!(StdTcpTransport::map_io_error(err), TransportError::ConnectionClosed);
+        assert_eq!(
+            StdTcpTransport::map_io_error(err),
+            TransportError::ConnectionClosed
+        );
 
         // WouldBlock
         let err = io::Error::new(io::ErrorKind::WouldBlock, "test");
@@ -575,7 +625,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_millis(500))); // Custom timeout
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -599,7 +649,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(None); // No timeout
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -625,7 +675,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(Some(Duration::from_secs(1)));
         let port = get_host_port(addr);
-        let config = ModbusTcpConfig::new("127.0.0.1", port);
+        let config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
 
         transport.connect(&config).unwrap();
 

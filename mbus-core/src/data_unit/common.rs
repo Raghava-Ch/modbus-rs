@@ -5,6 +5,7 @@ use crate::function_codes::public::{
 use heapless::Vec;
 
 pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
+pub const MAX_ADU_FRAME_LEN: usize = 260; // Maximum length of an ADU (MBAP header + PDU)
 
 /// Represents sub-function codes used by specific Modbus function codes.
 ///
@@ -152,9 +153,9 @@ impl ModbusMessage {
     /// followed by the PDU.
     ///
     /// # Returns
-    /// `Ok(Vec<u8, 260>)` containing the ADU bytes, or an `MbusError` if
+    /// `Ok(Vec<u8, MAX_ADU_LEN>)` containing the ADU bytes, or an `MbusError` if
     /// the message cannot be serialized.
-    pub fn to_bytes(&self) -> Result<Vec<u8, 260>, MbusError> {
+    pub fn to_bytes(&self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let mut adu_bytes = Vec::new();
 
         match &self.additional_address {

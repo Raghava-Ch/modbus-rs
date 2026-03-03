@@ -4,7 +4,11 @@ use std::cell::RefCell;
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MockApp {
-    pub received_coil_responses: RefCell<Vec<(u16, u8, Coils, u16)>>,
+    pub received_coil_responses: RefCell<Vec<(u16, u8, Coils, u16)>>, // Corrected duplicate
+    pub received_write_single_coil_responses:
+        RefCell<Vec<(u16, u8, u16, bool)>>,
+    pub received_write_multiple_coils_responses:
+        RefCell<Vec<(u16, u8, u16, u16)>>,
 }
 
 impl CoilResponse for MockApp {
@@ -24,5 +28,23 @@ impl CoilResponse for MockApp {
             ),
             1,
         ));
+    }
+
+    fn write_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool) {
+        self.received_write_single_coil_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, address, value));
+    }
+
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+    ) {
+        self.received_write_multiple_coils_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, address, quantity));
     }
 }

@@ -13,3 +13,11 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [dependencies]
 mbus-core ={ workspace = true }
+mbus-rtu ={ workspace = true }
+mbus-tcp ={ workspace = true }
+
+heapless = { workspace = true }
+bitfields = { workspace = true }
+anyhow = "1.0.102"
+
+[build-dependencies]

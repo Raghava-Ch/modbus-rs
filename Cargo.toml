@@ -17,6 +17,8 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 [workspace.dependencies]
 # Shared dependencies across workspace
 mbus-core ={ path = "./mbus-core" }
+mbus-rtu ={ path = "./mbus-rtu" }
+mbus-tcp ={ path = "./mbus-tcp" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
