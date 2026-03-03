@@ -4,7 +4,7 @@ use crate::{
     data_unit::{common::MbapHeader, tcp::ModbusTcpMessage},
     errors::MbusError,
     function_codes::public::FunctionCode,
-    transport::{ModbusTcpConfig, Transport, TransportType},
+    transport::{ModbusConfig, Transport, TransportType},
 };
 
 pub mod coils;
@@ -69,7 +69,7 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse>
     pub fn new(
         mut transport: TRANSPORT,
         app: APP,
-        config: ModbusTcpConfig,
+        config: ModbusConfig,
     ) -> Result<Self, MbusError> {
         transport
             .connect(&config)
@@ -477,7 +477,7 @@ mod tests {
     use crate::app::CoilResponse;
     use crate::client::services::coils::Coils;
     use crate::errors::MbusError;
-    use crate::transport::ModbusTcpConfig;
+    use crate::transport::ModbusConfig;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
     use heapless::Deque;
     use heapless::Vec;
@@ -497,7 +497,7 @@ mod tests {
     impl Transport for MockTransport {
         type Error = MbusError;
 
-        fn connect(&mut self, _config: &ModbusTcpConfig) -> Result<(), Self::Error> {
+        fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
             if self.connect_should_fail {
                 return Err(MbusError::ConnectionFailed);
             }
@@ -596,7 +596,7 @@ mod tests {
     fn test_client_services_new_success() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
 
         let client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config);
@@ -610,7 +610,7 @@ mod tests {
         let mut transport = MockTransport::default();
         transport.connect_should_fail = true;
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
 
         let client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config);
@@ -623,7 +623,7 @@ mod tests {
     fn test_read_multiple_coils_sends_valid_adu() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -658,7 +658,7 @@ mod tests {
     fn test_read_multiple_coils_invalid_quantity() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -677,7 +677,7 @@ mod tests {
         let mut transport = MockTransport::default();
         transport.send_should_fail = true;
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -695,7 +695,7 @@ mod tests {
     fn test_client_services_read_coils_e2e_success() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -765,7 +765,7 @@ mod tests {
     fn test_ingest_frame_wrong_fc() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -783,7 +783,7 @@ mod tests {
     fn test_ingest_frame_malformed_adu() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -801,7 +801,7 @@ mod tests {
     fn test_ingest_frame_unknown_txn_id() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -819,7 +819,7 @@ mod tests {
     fn test_ingest_frame_pdu_parse_failure() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap(); // Removed .to_string()
         let mut client_services = 
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -851,7 +851,7 @@ mod tests {
     fn test_client_services_read_single_coil_e2e_success() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -913,7 +913,7 @@ mod tests {
     fn test_read_single_coil_request_sends_valid_adu() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -958,7 +958,7 @@ mod tests {
     fn test_write_single_coil_sends_valid_adu() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -1007,7 +1007,7 @@ mod tests {
     fn test_client_services_write_single_coil_e2e_success() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -1071,7 +1071,7 @@ mod tests {
     fn test_write_multiple_coils_sends_valid_adu() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 
@@ -1125,7 +1125,7 @@ mod tests {
     fn test_client_services_write_multiple_coils_e2e_success() {
         let transport = MockTransport::default();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
         let mut client_services =
             ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
 

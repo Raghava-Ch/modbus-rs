@@ -5,7 +5,7 @@ mod tests {
     use mbus_core;
     use anyhow::Result;
     use mbus_core::client::services::ClientServices;
-    use mbus_core::transport::{ModbusTcpConfig};
+    use mbus_core::transport::{ModbusConfig};
     use mbus_tcp::management::std_transport::StdTcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -54,9 +54,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -120,9 +121,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 100;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -189,9 +191,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -260,9 +263,10 @@ mod tests {
             Ok(())
         });
 
-        let transport = StdTcpTransport::new(None);
+        let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 

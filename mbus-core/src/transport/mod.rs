@@ -4,16 +4,46 @@ use core::str::FromStr;
 use heapless::{String, Vec};
 use crate::{errors::MbusError};
 
+const MODBUS_TCP_DEFAULT_PORT: u16 = 502;
+
 /// Configuration parameters for establishing a Modbus TCP connection.
-pub struct ModbusTcpConfig {
+pub struct ModbusConfig {
     /// The hostname or IP address of the Modbus TCP server to connect to.
     pub host: heapless::String<64>, // Increased capacity for host string to accommodate longer IP addresses/hostnames
     /// The TCP port number on which the Modbus server is listening (default is typically 502).
     pub port: u16,
+
+    // Optional parameters for connection management (can be set to default values if not needed)
+    pub connection_timeout_ms: u32, // Timeout for establishing a connection in milliseconds
+    pub response_timeout_ms: u32, // Timeout for waiting for a response in milliseconds
+    pub retry_backoff_ms: u32, // Backoff time between retries in milliseconds
+
+    pub retry_attempts: u8, // Number of retry attempts for failed operations
+    pub keep_alive_interval_ms: u32, // Interval for sending keep-alive messages in milliseconds
 }
 
 /// The transport module defines the `Transport` trait and related types for managing Modbus TCP communication.
-impl ModbusTcpConfig {
+impl ModbusConfig {
+    /// Creates a new `ModbusTcpConfig` instance with the specified host and port.
+    /// # Arguments
+    /// * `host` - The hostname or IP address of the Modbus TCP server to connect to.
+    /// * `port` - The TCP port number on which the Modbus server is listening.
+    /// # Returns
+    /// A new `ModbusTcpConfig` instance with the provided host and port.
+    pub fn default(host: &str) -> Result<Self, MbusError> {
+        let host_string = String::from_str(host)
+            .map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
+        Ok(Self {
+            host: host_string,
+            port: MODBUS_TCP_DEFAULT_PORT,
+            connection_timeout_ms: 5000,
+            response_timeout_ms: 5000,
+            retry_backoff_ms: 100,
+            retry_attempts: 3,
+            keep_alive_interval_ms: 30000,
+        })
+    }
+
     /// Creates a new `ModbusTcpConfig` instance with the specified host and port.
     /// # Arguments
     /// * `host` - The hostname or IP address of the Modbus TCP server to connect to.
@@ -26,6 +56,11 @@ impl ModbusTcpConfig {
         Ok(Self {
             host: host_string,
             port,
+            connection_timeout_ms: 5000,
+            response_timeout_ms: 5000,
+            retry_backoff_ms: 100,
+            retry_attempts: 3,
+            keep_alive_interval_ms: 30000,
         })
     }
 }
@@ -104,11 +139,11 @@ pub trait Transport {
     /// Establishes a TCP connection to the specified remote address.
     ///
     /// # Arguments
-    /// * `addr` - The address of the Modbus TCP server (e.g., "192.168.1.1:502").
-    ///
+    /// * `config` - The `ModbusTcpConfig` containing the host and port of the Modbus TCP server.
+    /// 
     /// # Returns
     /// `Ok(())` if the connection is successfully established, or an error otherwise.
-    fn connect(&mut self, config: &ModbusTcpConfig) -> Result<(), Self::Error>;
+    fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error>;
 
     /// Closes the active TCP connection.
     fn disconnect(&mut self) -> Result<(), Self::Error>;
