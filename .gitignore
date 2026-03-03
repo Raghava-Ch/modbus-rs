@@ -19,6 +19,7 @@ Cargo.lock
 .DS_Store
 temp
 **.temp.**
+**.temp
 **/build/**
 **.db
 **.class

@@ -1,3 +1,7 @@
+## Work in Progress
+This create is helper crate for [modbus-rs](https://crates.io/crates/modbus-rs)
+This repository is under active development.
+
 ## Licensing Model
 
 Copyright (C) 2025 Raghava Challari

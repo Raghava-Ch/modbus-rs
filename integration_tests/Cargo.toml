@@ -1,0 +1,18 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mbus-tcp = { path = "../mbus-tcp" }
+mbus-core = { path = "../mbus-core" }
+heapless = "0.8.0"
+anyhow = "1.0.86"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+
+[[test]]
+name = "test_std_tcp_transport"
+path = "src/lib.rs"
+harness = true

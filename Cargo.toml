@@ -1,21 +1,27 @@
 [workspace]
-members = [
-]
+members = ["mbus-core", "mbus-rtu", "mbus-tcp", "modbus-rs", "integration_tests"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["Raghava Ch"]
-license = "GPL-3"
+authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
+license-file = "LICENSE"
 repository = "https://github.com/Raghava-Ch/modbus-rs"
+homepage = "https://github.com/Raghava-Ch"
 readme = "README.md"
-keywords = ["iolink", "embedded", "no-std", "device"]
+keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Complete Modbus Master and Slave implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
 
 [workspace.dependencies]
 # Shared dependencies across workspace
+mbus-core ={ path = "./mbus-core" }
+mbus-rtu ={ path = "./mbus-rtu" }
+mbus-tcp ={ path = "./mbus-tcp" }
+
+heapless = { version = "0.8.0" }
+bitfields = { version = "1.0.0" }
 
 # Macro dependencies
 proc-macro2 = { version = "1.0" }
@@ -23,4 +29,4 @@ quote = { version = "1.0" }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 
 [workspace.metadata]
-description = "Complete modbus application protocol specification"
+description = "Complete modbus application protocol stack for embedded first"

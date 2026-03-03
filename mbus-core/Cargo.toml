@@ -1,0 +1,15 @@
+[package]
+name = "mbus-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license-file = "LICENSE"
+repository.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description.workspace = true
+
+[dependencies]
+heapless = { workspace = true }
+bitfields = { workspace = true }
