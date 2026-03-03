@@ -461,6 +461,44 @@ mod tests {
         assert_eq!(bytes.as_slice(), expected_bytes_vec.as_slice());
     }
 
+    /// Test case: `ModbusMessage::to_bytes` for a Modbus TCP message.
+    ///
+    /// Verifies that a `ModbusMessage` with an `MbapHeader` and `Pdu` is correctly
+    /// serialized into its ADU byte representation.
+    #[test]
+    fn test_modbus_message_to_bytes_tcp() {
+        let mbap_header = MbapHeader {
+            transaction_id: 0x1234,
+            protocol_id: 0x0000,
+            length: 0x0005, // Length of PDU (FC + Data) + Unit ID
+            unit_id: 0x01,
+        };
+
+        let mut pdu_data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        pdu_data_vec.extend_from_slice(&[0x00, 0x00, 0x00]).unwrap();
+
+        let pdu = Pdu::new(
+            FunctionCode::ReadHoldingRegisters,
+            pdu_data_vec,
+            3, // 3 data bytes
+        );
+
+        let modbus_message = ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu);
+        let adu_bytes = modbus_message.to_bytes().expect("Failed to serialize ModbusMessage");
+
+        #[rustfmt::skip]
+        let expected_adu: [u8; 11] = [
+            0x12, 0x34, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x05, // Length (PDU length (FC + Data) + 1 byte Unit ID = (1 + 3) + 1 = 5)
+            0x01,       // Unit ID
+            0x03,       // Function Code (Read Holding Registers)
+            0x00, 0x00, 0x00, // Data
+        ];
+
+        assert_eq!(adu_bytes.as_slice(), &expected_adu);
+    }
+
     // --- Tests for FunctionCode::try_from ---
     /// Test case: `FunctionCode::try_from` with valid `u8` values.
     ///
