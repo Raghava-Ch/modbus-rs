@@ -1,7 +1,10 @@
 use heapless::Vec;
 
 use crate::{
-    app::{CoilResponse, FifoQueueResponse, RegisterResponse, RequestErrorNotifier},
+    app::{
+        CoilResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier,
+    },
+    client::services::file_record::{SubRequest},
     data_unit::{
         common::{MAX_ADU_FRAME_LEN, MbapHeader},
         tcp::ModbusTcpMessage,
@@ -14,6 +17,7 @@ use crate::{
 pub mod coils;
 pub mod fifo;
 pub mod registers;
+pub mod file_record;
 
 /// Represents the type of response we expect for a given request,
 /// along with any necessary metadata to validate and process the response when it arrives,
@@ -64,6 +68,10 @@ enum ExpectedResponseType {
     },
     /// Expected response for a Read FIFO Queue request.
     ReadFifoQueue,
+    /// Expected response for a Read File Record request.
+    ReadFileRecord,
+    /// Expected response for a Write File Record request.
+    WriteFileRecord,
 }
 
 /// Represents an expected response for a previously sent request,
@@ -100,6 +108,8 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
     register_service: registers::RegisterService,
     /// Service struct for constructing FIFO queue-related requests and parsing responses.
     fifo_queue_service: fifo::FifoQueueService,
+    /// Service struct for constructing file record-related requests and parsing responses.
+    file_record_service: file_record::FileRecordService,
 
     config: ModbusConfig,
 
@@ -111,7 +121,12 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
 impl<
     TRANSPORT: Transport,
     const N: usize,
-    APP: RequestErrorNotifier + CoilResponse + RegisterResponse + FifoQueueResponse + TimeKeeper,
+    APP: RequestErrorNotifier
+        + CoilResponse
+        + RegisterResponse
+        + FifoQueueResponse
+        + FileRecordResponse
+        + TimeKeeper,
 > ClientServices<TRANSPORT, N, APP>
 {
     /// Creates a new instance of ClientServices, connecting to the transport layer with the provided configuration.
@@ -130,6 +145,7 @@ impl<
             register_service: registers::RegisterService::new(),
             coil_service: coils::CoilService::new(),
             fifo_queue_service: fifo::FifoQueueService::new(),
+            file_record_service: file_record::FileRecordService::new(),
             config,
             expected_responses: Vec::new(),
         })
@@ -757,6 +773,80 @@ impl<
             .map_err(|_e| MbusError::SendFailed)?;
         Ok(())
     }
+
+    /// Sends a Read File Record request.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID.
+    /// - `unit_id`: The Modbus unit ID.
+    /// - `sub_request`: The sub-request structure containing file/record details.
+    pub fn read_file_record(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        sub_request: &SubRequest,
+    ) -> Result<(), MbusError> {
+        let frame = self.file_record_service.read_file_record(
+            txn_id,
+            unit_id,
+            sub_request,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadFileRecord,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Write File Record request.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID.
+    /// - `unit_id`: The Modbus unit ID.
+    /// - `sub_request`: The sub-request structure containing file/record details and data.
+    pub fn write_file_record(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        sub_request: &SubRequest,
+    ) -> Result<(), MbusError> {
+        let frame = self.file_record_service.write_file_record(
+            txn_id,
+            unit_id,
+            sub_request,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::WriteFileRecord,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+    
+
     /// Ingests received Modbus frames from the transport layer.
     fn ingest_frame(&mut self, frame: &[u8]) {
         // Changed to &mut self, removed transport param
@@ -932,6 +1022,12 @@ impl<
             }
             ExpectedResponseType::ReadFifoQueue { .. } => {
                 self.handle_read_fifo_queue_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::ReadFileRecord => {
+                self.handle_read_file_record_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::WriteFileRecord => {
+                self.handle_write_file_record_response(mbap_header, function_code, pdu);
             }
 
             ExpectedResponseType::Undefined => {
@@ -1275,6 +1371,53 @@ impl<
             &register_rsp,
         );
     }
+
+    fn handle_read_file_record_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        let data = match self
+            .file_record_service
+            .handle_read_file_record_rsp(function_code, pdu)
+        {
+            Ok(d) => d,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        self.app.read_file_record_response(
+            mbap_header.transaction_id,
+            mbap_header.unit_id,
+            &data,
+        );
+    }
+
+    fn handle_write_file_record_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        if self
+            .file_record_service
+            .handle_write_file_record_rsp(function_code, pdu)
+            .is_ok()
+        {
+            self.app
+                .write_file_record_response(mbap_header.transaction_id, mbap_header.unit_id);
+        } else {
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::ParseError,
+            );
+        }
+    }
 }
 
 /// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
@@ -1305,9 +1448,11 @@ mod tests {
     use super::*;
     use crate::app::CoilResponse;
     use crate::app::FifoQueueResponse;
+    use crate::app::FileRecordResponse;
     use crate::app::RegisterResponse;
     use crate::client::services::coils::Coils;
     use crate::client::services::fifo::FifoQueue;
+    use crate::client::services::file_record::{SubRequestParams, MAX_SUB_REQUESTS_PER_PDU};
     use crate::errors::MbusError;
     use crate::transport::ModbusConfig;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
@@ -1388,6 +1533,8 @@ mod tests {
             RefCell<Vec<(u16, u8, Registers), 10>>,
         pub received_mask_write_register_responses: RefCell<Vec<(u16, u8), 10>>,
         pub received_read_fifo_queue_responses: RefCell<Vec<(u16, u8, FifoQueue), 10>>,
+        pub received_read_file_record_responses: RefCell<Vec<(u16, u8, Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>), 10>>,
+        pub received_write_file_record_responses: RefCell<Vec<(u16, u8), 10>>,
         pub failed_requests: RefCell<Vec<(u16, u8, MbusError), 10>>,
 
         pub current_time: RefCell<u64>, // For simulating time in tests
@@ -1569,6 +1716,20 @@ mod tests {
                 .borrow_mut()
                 .push((txn_id, unit_id, fifo_queue.clone()))
                 .unwrap();
+        }
+    }
+
+    impl FileRecordResponse for MockApp {
+        fn read_file_record_response(&mut self, txn_id: u16, unit_id: u8, data: &[SubRequestParams]) {
+            let mut vec = Vec::new();
+            vec.extend_from_slice(data).unwrap();
+            self.received_read_file_record_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, vec))
+                .unwrap();
+        }
+        fn write_file_record_response(&mut self, txn_id: u16, unit_id: u8) {
+            self.received_write_file_record_responses.borrow_mut().push((txn_id, unit_id)).unwrap();
         }
     }
 
@@ -3039,5 +3200,98 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_fifo_queue.values.len(), 2);
         assert_eq!(rcv_fifo_queue.values.as_slice(), &[0xAAAA, 0xBBBB]);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_file_record` request.
+    #[test]
+    fn test_client_services_read_file_record_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 14;
+        let unit_id = 1;
+        let mut sub_req = SubRequest::new();
+        sub_req.add_read_sub_request(4, 1, 2).unwrap();
+
+        client_services
+            .read_file_record(txn_id, unit_id, &sub_req)
+            .unwrap();
+
+        // Simulate response: FC(20), ByteCount(7), SubReqLen(6), Ref(6), Data(0x1234, 0x5678)
+        // Note: ByteCount = 1 (SubReqLen) + 1 (Ref) + 4 (Data) + 1 (SubReqLen for next?) No.
+        // Response format: ByteCount, [Len, Ref, Data...]
+        // Len = 1 (Ref) + 4 (Data) = 5.
+        // ByteCount = 1 (Len) + 5 = 6.
+        let response_adu = [
+            0x00, 0x0E, 0x00, 0x00, 0x00, 0x09, 0x01, 0x14, 0x06, 0x05, 0x06, 0x12, 0x34, 0x56,
+            0x78,
+        ];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_read_file_record_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_data) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_data.len(), 1);
+        assert_eq!(rcv_data[0].record_data.as_ref().unwrap().as_slice(), &[0x1234, 0x5678]);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `write_file_record` request.
+    #[test]
+    fn test_client_services_write_file_record_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 15;
+        let unit_id = 1;
+        let mut sub_req = SubRequest::new();
+        let mut data = Vec::new();
+        data.push(0x1122).unwrap();
+        sub_req.add_write_sub_request(4, 1, 1, data).unwrap();
+
+        client_services
+            .write_file_record(txn_id, unit_id, &sub_req)
+            .unwrap();
+
+        // Simulate response (Echo of request)
+        // FC(21), ByteCount(9), Ref(6), File(4), Rec(1), Len(1), Data(0x1122)
+        let response_adu = [
+            0x00, 0x0F, 0x00, 0x00, 0x00, 0x0C, 0x01, 0x15, 0x09, 0x06, 0x00, 0x04, 0x00, 0x01,
+            0x00, 0x01, 0x11, 0x22,
+        ];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_write_file_record_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
     }
 }
