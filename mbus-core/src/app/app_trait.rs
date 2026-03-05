@@ -1,4 +1,4 @@
-use crate::{app::Coils, client::services::{fifo::FifoQueue, registers::Registers}, errors::MbusError};
+use crate::{app::Coils, client::services::{fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
 
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
@@ -35,6 +35,19 @@ pub trait CoilResponse {
 
 pub trait FifoQueueResponse {
     fn read_fifo_queue_response(&mut self, txn_id: u16, unit_id: u8, fifo_queue: &FifoQueue);
+}
+
+/// Trait defining the expected response handling for File Record Modbus operations.
+pub trait FileRecordResponse {
+    /// Handles a Read File Record response.
+    ///
+    /// # Parameters
+    /// - `data`: A slice containing the sub-request responses. Note that `file_number` and `record_number`
+    ///   are not returned by the server in the response PDU and will be set to 0 in the parameters.
+    fn read_file_record_response(&mut self, txn_id: u16, unit_id: u8, data: &[SubRequestParams]);
+
+    /// Handles a Write File Record response, confirming the write was successful.
+    fn write_file_record_response(&mut self, txn_id: u16, unit_id: u8);
 }
 
 /// Defines callbacks for handling responses to Modbus register-related requests.

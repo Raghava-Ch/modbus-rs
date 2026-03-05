@@ -1,9 +1,10 @@
 use anyhow::Result;
 use mbus_core::app::{
-    CoilResponse, Coils, FifoQueueResponse, RegisterResponse, RequestErrorNotifier,
+    CoilResponse, Coils, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier,
 };
 use mbus_core::client::services::ClientServices;
 use mbus_core::client::services::fifo::FifoQueue;
+use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, TimeKeeper};
@@ -160,6 +161,15 @@ impl TimeKeeper for ClientApp {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64
+    }
+}
+
+impl FileRecordResponse for ClientApp {
+    fn read_file_record_response(&mut self, _txn_id: u16, _unit_id: u8, _data: &[SubRequestParams]) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+    fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 }
 

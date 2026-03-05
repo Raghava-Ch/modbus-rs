@@ -1,11 +1,12 @@
 use anyhow::Result;
 use heapless::Vec as HeaplessVec;
 use mbus_core::app::{
-    CoilResponse, Coils, FifoQueueResponse, RegisterResponse, RequestErrorNotifier,
+    CoilResponse, Coils, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
 };
 use mbus_core::client::services::ClientServices;
 use mbus_core::client::services::coils::MAX_COIL_BYTES;
 use mbus_core::client::services::fifo::FifoQueue;
+use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
 // Import MAX_COIL_BYTES
 use mbus_core::errors::MbusError;
@@ -135,6 +136,15 @@ impl TimeKeeper for ClientMockApp {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64
+    }
+}
+
+impl FileRecordResponse for ClientMockApp {
+    fn read_file_record_response(&mut self, _txn_id: u16, _unit_id: u8, _data: &[SubRequestParams]) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+    fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 }
 
