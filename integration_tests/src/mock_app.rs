@@ -1,5 +1,6 @@
 use mbus_core::{
-    app::{CoilResponse, Coils},
+    app::{CoilResponse, Coils, FifoQueueResponse, RegisterResponse, RequestErrorNotifier},
+    client::services::{fifo::FifoQueue, registers::Registers},
     errors::MbusError,
     transport::TimeKeeper,
 };
@@ -44,9 +45,92 @@ impl CoilResponse for MockApp {
             .borrow_mut()
             .push((txn_id, unit_id, address, quantity));
     }
-
+}
+impl RequestErrorNotifier for MockApp {
     fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
         // In a real application, this would log the error or update some state.
+    }
+}
+
+impl RegisterResponse for MockApp {
+    fn read_holding_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _registers: &Registers,
+    ) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn read_input_register_response(&mut self, _txn_id: u16, _unit_id: u8, _registers: &Registers) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn read_single_input_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
+
+    fn read_single_holding_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
+
+    fn write_single_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn write_multiple_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _quantity: u16,
+    ) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn read_write_multiple_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _registers: &Registers,
+    ) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn read_single_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+
+    fn mask_write_register_response(&mut self, _txn_id: u16, _unit_id: u8) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+}
+
+impl FifoQueueResponse for MockApp {
+    fn read_fifo_queue_response(&mut self, _txn_id: u16, _unit_id: u8, _fifo_queue: &FifoQueue) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 }
 

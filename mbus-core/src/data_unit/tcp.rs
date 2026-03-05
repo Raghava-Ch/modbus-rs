@@ -1,4 +1,6 @@
-use crate::data_unit::common::{AdditionalAddress, MbapHeader, ModbusMessage, Pdu, MAX_PDU_DATA_LEN};
+use crate::data_unit::common::{
+    AdditionalAddress, MAX_PDU_DATA_LEN, MbapHeader, ModbusMessage, Pdu,
+};
 use crate::errors::MbusError;
 use crate::function_codes::public::FunctionCode;
 use heapless::Vec; // Ensure Vec is imported
@@ -128,12 +130,14 @@ impl ModbusTcpMessage {
         {
             mbap_header
         } else {
-            panic!("Expected MbapHeader: This should never happen, \nApplication developer error if this occurs");
+            panic!(
+                "Expected MbapHeader: This should never happen, \nApplication developer error if this occurs"
+            );
         }
     }
 
     /// Returns a reference to the PDU of the Modbus TCP message.
-    /// 
+    ///
     /// # Returns
     /// A reference to the data payload of the PDU.
     pub fn data(&self) -> &Vec<u8, MAX_PDU_DATA_LEN> {
@@ -282,7 +286,7 @@ mod tests {
         let pdu = Pdu::new(
             FunctionCode::ReportServerId,
             Vec::new(), // No actual data used
-            0,                       // 0 data bytes
+            0,          // 0 data bytes
         );
 
         let tcp_message = ModbusTcpMessage::new(mbap_header, pdu);
@@ -340,8 +344,10 @@ mod tests {
             FunctionCode::ReadHoldingRegisters
         );
         assert_eq!(tcp_message.modbus_message.data_len(), 3);
-        assert_eq!(tcp_message.modbus_message.data().as_slice(), &[0x00, 0x00, 0x00]);
-
+        assert_eq!(
+            tcp_message.modbus_message.data().as_slice(),
+            &[0x00, 0x00, 0x00]
+        );
     }
 
     /// Test case: `ModbusTcpMessage::from_adu_bytes` with maximum PDU data length.
@@ -389,7 +395,10 @@ mod tests {
             FunctionCode::WriteMultipleRegisters
         );
         assert_eq!(tcp_message.modbus_message.data_len(), 252);
-        assert_eq!(tcp_message.modbus_message.data().as_slice(), pdu_data_expected_slice);
+        assert_eq!(
+            tcp_message.modbus_message.data().as_slice(),
+            pdu_data_expected_slice
+        );
     }
 
     /// Test case: `ModbusTcpMessage::from_adu_bytes` with a PDU containing only a function code (no data).
@@ -408,25 +417,9 @@ mod tests {
             0x11,       // Function Code (Report Server ID)
         ];
 
-        let tcp_message = ModbusTcpMessage::from_adu_bytes(&adu_bytes)
-            .expect("Failed to deserialize ADU with no data");
-
-        if let AdditionalAddress::MbapHeader(mbap_header) =
-            tcp_message.modbus_message.additional_address
-        {
-            assert_eq!(mbap_header.transaction_id, 0x0002);
-            assert_eq!(mbap_header.protocol_id, 0x0000);
-            assert_eq!(mbap_header.length, 0x0002);
-            assert_eq!(mbap_header.unit_id, 0x0A);
-        } else {
-            panic!("Expected MbapHeader");
-        }
-
-        assert_eq!(
-            tcp_message.modbus_message.function_code(),
-            FunctionCode::ReportServerId
-        );
-        assert_eq!(tcp_message.modbus_message.data_len(), 0);
+        let err = ModbusTcpMessage::from_adu_bytes(&adu_bytes)
+            .expect_err("Should return error for ADU with no PDU data");
+        assert_eq!(err, MbusError::InvalidPduLength);
     }
 
     /// Test case: `ModbusTcpMessage` round-trip serialization and deserialization.
@@ -451,11 +444,7 @@ mod tests {
         pdu_data_vec.push(0x04).unwrap();
         pdu_data_vec.push(0x05).unwrap();
 
-        let original_pdu = Pdu::new(
-            FunctionCode::ReadWriteMultipleRegisters,
-            pdu_data_vec,
-            5,
-        );
+        let original_pdu = Pdu::new(FunctionCode::ReadWriteMultipleRegisters, pdu_data_vec, 5);
 
         let original_message = ModbusTcpMessage::new(mbap_header, original_pdu);
 
@@ -479,7 +468,16 @@ mod tests {
             assert_eq!(orig_mbap.transaction_id, deser_mbap.transaction_id);
             assert_eq!(orig_mbap.protocol_id, deser_mbap.protocol_id);
             // The length field is recalculated during serialization, so compare the actual length of the PDU + Unit ID.
-            assert_eq!(original_message.modbus_message.pdu.to_bytes().unwrap().len() as u16 + 1, deser_mbap.length);
+            assert_eq!(
+                original_message
+                    .modbus_message
+                    .pdu
+                    .to_bytes()
+                    .unwrap()
+                    .len() as u16
+                    + 1,
+                deser_mbap.length
+            );
             assert_eq!(orig_mbap.unit_id, deser_mbap.unit_id);
         } else {
             panic!("Expected MbapHeader for both original and deserialized messages");

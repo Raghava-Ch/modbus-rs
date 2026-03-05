@@ -2,12 +2,11 @@ mod mock_app;
 
 #[cfg(test)]
 mod tests {
-    use mbus_core;
     use anyhow::Result;
+    use mbus_core;
     use mbus_core::client::services::ClientServices;
-    use mbus_core::transport::{ModbusConfig};
+    use mbus_core::transport::ModbusConfig;
     use mbus_tcp::management::std_transport::StdTcpTransport;
-    use mbus_core::errors::MbusError;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
@@ -67,7 +66,7 @@ mod tests {
         let address = 1;
         client.read_single_coil(txn_id, unit_id, address).unwrap(); // Send read request
         client.poll(); // Process read response
-        
+
         // Assert that the MockApp received the correct response
         let received_responses = client.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
@@ -134,13 +133,15 @@ mod tests {
         let address = 10;
         let quantity = 3;
 
-        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        client
+            .read_multiple_coils(txn_id, unit_id, address, quantity)
+            .unwrap();
         client.poll(); // Process read response
 
         let received_responses = client.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
         let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
-        
+
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_coils.from_address(), address);
@@ -275,9 +276,13 @@ mod tests {
         let unit_id = 1;
         let address = 0;
         let quantity = 10;
-        let values = [true, false, true, false, true, false, true, false, true, false];
+        let values = [
+            true, false, true, false, true, false, true, false, true, false,
+        ];
 
-        client.write_multiple_coils(txn_id, unit_id, address, quantity, &values).unwrap();
+        client
+            .write_multiple_coils(txn_id, unit_id, address, quantity, &values)
+            .unwrap();
         client.poll(); // Process write response
 
         let received_responses = client.app.received_write_multiple_coils_responses.borrow();
@@ -329,7 +334,9 @@ mod tests {
         let address = 10;
         let quantity = 3;
 
-        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        client
+            .read_multiple_coils(txn_id, unit_id, address, quantity)
+            .unwrap();
         client.poll(); // Process the exception response
 
         // The client should receive an error, not a successful response
@@ -369,7 +376,9 @@ mod tests {
         let address = 10;
         let quantity = 3;
 
-        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        client
+            .read_multiple_coils(txn_id, unit_id, address, quantity)
+            .unwrap();
         // Poll multiple times to allow for connection closed error detection and timeout
         std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
         client.poll();
@@ -409,7 +418,9 @@ mod tests {
         let address = 10;
         let quantity = 3;
 
-        client.read_multiple_coils(txn_id, unit_id, address, quantity).unwrap();
+        client
+            .read_multiple_coils(txn_id, unit_id, address, quantity)
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
         client.poll(); // This poll should detect the timeout
 

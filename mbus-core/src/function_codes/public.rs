@@ -18,7 +18,6 @@ pub enum FunctionCode {
     // ============================================================
     // Bit Access (Single-bit data)
     // ============================================================
-
     /// 0x00 — Undefined
     /// This value is not defined in the specification and can be used as a placeholder
     /// for uninitialized or unknown function codes.
@@ -53,7 +52,6 @@ pub enum FunctionCode {
     // ============================================================
     // 16-bit Register Access
     // ============================================================
-
     /// 0x03 — Read Holding Registers
     ///
     /// Reads one or more 16-bit holding registers.
@@ -99,7 +97,6 @@ pub enum FunctionCode {
     // ============================================================
     // File Record Access
     // ============================================================
-
     /// 0x14 — Read File Record
     ///
     /// Reads structured file records.
@@ -115,7 +112,6 @@ pub enum FunctionCode {
     // ============================================================
     // Diagnostics & Device Information
     // ============================================================
-
     /// 0x07 — Read Exception Status (Serial Line Only)
     ///
     /// Returns 8-bit exception status.
@@ -257,7 +253,6 @@ impl TryFrom<u16> for DiagnosticSubFunction {
             0x0004 => Ok(ForceListenOnlyMode),
 
             // 0x0005–0x0009 Reserved
-
             0x000A => Ok(ClearCountersAndDiagnosticRegister),
             0x000B => Ok(ReturnBusMessageCount),
             0x000C => Ok(ReturnBusCommunicationErrorCount),
@@ -269,7 +264,6 @@ impl TryFrom<u16> for DiagnosticSubFunction {
             0x0012 => Ok(ReturnBusCharacterOverrunCount),
 
             // 0x0013 Reserved
-
             0x0014 => Ok(ClearOverrunCounterAndFlag),
 
             // Everything else reserved per spec

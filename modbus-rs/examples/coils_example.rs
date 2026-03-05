@@ -1,9 +1,14 @@
 use anyhow::Result;
 use heapless::Vec as HeaplessVec;
-use mbus_core::app::{CoilResponse, Coils};
-use mbus_core::errors::MbusError;
+use mbus_core::app::{
+    CoilResponse, Coils, FifoQueueResponse, RegisterResponse, RequestErrorNotifier,
+};
 use mbus_core::client::services::ClientServices;
-use mbus_core::client::services::coils::MAX_COIL_BYTES; // Import MAX_COIL_BYTES
+use mbus_core::client::services::coils::MAX_COIL_BYTES;
+use mbus_core::client::services::fifo::FifoQueue;
+use mbus_core::client::services::registers::Registers;
+// Import MAX_COIL_BYTES
+use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, TimeKeeper};
 use mbus_tcp::management::std_transport::StdTcpTransport;
 use std::cell::RefCell;
@@ -46,9 +51,81 @@ impl CoilResponse for ClientMockApp {
             .push((txn_id, unit_id, address, quantity))
             .unwrap();
     }
+}
 
-    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
+impl RegisterResponse for ClientMockApp {
+    fn read_input_register_response(&mut self, _txn_id: u16, _unit_id: u8, _registers: &Registers) {
+    }
+    fn read_holding_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _registers: &Registers,
+    ) {
+    }
+    fn write_single_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
 
+    fn read_single_input_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
+    fn write_multiple_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _starting_address: u16,
+        _quantity: u16,
+    ) {
+    }
+    fn read_write_multiple_registers_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _registers: &Registers,
+    ) {
+    }
+    fn read_single_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
+    fn read_single_holding_register_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: u16,
+    ) {
+    }
+    fn mask_write_register_response(&mut self, _txn_id: u16, _unit_id: u8) {}
+}
+
+impl RequestErrorNotifier for ClientMockApp {
+    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+        println!(
+            "Client: Request failed - txn_id: {}, unit_id: {}, error: {}",
+            txn_id, unit_id, error
+        );
+    }
+}
+
+impl FifoQueueResponse for ClientMockApp {
+    fn read_fifo_queue_response(&mut self, _txn_id: u16, _unit_id: u8, _values: &FifoQueue) {
+        // Not used in this example
     }
 }
 
@@ -59,14 +136,14 @@ impl TimeKeeper for ClientMockApp {
             .unwrap()
             .as_millis() as u64
     }
-    
 }
 
 fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut config = ModbusConfig::default("192.168.55.101").map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+    let mut config =
+        ModbusConfig::default("192.168.55.101").map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
     config.connection_timeout_ms = 500;
 
     let mut client =

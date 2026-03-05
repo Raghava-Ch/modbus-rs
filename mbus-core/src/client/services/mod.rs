@@ -1,6 +1,7 @@
 use heapless::Vec;
 
 use crate::{
+    app::{CoilResponse, FifoQueueResponse, RegisterResponse, RequestErrorNotifier},
     data_unit::{
         common::{MAX_ADU_FRAME_LEN, MbapHeader},
         tcp::ModbusTcpMessage,
@@ -11,6 +12,7 @@ use crate::{
 };
 
 pub mod coils;
+pub mod fifo;
 pub mod registers;
 
 /// Represents the type of response we expect for a given request,
@@ -33,6 +35,35 @@ enum ExpectedResponseType {
     WriteSingleCoil { address: u16, value: bool },
     /// Expected response for a Write Multiple Coils request, includes metadata to validate the response.
     WriteMultipleCoils { address: u16, quantity: u16 },
+    /// Expected response for a Read Holding Registers request, includes metadata to validate the response.
+    ReadHoldingRegisters {
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    },
+    /// Expected response for a Read Input Registers request, includes metadata to validate the response.
+    ReadInputRegisters {
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    },
+    /// Expected response for a Write Single Register request, includes metadata to validate the response.
+    WriteSingleRegister { address: u16, value: u16 },
+    /// Expected response for a Write Multiple Registers request, includes metadata to validate the response.
+    WriteMultipleRegisters { address: u16, quantity: u16 },
+    /// Expected response for a Read/Write Multiple Registers request.
+    ReadWriteMultipleRegisters {
+        read_address: u16,
+        read_quantity: u16,
+    },
+    /// Expected response for a Mask Write Register request.
+    MaskWriteRegister {
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    },
+    /// Expected response for a Read FIFO Queue request.
+    ReadFifoQueue,
 }
 
 /// Represents an expected response for a previously sent request,
@@ -65,6 +96,10 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
 
     /// Service struct for constructing coil-related requests and parsing responses.
     coil_service: coils::CoilService,
+    /// Service struct for constructing register-related requests and parsing responses.
+    register_service: registers::RegisterService,
+    /// Service struct for constructing FIFO queue-related requests and parsing responses.
+    fifo_queue_service: fifo::FifoQueueService,
 
     config: ModbusConfig,
 
@@ -73,8 +108,11 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
 }
 
 /// Implementation of core client services, including methods for sending requests and processing responses.
-impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeKeeper>
-    ClientServices<TRANSPORT, N, APP>
+impl<
+    TRANSPORT: Transport,
+    const N: usize,
+    APP: RequestErrorNotifier + CoilResponse + RegisterResponse + FifoQueueResponse + TimeKeeper,
+> ClientServices<TRANSPORT, N, APP>
 {
     /// Creates a new instance of ClientServices, connecting to the transport layer with the provided configuration.
     pub fn new(
@@ -89,7 +127,9 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeK
         Ok(Self {
             app,
             transport,
+            register_service: registers::RegisterService::new(),
             coil_service: coils::CoilService::new(),
+            fifo_queue_service: fifo::FifoQueueService::new(),
             config,
             expected_responses: Vec::new(),
         })
@@ -335,13 +375,401 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeK
         Ok(())
     }
 
+    /// Sends a Read Holding Registers request to the specified unit ID and address range, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the holding registers to read.
+    /// - `quantity`: The number of holding registers to read.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn read_holding_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.read_holding_registers(
+            txn_id,
+            unit_id,
+            address,
+            quantity,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadHoldingRegisters {
+                    expected_quantity: quantity,
+                    from_address: address,
+                    single_read: false,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+
+    /// Sends a Read Holding Registers request to the specified unit ID and address range, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the holding registers to read.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn read_single_holding_register(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.read_holding_registers(
+            txn_id,
+            unit_id,
+            address,
+            1, // quantity = 1
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadHoldingRegisters {
+                    expected_quantity: 1,
+                    from_address: address,
+                    single_read: true,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+
+    /// Sends a Read Input Registers request to the specified unit ID and address range, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the input registers to read.
+    /// - `quantity`: The number of input registers to read.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn read_input_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.read_input_registers(
+            txn_id,
+            unit_id,
+            address,
+            quantity,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadInputRegisters {
+                    expected_quantity: quantity,
+                    from_address: address,
+                    single_read: false,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+    
+    /// Sends a Read Input Registers request to the specified unit ID and address range, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the input registers to read.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn read_single_input_register(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.read_input_registers(
+            txn_id,
+            unit_id,
+            address,
+            1,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadInputRegisters {
+                    expected_quantity: 1,
+                    from_address: address,
+                    single_read: true,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+
+    /// Sends a Write Single Register request to the specified unit ID and address with the given value, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The address of the register to write.
+    /// - `value`: The `u16` value to write to the register.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn write_single_register(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        value: u16,
+    ) -> Result<(), MbusError> {
+        let transport_type = self.transport.transport_type();
+        let frame = self.register_service.write_single_register(
+            txn_id,
+            unit_id,
+            address,
+            value,
+            transport_type,
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::WriteSingleRegister { address, value },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Write Multiple Registers request to the specified unit ID and address with the given values, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request, used to match responses.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the registers to write.
+    /// - `quantity`: The number of registers to write.
+    /// - `values`: A slice of `u16` values to write to the registers.
+    ///
+    /// # Returns
+    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    pub fn write_multiple_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+        values: &[u16],
+    ) -> Result<(), MbusError> {
+        let transport_type = self.transport.transport_type();
+        let frame = self.register_service.write_multiple_registers(
+            txn_id,
+            unit_id,
+            address,
+            quantity,
+            values,
+            transport_type,
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::WriteMultipleRegisters { address, quantity },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Read/Write Multiple Registers request.
+    pub fn read_write_multiple_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_values: &[u16],
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.read_write_multiple_registers(
+            txn_id,
+            unit_id,
+            read_address,
+            read_quantity,
+            write_address,
+            write_values,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadWriteMultipleRegisters {
+                    read_address,
+                    read_quantity,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Mask Write Register request.
+    pub fn mask_write_register(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.register_service.mask_write_register(
+            txn_id,
+            unit_id,
+            address,
+            and_mask,
+            or_mask,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::MaskWriteRegister {
+                    address,
+                    and_mask,
+                    or_mask,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Read FIFO Queue request.
+    pub fn read_fifo_queue(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.fifo_queue_service.read_fifo_queue(
+            txn_id,
+            unit_id,
+            address,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadFifoQueue,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
     /// Ingests received Modbus frames from the transport layer.
     fn ingest_frame(&mut self, frame: &[u8]) {
         // Changed to &mut self, removed transport param
         let transport_type = self.transport.transport_type(); // Access self.transport directly
         let message = match decode_transport_frame(frame, transport_type) {
-            Some(value) => value,
-            None => {
+            Ok(value) => value,
+            Err(e) => {
+                // Parse MBAP Header
+                if frame.len() >= 7 {
+                    let transaction_id = u16::from_be_bytes([frame[0], frame[1]]);
+                    let unit_id = frame[6];
+                    self.app.request_failed(transaction_id, unit_id, e);
+                }
                 return; // Malformed frame or parsing error, frame is dropped.
             }
         };
@@ -385,6 +813,16 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeK
         };
         let pdu = message.pdu();
 
+        if pdu.error_code().is_some() {
+            // The response is an error response. Notify the application of the error.
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::ModbusException(pdu.error_code().unwrap()),
+            );
+            return; // No further processing needed for error responses.
+        }
+
         match expected_response.response_type {
             ExpectedResponseType::ReadCoils {
                 expected_quantity,
@@ -418,6 +856,82 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeK
                     address,
                     quantity,
                 );
+            }
+            ExpectedResponseType::ReadHoldingRegisters {
+                expected_quantity,
+                from_address,
+                single_read,
+            } => {
+                self.handle_read_holding_registers_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    expected_quantity,
+                    from_address,
+                    single_read,
+                );
+            }
+            ExpectedResponseType::ReadInputRegisters {
+                expected_quantity,
+                from_address,
+                single_read,
+            } => {
+                self.handle_read_input_registers_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    expected_quantity,
+                    from_address,
+                    single_read,
+                );
+            }
+            ExpectedResponseType::WriteSingleRegister { address, value } => {
+                self.handle_write_single_register_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    address,
+                    value,
+                );
+            }
+            ExpectedResponseType::WriteMultipleRegisters { address, quantity } => {
+                self.handle_write_multiple_registers_response(
+                    mbap_header.transaction_id,
+                    mbap_header.unit_id,
+                    function_code,
+                    pdu,
+                    address,
+                    quantity,
+                );
+            }
+            ExpectedResponseType::ReadWriteMultipleRegisters {
+                read_address,
+                read_quantity,
+            } => {
+                self.handle_read_write_multiple_registers_response(
+                    &mbap_header,
+                    function_code,
+                    pdu,
+                    read_address,
+                    read_quantity,
+                );
+            }
+            ExpectedResponseType::MaskWriteRegister {
+                address,
+                and_mask,
+                or_mask,
+            } => {
+                self.handle_mask_write_register_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    address,
+                    and_mask,
+                    or_mask,
+                );
+            }
+            ExpectedResponseType::ReadFifoQueue { .. } => {
+                self.handle_read_fifo_queue_response(mbap_header, function_code, pdu);
             }
 
             ExpectedResponseType::Undefined => {
@@ -540,10 +1054,234 @@ impl<TRANSPORT: Transport, const N: usize, APP: crate::app::CoilResponse + TimeK
                 .request_failed(txn_id, unit_id, MbusError::ParseError);
         }
     }
+
+    /// Handles a Read Holding Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    fn handle_read_holding_registers_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    ) {
+        let register_rsp = match self.register_service.handle_read_holding_register_rsp(
+            function_code,
+            pdu,
+            expected_quantity,
+            from_address,
+        ) {
+            Ok(register_response) => register_response,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        if single_read {
+            let value = register_rsp.values().get(0).copied().unwrap_or(0);
+            self.app.read_single_holding_register_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                from_address,
+                value,
+            );
+        } else {
+            self.app.read_holding_registers_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                &register_rsp,
+            );
+        }
+    }
+
+    /// Handles a Read Input Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    fn handle_read_input_registers_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    ) {
+        let register_rsp = match self.register_service.handle_read_input_register_rsp(
+            function_code,
+            pdu,
+            expected_quantity,
+            from_address,
+        ) {
+            Ok(register_response) => register_response,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+        if single_read {
+            let value = match register_rsp.value(from_address) {
+                Ok(v) => v,
+                Err(err) => {
+                    self.app
+                        .request_failed(mbap_header.transaction_id, mbap_header.unit_id, err);
+                    return;
+                }
+            };
+            self.app.read_single_input_register_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                from_address,
+                value,
+            );
+        } else {
+            self.app.read_input_register_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                &register_rsp,
+            );
+        }
+    }
+
+    /// Handles a Write Single Register response by invoking the appropriate application callback.
+    fn handle_write_single_register_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        address: u16,
+        value: u16,
+    ) {
+        if self
+            .register_service
+            .handle_write_single_register_rsp(function_code, pdu, address, value)
+            .is_ok()
+        {
+            self.app.write_single_register_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                address,
+                value,
+            );
+        } else {
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::ParseError,
+            );
+        }
+    }
+
+    /// Handles a Write Multiple Registers response by invoking the appropriate application callback.
+    fn handle_write_multiple_registers_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        address: u16,
+        quantity: u16,
+    ) {
+        if self
+            .register_service
+            .handle_write_multiple_registers_rsp(function_code, pdu, address, quantity)
+            .is_ok()
+        {
+            self.app
+                .write_multiple_registers_response(txn_id, unit_id, address, quantity);
+        } else {
+            self.app
+                .request_failed(txn_id, unit_id, MbusError::ParseError);
+        }
+    }
+
+    fn handle_read_write_multiple_registers_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        read_address: u16,
+        read_quantity: u16,
+    ) {
+        let register_rsp = match self
+            .register_service
+            .handle_read_write_multiple_registers_rsp(
+                function_code,
+                pdu,
+                read_quantity,
+                read_address,
+            ) {
+            Ok(register_response) => register_response,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        self.app.read_write_multiple_registers_response(
+            mbap_header.transaction_id,
+            mbap_header.unit_id,
+            &register_rsp,
+        );
+    }
+
+    fn handle_mask_write_register_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) {
+        if self
+            .register_service
+            .handle_mask_write_register_rsp(function_code, pdu, address, and_mask, or_mask)
+            .is_ok()
+        {
+            self.app
+                .mask_write_register_response(mbap_header.transaction_id, mbap_header.unit_id);
+        } else {
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::ParseError,
+            );
+        }
+    }
+
+    fn handle_read_fifo_queue_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        let register_rsp = match self
+            .fifo_queue_service
+            .handle_read_fifo_queue_rsp(function_code, pdu)
+        {
+            Ok(register_response) => register_response,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        self.app.read_fifo_queue_response(
+            mbap_header.transaction_id,
+            mbap_header.unit_id,
+            &register_rsp,
+        );
+    }
 }
 
 /// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
-fn decode_transport_frame(frame: &[u8], transport_type: TransportType) -> Option<ModbusTcpMessage> {
+fn decode_transport_frame(
+    frame: &[u8],
+    transport_type: TransportType,
+) -> Result<ModbusTcpMessage, MbusError> {
     let message = match transport_type {
         TransportType::StdTcp | TransportType::CustomTcp => {
             // Parse MBAP header and PDU
@@ -551,8 +1289,7 @@ fn decode_transport_frame(frame: &[u8], transport_type: TransportType) -> Option
                 Ok(msg) => msg, // Successfully decoded the frame.
                 // If decoding fails, the frame is dropped.
                 Err(_e) => {
-                    // FUTURE: Handle parsing error.
-                    return None;
+                    return Err(MbusError::BasicParseError);
                 }
             }
         }
@@ -560,19 +1297,23 @@ fn decode_transport_frame(frame: &[u8], transport_type: TransportType) -> Option
             todo!("Serial transport is not yet implemented for frame decoding.")
         }
     };
-    Some(message)
+    Ok(message)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::CoilResponse;
+    use crate::app::FifoQueueResponse;
+    use crate::app::RegisterResponse;
     use crate::client::services::coils::Coils;
+    use crate::client::services::fifo::FifoQueue;
     use crate::errors::MbusError;
     use crate::transport::ModbusConfig;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
     use heapless::Deque;
     use heapless::Vec;
+    use registers::Registers;
 
     const MOCK_DEQUE_CAPACITY: usize = 10; // Define a capacity for the mock deques
 
@@ -639,6 +1380,15 @@ mod tests {
         pub received_coil_responses: RefCell<Vec<(u16, u8, Coils, u16), 10>>, // Corrected duplicate
         pub received_write_single_coil_responses: RefCell<Vec<(u16, u8, u16, bool), 10>>,
         pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16), 10>>,
+        pub received_holding_register_responses: RefCell<Vec<(u16, u8, Registers, u16), 10>>,
+        pub received_input_register_responses: RefCell<Vec<(u16, u8, Registers, u16), 10>>,
+        pub received_write_single_register_responses: RefCell<Vec<(u16, u8, u16, u16), 10>>,
+        pub received_write_multiple_register_responses: RefCell<Vec<(u16, u8, u16, u16), 10>>,
+        pub received_read_write_multiple_registers_responses:
+            RefCell<Vec<(u16, u8, Registers), 10>>,
+        pub received_mask_write_register_responses: RefCell<Vec<(u16, u8), 10>>,
+        pub received_read_fifo_queue_responses: RefCell<Vec<(u16, u8, FifoQueue), 10>>,
+        pub failed_requests: RefCell<Vec<(u16, u8, MbusError), 10>>,
 
         pub current_time: RefCell<u64>, // For simulating time in tests
     }
@@ -681,9 +1431,144 @@ mod tests {
                 .push((txn_id, unit_id, address, quantity))
                 .unwrap();
         }
+    }
 
-        fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
-            // For now, just ignore in mock. In a real app, this would log or handle the error.
+    impl RequestErrorNotifier for MockApp {
+        fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+            self.failed_requests
+                .borrow_mut()
+                .push((txn_id, unit_id, error))
+                .unwrap();
+        }
+    }
+
+    impl RegisterResponse for MockApp {
+        fn read_holding_registers_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            registers: &Registers,
+        ) {
+            let quantity = registers.quantity();
+            self.received_holding_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers.clone(), quantity))
+                .unwrap();
+        }
+
+        fn read_single_input_register_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            value: u16,
+        ) {
+            let mut values = Vec::new();
+            values.push(value).unwrap();
+            let registers = Registers::new(address, 1, values);
+            self.received_input_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers, 1))
+                .unwrap();
+        }
+
+        fn read_single_holding_register_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            value: u16,
+        ) {
+            let mut values = Vec::new();
+            values.push(value).unwrap();
+            let registers = Registers::new(address, 1, values);
+            self.received_holding_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers, 1))
+                .unwrap();
+        }
+
+        fn read_input_register_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            registers: &Registers,
+        ) {
+            let quantity = registers.quantity();
+            self.received_input_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers.clone(), quantity))
+                .unwrap();
+        }
+
+        fn write_single_register_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            value: u16,
+        ) {
+            self.received_write_single_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, address, value))
+                .unwrap();
+        }
+
+        fn write_multiple_registers_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            quantity: u16,
+        ) {
+            self.received_write_multiple_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, address, quantity))
+                .unwrap();
+        }
+
+        fn read_write_multiple_registers_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            registers: &Registers,
+        ) {
+            self.received_read_write_multiple_registers_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers.clone()))
+                .unwrap();
+        }
+
+        fn mask_write_register_response(&mut self, txn_id: u16, unit_id: u8) {
+            self.received_mask_write_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id))
+                .unwrap();
+        }
+
+        fn read_single_register_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            value: u16,
+        ) {
+            let mut values = Vec::new();
+            values.push(value).unwrap();
+            let registers = Registers::new(address, 1, values);
+            self.received_holding_register_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, registers, 1))
+                .unwrap();
+        }
+    }
+
+    impl FifoQueueResponse for MockApp {
+        fn read_fifo_queue_response(&mut self, txn_id: u16, unit_id: u8, fifo_queue: &FifoQueue) {
+            self.received_read_fifo_queue_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, fifo_queue.clone()))
+                .unwrap();
         }
     }
 
@@ -1404,5 +2289,755 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), MbusError::TooManyRequests);
         assert_eq!(client_services.expected_responses.len(), 1); // Queue size remains 1
+    }
+
+    /// Test case: `read_holding_registers` sends a valid ADU over the transport.
+    #[test]
+    fn test_read_holding_registers_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0005;
+        let unit_id = 0x01;
+        let address = 0x0000;
+        let quantity = 2;
+        client_services
+            .read_holding_registers(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        // Expected ADU: TID(0x0005), PID(0x0000), Length(0x0006 = Unit ID + FC + Addr + Qty), UnitID(0x01), FC(0x03), Addr(0x0000), Qty(0x0002)
+        #[rustfmt::skip]
+        let expected_adu: [u8; 12] = [
+            0x00, 0x05, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x06, // Length (1 byte Unit ID + 1 byte FC + 2 bytes Address + 2 bytes Quantity = 6)
+            0x01,       // Unit ID
+            0x03,       // Function Code (Read Holding Registers)
+            0x00, 0x00, // Starting Address
+            0x00, 0x02, // Quantity of Registers
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `ClientServices` successfully sends a Read Holding Registers request and processes a valid response.
+    #[test]
+    fn test_client_services_read_holding_registers_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0005;
+        let unit_id = 0x01;
+        let address = 0x0000;
+        let quantity = 2;
+        client_services
+            .read_holding_registers(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        // Simulate response
+        // ADU: TID(0x0005), PID(0x0000), Length(0x0007), UnitID(0x01), FC(0x03), Byte Count(0x04), Data(0x1234, 0x5678)
+        let response_adu = [
+            0x00, 0x05, 0x00, 0x00, 0x00, 0x07, 0x01, 0x03, 0x04, 0x12, 0x34, 0x56, 0x78,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_holding_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_registers, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_registers.from_address(), address);
+        assert_eq!(rcv_registers.quantity(), quantity);
+        assert_eq!(rcv_registers.values().as_slice(), &[0x1234, 0x5678]);
+        assert_eq!(*rcv_quantity, quantity);
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    /// Test case: `read_input_registers` sends a valid ADU over the transport.
+    #[test]
+    fn test_read_input_registers_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0006;
+        let unit_id = 0x01;
+        let address = 0x0000;
+        let quantity = 2;
+        client_services
+            .read_input_registers(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        // Expected ADU: TID(0x0006), PID(0x0000), Length(0x0006 = Unit ID + FC + Addr + Qty), UnitID(0x01), FC(0x04), Addr(0x0000), Qty(0x0002)
+        #[rustfmt::skip]
+        let expected_adu: [u8; 12] = [
+            0x00, 0x06, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x06, // Length (1 byte Unit ID + 1 byte FC + 2 bytes Address + 2 bytes Quantity = 6)
+            0x01,       // Unit ID
+            0x04,       // Function Code (Read Input Registers)
+            0x00, 0x00, // Starting Address
+            0x00, 0x02, // Quantity of Registers
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `ClientServices` successfully sends a Read Input Registers request and processes a valid response.
+    #[test]
+    fn test_client_services_read_input_registers_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0006;
+        let unit_id = 0x01;
+        let address = 0x0000;
+        let quantity = 2;
+        client_services
+            .read_input_registers(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        // Simulate response
+        // ADU: TID(0x0006), PID(0x0000), Length(0x0007), UnitID(0x01), FC(0x04), Byte Count(0x04), Data(0xAABB, 0xCCDD)
+        let response_adu = [
+            0x00, 0x06, 0x00, 0x00, 0x00, 0x07, 0x01, 0x04, 0x04, 0xAA, 0xBB, 0xCC, 0xDD,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_input_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_registers, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_registers.from_address(), address);
+        assert_eq!(rcv_registers.quantity(), quantity);
+        assert_eq!(rcv_registers.values().as_slice(), &[0xAABB, 0xCCDD]);
+        assert_eq!(*rcv_quantity, quantity);
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    /// Test case: `write_single_register` sends a valid ADU over the transport.
+    #[test]
+    fn test_write_single_register_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0007;
+        let unit_id = 0x01;
+        let address = 0x0001;
+        let value = 0x1234;
+        client_services
+            .write_single_register(txn_id, unit_id, address, value)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        // Expected ADU: TID(0x0007), PID(0x0000), Length(0x0006), UnitID(0x01), FC(0x06), Addr(0x0001), Value(0x1234)
+        #[rustfmt::skip]
+        let expected_adu: [u8; 12] = [
+            0x00, 0x07, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x06, // Length (1 byte Unit ID + 1 byte FC + 2 bytes Address + 2 bytes Value = 6)
+            0x01,       // Unit ID
+            0x06,       // Function Code (Write Single Register)
+            0x00, 0x01, // Address
+            0x12, 0x34, // Value
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `ClientServices` successfully sends a Write Single Register request and processes a valid response.
+    #[test]
+    fn test_client_services_write_single_register_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0007;
+        let unit_id = 0x01;
+        let address = 0x0001;
+        let value = 0x1234;
+        client_services
+            .write_single_register(txn_id, unit_id, address, value)
+            .unwrap();
+
+        // Simulate response
+        // ADU: TID(0x0007), PID(0x0000), Length(0x0006), UnitID(0x01), FC(0x06), Address(0x0001), Value(0x1234)
+        let response_adu = [
+            0x00, 0x07, 0x00, 0x00, 0x00, 0x06, 0x01, 0x06, 0x00, 0x01, 0x12, 0x34,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_write_single_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_address, rcv_value) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(*rcv_address, address);
+        assert_eq!(*rcv_value, value);
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    /// Test case: `write_multiple_registers` sends a valid ADU over the transport.
+    #[test]
+    fn test_write_multiple_registers_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0008;
+        let unit_id = 0x01;
+        let address = 0x0001;
+        let quantity = 2;
+        let values = [0x1234, 0x5678];
+        client_services
+            .write_multiple_registers(txn_id, unit_id, address, quantity, &values)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        // Expected ADU: TID(0x0008), PID(0x0000), Length(0x0009), UnitID(0x01), FC(0x10), Addr(0x0001), Qty(0x0002), Byte Count(0x04), Data(0x1234, 0x5678)
+        #[rustfmt::skip]
+        let expected_adu: [u8; 17] = [ // Total ADU length is 17 bytes
+            0x00, 0x08, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x0B, // Length (UnitID(1) + PDU(10) = 11)
+            0x01,       // Unit ID
+            0x10,       // Function Code (Write Multiple Registers)
+            0x00, 0x01, // Address
+            0x00, 0x02, // Quantity
+            0x04,       // Byte Count
+            0x12, 0x34, 0x56, 0x78, // Data
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `ClientServices` successfully sends a Write Multiple Registers request and processes a valid response.
+    #[test]
+    fn test_client_services_write_multiple_registers_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0008;
+        let unit_id = 0x01;
+        let address = 0x0001;
+        let quantity = 2;
+        let values = [0x1234, 0x5678];
+        client_services
+            .write_multiple_registers(txn_id, unit_id, address, quantity, &values)
+            .unwrap();
+
+        // Simulate response
+        // ADU: TID(0x0008), PID(0x0000), Length(0x0006), UnitID(0x01), FC(0x10), Address(0x0001), Quantity(0x0002)
+        let response_adu = [
+            0x00, 0x08, 0x00, 0x00, 0x00, 0x06, 0x01, 0x10, 0x00, 0x01, 0x00, 0x02,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_write_multiple_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_address, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(*rcv_address, address);
+        assert_eq!(*rcv_quantity, quantity);
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    /// Test case: `ClientServices` correctly handles a Modbus exception response.
+    #[test]
+    fn test_client_services_handles_exception_response() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0009;
+        let unit_id = 0x01;
+        let address = 0x0000;
+        let quantity = 1;
+
+        client_services
+            .read_holding_registers(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        // Simulate an exception response (e.g., Illegal Data Address)
+        // FC = 0x83 (0x03 + 0x80), Exception Code = 0x02
+        let exception_adu = [
+            0x00, 0x09, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x03, // Length
+            0x01, // Unit ID
+            0x83, // Function Code (0x03 + 0x80 Error Mask)
+            0x02, // Exception Code (Illegal Data Address)
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&exception_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        // Verify that no successful response was recorded
+        assert!(
+            client_services
+                .app
+                .received_holding_register_responses
+                .borrow()
+                .is_empty()
+        );
+        // Verify that the failure was reported to the app
+        assert_eq!(client_services.app.failed_requests.borrow().len(), 1);
+        let (failed_txn, failed_unit, failed_err) =
+            &client_services.app.failed_requests.borrow()[0];
+        assert_eq!(*failed_txn, txn_id);
+        assert_eq!(*failed_unit, unit_id);
+        assert_eq!(*failed_err, MbusError::ModbusException(0x02));
+    }
+
+    /// Test case: `read_single_holding_register` sends a valid ADU.
+    #[test]
+    fn test_read_single_holding_register_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        client_services
+            .read_single_holding_register(10, 1, 100)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        #[rustfmt::skip]
+        let expected_adu: [u8; 12] = [
+            0x00, 0x0A, // TID
+            0x00, 0x00, // PID
+            0x00, 0x06, // Length
+            0x01,       // Unit ID
+            0x03,       // FC
+            0x00, 0x64, // Address
+            0x00, 0x01, // Quantity
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+
+        // Verify expected response
+        assert_eq!(client_services.expected_responses.len(), 1);
+        if let ExpectedResponseType::ReadHoldingRegisters { single_read, .. } =
+            client_services.expected_responses[0].response_type
+        {
+            assert!(single_read);
+        } else {
+            panic!("Expected ReadHoldingRegisters response type");
+        }
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_single_holding_register` request.
+    #[test]
+    fn test_client_services_read_single_holding_register_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 10;
+        let unit_id = 1;
+        let address = 100;
+
+        client_services
+            .read_single_holding_register(txn_id, unit_id, address)
+            .unwrap();
+
+        // Simulate response
+        let response_adu = [
+            0x00, 0x0A, 0x00, 0x00, 0x00, 0x05, 0x01, 0x03, 0x02, 0x12, 0x34,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_holding_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_registers, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_registers.from_address(), address);
+        assert_eq!(rcv_registers.quantity(), 1);
+        assert_eq!(rcv_registers.values().as_slice(), &[0x1234]);
+        assert_eq!(*rcv_quantity, 1);
+    }
+
+    /// Test case: `read_single_input_register` sends a valid ADU.
+    #[test]
+    fn test_read_single_input_register_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        client_services
+            .read_single_input_register(10, 1, 100)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        #[rustfmt::skip]
+        let expected_adu: [u8; 12] = [
+            0x00, 0x0A, // TID
+            0x00, 0x00, // PID
+            0x00, 0x06, // Length
+            0x01,       // Unit ID
+            0x04,       // FC (Read Input Registers)
+            0x00, 0x64, // Address
+            0x00, 0x01, // Quantity
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+
+        // Verify expected response
+        assert_eq!(client_services.expected_responses.len(), 1);
+        if let ExpectedResponseType::ReadInputRegisters { single_read, .. } =
+            client_services.expected_responses[0].response_type
+        {
+            assert!(single_read);
+        } else {
+            panic!("Expected ReadInputRegisters response type");
+        }
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_single_input_register` request.
+    #[test]
+    fn test_client_services_read_single_input_register_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 10;
+        let unit_id = 1;
+        let address = 100;
+
+        client_services
+            .read_single_input_register(txn_id, unit_id, address)
+            .unwrap();
+
+        // Simulate response
+        // ADU: TID(10), PID(0), Len(5), Unit(1), FC(4), ByteCount(2), Data(0x1234)
+        let response_adu = [
+            0x00, 0x0A, 0x00, 0x00, 0x00, 0x05, 0x01, 0x04, 0x02, 0x12, 0x34,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_input_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_registers, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_registers.from_address(), address);
+        assert_eq!(rcv_registers.quantity(), 1);
+        assert_eq!(rcv_registers.values().as_slice(), &[0x1234]);
+        assert_eq!(*rcv_quantity, 1);
+    }
+
+    /// Test case: `read_write_multiple_registers` sends a valid ADU.
+    #[test]
+    fn test_read_write_multiple_registers_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let write_values = [0xAAAA, 0xBBBB];
+        client_services
+            .read_write_multiple_registers(11, 1, 10, 2, 20, &write_values)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        #[rustfmt::skip]
+        let expected_adu: [u8; 21] = [
+            0x00, 0x0B, // TID
+            0x00, 0x00, // PID
+            0x00, 0x0F, // Length
+            0x01,       // Unit ID
+            0x17,       // FC
+            0x00, 0x0A, // Read Address
+            0x00, 0x02, // Read Quantity
+            0x00, 0x14, // Write Address
+            0x00, 0x02, // Write Quantity
+            0x04,       // Write Byte Count
+            0xAA, 0xAA, // Write Value 1
+            0xBB, 0xBB, // Write Value 2
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `mask_write_register` sends a valid ADU.
+    #[test]
+    fn test_mask_write_register_sends_valid_adu() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        client_services
+            .mask_write_register(12, 1, 30, 0xF0F0, 0x0F0F)
+            .unwrap();
+
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        let sent_adu = sent_frames.front().unwrap();
+
+        #[rustfmt::skip]
+        let expected_adu: [u8; 14] = [
+            0x00, 0x0C, // TID
+            0x00, 0x00, // PID
+            0x00, 0x08, // Length
+            0x01,       // Unit ID
+            0x16,       // FC
+            0x00, 0x1E, // Address
+            0xF0, 0xF0, // AND mask
+            0x0F, 0x0F, // OR mask
+        ];
+        assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_write_multiple_registers` request.
+    #[test]
+    fn test_client_services_read_write_multiple_registers_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 11;
+        let unit_id = 1;
+        let read_address = 10;
+        let read_quantity = 2;
+        let write_address = 20;
+        let write_values = [0xAAAA, 0xBBBB];
+
+        client_services
+            .read_write_multiple_registers(
+                txn_id,
+                unit_id,
+                read_address,
+                read_quantity,
+                write_address,
+                &write_values,
+            )
+            .unwrap();
+
+        // Simulate response
+        let response_adu = [
+            0x00, 0x0B, 0x00, 0x00, 0x00, 0x07, 0x01, 0x17, 0x04, 0x12, 0x34, 0x56, 0x78,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_read_write_multiple_registers_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_registers) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_registers.from_address(), read_address);
+        assert_eq!(rcv_registers.quantity(), read_quantity);
+        assert_eq!(rcv_registers.values().as_slice(), &[0x1234, 0x5678]);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `mask_write_register` request.
+    #[test]
+    fn test_client_services_mask_write_register_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 12;
+        let unit_id = 1;
+        let address = 30;
+        let and_mask = 0xF0F0;
+        let or_mask = 0x0F0F;
+
+        client_services
+            .mask_write_register(txn_id, unit_id, address, and_mask, or_mask)
+            .unwrap();
+
+        // Simulate response
+        let response_adu = [
+            0x00, 0x0C, 0x00, 0x00, 0x00, 0x08, 0x01, 0x16, 0x00, 0x1E, 0xF0, 0xF0, 0x0F, 0x0F,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_mask_write_register_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_fifo_queue` request.
+    #[test]
+    fn test_client_services_read_fifo_queue_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 13;
+        let unit_id = 1;
+        let address = 40;
+
+        client_services
+            .read_fifo_queue(txn_id, unit_id, address)
+            .unwrap();
+
+        // Simulate response
+        #[rustfmt::skip]
+        let response_adu = [
+            0x00, 0x0D, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x0A, // Length (Unit ID + PDU)
+            0x01,       // Unit ID
+            0x18,       // Function Code (Read FIFO Queue)
+            0x00, 0x06, // FIFO Byte Count (2 bytes for FIFO Count + 2 * 2 bytes for values)
+            0x00, 0x02, // FIFO Count (2 registers)
+            0xAA, 0xAA, // Register Value 1
+            0xBB, 0xBB, // Register Value 2
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_read_fifo_queue_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_fifo_queue) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_fifo_queue.values.len(), 2);
+        assert_eq!(rcv_fifo_queue.values.as_slice(), &[0xAAAA, 0xBBBB]);
     }
 }
