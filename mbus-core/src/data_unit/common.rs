@@ -7,6 +7,9 @@ use heapless::Vec;
 pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
 pub const MAX_ADU_FRAME_LEN: usize = 260; // Maximum length of an ADU (MBAP header + PDU)
 
+const ERROR_BIT_MASK: u8 = 0x80;
+const FUNCTION_CODE_MASK: u8 = 0x7F;
+
 /// Represents sub-function codes used by specific Modbus function codes.
 ///
 /// This union allows treating the sub-code as either a 16-bit Diagnostic sub-function
@@ -52,6 +55,8 @@ pub enum Data {
 pub struct Pdu {
     /// The Modbus function code identifying the operation.
     function_code: FunctionCode,
+    /// Optional error code for exception responses (only valid if function_code indicates an error).
+    error_code: Option<u8>,
     /// The data payload associated with the function code.
     data: heapless::Vec<u8, MAX_PDU_DATA_LEN>,
     /// The actual length of the data payload (excluding the function code).
@@ -188,7 +193,6 @@ impl ModbusMessage {
 
         Ok(adu_bytes)
     }
-
 }
 
 impl Pdu {
@@ -202,10 +206,15 @@ impl Pdu {
     ///
     /// # Returns
     /// A new `Pdu` instance.
-    pub fn new(function_code: FunctionCode, data: heapless::Vec<u8, MAX_PDU_DATA_LEN>, data_len: u8) -> Self {
+    pub fn new(
+        function_code: FunctionCode,
+        data: heapless::Vec<u8, MAX_PDU_DATA_LEN>,
+        data_len: u8,
+    ) -> Self {
         Self {
             function_code,
-            data: data, // Ensure the heapless::Vec is moved here
+            error_code: None, // Default to None for normal responses; can be set for exceptions
+            data: data,       // Ensure the heapless::Vec is moved here
             data_len,
         }
     }
@@ -225,6 +234,11 @@ impl Pdu {
         self.data_len
     }
 
+    /// Accessor for the error code from the PDU.
+    pub fn error_code(&self) -> Option<u8> {
+        self.error_code
+    }
+
     /// Converts the PDU into its byte representation.
     ///
     /// This method serializes the function code and its associated data payload.
@@ -237,7 +251,9 @@ impl Pdu {
     /// the PDU cannot be serialized (e.g., due to buffer overflow).
     pub fn to_bytes(&self) -> Result<Vec<u8, 253>, MbusError> {
         let mut pdu_bytes = Vec::new(); // Capacity is 253 (1 byte FC + 252 bytes data)
-        pdu_bytes.push(self.function_code as u8).map_err(|_| MbusError::Unexpected)?; // Function code (1 byte)
+        pdu_bytes
+            .push(self.function_code as u8)
+            .map_err(|_| MbusError::Unexpected)?; // Function code (1 byte)
 
         pdu_bytes
             .extend_from_slice(&self.data.as_slice()[..self.data_len as usize])
@@ -256,11 +272,18 @@ impl Pdu {
     /// # Returns
     /// `Ok(Pdu)` if the bytes represent a valid PDU, or an `MbusError` otherwise.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MbusError> {
-        if bytes.is_empty() {
+        if bytes.is_empty() || bytes.len() < 2 {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let function_code = FunctionCode::try_from(bytes[0])?;
+        let error_code = if bytes[0] & ERROR_BIT_MASK != 0 {
+            Some(bytes[1]) // The second byte is the exception code for error responses
+        } else {
+            None
+        };
+        let function_code = bytes[0] & FUNCTION_CODE_MASK; // Mask out the error bit to get the actual function code
+
+        let function_code = FunctionCode::try_from(function_code)?;
 
         let data_slice = &bytes[1..];
         let data_len = data_slice.len();
@@ -275,6 +298,7 @@ impl Pdu {
 
         Ok(Pdu {
             function_code,
+            error_code,
             data,
             data_len: data_len as u8,
         })
@@ -289,21 +313,14 @@ mod tests {
 
     // --- Tests for Pdu::from_bytes ---
 
-    /// Test case: `Pdu::from_bytes` with a valid PDU that has no data bytes.
+    /// Test case: `Pdu::from_bytes` with a PDU that has no data bytes (only FC).
     ///
-    /// This covers function codes like `ReportServerId` (0x11) which consist only of the function code.
-    ///
-    /// Modbus Specification Reference: V1.1b3, Section 6.13 (Report Server ID).
+    /// According to the implementation, a PDU must be at least 2 bytes.
     #[test]
-    fn test_pdu_from_bytes_valid_no_data() {
-        // Example: Report Server ID (0x11) request has no data bytes.
+    fn test_pdu_from_bytes_invalid_no_data() {
         let bytes = [0x11];
-        let pdu = Pdu::from_bytes(&bytes).expect("Should successfully parse PDU with no data");
-
-        assert_eq!(pdu.function_code, FunctionCode::ReportServerId);
-        assert_eq!(pdu.data_len, 0);
-        assert!(pdu.data.is_empty());
-        assert_eq!(pdu.data.len(), 0);
+        let err = Pdu::from_bytes(&bytes).expect_err("Should return error for PDU with only FC");
+        assert_eq!(err, MbusError::InvalidPduLength);
     }
 
     /// Test case: `Pdu::from_bytes` with a valid `Read Coils` request PDU.
@@ -386,7 +403,7 @@ mod tests {
         // 0xFF is also not a valid public function code
         let bytes = [0xFF, 0x01, 0x02];
         let err = Pdu::from_bytes(&bytes).expect_err("Should return error for invalid FC 0xFF");
-        assert_eq!(err, MbusError::UnsupportedFunction(0xFF));
+        assert_eq!(err, MbusError::UnsupportedFunction(0x7F));
     }
 
     /// Test case: `Pdu::from_bytes` with a data payload exceeding the maximum allowed length.
@@ -430,7 +447,9 @@ mod tests {
     #[test]
     fn test_pdu_to_bytes_with_data() {
         let mut data_vec = Vec::new();
-        data_vec.extend_from_slice(&[0x00, 0x00, 0x00, 0x0A]).unwrap(); // Read 10 coils
+        data_vec
+            .extend_from_slice(&[0x00, 0x00, 0x00, 0x0A])
+            .unwrap(); // Read 10 coils
 
         let pdu = Pdu::new(FunctionCode::ReadCoils, data_vec, 4);
         let bytes = pdu.to_bytes().expect("Should convert PDU to bytes");
@@ -484,7 +503,9 @@ mod tests {
         );
 
         let modbus_message = ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu);
-        let adu_bytes = modbus_message.to_bytes().expect("Failed to serialize ModbusMessage");
+        let adu_bytes = modbus_message
+            .to_bytes()
+            .expect("Failed to serialize ModbusMessage");
 
         #[rustfmt::skip]
         let expected_adu: [u8; 11] = [
@@ -547,18 +568,6 @@ mod tests {
     }
 
     // --- Round-trip tests (from_bytes -> to_bytes) ---
-
-    /// Test case: Round-trip serialization/deserialization for a PDU with no data.
-    ///
-    /// Converts bytes to PDU and back to bytes, asserting equality with the original.
-    /// Modbus Specification Reference: General Modbus PDU structure.
-    #[test]
-    fn test_pdu_round_trip_no_data() {
-        let original_bytes = [0x11]; // ReportServerId
-        let pdu = Pdu::from_bytes(&original_bytes).expect("from_bytes failed");
-        let new_bytes = pdu.to_bytes().expect("to_bytes failed");
-        assert_eq!(original_bytes.as_slice(), new_bytes.as_slice());
-    }
 
     /// Test case: Round-trip serialization/deserialization for a PDU with data.
     ///

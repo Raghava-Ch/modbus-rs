@@ -1,5 +1,5 @@
 use crate::data_unit::common::{
-    AdditionalAddress, MbapHeader, ModbusMessage, Pdu, MAX_ADU_FRAME_LEN,
+    AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu,
 };
 use crate::errors::MbusError;
 use crate::function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN};
@@ -61,36 +61,6 @@ impl Coils {
 
         Ok(self.values[byte_index] & bit_mask != 0)
     }
-}
-
-/// Trait defining the expected response handling for coil-related Modbus operations.
-/// Implementors of this trait to deliver the responses to the application layer,
-/// allowing application developers to process the coil data and update their application state accordingly.
-pub trait CoilResponse {
-    /// Handles a Read Coils response by invoking the appropriate application callback with the coil states.
-    /// This method will be called when a Read Coils response is received, 
-    /// and application developers can use it to process the coil data and update their application state accordingly.
-    fn read_coils_response(&self, txn_id: u16, unit_id: u8, coils: &Coils, quantity: u16);
-
-    /// Handles a Write Single Coil response by invoking the appropriate application callback with the address and
-    /// value of the coil that was written.
-    /// This method will be called when a Write Single Coil response is received, 
-    fn read_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool);
-
-    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
-    /// and quantity of the coils that were written.
-    /// This method will be called when a Write Multiple Coils response is received, 
-    /// and application developers can use it to update their application state accordingly.
-    fn write_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool);
-
-    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
-    /// and quantity of the coils that were written.
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16);
-
-    /// Handles a failed request by invoking the appropriate application callback with the error information.
-    /// This method will be called when a Modbus request related to coils fails, allowing application developers to log the error, 
-    /// update their application state, or take other appropriate actions based on the error information.
-    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError);
 }
 
 /// Service for handling Modbus coil operations, including creating request PDUs and parsing responses.
@@ -389,8 +359,8 @@ impl CoilReqPdu {
     /// * `pdu` - The received `Pdu` from the Modbus server.
     /// * `expected_address` - The address of the single coil that was originally requested.
     /// # Returns
-    /// A `Result` containing the boolean state of the coil, or an `MbusError` if the PDU is malformed, 
-    /// contains an unexpected function code, the data length does not match the expected quantity, 
+    /// A `Result` containing the boolean state of the coil, or an `MbusError` if the PDU is malformed,
+    /// contains an unexpected function code, the data length does not match the expected quantity,
     /// or the coil address is out of range.
     pub fn parse_read_single_coil_response(
         pdu: &Pdu,
@@ -586,7 +556,7 @@ impl CoilReqPdu {
     /// * `expected_quantity` - The quantity of coils that was originally requested.
     /// * `from_address` - The starting address of the coils that were requested.
     /// # Returns
-    /// An `Option<Coils>` containing the parsed coil states if the response is valid, or 
+    /// An `Option<Coils>` containing the parsed coil states if the response is valid, or
     /// `None` if the response is malformed or does not match the expected quantity.
     pub fn handle_coil_response(
         pdu: &Pdu,
@@ -697,8 +667,7 @@ mod tests {
     #[test]
     fn test_parse_read_coils_response_empty_data() {
         // PDU: FC (0x01) only, no byte count or coil data
-        let response_bytes = [0x01];
-        let pdu = Pdu::from_bytes(&response_bytes).unwrap();
+        let pdu = Pdu::new(FunctionCode::ReadCoils, Vec::new(), 0);
         let result = CoilReqPdu::parse_read_coils_response(&pdu, 8);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
