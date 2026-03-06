@@ -40,6 +40,10 @@ pub enum MbusError {
     InvalidFunctionCode,
     /// No retries left for the transaction
     NoRetriesLeft,
+    /// Too many sub-requests in a PDU, Max allowed is 35
+    TooManyFileReadSubRequests,
+    /// File read PDU overflow, total length of file read sub-requests exceeds maximum allowed bytes per PDU
+    FileReadPduOverflow,
 }
 
 impl fmt::Display for MbusError {
@@ -99,6 +103,14 @@ impl fmt::Display for MbusError {
             }
             MbusError::InvalidFunctionCode => write!(f, "Invalid function code"),
             MbusError::NoRetriesLeft => write!(f, "No retries left for the transaction"),
+            MbusError::TooManyFileReadSubRequests => write!(
+                f,
+                "Too many sub-requests: Maximum of 35 sub-requests per PDU allowed"
+            ),
+            MbusError::FileReadPduOverflow => write!(
+                f,
+                "File read PDU overflow: Total length of file read sub-requests exceeds maximum allowed bytes per PDU"
+            ),
         }
     }
 }
