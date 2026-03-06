@@ -1,6 +1,6 @@
 use mbus_core::{
-    app::{CoilResponse, Coils, FifoQueueResponse, RegisterResponse, RequestErrorNotifier},
-    client::services::{fifo::FifoQueue, registers::Registers},
+    app::{CoilResponse, Coils, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
+    client::services::{fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
     errors::MbusError,
     transport::TimeKeeper,
 };
@@ -140,5 +140,15 @@ impl TimeKeeper for MockApp {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_millis() as u64
+    }
+}
+
+
+impl FileRecordResponse for MockApp {
+    fn read_file_record_response(&mut self, _txn_id: u16, _unit_id: u8, _data: &[SubRequestParams]) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+    fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
+        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 }
