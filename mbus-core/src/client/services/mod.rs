@@ -2,7 +2,8 @@ use heapless::Vec;
 
 use crate::{
     app::{
-        CoilResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier,
+        CoilResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse,
+        RegisterResponse, RequestErrorNotifier,
     },
     client::services::file_record::{SubRequest},
     data_unit::{
@@ -18,6 +19,7 @@ pub mod coils;
 pub mod fifo;
 pub mod registers;
 pub mod file_record;
+pub mod discrete_inputs;
 
 /// Represents the type of response we expect for a given request,
 /// along with any necessary metadata to validate and process the response when it arrives,
@@ -31,6 +33,12 @@ enum ExpectedResponseType {
     Undefined,
     /// Expected response for a Read Coils request, includes metadata to validate the response.
     ReadCoils {
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    },
+    /// Expected response for a Read Discrete Inputs request, includes metadata to validate the response.
+    ReadDiscreteInputs {
         expected_quantity: u16,
         from_address: u16,
         single_read: bool,
@@ -110,6 +118,8 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
     fifo_queue_service: fifo::FifoQueueService,
     /// Service struct for constructing file record-related requests and parsing responses.
     file_record_service: file_record::FileRecordService,
+    /// Service struct for constructing discrete input-related requests and parsing responses.
+    discrete_input_service: discrete_inputs::DiscreteInputService,
 
     config: ModbusConfig,
 
@@ -126,6 +136,7 @@ impl<
         + RegisterResponse
         + FifoQueueResponse
         + FileRecordResponse
+        + DiscreteInputResponse
         + TimeKeeper,
 > ClientServices<TRANSPORT, N, APP>
 {
@@ -145,6 +156,7 @@ impl<
             register_service: registers::RegisterService::new(),
             coil_service: coils::CoilService::new(),
             fifo_queue_service: fifo::FifoQueueService::new(),
+            discrete_input_service: discrete_inputs::DiscreteInputService::new(),
             file_record_service: file_record::FileRecordService::new(),
             config,
             expected_responses: Vec::new(),
@@ -292,6 +304,87 @@ impl<
                 sent_timestamp: self.app.current_millis(),
                 retries_left: self.config.retry_attempts,
                 response_type: ExpectedResponseType::ReadCoils {
+                    expected_quantity: 1,
+                    from_address: address,
+                    single_read: true,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+
+    /// Sends a Read Discrete Inputs request to the specified unit ID and address range, and records the expected response.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID for this request.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `address`: The starting address of the inputs to read.
+    /// - `quantity`: The number of inputs to read.
+    pub fn read_discrete_inputs(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.discrete_input_service.read_discrete_inputs(
+            txn_id,
+            unit_id,
+            address,
+            quantity,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadDiscreteInputs {
+                    expected_quantity: quantity,
+                    from_address: address,
+                    single_read: false,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+
+        Ok(())
+    }
+
+    /// Sends a Read Discrete Inputs request for a single input.
+    pub fn read_single_discrete_input(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        let frame = self.discrete_input_service.read_discrete_inputs(
+            txn_id,
+            unit_id,
+            address,
+            1,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadDiscreteInputs {
                     expected_quantity: 1,
                     from_address: address,
                     single_read: true,
@@ -845,6 +938,8 @@ impl<
             .map_err(|_e| MbusError::SendFailed)?;
         Ok(())
     }
+
+    
     
 
     /// Ingests received Modbus frames from the transport layer.
@@ -920,6 +1015,20 @@ impl<
                 single_read,
             } => {
                 self.handle_read_coils_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    expected_quantity,
+                    from_address,
+                    single_read,
+                );
+            }
+            ExpectedResponseType::ReadDiscreteInputs {
+                expected_quantity,
+                from_address,
+                single_read,
+            } => {
+                self.handle_read_discrete_inputs_response(
                     mbap_header,
                     function_code,
                     pdu,
@@ -1091,6 +1200,54 @@ impl<
                 mbap_header.unit_id,
                 &coil_rsp,
                 expected_quantity, // Pass the original expected quantity
+            );
+        }
+    }
+
+    fn handle_read_discrete_inputs_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_quantity: u16,
+        from_address: u16,
+        single_read: bool,
+    ) {
+        let inputs_rsp = match self.discrete_input_service.handle_read_discrete_inputs_rsp(
+            function_code,
+            pdu,
+            expected_quantity,
+            from_address,
+        ) {
+            Ok(response) => response,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        if single_read {
+            let value = match inputs_rsp.value(from_address) {
+                Ok(v) => v,
+                Err(err) => {
+                    self.app
+                        .request_failed(mbap_header.transaction_id, mbap_header.unit_id, err);
+                    return;
+                }
+            };
+            self.app.read_single_discrete_input_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                from_address,
+                value,
+            );
+        } else {
+            self.app.read_discrete_inputs_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                &inputs_rsp,
+                expected_quantity,
             );
         }
     }
@@ -1447,11 +1604,13 @@ fn decode_transport_frame(
 mod tests {
     use super::*;
     use crate::app::CoilResponse;
+    use crate::app::DiscreteInputResponse;
     use crate::app::FifoQueueResponse;
     use crate::app::FileRecordResponse;
     use crate::app::RegisterResponse;
     use crate::client::services::coils::Coils;
     use crate::client::services::fifo::FifoQueue;
+    use crate::client::services::discrete_inputs::DiscreteInputs;
     use crate::client::services::file_record::{SubRequestParams, MAX_SUB_REQUESTS_PER_PDU};
     use crate::errors::MbusError;
     use crate::transport::ModbusConfig;
@@ -1525,6 +1684,7 @@ mod tests {
         pub received_coil_responses: RefCell<Vec<(u16, u8, Coils, u16), 10>>, // Corrected duplicate
         pub received_write_single_coil_responses: RefCell<Vec<(u16, u8, u16, bool), 10>>,
         pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16), 10>>,
+        pub received_discrete_input_responses: RefCell<Vec<(u16, u8, DiscreteInputs, u16), 10>>,
         pub received_holding_register_responses: RefCell<Vec<(u16, u8, Registers, u16), 10>>,
         pub received_input_register_responses: RefCell<Vec<(u16, u8, Registers, u16), 10>>,
         pub received_write_single_register_responses: RefCell<Vec<(u16, u8, u16, u16), 10>>,
@@ -1576,6 +1736,37 @@ mod tests {
             self.received_write_multiple_coils_responses
                 .borrow_mut()
                 .push((txn_id, unit_id, address, quantity))
+                .unwrap();
+        }
+    }
+
+    impl DiscreteInputResponse for MockApp {
+        fn read_discrete_inputs_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            inputs: &DiscreteInputs,
+            quantity: u16,
+        ) {
+            self.received_discrete_input_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, inputs.clone(), quantity))
+                .unwrap();
+        }
+
+        fn read_single_discrete_input_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            address: u16,
+            value: bool,
+        ) {
+            let mut values = Vec::new();
+            values.push(if value { 0x01 } else { 0x00 }).unwrap();
+            let inputs = DiscreteInputs::new(address, 1, values);
+            self.received_discrete_input_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, inputs, 1))
                 .unwrap();
         }
     }
@@ -3293,5 +3484,104 @@ mod tests {
         let (rcv_txn_id, rcv_unit_id) = &received_responses[0];
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_discrete_inputs` request.
+    #[test]
+    fn test_client_services_read_discrete_inputs_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 16;
+        let unit_id = 1;
+        let address = 50;
+        let quantity = 8;
+
+        client_services
+            .read_discrete_inputs(txn_id, unit_id, address, quantity)
+            .unwrap();
+
+        // Simulate response: FC(02), ByteCount(1), Data(0xAA)
+        let response_adu = [
+            0x00, 0x10, 0x00, 0x00, 0x00, 0x04, 0x01, 0x02, 0x01, 0xAA,
+        ];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_discrete_input_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_inputs.from_address(), address);
+        assert_eq!(rcv_inputs.quantity(), quantity);
+        assert_eq!(rcv_inputs.values().as_slice(), &[0xAA]);
+        assert_eq!(*rcv_quantity, quantity);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_single_discrete_input` request.
+    #[test]
+    fn test_client_services_read_single_discrete_input_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 17;
+        let unit_id = 1;
+        let address = 10;
+
+        client_services
+            .read_single_discrete_input(txn_id, unit_id, address)
+            .unwrap();
+
+        // Verify request ADU
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        // MBAP(7) + PDU(5) = 12 bytes
+        // MBAP: 00 11 00 00 00 06 01
+        // PDU: 02 00 0A 00 01
+        let expected_request = [
+            0x00, 0x11, 0x00, 0x00, 0x00, 0x06, 0x01, 0x02, 0x00, 0x0A, 0x00, 0x01,
+        ];
+        assert_eq!(sent_frames.front().unwrap().as_slice(), &expected_request);
+        drop(sent_frames);
+
+        // Simulate response: FC(02), ByteCount(1), Data(0x01) -> Input ON
+        let response_adu = [0x00, 0x11, 0x00, 0x00, 0x00, 0x04, 0x01, 0x02, 0x01, 0x01];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_discrete_input_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_inputs.from_address(), address);
+        assert_eq!(rcv_inputs.quantity(), 1);
+        assert_eq!(rcv_inputs.value(address).unwrap(), true);
+        assert_eq!(*rcv_quantity, 1);
     }
 }
