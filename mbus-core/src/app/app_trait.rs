@@ -1,4 +1,4 @@
-use crate::{app::Coils, client::services::{discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
+use crate::{app::Coils, client::services::{diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
 
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
@@ -191,5 +191,16 @@ pub trait DiscreteInputResponse {
         unit_id: u8,
         address: u16,
         value: bool,
+    );
+}
+
+/// Trait for handling Diagnostics responses.
+pub trait DiagnosticsResponse {
+    /// Called when a Read Device Identification response is received.
+    fn read_device_identification_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        response: &DeviceIdentificationResponse,
     );
 }

@@ -1,6 +1,6 @@
 use mbus_core::{
-    app::{CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
-    client::services::{discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
+    app::{CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, DiagnosticsResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
+    client::services::{diagnostics::{DeviceIdentificationResponse}, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
     errors::MbusError,
     transport::TimeKeeper,
 };
@@ -14,6 +14,7 @@ pub struct MockApp {
     pub received_write_single_coil_responses: RefCell<Vec<(u16, u8, u16, bool)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16)>>,
     pub received_discrete_input_responses: RefCell<Vec<(u16, u8, DiscreteInputs, u16)>>,
+    pub received_read_device_id_responses: RefCell<Vec<(u16, u8, DeviceIdentificationResponse)>>,
 }
 
 impl CoilResponse for MockApp {
@@ -181,5 +182,16 @@ impl FileRecordResponse for MockApp {
     }
     fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
+    }
+}
+
+impl DiagnosticsResponse for MockApp {
+    fn read_device_identification_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        response: &DeviceIdentificationResponse,
+    ) {
+        self.received_read_device_id_responses.borrow_mut().push((txn_id, unit_id, response.clone()));
     }
 }

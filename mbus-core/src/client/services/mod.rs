@@ -3,23 +3,28 @@ use heapless::Vec;
 use crate::{
     app::{
         CoilResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse,
-        RegisterResponse, RequestErrorNotifier,
+        RegisterResponse, RequestErrorNotifier, DiagnosticsResponse
     },
-    client::services::file_record::{SubRequest},
+    client::services::{
+        diagnostics::{DiagnosticsService},
+        file_record::SubRequest,
+    },
     data_unit::{
         common::{MAX_ADU_FRAME_LEN, MbapHeader},
         tcp::ModbusTcpMessage,
     },
+    device_identification::{ObjectId, ReadDeviceIdCode},
     errors::MbusError,
     function_codes::public::FunctionCode,
     transport::{ModbusConfig, TimeKeeper, Transport, TransportType},
 };
 
 pub mod coils;
-pub mod fifo;
-pub mod registers;
-pub mod file_record;
+pub mod diagnostics;
 pub mod discrete_inputs;
+pub mod fifo;
+pub mod file_record;
+pub mod registers;
 
 /// Represents the type of response we expect for a given request,
 /// along with any necessary metadata to validate and process the response when it arrives,
@@ -80,6 +85,10 @@ enum ExpectedResponseType {
     ReadFileRecord,
     /// Expected response for a Write File Record request.
     WriteFileRecord,
+    /// Expected response for a Read Device Identification request.
+    ReadDeviceIdentification {
+        read_device_id_code: ReadDeviceIdCode,
+    },
 }
 
 /// Represents an expected response for a previously sent request,
@@ -120,6 +129,8 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
     file_record_service: file_record::FileRecordService,
     /// Service struct for constructing discrete input-related requests and parsing responses.
     discrete_input_service: discrete_inputs::DiscreteInputService,
+    /// Service struct for constructing diagnostics-related requests and parsing responses.
+    diagnostics_service: DiagnosticsService,
 
     config: ModbusConfig,
 
@@ -137,6 +148,7 @@ impl<
         + FifoQueueResponse
         + FileRecordResponse
         + DiscreteInputResponse
+        + DiagnosticsResponse
         + TimeKeeper,
 > ClientServices<TRANSPORT, N, APP>
 {
@@ -158,6 +170,7 @@ impl<
             fifo_queue_service: fifo::FifoQueueService::new(),
             discrete_input_service: discrete_inputs::DiscreteInputService::new(),
             file_record_service: file_record::FileRecordService::new(),
+            diagnostics_service: DiagnosticsService::new(),
             config,
             expected_responses: Vec::new(),
         })
@@ -622,7 +635,7 @@ impl<
 
         Ok(())
     }
-    
+
     /// Sends a Read Input Registers request to the specified unit ID and address range, and records the expected response.
     ///
     /// # Parameters
@@ -939,8 +952,46 @@ impl<
         Ok(())
     }
 
-    
-    
+    /// Sends a Read Device Identification request (FC 43 / 14).
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID.
+    /// - `unit_id`: The Modbus unit ID.
+    /// - `read_device_id_code`: The type of access (01=Basic, 02=Regular, 03=Extended, 04=Specific).
+    /// - `object_id`: The object ID to start reading from.
+    pub fn read_device_identification(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        read_device_id_code: ReadDeviceIdCode,
+        object_id: ObjectId,
+    ) -> Result<(), MbusError> {
+        let frame = self.diagnostics_service.read_device_identification(
+            txn_id,
+            unit_id,
+            read_device_id_code,
+            object_id,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadDeviceIdentification {
+                    read_device_id_code,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
 
     /// Ingests received Modbus frames from the transport layer.
     fn ingest_frame(&mut self, frame: &[u8]) {
@@ -1137,6 +1188,16 @@ impl<
             }
             ExpectedResponseType::WriteFileRecord => {
                 self.handle_write_file_record_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::ReadDeviceIdentification {
+                read_device_id_code,
+            } => {
+                self.handle_read_device_identification_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    read_device_id_code,
+                );
             }
 
             ExpectedResponseType::Undefined => {
@@ -1547,11 +1608,8 @@ impl<
             }
         };
 
-        self.app.read_file_record_response(
-            mbap_header.transaction_id,
-            mbap_header.unit_id,
-            &data,
-        );
+        self.app
+            .read_file_record_response(mbap_header.transaction_id, mbap_header.unit_id, &data);
     }
 
     fn handle_write_file_record_response(
@@ -1574,6 +1632,42 @@ impl<
                 MbusError::ParseError,
             );
         }
+    }
+
+    fn handle_read_device_identification_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_code: ReadDeviceIdCode,
+    ) {
+        let response = match self
+            .diagnostics_service
+            .handle_read_device_identification_rsp(function_code, pdu)
+        {
+            Ok(r) => r,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        // Validate that the server echoed the correct Read Device ID Code
+        if response.read_device_id_code != expected_code {
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::UnexpectedResponse,
+            );
+            return;
+        }
+
+        self.app.read_device_identification_response(
+            mbap_header.transaction_id,
+            mbap_header.unit_id,
+            &response,
+        );
     }
 }
 
@@ -1608,10 +1702,13 @@ mod tests {
     use crate::app::FifoQueueResponse;
     use crate::app::FileRecordResponse;
     use crate::app::RegisterResponse;
+    use crate::app::DiagnosticsResponse;
     use crate::client::services::coils::Coils;
-    use crate::client::services::fifo::FifoQueue;
+    use crate::client::services::diagnostics::{DeviceIdentificationResponse};
     use crate::client::services::discrete_inputs::DiscreteInputs;
-    use crate::client::services::file_record::{SubRequestParams, MAX_SUB_REQUESTS_PER_PDU};
+    use crate::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
+    use crate::client::services::fifo::FifoQueue;
+    use crate::client::services::file_record::{MAX_SUB_REQUESTS_PER_PDU, SubRequestParams};
     use crate::errors::MbusError;
     use crate::transport::ModbusConfig;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
@@ -1693,8 +1790,11 @@ mod tests {
             RefCell<Vec<(u16, u8, Registers), 10>>,
         pub received_mask_write_register_responses: RefCell<Vec<(u16, u8), 10>>,
         pub received_read_fifo_queue_responses: RefCell<Vec<(u16, u8, FifoQueue), 10>>,
-        pub received_read_file_record_responses: RefCell<Vec<(u16, u8, Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>), 10>>,
+        pub received_read_file_record_responses:
+            RefCell<Vec<(u16, u8, Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>), 10>>,
         pub received_write_file_record_responses: RefCell<Vec<(u16, u8), 10>>,
+        pub received_read_device_id_responses:
+            RefCell<Vec<(u16, u8, DeviceIdentificationResponse), 10>>,
         pub failed_requests: RefCell<Vec<(u16, u8, MbusError), 10>>,
 
         pub current_time: RefCell<u64>, // For simulating time in tests
@@ -1911,7 +2011,12 @@ mod tests {
     }
 
     impl FileRecordResponse for MockApp {
-        fn read_file_record_response(&mut self, txn_id: u16, unit_id: u8, data: &[SubRequestParams]) {
+        fn read_file_record_response(
+            &mut self,
+            txn_id: u16,
+            unit_id: u8,
+            data: &[SubRequestParams],
+        ) {
             let mut vec = Vec::new();
             vec.extend_from_slice(data).unwrap();
             self.received_read_file_record_responses
@@ -1920,7 +2025,24 @@ mod tests {
                 .unwrap();
         }
         fn write_file_record_response(&mut self, txn_id: u16, unit_id: u8) {
-            self.received_write_file_record_responses.borrow_mut().push((txn_id, unit_id)).unwrap();
+            self.received_write_file_record_responses
+                .borrow_mut()
+                .push((txn_id, unit_id))
+                .unwrap();
+        }
+    }
+
+    impl DiagnosticsResponse for MockApp {
+        fn read_device_identification_response(
+            &self,
+            txn_id: u16,
+            unit_id: u8,
+            response: &DeviceIdentificationResponse,
+        ) {
+            self.received_read_device_id_responses
+                .borrow_mut()
+                .push((txn_id, unit_id, response.clone()))
+                .unwrap();
         }
     }
 
@@ -3438,7 +3560,10 @@ mod tests {
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_data.len(), 1);
-        assert_eq!(rcv_data[0].record_data.as_ref().unwrap().as_slice(), &[0x1234, 0x5678]);
+        assert_eq!(
+            rcv_data[0].record_data.as_ref().unwrap().as_slice(),
+            &[0x1234, 0x5678]
+        );
     }
 
     /// Test case: `ClientServices` successfully sends and processes a `write_file_record` request.
@@ -3505,9 +3630,7 @@ mod tests {
             .unwrap();
 
         // Simulate response: FC(02), ByteCount(1), Data(0xAA)
-        let response_adu = [
-            0x00, 0x10, 0x00, 0x00, 0x00, 0x04, 0x01, 0x02, 0x01, 0xAA,
-        ];
+        let response_adu = [0x00, 0x10, 0x00, 0x00, 0x00, 0x04, 0x01, 0x02, 0x01, 0xAA];
 
         client_services
             .transport
@@ -3583,5 +3706,172 @@ mod tests {
         assert_eq!(rcv_inputs.quantity(), 1);
         assert_eq!(rcv_inputs.value(address).unwrap(), true);
         assert_eq!(*rcv_quantity, 1);
+    }
+
+    /// Test case: `ClientServices` successfully sends and processes a `read_device_identification` request.
+    #[test]
+    fn test_client_services_read_device_identification_e2e_success() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 20;
+        let unit_id = 1;
+        let read_code = ReadDeviceIdCode::Basic;
+        let object_id = ObjectId::from(0x00);
+
+        client_services
+            .read_device_identification(txn_id, unit_id, read_code, object_id)
+            .unwrap();
+
+        // Verify request ADU
+        let sent_frames = client_services.transport.sent_frames.borrow();
+        assert_eq!(sent_frames.len(), 1);
+        // MBAP(7) + PDU(4) = 11 bytes
+        // MBAP: 00 14 00 00 00 05 01
+        // PDU: 2B 0E 01 00
+        let expected_request = [
+            0x00, 0x14, 0x00, 0x00, 0x00, 0x05, 0x01, 0x2B, 0x0E, 0x01, 0x00,
+        ];
+        assert_eq!(sent_frames.front().unwrap().as_slice(), &expected_request);
+        drop(sent_frames);
+
+        // Simulate response:
+        // MEI(0E), Code(01), Conf(81), More(00), Next(00), Num(01), Obj0(00), Len(03), Val("Foo")
+        // PDU Len = 1(MEI) + 1(Code) + 1(Conf) + 1(More) + 1(Next) + 1(Num) + 1(Id) + 1(Len) + 3(Val) = 11
+        // MBAP Len = 1(Unit) + 1(FC) + 11 = 13
+        let response_adu = [
+            0x00, 0x14, 0x00, 0x00, 0x00, 0x0D, 0x01, 0x2B, 0x0E, 0x01, 0x81, 0x00, 0x00, 0x01,
+            0x00, 0x03, 0x46, 0x6F, 0x6F,
+        ];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        client_services.poll();
+
+        let received_responses = client_services
+            .app
+            .received_read_device_id_responses
+            .borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_resp) = &received_responses[0];
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_resp.read_device_id_code, ReadDeviceIdCode::Basic);
+        assert_eq!(rcv_resp.conformity_level, ConformityLevel::BasicStreamAndIndividual);
+        assert_eq!(rcv_resp.objects_data.len(), 5); // Id(1)+Len(1)+Val(3)
+    }
+
+    /// Test case: `ClientServices` handles multiple concurrent `read_device_identification` requests.
+    #[test]
+    fn test_client_services_read_device_identification_multi_transaction() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        // Request 1
+        let txn_id_1 = 21;
+        client_services
+            .read_device_identification(txn_id_1, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+            .unwrap();
+
+        // Request 2
+        let txn_id_2 = 22;
+        client_services
+            .read_device_identification(txn_id_2, 1, ReadDeviceIdCode::Regular, ObjectId::from(0x00))
+            .unwrap();
+
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
+
+        // Response for Request 2 (Out of order arrival)
+        // MEI(0E), Code(02), Conf(82), More(00), Next(00), Num(00)
+        // PDU Len = 6. MBAP Len = 1 + 1 + 6 = 8.
+        let response_adu_2 = [
+            0x00, 0x16, 0x00, 0x00, 0x00, 0x08, 0x01, 0x2B, 0x0E, 0x02, 0x82, 0x00, 0x00, 0x00,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu_2).unwrap())
+            .unwrap();
+        
+        client_services.poll();
+
+        {
+            let received_responses = client_services.app.received_read_device_id_responses.borrow();
+            assert_eq!(received_responses.len(), 1);
+            assert_eq!(received_responses[0].0, txn_id_2);
+            assert_eq!(received_responses[0].2.read_device_id_code, ReadDeviceIdCode::Regular);
+        }
+
+        // Response for Request 1
+        // MEI(0E), Code(01), Conf(81), More(00), Next(00), Num(00)
+        let response_adu_1 = [
+            0x00, 0x15, 0x00, 0x00, 0x00, 0x08, 0x01, 0x2B, 0x0E, 0x01, 0x81, 0x00, 0x00, 0x00,
+        ];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu_1).unwrap())
+            .unwrap();
+        
+        client_services.poll();
+
+        {
+            let received_responses = client_services.app.received_read_device_id_responses.borrow();
+            assert_eq!(received_responses.len(), 2);
+            assert_eq!(received_responses[1].0, txn_id_1);
+            assert_eq!(received_responses[1].2.read_device_id_code, ReadDeviceIdCode::Basic);
+        }
+    }
+
+    /// Test case: `ClientServices` rejects a response where the echoed Read Device ID Code does not match the request.
+    #[test]
+    fn test_client_services_read_device_identification_mismatch_code() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::new("127.0.0.1", 502).unwrap();
+        let mut client_services =
+            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+
+        let txn_id = 30;
+        let unit_id = 1;
+        // We request BASIC (0x01)
+        client_services
+            .read_device_identification(txn_id, unit_id, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+            .unwrap();
+
+        // Server responds with REGULAR (0x02) - This is a protocol violation or mismatch
+        // MEI(0E), Code(02), Conf(81), More(00), Next(00), Num(00)
+        let response_adu = [
+            0x00, 0x1E, 0x00, 0x00, 0x00, 0x08, 0x01, 0x2B, 0x0E, 0x02, 0x81, 0x00, 0x00, 0x00,
+        ];
+
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+        
+        client_services.poll();
+
+        // Verify success callback was NOT called
+        assert!(client_services.app.received_read_device_id_responses.borrow().is_empty());
+
+        // Verify failure callback WAS called with UnexpectedResponse
+        let failed = client_services.app.failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].2, MbusError::UnexpectedResponse);
     }
 }

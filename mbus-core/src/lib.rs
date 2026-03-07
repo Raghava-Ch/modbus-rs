@@ -7,3 +7,4 @@ pub mod data_unit;
 pub mod errors;
 pub mod function_codes;
 pub mod transport;
+pub mod device_identification;

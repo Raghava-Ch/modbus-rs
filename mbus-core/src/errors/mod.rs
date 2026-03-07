@@ -44,6 +44,8 @@ pub enum MbusError {
     TooManyFileReadSubRequests,
     /// File read PDU overflow, total length of file read sub-requests exceeds maximum allowed bytes per PDU
     FileReadPduOverflow,
+    /// An unexpected response was received that does not match the expected response type for the transaction.
+    UnexpectedResponse,
 }
 
 impl fmt::Display for MbusError {
@@ -110,6 +112,10 @@ impl fmt::Display for MbusError {
             MbusError::FileReadPduOverflow => write!(
                 f,
                 "File read PDU overflow: Total length of file read sub-requests exceeds maximum allowed bytes per PDU"
+            ),
+            MbusError::UnexpectedResponse => write!(
+                f,
+                "Unexpected response: An unexpected response was received"
             ),
         }
     }

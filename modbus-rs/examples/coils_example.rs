@@ -1,8 +1,9 @@
 use anyhow::Result;
 use heapless::Vec as HeaplessVec;
 use mbus_core::app::{
-    CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
+    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
 };
+use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
 use mbus_core::client::services::discrete_inputs::DiscreteInputs;
 use mbus_core::client::services::{ClientServices, discrete_inputs};
 use mbus_core::client::services::coils::MAX_COIL_BYTES;
@@ -167,6 +168,15 @@ impl FileRecordResponse for ClientMockApp {
     fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
+}
+
+impl DiagnosticsResponse for ClientMockApp {
+    fn read_device_identification_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _response: &DeviceIdentificationResponse,
+    ) {}
 }
 
 fn main() -> Result<()> {

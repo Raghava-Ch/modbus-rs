@@ -6,6 +6,7 @@ mod tests {
     use mbus_core;
     use mbus_core::client::services::ClientServices;
     use mbus_core::transport::ModbusConfig;
+    use mbus_core::device_identification::{ReadDeviceIdCode, ObjectId, ConformityLevel};
     use mbus_tcp::management::std_transport::StdTcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -568,6 +569,154 @@ mod tests {
         assert_eq!(rcv_inputs.quantity(), 1);
         assert_eq!(rcv_inputs.value(address).unwrap(), true);
         assert_eq!(*rcv_quantity, 1);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_read_device_identification() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+
+            // Expect Read Device Identification request (FC 2B, MEI 0E)
+            let mut buf = [0; 11];
+            stream.read_exact(&mut buf)?;
+            #[rustfmt::skip]
+            assert_eq!(
+                buf,
+                [
+                    0x00, 0x08, // Transaction ID (8)
+                    0x00, 0x00, // Protocol ID
+                    0x00, 0x05, // Length (5 bytes follow)
+                    0x01,       // Unit ID (1)
+                    0x2B,       // Function Code (43)
+                    0x0E,       // MEI Type (14)
+                    0x01,       // Read Device ID Code (01 - Basic)
+                    0x00,       // Object ID (00)
+                ]
+            );
+
+            // Send response: Basic, Conformity 81, More 00, Next 00, Num 01, Obj 00, Len 03, "Foo"
+            #[rustfmt::skip]
+            stream.write_all(&[
+                0x00, 0x08, // Transaction ID
+                0x00, 0x00, // Protocol ID
+                0x00, 0x0D, // Length (13 bytes follow: Unit(1)+FC(1)+MEI(1)+Read(1)+Conf(1)+More(1)+Next(1)+Num(1)+ObjId(1)+ObjLen(1)+Val(3))
+                0x01,       // Unit ID
+                0x2B,       // Function Code
+                0x0E,       // MEI Type
+                0x01,       // Read Device ID Code
+                0x81,       // Conformity Level
+                0x00,       // More Follows
+                0x00,       // Next Object ID
+                0x01,       // Number of Objects
+                0x00,       // Object ID
+                0x03,       // Object Length
+                0x46, 0x6F, 0x6F, // Object Value "Foo"
+            ])?;
+
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 8;
+        let unit_id = 1;
+        let read_code = ReadDeviceIdCode::Basic;
+        let object_id = ObjectId::from(0x00);
+
+        client.read_device_identification(txn_id, unit_id, read_code, object_id).unwrap();
+        client.poll();
+
+        let received_responses = client.app.received_read_device_id_responses.borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_resp) = &received_responses[0];
+
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_resp.read_device_id_code, ReadDeviceIdCode::Basic);
+        assert_eq!(rcv_resp.conformity_level, ConformityLevel::BasicStreamAndIndividual);
+        assert_eq!(rcv_resp.more_follows, false);
+        assert_eq!(rcv_resp.next_object_id, ObjectId::from(0x00));
+        assert_eq!(rcv_resp.number_of_objects, 1);
+        
+        // Verify object data
+        let objects: Vec<_> = rcv_resp.objects().map(|r| r.unwrap()).collect();
+        assert_eq!(objects.len(), 1);
+        let obj = &objects[0];
+        assert_eq!(obj.object_id, ObjectId::from(0x00));
+        assert_eq!(obj.value.as_slice(), b"Foo");
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_read_device_identification_multi_transaction() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+
+            // Handle 2 requests
+            for _ in 0..2 {
+                let mut buf = [0; 11];
+                stream.read_exact(&mut buf)?;
+                
+                // Extract TID to echo back
+                let tid_hi = buf[0];
+                let tid_lo = buf[1];
+
+                // Send generic response (Basic, No objects for simplicity)
+                #[rustfmt::skip]
+                stream.write_all(&[
+                    tid_hi, tid_lo, // Transaction ID
+                    0x00, 0x00, // Protocol ID
+                    0x00, 0x08, // Length (8 bytes follow)
+                    0x01,       // Unit ID
+                    0x2B,       // Function Code
+                    0x0E,       // MEI Type
+                    0x01,       // Read Device ID Code (Echo Basic)
+                    0x81,       // Conformity Level
+                    0x00,       // More Follows
+                    0x00,       // Next Object ID
+                    0x00,       // Number of Objects
+                ])?;
+            }
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        // Send Request 1
+        client.read_device_identification(10, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00)).unwrap();
+        // Send Request 2
+        client.read_device_identification(11, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00)).unwrap();
+
+        // Poll twice to process both responses
+        client.poll();
+        client.poll();
+
+        let received_responses = client.app.received_read_device_id_responses.borrow();
+        assert_eq!(received_responses.len(), 2);
+        
+        assert_eq!(received_responses[0].0, 10);
+        assert_eq!(received_responses[1].0, 11);
 
         server_handle.join().unwrap()?;
         Ok(())
