@@ -1,4 +1,4 @@
-use crate::{app::Coils, client::services::{diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
+use crate::{app::Coils, client::services::{diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError, function_codes::public::EncapsulatedInterfaceType};
 
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
@@ -197,10 +197,30 @@ pub trait DiscreteInputResponse {
 /// Trait for handling Diagnostics responses.
 pub trait DiagnosticsResponse {
     /// Called when a Read Device Identification response is received.
+    /// Implementors can use this callback to process the device identification information and update their application state accordingly.
+    /// # Parameters
+    /// - `txn_id`: The transaction ID of the original request.
+    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `response`: A `DeviceIdentificationResponse` struct containing the device identification information returned
+
     fn read_device_identification_response(
         &self,
         txn_id: u16,
         unit_id: u8,
         response: &DeviceIdentificationResponse,
+    );
+
+    /// Called when a generic Encapsulated Interface Transport response (FC 43) is received.
+    /// # Parameters
+    /// - `txn_id`: The transaction ID of the original request.
+    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `mei_type`: The MEI type returned in the response.
+    /// - `data`: The data payload returned in the response.
+    fn encapsulated_interface_transport_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
     );
 }

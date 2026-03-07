@@ -2,11 +2,10 @@ use heapless::Vec;
 
 use crate::{
     app::{
-        CoilResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse,
-        RegisterResponse, RequestErrorNotifier, DiagnosticsResponse
+        CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
     },
     client::services::{
-        diagnostics::{DiagnosticsService},
+        diagnostics::DiagnosticsService,
         file_record::SubRequest,
     },
     data_unit::{
@@ -15,7 +14,7 @@ use crate::{
     },
     device_identification::{ObjectId, ReadDeviceIdCode},
     errors::MbusError,
-    function_codes::public::FunctionCode,
+    function_codes::public::{EncapsulatedInterfaceType, FunctionCode},
     transport::{ModbusConfig, TimeKeeper, Transport, TransportType},
 };
 
@@ -88,6 +87,10 @@ enum ExpectedResponseType {
     /// Expected response for a Read Device Identification request.
     ReadDeviceIdentification {
         read_device_id_code: ReadDeviceIdCode,
+    },
+    /// Expected response for a generic Encapsulated Interface Transport request.
+    EncapsulatedInterfaceTransport {
+        mei_type: EncapsulatedInterfaceType,
     },
 }
 
@@ -993,6 +996,47 @@ impl<
         Ok(())
     }
 
+    /// Sends a generic Encapsulated Interface Transport request (FC 43).
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID.
+    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `mei_type`: The MEI type (e.g., `CanopenGeneralReference`).
+    /// - `data`: The data payload to be sent with the request.
+    pub fn encapsulated_interface_transport(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+    ) -> Result<(), MbusError> {
+        let frame = self.diagnostics_service.encapsulated_interface_transport(
+            txn_id,
+            unit_id,
+            mei_type,
+            data,
+            self.transport.transport_type(),
+        )?;
+
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::EncapsulatedInterfaceTransport {
+                    mei_type,
+                },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+
+        self.transport
+            .send(&frame)
+            .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
     /// Ingests received Modbus frames from the transport layer.
     fn ingest_frame(&mut self, frame: &[u8]) {
         // Changed to &mut self, removed transport param
@@ -1197,6 +1241,14 @@ impl<
                     function_code,
                     pdu,
                     read_device_id_code,
+                );
+            }
+            ExpectedResponseType::EncapsulatedInterfaceTransport { mei_type } => {
+                self.handle_encapsulated_interface_transport_response(
+                    mbap_header,
+                    function_code,
+                    pdu,
+                    mei_type,
                 );
             }
 
@@ -1669,6 +1721,42 @@ impl<
             &response,
         );
     }
+
+    fn handle_encapsulated_interface_transport_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_mei_type: EncapsulatedInterfaceType,
+    ) {
+        let (mei_type, data) = match self
+            .diagnostics_service
+            .handle_encapsulated_interface_transport_rsp(function_code, pdu)
+        {
+            Ok(r) => r,
+            Err(e) => {
+                self.app
+                    .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e);
+                return;
+            }
+        };
+
+        if mei_type != expected_mei_type {
+            self.app.request_failed(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                MbusError::UnexpectedResponse,
+            );
+            return;
+        }
+
+        self.app.encapsulated_interface_transport_response(
+            mbap_header.transaction_id,
+            mbap_header.unit_id,
+            mei_type,
+            &data,
+        );
+    }
 }
 
 /// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
@@ -2043,6 +2131,16 @@ mod tests {
                 .borrow_mut()
                 .push((txn_id, unit_id, response.clone()))
                 .unwrap();
+        }
+
+        fn encapsulated_interface_transport_response(
+            &self,
+            txn_id: u16,
+            unit_id: u8,
+            mei_type: EncapsulatedInterfaceType,
+            data: &[u8],
+        ) {
+            // For simplicity, we won't store the data in this mock response, but we could if needed.
         }
     }
 

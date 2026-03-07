@@ -53,6 +53,31 @@ impl DiagnosticsService {
         }
     }
 
+    /// Sends a generic Encapsulated Interface Transport request (FC 43 / 0x2B).
+    ///
+    /// This function allows sending requests for specific MEI types, such as CANopen General Reference (0x0D).
+    /// The `data` payload is appended after the MEI type in the PDU.
+    pub fn encapsulated_interface_transport(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let pdu = DiagnosticsReqPdu::encapsulated_interface_transport_request(mei_type, data)?;
+        match transport_type {
+            TransportType::StdTcp | TransportType::CustomTcp => {
+                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
+                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
+                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
+            }
+            TransportType::StdSerial | TransportType::CustomSerial => {
+                todo!("Serial transport is not yet implemented for Encapsulated Interface Transport.")
+            }
+        }
+    }
+
     /// Handles a Read Device Identification response.
     pub fn handle_read_device_identification_rsp(
         &self,
@@ -63,6 +88,21 @@ impl DiagnosticsService {
             return Err(MbusError::InvalidFunctionCode);
         }
         DiagnosticsReqPdu::parse_read_device_identification_response(pdu)
+    }
+
+    /// Handles a generic Encapsulated Interface Transport response (FC 43 / 0x2B).
+    ///
+    /// Parses the response PDU to extract the MEI type and the associated data.
+    /// Returns the MEI type and the raw data payload.
+    pub fn handle_encapsulated_interface_transport_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<(EncapsulatedInterfaceType, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+        if function_code != FunctionCode::EncapsulatedInterfaceTransport {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_encapsulated_interface_transport_response(pdu)
     }
 }
 
@@ -203,6 +243,44 @@ impl DiagnosticsReqPdu {
         Ok((sub_function, values))
     }
 
+    /// Creates an Encapsulated Interface Transport (FC 0x2B) request PDU.
+    pub fn encapsulated_interface_transport_request(
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+    ) -> Result<Pdu, MbusError> {
+        let mut pdu_data = Vec::new();
+        pdu_data.push(mei_type.into()).map_err(|_| MbusError::BufferTooSmall)?;
+        pdu_data.extend_from_slice(data).map_err(|_| MbusError::BufferTooSmall)?;
+
+        Ok(Pdu::new(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            pdu_data,
+            (1 + data.len()) as u8,
+        ))
+    }
+
+    /// Parses an Encapsulated Interface Transport (FC 0x2B) response PDU.
+    pub fn parse_encapsulated_interface_transport_response(
+        pdu: &Pdu,
+    ) -> Result<(EncapsulatedInterfaceType, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+        if pdu.function_code() != FunctionCode::EncapsulatedInterfaceTransport {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+
+        let data = pdu.data().as_slice();
+        if data.is_empty() {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let mei_type = EncapsulatedInterfaceType::try_from(data[0])?;
+        let mut response_data = Vec::new();
+        if data.len() > 1 {
+            response_data.extend_from_slice(&data[1..]).map_err(|_| MbusError::BufferTooSmall)?;
+        }
+
+        Ok((mei_type, response_data))
+    }
+
     /// Creates a Read Device Identification (FC 0x2B / MEI 0x0E) request PDU.
     ///
     /// # Arguments
@@ -289,19 +367,28 @@ impl DiagnosticsReqPdu {
 }
 
 impl<'a> DeviceIdObjectIterator<'a> {
+    /// Parses the next `DeviceIdObject` from the raw objects data buffer.
+    /// 
+    /// Each object in the stream consists of:
+    /// - Object Id (1 byte)
+    /// - Object Length (1 byte)
+    /// - Object Value (N bytes)
     fn parse_next(&mut self) -> Option<Result<DeviceIdObject, MbusError>> {
+        // Check if there is enough data for the 2-byte header (Id + Length)
         if self.offset + 2 > self.data.len() {
             return Some(Err(MbusError::InvalidPduLength));
         }
         let obj_id = ObjectId::from(self.data[self.offset]);
         let obj_len = self.data[self.offset + 1] as usize;
-        self.offset += 2;
+        self.offset += 2; // Move past the header
 
+        // Ensure the remaining data contains the full object value
         if self.offset + obj_len > self.data.len() {
             return Some(Err(MbusError::InvalidPduLength));
         }
 
         let mut value = Vec::new();
+        // Copy the object value into the heapless::Vec
         if value.extend_from_slice(&self.data[self.offset..self.offset + obj_len]).is_err() {
              return Some(Err(MbusError::BufferTooSmall));
         }
@@ -397,5 +484,23 @@ mod tests {
         ];
         let pdu_overflow = Pdu::new(FunctionCode::EncapsulatedInterfaceTransport, Vec::from_slice(&data_overflow).unwrap(), data_overflow.len() as u8);
         assert_eq!(DiagnosticsReqPdu::parse_read_device_identification_response(&pdu_overflow).unwrap_err(), MbusError::InvalidPduLength);
+    }
+
+    #[test]
+    fn test_encapsulated_interface_transport_request() {
+        let mei_type = EncapsulatedInterfaceType::CanopenGeneralReference;
+        let data = [0x01, 0x02, 0x03];
+        let pdu = DiagnosticsReqPdu::encapsulated_interface_transport_request(mei_type, &data).unwrap();
+        assert_eq!(pdu.function_code(), FunctionCode::EncapsulatedInterfaceTransport);
+        assert_eq!(pdu.data().as_slice(), &[0x0D, 0x01, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn test_parse_encapsulated_interface_transport_response() {
+        let data = [0x0D, 0x01, 0x02, 0x03];
+        let pdu = Pdu::new(FunctionCode::EncapsulatedInterfaceTransport, Vec::from_slice(&data).unwrap(), 4);
+        let (mei, resp_data) = DiagnosticsReqPdu::parse_encapsulated_interface_transport_response(&pdu).unwrap();
+        assert_eq!(mei, EncapsulatedInterfaceType::CanopenGeneralReference);
+        assert_eq!(resp_data.as_slice(), &[0x01, 0x02, 0x03]);
     }
 }

@@ -57,6 +57,16 @@ impl DiagnosticsResponse for ClientApp {
         }
         println!("--------------------------------------------------");
     }
+
+    fn encapsulated_interface_transport_response(
+            &self,
+            _txn_id: u16,
+            _unit_id: u8,
+            _mei_type: mbus_core::function_codes::public::EncapsulatedInterfaceType,
+            _data: &[u8],
+        ) {
+        
+    }
 }
 
 // Implement other required traits with minimal/empty logic for this example
