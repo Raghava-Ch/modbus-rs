@@ -3,6 +3,7 @@ use mbus_core::{
     client::services::{diagnostics::{DeviceIdentificationResponse}, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
     errors::MbusError,
     transport::TimeKeeper,
+    function_codes::public::EncapsulatedInterfaceType,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,6 +16,8 @@ pub struct MockApp {
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16)>>,
     pub received_discrete_input_responses: RefCell<Vec<(u16, u8, DiscreteInputs, u16)>>,
     pub received_read_device_id_responses: RefCell<Vec<(u16, u8, DeviceIdentificationResponse)>>,
+    pub received_encapsulated_interface_transport_responses: RefCell<Vec<(u16, u8, EncapsulatedInterfaceType, Vec<u8>)>>,
+    pub failed_requests: RefCell<Vec<(u16, u8, MbusError)>>,
 }
 
 impl CoilResponse for MockApp {
@@ -79,8 +82,8 @@ impl DiscreteInputResponse for MockApp {
 }
 
 impl RequestErrorNotifier for MockApp {
-    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
-        // In a real application, this would log the error or update some state.
+    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+        self.failed_requests.borrow_mut().push((txn_id, unit_id, error));
     }
 }
 
@@ -193,5 +196,17 @@ impl DiagnosticsResponse for MockApp {
         response: &DeviceIdentificationResponse,
     ) {
         self.received_read_device_id_responses.borrow_mut().push((txn_id, unit_id, response.clone()));
+    }
+
+    fn encapsulated_interface_transport_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+    ) {
+        self.received_encapsulated_interface_transport_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, mei_type, data.to_vec()));
     }
 }

@@ -7,6 +7,8 @@ mod tests {
     use mbus_core::client::services::ClientServices;
     use mbus_core::transport::ModbusConfig;
     use mbus_core::device_identification::{ReadDeviceIdCode, ObjectId, ConformityLevel};
+    use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+    use mbus_core::errors::MbusError;
     use mbus_tcp::management::std_transport::StdTcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -717,6 +719,158 @@ mod tests {
         
         assert_eq!(received_responses[0].0, 10);
         assert_eq!(received_responses[1].0, 11);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+
+            // Expect Encapsulated Interface Transport request (FC 43, MEI 0D)
+            let mut buf = [0; 11]; // MBAP(7) + FC(1) + MEI(1) + Data(2) = 11
+            stream.read_exact(&mut buf)?;
+
+            // Verify request
+            // MBAP
+            assert_eq!(buf[2], 0x00); assert_eq!(buf[3], 0x00); // Protocol ID
+            assert_eq!(buf[4], 0x00); assert_eq!(buf[5], 0x05); // Length (5 bytes: Unit+FC+MEI+Data)
+            assert_eq!(buf[6], 0x01); // Unit ID
+            // PDU
+            assert_eq!(buf[7], 0x2B); // FC 43
+            assert_eq!(buf[8], 0x0D); // MEI 0D (CANopen)
+            assert_eq!(buf[9], 0xAA); // Data 1
+            assert_eq!(buf[10], 0xBB); // Data 2
+
+            // Send response
+            // MBAP(7) + FC(1) + MEI(1) + Data(2) = 11 bytes
+            #[rustfmt::skip]
+            stream.write_all(&[
+                buf[0], buf[1], // TID
+                0x00, 0x00, // PID
+                0x00, 0x05, // Length
+                0x01,       // Unit ID
+                0x2B,       // FC
+                0x0D,       // MEI
+                0xCC, 0xDD  // Response Data
+            ])?;
+
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 100;
+        let unit_id = 1;
+        let mei_type = EncapsulatedInterfaceType::CanopenGeneralReference;
+        let data = [0xAA, 0xBB];
+
+        client.encapsulated_interface_transport(txn_id, unit_id, mei_type, &data).unwrap();
+        client.poll();
+
+        let received = client.app.received_encapsulated_interface_transport_responses.borrow();
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].0, txn_id);
+        assert_eq!(received[0].1, unit_id);
+        assert_eq!(received[0].2, mei_type);
+        assert_eq!(received[0].3, &[0xCC, 0xDD]);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0; 10]; // MBAP(7) + FC(1) + MEI(1) + Data(1)
+            stream.read_exact(&mut buf)?;
+
+            // Send response with WRONG MEI (0x0E instead of 0x0D)
+            #[rustfmt::skip]
+            stream.write_all(&[
+                buf[0], buf[1], // TID
+                0x00, 0x00, // PID
+                0x00, 0x04, // Length
+                0x01,       // Unit ID
+                0x2B,       // FC
+                0x0E,       // MEI (Wrong)
+                0x00        // Data
+            ])?;
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        client.encapsulated_interface_transport(101, 1, EncapsulatedInterfaceType::CanopenGeneralReference, &[0x01]).unwrap();
+        client.poll();
+
+        // Should fail
+        assert!(client.app.received_encapsulated_interface_transport_responses.borrow().is_empty());
+        let failed = client.app.failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].2, MbusError::UnexpectedResponse);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_encapsulated_interface_transport_exception() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0; 10];
+            stream.read_exact(&mut buf)?;
+
+            // Send Exception (FC 0xAB, Code 0x01)
+            #[rustfmt::skip]
+            stream.write_all(&[
+                buf[0], buf[1], // TID
+                0x00, 0x00, // PID
+                0x00, 0x03, // Length
+                0x01,       // Unit ID
+                0xAB,       // FC (0x2B + 0x80)
+                0x01        // Exception Code
+            ])?;
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        client.encapsulated_interface_transport(102, 1, EncapsulatedInterfaceType::CanopenGeneralReference, &[0x01]).unwrap();
+        client.poll();
+
+        // Should fail
+        assert!(client.app.received_encapsulated_interface_transport_responses.borrow().is_empty());
+        let failed = client.app.failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
 
         server_handle.join().unwrap()?;
         Ok(())

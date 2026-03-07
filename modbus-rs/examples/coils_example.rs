@@ -5,7 +5,7 @@ use mbus_core::app::{
 };
 use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
 use mbus_core::client::services::discrete_inputs::DiscreteInputs;
-use mbus_core::client::services::{ClientServices, discrete_inputs};
+use mbus_core::client::services::{ClientServices};
 use mbus_core::client::services::coils::MAX_COIL_BYTES;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
@@ -177,6 +177,16 @@ impl DiagnosticsResponse for ClientMockApp {
         _unit_id: u8,
         _response: &DeviceIdentificationResponse,
     ) {}
+
+    fn encapsulated_interface_transport_response(
+            &self,
+            _txn_id: u16,
+            _unit_id: u8,
+            _mei_type: mbus_core::function_codes::public::EncapsulatedInterfaceType,
+            _data: &[u8],
+        ) {
+        
+    }
 }
 
 fn main() -> Result<()> {
