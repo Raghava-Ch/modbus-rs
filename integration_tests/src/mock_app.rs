@@ -1,6 +1,6 @@
 use mbus_core::{
-    app::{CoilResponse, Coils, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
-    client::services::{fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
+    app::{CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
+    client::services::{discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
     errors::MbusError,
     transport::TimeKeeper,
 };
@@ -13,6 +13,7 @@ pub struct MockApp {
     pub received_coil_responses: RefCell<Vec<(u16, u8, Coils, u16)>>, // Corrected duplicate
     pub received_write_single_coil_responses: RefCell<Vec<(u16, u8, u16, bool)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16)>>,
+    pub received_discrete_input_responses: RefCell<Vec<(u16, u8, DiscreteInputs, u16)>>,
 }
 
 impl CoilResponse for MockApp {
@@ -46,6 +47,36 @@ impl CoilResponse for MockApp {
             .push((txn_id, unit_id, address, quantity));
     }
 }
+
+impl DiscreteInputResponse for MockApp {
+    fn read_discrete_inputs_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        inputs: &DiscreteInputs,
+        quantity: u16,
+    ) {
+        self.received_discrete_input_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, inputs.clone(), quantity));
+    }
+
+    fn read_single_discrete_input_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        value: bool,
+    ) {
+        let mut values = heapless::Vec::new();
+        values.push(if value { 1 } else { 0 }).unwrap();
+        let inputs = DiscreteInputs::new(address, 1, values);
+        self.received_discrete_input_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, inputs, 1));
+    }
+}
+
 impl RequestErrorNotifier for MockApp {
     fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
         // In a real application, this would log the error or update some state.

@@ -1,4 +1,4 @@
-use crate::{app::Coils, client::services::{fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
+use crate::{app::Coils, client::services::{discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError};
 
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
@@ -162,4 +162,34 @@ pub trait RegisterResponse {
     /// - `txn_id`: The transaction ID of the original request.
     /// - `unit_id`: The unit ID of the device that responded.
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id: u8);
+}
+
+/// Defines callbacks for handling responses to Modbus discrete input-related requests.
+///
+/// Implementors of this trait can process the data received from a Modbus server
+/// and update their application state accordingly.
+pub trait DiscreteInputResponse {
+    /// Handles a response for a `Read Discrete Inputs` (FC 0x02) request.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID of the original request.
+    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `inputs`: A `DiscreteInputs` struct containing the states of the read inputs.
+    /// - `quantity`: The number of inputs that were read.
+    fn read_discrete_inputs_response(&mut self, txn_id: u16, unit_id: u8, inputs: &DiscreteInputs, quantity: u16);
+
+    /// Handles a response for a single discrete input read request.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID of the original request.
+    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `address`: The address of the input that was read.
+    /// - `value`: The boolean state of the read input.
+    fn read_single_discrete_input_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        value: bool,
+    );
 }

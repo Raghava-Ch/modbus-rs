@@ -1,9 +1,10 @@
 use anyhow::Result;
 use heapless::Vec as HeaplessVec;
 use mbus_core::app::{
-    CoilResponse, Coils, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
+    CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
 };
-use mbus_core::client::services::ClientServices;
+use mbus_core::client::services::discrete_inputs::DiscreteInputs;
+use mbus_core::client::services::{ClientServices, discrete_inputs};
 use mbus_core::client::services::coils::MAX_COIL_BYTES;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
@@ -127,6 +128,26 @@ impl RequestErrorNotifier for ClientMockApp {
 impl FifoQueueResponse for ClientMockApp {
     fn read_fifo_queue_response(&mut self, _txn_id: u16, _unit_id: u8, _values: &FifoQueue) {
         // Not used in this example
+    }
+}
+
+impl DiscreteInputResponse for ClientMockApp {
+    fn read_discrete_inputs_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _inputs: &DiscreteInputs,
+        _quantity: u16
+    ) {
+    }
+
+    fn read_single_discrete_input_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _address: u16,
+        _value: bool,
+    ) {
     }
 }
 

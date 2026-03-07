@@ -431,4 +431,145 @@ mod tests {
         server_handle.join().unwrap()?;
         Ok(())
     }
+
+    #[test]
+    fn test_client_services_read_discrete_inputs() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+
+            // Expect Read Discrete Inputs request (FC 02)
+            let mut buf = [0; 12];
+            stream.read_exact(&mut buf)?;
+            #[rustfmt::skip]
+            assert_eq!(
+                buf,
+                [
+                    0x00, 0x06, // Transaction ID (6)
+                    0x00, 0x00, // Protocol ID
+                    0x00, 0x06, // Length
+                    0x01,       // Unit ID (1)
+                    0x02,       // Function Code (2 = Read Discrete Inputs)
+                    0x00, 0x0A, // Starting Address (10)
+                    0x00, 0x08, // Quantity (8)
+                ]
+            );
+
+            // Send response: 8 inputs, value 0xAA (10101010)
+            #[rustfmt::skip]
+            stream.write_all(&[
+                0x00, 0x06, // Transaction ID
+                0x00, 0x00, // Protocol ID
+                0x00, 0x04, // Length
+                0x01,       // Unit ID
+                0x02,       // Function Code
+                0x01,       // Byte Count
+                0xAA,       // Input Status
+            ])?;
+
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 6;
+        let unit_id = 1;
+        let address = 10;
+        let quantity = 8;
+
+        client
+            .read_discrete_inputs(txn_id, unit_id, address, quantity)
+            .unwrap();
+        client.poll(); // Process read response
+
+        let received_responses = client.app.received_discrete_input_responses.borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
+
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_inputs.from_address(), address);
+        assert_eq!(rcv_inputs.quantity(), quantity);
+        assert_eq!(rcv_inputs.values().as_slice(), &[0xAA]);
+        assert_eq!(*rcv_quantity, quantity);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_client_services_read_single_discrete_input() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+
+        let server_handle = thread::spawn(move || -> Result<()> {
+            let (mut stream, _) = listener.accept()?;
+
+            // Expect Read Discrete Inputs request (FC 02) for single input
+            let mut buf = [0; 12];
+            stream.read_exact(&mut buf)?;
+            #[rustfmt::skip]
+            assert_eq!(
+                buf,
+                [
+                    0x00, 0x07, // Transaction ID (7)
+                    0x00, 0x00, // Protocol ID
+                    0x00, 0x06, // Length
+                    0x01,       // Unit ID (1)
+                    0x02,       // Function Code (2 = Read Discrete Inputs)
+                    0x00, 0x05, // Starting Address (5)
+                    0x00, 0x01, // Quantity (1)
+                ]
+            );
+
+            // Send response: 1 input, value 1 (ON)
+            #[rustfmt::skip]
+            stream.write_all(&[
+                0x00, 0x07, // Transaction ID
+                0x00, 0x00, // Protocol ID
+                0x00, 0x04, // Length
+                0x01,       // Unit ID
+                0x02,       // Function Code
+                0x01,       // Byte Count
+                0x01,       // Input Status
+            ])?;
+
+            Ok(())
+        });
+
+        let transport = StdTcpTransport::new();
+        let app = MockApp::default();
+        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        config.connection_timeout_ms = 500;
+
+        let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
+
+        let txn_id = 7;
+        let unit_id = 1;
+        let address = 5;
+
+        client.read_single_discrete_input(txn_id, unit_id, address).unwrap();
+        client.poll(); // Process read response
+
+        let received_responses = client.app.received_discrete_input_responses.borrow();
+        assert_eq!(received_responses.len(), 1);
+        let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
+
+        assert_eq!(*rcv_txn_id, txn_id);
+        assert_eq!(*rcv_unit_id, unit_id);
+        assert_eq!(rcv_inputs.from_address(), address);
+        assert_eq!(rcv_inputs.quantity(), 1);
+        assert_eq!(rcv_inputs.value(address).unwrap(), true);
+        assert_eq!(*rcv_quantity, 1);
+
+        server_handle.join().unwrap()?;
+        Ok(())
+    }
 }

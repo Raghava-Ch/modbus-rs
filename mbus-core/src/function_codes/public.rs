@@ -239,6 +239,18 @@ pub enum DiagnosticSubFunction {
     ClearOverrunCounterAndFlag = 0x0014,
 }
 
+impl DiagnosticSubFunction {
+    pub fn to_be_bytes(self) -> [u8; 2] {
+        (self as u16).to_be_bytes()
+    }
+}
+
+impl From<DiagnosticSubFunction> for u16 {
+    fn from(sub_func: DiagnosticSubFunction) -> Self {
+        sub_func as u16
+    }
+}
+
 impl TryFrom<u16> for DiagnosticSubFunction {
     type Error = MbusError;
 
