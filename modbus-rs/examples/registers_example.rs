@@ -1,8 +1,9 @@
 use anyhow::Result;
 use mbus_core::app::{
-    CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
+    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
 };
 use mbus_core::client::services::ClientServices;
+use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
 use mbus_core::client::services::discrete_inputs::DiscreteInputs;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
@@ -183,6 +184,15 @@ impl TimeKeeper for ClientApp {
             .unwrap()
             .as_millis() as u64
     }
+}
+
+impl DiagnosticsResponse for ClientApp {
+    fn read_device_identification_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _response: &DeviceIdentificationResponse,
+    ) {}
 }
 
 impl FileRecordResponse for ClientApp {
