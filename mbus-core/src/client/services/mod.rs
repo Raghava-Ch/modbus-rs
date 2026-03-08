@@ -2,19 +2,17 @@ use heapless::Vec;
 
 use crate::{
     app::{
-        CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
+        CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
+        FileRecordResponse, RegisterResponse, RequestErrorNotifier,
     },
-    client::services::{
-        diagnostics::DiagnosticsService,
-        file_record::SubRequest,
-    },
+    client::services::{diagnostics::DiagnosticsService, file_record::SubRequest},
     data_unit::{
         common::{MAX_ADU_FRAME_LEN, MbapHeader},
         tcp::ModbusTcpMessage,
     },
     device_identification::{ObjectId, ReadDeviceIdCode},
     errors::MbusError,
-    function_codes::public::{EncapsulatedInterfaceType, FunctionCode},
+    function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
     transport::{ModbusConfig, TimeKeeper, Transport, TransportType},
 };
 
@@ -89,9 +87,17 @@ enum ExpectedResponseType {
         read_device_id_code: ReadDeviceIdCode,
     },
     /// Expected response for a generic Encapsulated Interface Transport request.
-    EncapsulatedInterfaceTransport {
-        mei_type: EncapsulatedInterfaceType,
-    },
+    EncapsulatedInterfaceTransport { mei_type: EncapsulatedInterfaceType },
+    /// Expected response for Read Exception Status (FC 07).
+    ReadExceptionStatus,
+    /// Expected response for Diagnostics (FC 08).
+    Diagnostics { sub_function: DiagnosticSubFunction },
+    /// Expected response for Get Comm Event Counter (FC 11).
+    GetCommEventCounter,
+    /// Expected response for Get Comm Event Log (FC 12).
+    GetCommEventLog,
+    /// Expected response for Report Server ID (FC 17).
+    ReportServerId,
 }
 
 /// Represents an expected response for a previously sent request,
@@ -1025,15 +1031,127 @@ impl<
                 original_adu: frame.clone(),
                 sent_timestamp: self.app.current_millis(),
                 retries_left: self.config.retry_attempts,
-                response_type: ExpectedResponseType::EncapsulatedInterfaceTransport {
-                    mei_type,
-                },
+                response_type: ExpectedResponseType::EncapsulatedInterfaceTransport { mei_type },
             })
             .map_err(|_| MbusError::TooManyRequests)?;
 
         self.transport
             .send(&frame)
             .map_err(|_e| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Read Exception Status request (FC 07). Serial Line only.
+    pub fn read_exception_status(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+        let frame = self
+            .diagnostics_service
+            .read_exception_status(unit_id, self.transport.transport_type())?;
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReadExceptionStatus,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        self.transport
+            .send(&frame)
+            .map_err(|_| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Diagnostics request (FC 08). Serial Line only.
+    pub fn diagnostics(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        sub_function: DiagnosticSubFunction,
+        data: &[u16],
+    ) -> Result<(), MbusError> {
+        let frame = self.diagnostics_service.diagnostics(
+            unit_id,
+            sub_function,
+            data,
+            self.transport.transport_type(),
+        )?;
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::Diagnostics { sub_function },
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        self.transport
+            .send(&frame)
+            .map_err(|_| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Get Comm Event Counter request (FC 11). Serial Line only.
+    pub fn get_comm_event_counter(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+        let frame = self
+            .diagnostics_service
+            .get_comm_event_counter(unit_id, self.transport.transport_type())?;
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::GetCommEventCounter,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        self.transport
+            .send(&frame)
+            .map_err(|_| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Get Comm Event Log request (FC 12). Serial Line only.
+    pub fn get_comm_event_log(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+        let frame = self
+            .diagnostics_service
+            .get_comm_event_log(unit_id, self.transport.transport_type())?;
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::GetCommEventLog,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        self.transport
+            .send(&frame)
+            .map_err(|_| MbusError::SendFailed)?;
+        Ok(())
+    }
+
+    /// Sends a Report Server ID request (FC 17). Serial Line only.
+    pub fn report_server_id(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+        let frame = self
+            .diagnostics_service
+            .report_server_id(unit_id, self.transport.transport_type())?;
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id,
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.config.retry_attempts,
+                response_type: ExpectedResponseType::ReportServerId,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        self.transport
+            .send(&frame)
+            .map_err(|_| MbusError::SendFailed)?;
         Ok(())
     }
 
@@ -1250,6 +1368,21 @@ impl<
                     pdu,
                     mei_type,
                 );
+            }
+            ExpectedResponseType::ReadExceptionStatus => {
+                self.handle_read_exception_status_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::Diagnostics { sub_function } => {
+                self.handle_diagnostics_response(mbap_header, function_code, pdu, sub_function);
+            }
+            ExpectedResponseType::GetCommEventCounter => {
+                self.handle_get_comm_event_counter_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::GetCommEventLog => {
+                self.handle_get_comm_event_log_response(mbap_header, function_code, pdu);
+            }
+            ExpectedResponseType::ReportServerId => {
+                self.handle_report_server_id_response(mbap_header, function_code, pdu);
             }
 
             ExpectedResponseType::Undefined => {
@@ -1757,6 +1890,127 @@ impl<
             &data,
         );
     }
+
+    fn handle_read_exception_status_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        match self
+            .diagnostics_service
+            .handle_read_exception_status_rsp(function_code, pdu)
+        {
+            Ok(status) => self.app.read_exception_status_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                status,
+            ),
+            Err(e) => self
+                .app
+                .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e),
+        }
+    }
+
+    fn handle_diagnostics_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+        expected_sub_function: DiagnosticSubFunction,
+    ) {
+        match self
+            .diagnostics_service
+            .handle_diagnostics_rsp(function_code, pdu)
+        {
+            Ok((sub_func, data)) => {
+                if sub_func != u16::from(expected_sub_function) {
+                    self.app.request_failed(
+                        mbap_header.transaction_id,
+                        mbap_header.unit_id,
+                        MbusError::UnexpectedResponse,
+                    );
+                } else {
+                    self.app.diagnostics_response(
+                        mbap_header.transaction_id,
+                        mbap_header.unit_id,
+                        sub_func,
+                        &data,
+                    );
+                }
+            }
+            Err(e) => self
+                .app
+                .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e),
+        }
+    }
+
+    fn handle_get_comm_event_counter_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        match self
+            .diagnostics_service
+            .handle_get_comm_event_counter_rsp(function_code, pdu)
+        {
+            Ok((status, count)) => self.app.get_comm_event_counter_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                status,
+                count,
+            ),
+            Err(e) => self
+                .app
+                .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e),
+        }
+    }
+
+    fn handle_get_comm_event_log_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        match self
+            .diagnostics_service
+            .handle_get_comm_event_log_rsp(function_code, pdu)
+        {
+            Ok((status, event_count, msg_count, events)) => self.app.get_comm_event_log_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                status,
+                event_count,
+                msg_count,
+                &events,
+            ),
+            Err(e) => self
+                .app
+                .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e),
+        }
+    }
+
+    fn handle_report_server_id_response(
+        &mut self,
+        mbap_header: &MbapHeader,
+        function_code: FunctionCode,
+        pdu: &crate::data_unit::common::Pdu,
+    ) {
+        match self
+            .diagnostics_service
+            .handle_report_server_id_rsp(function_code, pdu)
+        {
+            Ok(data) => self.app.report_server_id_response(
+                mbap_header.transaction_id,
+                mbap_header.unit_id,
+                &data,
+            ),
+            Err(e) => self
+                .app
+                .request_failed(mbap_header.transaction_id, mbap_header.unit_id, e),
+        }
+    }
 }
 
 /// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
@@ -1786,17 +2040,17 @@ fn decode_transport_frame(
 mod tests {
     use super::*;
     use crate::app::CoilResponse;
+    use crate::app::DiagnosticsResponse;
     use crate::app::DiscreteInputResponse;
     use crate::app::FifoQueueResponse;
     use crate::app::FileRecordResponse;
     use crate::app::RegisterResponse;
-    use crate::app::DiagnosticsResponse;
     use crate::client::services::coils::Coils;
-    use crate::client::services::diagnostics::{DeviceIdentificationResponse};
+    use crate::client::services::diagnostics::DeviceIdentificationResponse;
     use crate::client::services::discrete_inputs::DiscreteInputs;
-    use crate::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
     use crate::client::services::fifo::FifoQueue;
     use crate::client::services::file_record::{MAX_SUB_REQUESTS_PER_PDU, SubRequestParams};
+    use crate::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
     use crate::errors::MbusError;
     use crate::transport::ModbusConfig;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
@@ -2135,13 +2389,39 @@ mod tests {
 
         fn encapsulated_interface_transport_response(
             &self,
-            txn_id: u16,
-            unit_id: u8,
-            mei_type: EncapsulatedInterfaceType,
-            data: &[u8],
+            _txn_id: u16,
+            _unit_id: u8,
+            _mei_type: EncapsulatedInterfaceType,
+            _data: &[u8],
         ) {
             // For simplicity, we won't store the data in this mock response, but we could if needed.
         }
+
+        fn diagnostics_response(&self, _txn_id: u16, _unit_id: u8, _sub_function: u16, _data: &[u16]) {}
+
+        fn get_comm_event_counter_response(
+            &self,
+            _txn_id: u16,
+            _unit_id: u8,
+            _status: u16,
+            _event_count: u16,
+        ) {
+        }
+
+        fn get_comm_event_log_response(
+            &self,
+            _txn_id: u16,
+            _unit_id: u8,
+            _status: u16,
+            _event_count: u16,
+            _message_count: u16,
+            _events: &[u8],
+        ) {
+        }
+
+        fn read_exception_status_response(&self, _txn_id: u16, _unit_id: u8, _status: u8) {}
+
+        fn report_server_id_response(&self, _txn_id: u16, _unit_id: u8, _data: &[u8]) {}
     }
 
     impl TimeKeeper for MockApp {
@@ -3862,7 +4142,10 @@ mod tests {
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_resp.read_device_id_code, ReadDeviceIdCode::Basic);
-        assert_eq!(rcv_resp.conformity_level, ConformityLevel::BasicStreamAndIndividual);
+        assert_eq!(
+            rcv_resp.conformity_level,
+            ConformityLevel::BasicStreamAndIndividual
+        );
         assert_eq!(rcv_resp.objects_data.len(), 5); // Id(1)+Len(1)+Val(3)
     }
 
@@ -3884,7 +4167,12 @@ mod tests {
         // Request 2
         let txn_id_2 = 22;
         client_services
-            .read_device_identification(txn_id_2, 1, ReadDeviceIdCode::Regular, ObjectId::from(0x00))
+            .read_device_identification(
+                txn_id_2,
+                1,
+                ReadDeviceIdCode::Regular,
+                ObjectId::from(0x00),
+            )
             .unwrap();
 
         assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
@@ -3901,14 +4189,20 @@ mod tests {
             .borrow_mut()
             .push_back(Vec::from_slice(&response_adu_2).unwrap())
             .unwrap();
-        
+
         client_services.poll();
 
         {
-            let received_responses = client_services.app.received_read_device_id_responses.borrow();
+            let received_responses = client_services
+                .app
+                .received_read_device_id_responses
+                .borrow();
             assert_eq!(received_responses.len(), 1);
             assert_eq!(received_responses[0].0, txn_id_2);
-            assert_eq!(received_responses[0].2.read_device_id_code, ReadDeviceIdCode::Regular);
+            assert_eq!(
+                received_responses[0].2.read_device_id_code,
+                ReadDeviceIdCode::Regular
+            );
         }
 
         // Response for Request 1
@@ -3922,14 +4216,20 @@ mod tests {
             .borrow_mut()
             .push_back(Vec::from_slice(&response_adu_1).unwrap())
             .unwrap();
-        
+
         client_services.poll();
 
         {
-            let received_responses = client_services.app.received_read_device_id_responses.borrow();
+            let received_responses = client_services
+                .app
+                .received_read_device_id_responses
+                .borrow();
             assert_eq!(received_responses.len(), 2);
             assert_eq!(received_responses[1].0, txn_id_1);
-            assert_eq!(received_responses[1].2.read_device_id_code, ReadDeviceIdCode::Basic);
+            assert_eq!(
+                received_responses[1].2.read_device_id_code,
+                ReadDeviceIdCode::Basic
+            );
         }
     }
 
@@ -3946,7 +4246,12 @@ mod tests {
         let unit_id = 1;
         // We request BASIC (0x01)
         client_services
-            .read_device_identification(txn_id, unit_id, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+            .read_device_identification(
+                txn_id,
+                unit_id,
+                ReadDeviceIdCode::Basic,
+                ObjectId::from(0x00),
+            )
             .unwrap();
 
         // Server responds with REGULAR (0x02) - This is a protocol violation or mismatch
@@ -3961,11 +4266,17 @@ mod tests {
             .borrow_mut()
             .push_back(Vec::from_slice(&response_adu).unwrap())
             .unwrap();
-        
+
         client_services.poll();
 
         // Verify success callback was NOT called
-        assert!(client_services.app.received_read_device_id_responses.borrow().is_empty());
+        assert!(
+            client_services
+                .app
+                .received_read_device_id_responses
+                .borrow()
+                .is_empty()
+        );
 
         // Verify failure callback WAS called with UnexpectedResponse
         let failed = client_services.app.failed_requests.borrow();
