@@ -223,4 +223,19 @@ pub trait DiagnosticsResponse {
         mei_type: EncapsulatedInterfaceType,
         data: &[u8],
     );
+
+    /// Called when a Read Exception Status response (FC 07) is received.
+    fn read_exception_status_response(&self, txn_id: u16, unit_id: u8, status: u8);
+
+    /// Called when a Diagnostics response (FC 08) is received.
+    fn diagnostics_response(&self, txn_id: u16, unit_id: u8, sub_function: u16, data: &[u16]);
+
+    /// Called when a Get Comm Event Counter response (FC 11) is received.
+    fn get_comm_event_counter_response(&self, txn_id: u16, unit_id: u8, status: u16, event_count: u16);
+
+    /// Called when a Get Comm Event Log response (FC 12) is received.
+    fn get_comm_event_log_response(&self, txn_id: u16, unit_id: u8, status: u16, event_count: u16, message_count: u16, events: &[u8]);
+
+    /// Called when a Report Server ID response (FC 17) is received.
+    fn report_server_id_response(&self, txn_id: u16, unit_id: u8, data: &[u8]);
 }

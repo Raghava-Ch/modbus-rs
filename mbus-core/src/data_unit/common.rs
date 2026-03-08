@@ -97,13 +97,30 @@ impl MbapHeader {
     }
 }
 
+/// Represents a Modbus slave address for RTU/ASCII messages.
+#[derive(Debug, Clone, Copy)]
+pub struct SlaveAddress(u8);
+
+impl SlaveAddress {
+    pub fn new(address: u8) -> Result<Self, MbusError> {
+        if !(1..=247).contains(&address) {
+            return Err(MbusError::InvalidSlaveAddress);
+        }
+        Ok(Self(address))
+    }
+
+    pub fn address(&self) -> u8 {
+        self.0
+    }
+}
+
 /// Additional address field for Modbus RTU/TCP messages.
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum AdditionalAddress {
     /// The additional address field used in certain Modbus function codes.
     MbapHeader(MbapHeader),
-    SlaveAddress(u8),
+    SlaveAddress(SlaveAddress),
 }
 
 /// Represents a complete Modbus message, including the additional address, PDU and Error check.
@@ -181,7 +198,7 @@ impl ModbusMessage {
             }
             AdditionalAddress::SlaveAddress(address) => {
                 adu_bytes
-                    .push(*address)
+                    .push(address.address())
                     .map_err(|_| MbusError::Unexpected)?;
             }
         }

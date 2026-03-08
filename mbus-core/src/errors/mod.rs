@@ -46,6 +46,10 @@ pub enum MbusError {
     FileReadPduOverflow,
     /// An unexpected response was received that does not match the expected response type for the transaction.
     UnexpectedResponse,
+    /// The transport is invalid for the requested operation
+    InvalidTransport,
+    /// Invalid slave address
+    InvalidSlaveAddress,
 }
 
 impl fmt::Display for MbusError {
@@ -116,6 +120,14 @@ impl fmt::Display for MbusError {
             MbusError::UnexpectedResponse => write!(
                 f,
                 "Unexpected response: An unexpected response was received"
+            ),
+            MbusError::InvalidTransport => write!(
+                f,
+                "Invalid transport: The transport is invalid for the requested operation"
+            ),
+            MbusError::InvalidSlaveAddress => write!(
+                f,
+                "Invalid slave address: The provided slave address is invalid"
             ),
         }
     }

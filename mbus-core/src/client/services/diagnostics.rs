@@ -104,6 +104,115 @@ impl DiagnosticsService {
         }
         DiagnosticsReqPdu::parse_encapsulated_interface_transport_response(pdu)
     }
+
+    /// Sends a Read Exception Status request (FC 0x07). Serial Line only.
+    pub fn read_exception_status(
+        &self,
+        unit_id: u8,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        self.check_serial(transport_type)?;
+        let pdu = DiagnosticsReqPdu::read_exception_status_request()?;
+        self.build_serial_adu(unit_id, pdu)
+    }
+
+    /// Sends a Diagnostics request (FC 0x08). Serial Line only.
+    pub fn diagnostics(
+        &self,
+        unit_id: u8,
+        sub_function: DiagnosticSubFunction,
+        data: &[u16],
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        self.check_serial(transport_type)?;
+        let pdu = DiagnosticsReqPdu::diagnostics_request(sub_function, data)?;
+        self.build_serial_adu(unit_id, pdu)
+    }
+
+    /// Sends a Get Comm Event Counter request (FC 0x0B). Serial Line only.
+    pub fn get_comm_event_counter(
+        &self,
+        unit_id: u8,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        self.check_serial(transport_type)?;
+        let pdu = DiagnosticsReqPdu::get_comm_event_counter_request()?;
+        self.build_serial_adu(unit_id, pdu)
+    }
+
+    /// Sends a Get Comm Event Log request (FC 0x0C). Serial Line only.
+    pub fn get_comm_event_log(
+        &self,
+        unit_id: u8,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        self.check_serial(transport_type)?;
+        let pdu = DiagnosticsReqPdu::get_comm_event_log_request()?;
+        self.build_serial_adu(unit_id, pdu)
+    }
+
+    /// Sends a Report Server ID request (FC 0x11). Serial Line only.
+    pub fn report_server_id(
+        &self,
+        unit_id: u8,
+        transport_type: TransportType,
+    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        self.check_serial(transport_type)?;
+        let pdu = DiagnosticsReqPdu::report_server_id_request()?;
+        self.build_serial_adu(unit_id, pdu)
+    }
+
+    // --- Response Handlers ---
+
+    pub fn handle_read_exception_status_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<u8, MbusError> {
+        if function_code != FunctionCode::ReadExceptionStatus {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_read_exception_status_response(pdu)
+    }
+
+    pub fn handle_diagnostics_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, Vec<u16, 125>), MbusError> {
+        if function_code != FunctionCode::Diagnostics {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_diagnostics_response(pdu)
+    }
+
+    pub fn handle_get_comm_event_counter_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, u16), MbusError> {
+        if function_code != FunctionCode::GetCommEventCounter {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_get_comm_event_counter_response(pdu)
+    }
+
+    pub fn handle_get_comm_event_log_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+        if function_code != FunctionCode::GetCommEventLog {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_get_comm_event_log_response(pdu)
+    }
+
+    pub fn handle_report_server_id_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
+        if function_code != FunctionCode::ReportServerId {
+            return Err(MbusError::InvalidFunctionCode);
+        }
+        DiagnosticsReqPdu::parse_report_server_id_response(pdu)
+    }
+
+    // --- Helpers ---
+
+    fn check_serial(&self, transport_type: TransportType) -> Result<(), MbusError> {
+        match transport_type {
+            TransportType::StdSerial | TransportType::CustomSerial => Ok(()),
+            _ => Err(MbusError::InvalidTransport), // Feature not supported on non-serial transport
+        }
+    }
+
+    fn build_serial_adu(&self, _unit_id: u8, _pdu: Pdu) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        // Serial transport ADU construction is not yet implemented in this context.
+        // This placeholder allows the code to compile and the structure to be ready.
+        todo!("Serial transport ADU construction is not yet implemented.")
+    }
 }
 
 impl DeviceIdentificationResponse {
@@ -241,6 +350,91 @@ impl DiagnosticsReqPdu {
         }
 
         Ok((sub_function, values))
+    }
+
+    /// Creates a Get Comm Event Counter (FC 0x0B) request PDU.
+    pub fn get_comm_event_counter_request() -> Result<Pdu, MbusError> {
+        Ok(Pdu::new(FunctionCode::GetCommEventCounter, Vec::new(), 0))
+    }
+
+    /// Parses a Get Comm Event Counter (FC 0x0B) response PDU.
+    /// Returns (Status, Event Count).
+    pub fn parse_get_comm_event_counter_response(pdu: &Pdu) -> Result<(u16, u16), MbusError> {
+        if pdu.function_code() != FunctionCode::GetCommEventCounter {
+            return Err(MbusError::ParseError);
+        }
+        let data = pdu.data().as_slice();
+        if data.len() != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let status = u16::from_be_bytes([data[0], data[1]]);
+        let event_count = u16::from_be_bytes([data[2], data[3]]);
+        Ok((status, event_count))
+    }
+
+    /// Creates a Get Comm Event Log (FC 0x0C) request PDU.
+    pub fn get_comm_event_log_request() -> Result<Pdu, MbusError> {
+        Ok(Pdu::new(FunctionCode::GetCommEventLog, Vec::new(), 0))
+    }
+
+    /// Parses a Get Comm Event Log (FC 0x0C) response PDU.
+    /// Returns (Status, Event Count, Message Count, Events).
+    pub fn parse_get_comm_event_log_response(pdu: &Pdu) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+        if pdu.function_code() != FunctionCode::GetCommEventLog {
+            return Err(MbusError::ParseError);
+        }
+        let data = pdu.data().as_slice();
+        if data.len() < 7 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let byte_count = data[0] as usize;
+        if data.len() != 1 + byte_count {
+            return Err(MbusError::InvalidPduLength);
+        }
+        // Byte count includes: Status(2) + EventCount(2) + MsgCount(2) + Events(N)
+        // So N = byte_count - 6
+        if byte_count < 6 {
+            return Err(MbusError::ParseError);
+        }
+
+        let status = u16::from_be_bytes([data[1], data[2]]);
+        let event_count = u16::from_be_bytes([data[3], data[4]]);
+        let message_count = u16::from_be_bytes([data[5], data[6]]);
+        
+        let mut events = Vec::new();
+        if data.len() > 7 {
+            events.extend_from_slice(&data[7..]).map_err(|_| MbusError::BufferTooSmall)?;
+        }
+
+        Ok((status, event_count, message_count, events))
+    }
+
+    /// Creates a Report Server ID (FC 0x11) request PDU.
+    pub fn report_server_id_request() -> Result<Pdu, MbusError> {
+        Ok(Pdu::new(FunctionCode::ReportServerId, Vec::new(), 0))
+    }
+
+    /// Parses a Report Server ID (FC 0x11) response PDU.
+    /// Returns the raw data (Server ID + Run Indicator + Additional Data).
+    pub fn parse_report_server_id_response(pdu: &Pdu) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
+        if pdu.function_code() != FunctionCode::ReportServerId {
+            return Err(MbusError::ParseError);
+        }
+        let data = pdu.data().as_slice();
+        if data.is_empty() {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let byte_count = data[0] as usize;
+        if data.len() != 1 + byte_count {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let mut server_data = Vec::new();
+        if data.len() > 1 {
+            server_data.extend_from_slice(&data[1..]).map_err(|_| MbusError::BufferTooSmall)?;
+        }
+
+        Ok(server_data)
     }
 
     /// Creates an Encapsulated Interface Transport (FC 0x2B) request PDU.
@@ -503,4 +697,6 @@ mod tests {
         assert_eq!(mei, EncapsulatedInterfaceType::CanopenGeneralReference);
         assert_eq!(resp_data.as_slice(), &[0x01, 0x02, 0x03]);
     }
+
+    
 }
