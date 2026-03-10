@@ -1,11 +1,15 @@
+use crate::data_unit::tcp::ModbusTcpMessage;
 use crate::errors::MbusError;
 use crate::function_codes::public::{
     DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode,
 };
+use crate::transport::{SerialMode, TransportType, checksum};
 use heapless::Vec;
 
 pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
-pub const MAX_ADU_FRAME_LEN: usize = 260; // Maximum length of an ADU (MBAP header + PDU)
+// Maximum length of an ADU (MBAP header + PDU)
+// Maximum length of an ADU (ASCII mode requires 513 bytes)
+pub const MAX_ADU_FRAME_LEN: usize = 513;
 
 const ERROR_BIT_MASK: u8 = 0x80;
 const FUNCTION_CODE_MASK: u8 = 0x7F;
@@ -98,7 +102,7 @@ impl MbapHeader {
 }
 
 /// Represents a Modbus slave address for RTU/ASCII messages.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlaveAddress(u8);
 
 impl SlaveAddress {
@@ -210,6 +214,57 @@ impl ModbusMessage {
 
         Ok(adu_bytes)
     }
+
+    /// Converts the `ModbusMessage` into its ASCII ADU byte representation.
+    ///
+    /// This method serializes the message to binary, calculates the LRC,
+    /// and then encodes the result into Modbus ASCII format (Start ':', Hex, End CR LF).
+    ///
+    /// # Returns
+    /// `Ok(Vec<u8, MAX_ADU_FRAME_LEN>)` containing the ASCII ADU bytes.
+    ///
+    /// # Errors
+    /// Returns `MbusError::BufferTooSmall` if the resulting ASCII frame exceeds `MAX_ADU_FRAME_LEN`.
+    pub fn to_ascii_bytes(&self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let mut binary_data = self.to_bytes()?;
+
+        // Calculate LRC on Address + PDU
+        let lrc = checksum::lrc(&binary_data);
+
+        // Append LRC to binary data temporarily to iterate over it
+        binary_data
+            .push(lrc)
+            .map_err(|_| MbusError::BufferTooSmall)?;
+
+        let mut ascii_data = Vec::new();
+
+        // Start character ':'
+        ascii_data
+            .push(b':')
+            .map_err(|_| MbusError::BufferTooSmall)?;
+
+        for byte in binary_data {
+            let high = (byte >> 4) & 0x0F;
+            let low = byte & 0x0F;
+
+            ascii_data
+                .push(nibble_to_hex(high))
+                .map_err(|_| MbusError::BufferTooSmall)?;
+            ascii_data
+                .push(nibble_to_hex(low))
+                .map_err(|_| MbusError::BufferTooSmall)?;
+        }
+
+        // End characters CR LF
+        ascii_data
+            .push(b'\r')
+            .map_err(|_| MbusError::BufferTooSmall)?;
+        ascii_data
+            .push(b'\n')
+            .map_err(|_| MbusError::BufferTooSmall)?;
+
+        Ok(ascii_data)
+    }
 }
 
 impl Pdu {
@@ -320,6 +375,185 @@ impl Pdu {
             data_len: data_len as u8,
         })
     }
+}
+
+/// Helper to build the ADU from PDU based on transport type.
+pub fn compile_adu_frame(
+    txn_id: u16,
+    unit_id: u8,
+    pdu: Pdu,
+    transport_type: TransportType,
+) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    match transport_type {
+        TransportType::StdTcp | TransportType::CustomTcp => {
+            let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
+            let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
+            ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
+        }
+        TransportType::StdSerial(slave_address, serial_mode)
+        | TransportType::CustomSerial(slave_address, serial_mode) => {
+            let adu_bytes = match serial_mode {
+                SerialMode::Rtu => {
+                    let mut adu_bytes =
+                        ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
+                            .to_bytes()?;
+                    // Calculate the 16-bit CRC for the Slave Address + PDU.
+                    let crc16 = checksum::crc16(adu_bytes.as_slice());
+                    // Modbus RTU transmits CRC in Little-Endian (LSB first) according to the spec.
+                    let crc_bytes = crc16.to_le_bytes();
+                    adu_bytes
+                        .extend_from_slice(&crc_bytes)
+                        .map_err(|_| MbusError::Unexpected)?;
+
+                    adu_bytes
+                }
+                SerialMode::Ascii => {
+                    let mut adu_bytes =
+                        ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
+                            .to_ascii_bytes()?;
+                    let lrc = checksum::lrc(&adu_bytes);
+                    adu_bytes.push(lrc).map_err(|_| MbusError::Unexpected)?;
+                    adu_bytes
+                }
+            };
+
+            Ok(adu_bytes)
+        }
+    }
+}
+
+/// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
+pub fn decompile_adu_frame(
+    frame: &[u8],
+    transport_type: TransportType,
+) -> Result<ModbusMessage, MbusError> {
+    let message = match transport_type {
+        TransportType::StdTcp | TransportType::CustomTcp => {
+            // Parse MBAP header and PDU
+            match ModbusTcpMessage::from_adu_bytes(frame) {
+                Ok(msg) => {
+                    let additional_address =
+                        AdditionalAddress::MbapHeader(msg.mbap_header().clone());
+                    ModbusMessage {
+                        additional_address: additional_address,
+                        pdu: msg.pdu().clone(),
+                    } // Successfully decoded the frame.
+                }
+                // If decoding fails, the frame is dropped.
+                Err(_e) => {
+                    return Err(MbusError::BasicParseError);
+                }
+            }
+        }
+        TransportType::StdSerial(_slave_address, serial_mode)
+        | TransportType::CustomSerial(_slave_address, serial_mode) => {
+            match serial_mode {
+                SerialMode::Rtu => {
+                    // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
+                    // Minimum length: 1 (Addr) + 1 (FC) + 2 (CRC) = 4
+                    if frame.len() < 4 {
+                        return Err(MbusError::InvalidAduLength);
+                    }
+
+                    let data_len = frame.len() - 2;
+                    let data_to_check = &frame[..data_len];
+                    let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
+
+                    let calculated_crc = checksum::crc16(data_to_check);
+
+                    if calculated_crc != received_crc {
+                        return Err(MbusError::ChecksumError); // CRC Mismatch
+                    }
+
+                    let slave_address = SlaveAddress::new(frame[0])?;
+                    // PDU is from byte 1 to end of data (excluding CRC)
+                    let pdu_bytes = &frame[1..data_len];
+                    let pdu = Pdu::from_bytes(pdu_bytes)?;
+
+                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
+                }
+                SerialMode::Ascii => {
+                    // ASCII Frame: [Start (:)] [Address (2)] [PDU (N)] [LRC (2)] [End (\r\n)]
+                    // Minimum length: 1 + 2 + 2 (FC) + 2 + 2 = 9 bytes
+                    if frame.len() < 9 {
+                        return Err(MbusError::InvalidAduLength);
+                    }
+
+                    // Check Start and End characters
+                    if frame[0] != b':' {
+                        return Err(MbusError::BasicParseError); // Missing start char
+                    }
+                    if frame[frame.len() - 2] != b'\r' || frame[frame.len() - 1] != b'\n' {
+                        return Err(MbusError::BasicParseError); // Missing end chars
+                    }
+
+                    // Extract Hex content (excluding ':' and '\r\n')
+                    let hex_content = &frame[1..frame.len() - 2];
+                    if hex_content.len() % 2 != 0 {
+                        return Err(MbusError::BasicParseError); // Odd length hex string
+                    }
+
+                    // Decode Hex to Binary
+                    // Max binary length = (513 - 3) / 2 = 255. Using 260 for safety.
+                    let mut binary_data: Vec<u8, 260> = Vec::new();
+                    for chunk in hex_content.chunks(2) {
+                        let byte = hex_pair_to_byte(chunk[0], chunk[1])?;
+                        binary_data
+                            .push(byte)
+                            .map_err(|_| MbusError::BufferTooSmall)?;
+                    }
+
+                    // Binary structure: [Slave Address (1)] [PDU (N)] [LRC (1)]
+                    if binary_data.len() < 2 {
+                        return Err(MbusError::InvalidAduLength);
+                    }
+
+                    let data_len = binary_data.len() - 1;
+                    let data_to_check = &binary_data[..data_len];
+                    let received_lrc = binary_data[data_len];
+
+                    let calculated_lrc = checksum::lrc(data_to_check);
+
+                    if calculated_lrc != received_lrc {
+                        return Err(MbusError::ChecksumError); // LRC Mismatch
+                    }
+
+                    let slave_address = SlaveAddress::new(binary_data[0])?;
+                    let pdu_bytes = &binary_data[1..data_len];
+                    let pdu = Pdu::from_bytes(pdu_bytes)?;
+
+                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
+                }
+            }
+        }
+    };
+    Ok(message)
+}
+
+/// Helper function to convert a 4-bit nibble to its ASCII hex representation.
+fn nibble_to_hex(nibble: u8) -> u8 {
+    match nibble {
+        0..=9 => b'0' + nibble,
+        10..=15 => b'A' + (nibble - 10),
+        _ => b'?', // Should not happen for a valid nibble
+    }
+}
+
+/// Helper function to convert a hex character to its 4-bit nibble value.
+fn hex_char_to_nibble(c: u8) -> Result<u8, MbusError> {
+    match c {
+        b'0'..=b'9' => Ok(c - b'0'),
+        b'A'..=b'F' => Ok(c - b'A' + 10),
+        b'a'..=b'f' => Ok(c - b'a' + 10),
+        _ => Err(MbusError::BasicParseError),
+    }
+}
+
+/// Helper function to convert two hex characters to a byte.
+fn hex_pair_to_byte(high: u8, low: u8) -> Result<u8, MbusError> {
+    let h = hex_char_to_nibble(high)?;
+    let l = hex_char_to_nibble(low)?;
+    Ok((h << 4) | l)
 }
 
 #[cfg(test)]
@@ -614,5 +848,223 @@ mod tests {
         let pdu = Pdu::from_bytes(original_bytes).expect("from_bytes failed");
         let new_bytes = pdu.to_bytes().expect("to_bytes failed");
         assert_eq!(original_bytes, new_bytes.as_slice());
+    }
+
+    // --- Tests for ModbusMessage::to_ascii_bytes ---
+
+    /// Test case: `ModbusMessage::to_ascii_bytes` with a valid message.
+    ///
+    /// Verifies correct ASCII encoding and LRC calculation.
+    /// Request: Slave 1, Read Coils (FC 01), Start 0, Qty 10.
+    /// Binary: 01 01 00 00 00 0A
+    /// LRC: -(01+01+0A) = -12 = F4
+    /// ASCII: :01010000000AF4\r\n
+    #[test]
+    fn test_modbus_message_to_ascii_bytes_valid() {
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0x00, 0x00, 0x00, 0x0A]).unwrap();
+        let pdu = Pdu::new(FunctionCode::ReadCoils, data, 4);
+        let message = ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_addr), pdu);
+
+        let ascii_bytes = message
+            .to_ascii_bytes()
+            .expect("Failed to convert to ASCII");
+
+        let expected = b":01010000000AF4\r\n";
+        assert_eq!(ascii_bytes.as_slice(), expected);
+    }
+
+    /// Test case: `ModbusMessage::to_ascii_bytes` boundary check.
+    ///
+    /// Case 1: Data len 125. Total ASCII = 1 + (1+1+125+1)*2 + 2 = 1 + 256 + 2 = 259.
+    /// This fits comfortably within MAX_ADU_FRAME_LEN (513).
+    #[test]
+    fn test_modbus_message_to_ascii_bytes_max_capacity() {
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let mut data = Vec::new();
+        for _ in 0..125 {
+            data.push(0xAA).unwrap();
+        }
+        let pdu = Pdu::new(FunctionCode::ReadHoldingRegisters, data, 125);
+        let message = ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_addr), pdu);
+
+        let ascii_bytes = message.to_ascii_bytes().expect("Should fit in buffer");
+        assert_eq!(ascii_bytes.len(), 259);
+    }
+
+    /// Test case: `ModbusMessage::to_ascii_bytes` with large payload.
+    ///
+    /// Case 2: Data len 126. Total ASCII = 1 + (1+1+126+1)*2 + 2 = 1 + 258 + 2 = 261.
+    /// This should NOT fail with MAX_ADU_FRAME_LEN = 513.
+    #[test]
+    fn test_modbus_message_to_ascii_bytes_large_payload() {
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let mut data = Vec::new();
+        for _ in 0..126 {
+            data.push(0xAA).unwrap();
+        }
+        let pdu = Pdu::new(FunctionCode::ReadHoldingRegisters, data, 126);
+        let message = ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_addr), pdu);
+
+        let ascii_bytes = message.to_ascii_bytes().expect("Should fit in buffer");
+        assert_eq!(ascii_bytes.len(), 261);
+    }
+
+    // --- Tests for decompile_adu_frame ---
+
+    #[test]
+    fn test_decompile_adu_frame_tcp_valid() {
+        let frame = [
+            0x12, 0x34, // TID
+            0x00, 0x00, // PID
+            0x00, 0x06, // Length
+            0x01, // Unit ID
+            0x03, // FC
+            0x00, 0x01, 0x00, 0x02, // Data
+        ];
+        let msg = decompile_adu_frame(&frame, TransportType::StdTcp)
+            .expect("Should decode valid TCP frame");
+        assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
+        if let AdditionalAddress::MbapHeader(header) = msg.additional_address {
+            assert_eq!(header.transaction_id, 0x1234);
+        } else {
+            panic!("Expected MbapHeader");
+        }
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_tcp_invalid() {
+        let frame = [0x00]; // Too short
+        let err = decompile_adu_frame(&frame, TransportType::StdTcp).expect_err("Should fail");
+        assert_eq!(err, MbusError::BasicParseError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_rtu_valid() {
+        // Frame: 01 03 00 6B 00 03 74 17 (CRC LE)
+        let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17];
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let msg = decompile_adu_frame(
+            &frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+        )
+        .expect("Valid RTU");
+        assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_rtu_too_short() {
+        let frame = [0x01, 0x02, 0x03];
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            &frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+        )
+        .expect_err("Too short");
+        assert_eq!(err, MbusError::InvalidAduLength);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_rtu_crc_mismatch() {
+        let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x00, 0x00]; // Bad CRC
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            &frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+        )
+        .expect_err("CRC mismatch");
+        assert_eq!(err, MbusError::ChecksumError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_valid() {
+        // :010300000001FB\r\n
+        let frame = b":010300000001FB\r\n";
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let msg = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect("Valid ASCII");
+        assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_too_short() {
+        let frame = b":123\r\n";
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("Too short");
+        assert_eq!(err, MbusError::InvalidAduLength);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_missing_start() {
+        let frame = b"010300000001FB\r\n";
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("Missing start");
+        assert_eq!(err, MbusError::BasicParseError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_missing_end() {
+        let frame = b":010300000001FB\r"; // Missing \n
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("Missing end");
+        assert_eq!(err, MbusError::BasicParseError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_odd_hex() {
+        let frame = b":010300000001F\r\n"; // Odd length hex
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("Odd hex");
+        assert_eq!(err, MbusError::BasicParseError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_lrc_mismatch() {
+        let frame = b":01030000000100\r\n"; // LRC 00 is wrong, should be FB
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("LRC mismatch");
+        assert_eq!(err, MbusError::ChecksumError);
+    }
+
+    #[test]
+    fn test_decompile_adu_frame_ascii_buffer_overflow() {
+        // Construct a frame that decodes to 261 bytes.
+        let mut frame = Vec::<u8, 600>::new();
+        frame.push(b':').unwrap();
+        for _ in 0..261 {
+            frame.extend_from_slice(b"00").unwrap();
+        }
+        frame.extend_from_slice(b"\r\n").unwrap();
+        let slave_addr = SlaveAddress::new(1).unwrap();
+        let err = decompile_adu_frame(
+            &frame,
+            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+        )
+        .expect_err("Buffer overflow");
+        assert_eq!(err, MbusError::BufferTooSmall);
     }
 }

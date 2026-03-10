@@ -4,7 +4,7 @@
 pub mod app;
 pub mod client;
 pub mod data_unit;
+pub mod device_identification;
 pub mod errors;
 pub mod function_codes;
 pub mod transport;
-pub mod device_identification;

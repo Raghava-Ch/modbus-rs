@@ -5,10 +5,10 @@ mod tests {
     use anyhow::Result;
     use mbus_core;
     use mbus_core::client::services::ClientServices;
-    use mbus_core::transport::ModbusConfig;
-    use mbus_core::device_identification::{ReadDeviceIdCode, ObjectId, ConformityLevel};
-    use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+    use mbus_core::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
     use mbus_core::errors::MbusError;
+    use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+    use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
     use mbus_tcp::management::std_transport::StdTcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -59,8 +59,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -126,8 +127,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 100;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 100;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -198,8 +200,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -270,8 +273,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -327,8 +331,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -368,9 +373,10 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.response_timeout_ms = 100; // Short timeout
-        config.retry_attempts = 0; // No retries for this test
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.response_timeout_ms = 100; // Short timeout
+        tcp_config.retry_attempts = 0; // No retries for this test
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -410,9 +416,10 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.response_timeout_ms = 100; // Short timeout for test
-        config.retry_attempts = 0; // No retries for this test
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.response_timeout_ms = 100; // Short timeout for test
+        tcp_config.retry_attempts = 0; // No retries for this test
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -477,8 +484,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -549,8 +557,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -558,7 +567,9 @@ mod tests {
         let unit_id = 1;
         let address = 5;
 
-        client.read_single_discrete_input(txn_id, unit_id, address).unwrap();
+        client
+            .read_single_discrete_input(txn_id, unit_id, address)
+            .unwrap();
         client.poll(); // Process read response
 
         let received_responses = client.app.received_discrete_input_responses.borrow();
@@ -626,8 +637,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -636,7 +648,9 @@ mod tests {
         let read_code = ReadDeviceIdCode::Basic;
         let object_id = ObjectId::from(0x00);
 
-        client.read_device_identification(txn_id, unit_id, read_code, object_id).unwrap();
+        client
+            .read_device_identification(txn_id, unit_id, read_code, object_id)
+            .unwrap();
         client.poll();
 
         let received_responses = client.app.received_read_device_id_responses.borrow();
@@ -646,11 +660,14 @@ mod tests {
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_resp.read_device_id_code, ReadDeviceIdCode::Basic);
-        assert_eq!(rcv_resp.conformity_level, ConformityLevel::BasicStreamAndIndividual);
+        assert_eq!(
+            rcv_resp.conformity_level,
+            ConformityLevel::BasicStreamAndIndividual
+        );
         assert_eq!(rcv_resp.more_follows, false);
         assert_eq!(rcv_resp.next_object_id, ObjectId::from(0x00));
         assert_eq!(rcv_resp.number_of_objects, 1);
-        
+
         // Verify object data
         let objects: Vec<_> = rcv_resp.objects().map(|r| r.unwrap()).collect();
         assert_eq!(objects.len(), 1);
@@ -674,7 +691,7 @@ mod tests {
             for _ in 0..2 {
                 let mut buf = [0; 11];
                 stream.read_exact(&mut buf)?;
-                
+
                 // Extract TID to echo back
                 let tid_hi = buf[0];
                 let tid_lo = buf[1];
@@ -700,15 +717,20 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
         // Send Request 1
-        client.read_device_identification(10, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00)).unwrap();
+        client
+            .read_device_identification(10, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+            .unwrap();
         // Send Request 2
-        client.read_device_identification(11, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00)).unwrap();
+        client
+            .read_device_identification(11, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+            .unwrap();
 
         // Poll twice to process both responses
         client.poll();
@@ -716,7 +738,7 @@ mod tests {
 
         let received_responses = client.app.received_read_device_id_responses.borrow();
         assert_eq!(received_responses.len(), 2);
-        
+
         assert_eq!(received_responses[0].0, 10);
         assert_eq!(received_responses[1].0, 11);
 
@@ -738,10 +760,12 @@ mod tests {
 
             // Verify request
             // MBAP
-            assert_eq!(buf[2], 0x00); assert_eq!(buf[3], 0x00); // Protocol ID
-            assert_eq!(buf[4], 0x00); assert_eq!(buf[5], 0x05); // Length (5 bytes: Unit+FC+MEI+Data)
+            assert_eq!(buf[2], 0x00);
+            assert_eq!(buf[3], 0x00); // Protocol ID
+            assert_eq!(buf[4], 0x00);
+            assert_eq!(buf[5], 0x05); // Length (5 bytes: Unit+FC+MEI+Data)
             assert_eq!(buf[6], 0x01); // Unit ID
-            // PDU
+                                      // PDU
             assert_eq!(buf[7], 0x2B); // FC 43
             assert_eq!(buf[8], 0x0D); // MEI 0D (CANopen)
             assert_eq!(buf[9], 0xAA); // Data 1
@@ -765,8 +789,9 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
@@ -775,10 +800,15 @@ mod tests {
         let mei_type = EncapsulatedInterfaceType::CanopenGeneralReference;
         let data = [0xAA, 0xBB];
 
-        client.encapsulated_interface_transport(txn_id, unit_id, mei_type, &data).unwrap();
+        client
+            .encapsulated_interface_transport(txn_id, unit_id, mei_type, &data)
+            .unwrap();
         client.poll();
 
-        let received = client.app.received_encapsulated_interface_transport_responses.borrow();
+        let received = client
+            .app
+            .received_encapsulated_interface_transport_responses
+            .borrow();
         assert_eq!(received.len(), 1);
         assert_eq!(received[0].0, txn_id);
         assert_eq!(received[0].1, unit_id);
@@ -815,16 +845,28 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
-        client.encapsulated_interface_transport(101, 1, EncapsulatedInterfaceType::CanopenGeneralReference, &[0x01]).unwrap();
+        client
+            .encapsulated_interface_transport(
+                101,
+                1,
+                EncapsulatedInterfaceType::CanopenGeneralReference,
+                &[0x01],
+            )
+            .unwrap();
         client.poll();
 
         // Should fail
-        assert!(client.app.received_encapsulated_interface_transport_responses.borrow().is_empty());
+        assert!(client
+            .app
+            .received_encapsulated_interface_transport_responses
+            .borrow()
+            .is_empty());
         let failed = client.app.failed_requests.borrow();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].2, MbusError::UnexpectedResponse);
@@ -858,16 +900,28 @@ mod tests {
 
         let transport = StdTcpTransport::new();
         let app = MockApp::default();
-        let mut config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
-        config.connection_timeout_ms = 500;
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+        tcp_config.connection_timeout_ms = 500;
+        let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client = ClientServices::<_, 10, _>::new(transport, app, config).unwrap();
 
-        client.encapsulated_interface_transport(102, 1, EncapsulatedInterfaceType::CanopenGeneralReference, &[0x01]).unwrap();
+        client
+            .encapsulated_interface_transport(
+                102,
+                1,
+                EncapsulatedInterfaceType::CanopenGeneralReference,
+                &[0x01],
+            )
+            .unwrap();
         client.poll();
 
         // Should fail
-        assert!(client.app.received_encapsulated_interface_transport_responses.borrow().is_empty());
+        assert!(client
+            .app
+            .received_encapsulated_interface_transport_responses
+            .borrow()
+            .is_empty());
         let failed = client.app.failed_requests.borrow();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].2, MbusError::ModbusException(0x01));

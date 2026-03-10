@@ -1,18 +1,19 @@
 use anyhow::Result;
 use heapless::Vec as HeaplessVec;
 use mbus_core::app::{
-    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier
+    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
+    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
 };
+use mbus_core::client::services::ClientServices;
+use mbus_core::client::services::coils::MAX_COIL_BYTES;
 use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
 use mbus_core::client::services::discrete_inputs::DiscreteInputs;
-use mbus_core::client::services::{ClientServices};
-use mbus_core::client::services::coils::MAX_COIL_BYTES;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
 // Import MAX_COIL_BYTES
 use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, TimeKeeper};
+use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper};
 use mbus_tcp::management::std_transport::StdTcpTransport;
 use std::cell::RefCell;
 
@@ -138,7 +139,7 @@ impl DiscreteInputResponse for ClientMockApp {
         _txn_id: u16,
         _unit_id: u8,
         _inputs: &DiscreteInputs,
-        _quantity: u16
+        _quantity: u16,
     ) {
     }
 
@@ -162,7 +163,12 @@ impl TimeKeeper for ClientMockApp {
 }
 
 impl FileRecordResponse for ClientMockApp {
-    fn read_file_record_response(&mut self, _txn_id: u16, _unit_id: u8, _data: &[SubRequestParams]) {
+    fn read_file_record_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _data: &[SubRequestParams],
+    ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
     fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
@@ -176,26 +182,48 @@ impl DiagnosticsResponse for ClientMockApp {
         _txn_id: u16,
         _unit_id: u8,
         _response: &DeviceIdentificationResponse,
-    ) {}
+    ) {
+    }
 
     fn encapsulated_interface_transport_response(
-            &self,
-            _txn_id: u16,
-            _unit_id: u8,
-            _mei_type: mbus_core::function_codes::public::EncapsulatedInterfaceType,
-            _data: &[u8],
-        ) {
-        
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _mei_type: mbus_core::function_codes::public::EncapsulatedInterfaceType,
+        _data: &[u8],
+    ) {
     }
+    fn diagnostics_response(&self, _txn_id: u16, _unit_id: u8, _sub_function: u16, _data: &[u16]) {}
+    fn get_comm_event_counter_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _status: u16,
+        _event_count: u16,
+    ) {
+    }
+    fn get_comm_event_log_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _status: u16,
+        _event_count: u16,
+        _message_count: u16,
+        _events: &[u8],
+    ) {
+    }
+    fn read_exception_status_response(&self, _txn_id: u16, _unit_id: u8, _status: u8) {}
+    fn report_server_id_response(&self, _txn_id: u16, _unit_id: u8, _data: &[u8]) {}
 }
 
 fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut config =
-        ModbusConfig::default("192.168.55.101").map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
-    config.connection_timeout_ms = 500;
+    let mut tcp_config = ModbusTcpConfig::default("192.168.55.101")
+        .map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+    tcp_config.connection_timeout_ms = 500;
+    let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client =
         ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;

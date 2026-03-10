@@ -1,4 +1,12 @@
-use crate::{app::Coils, client::services::{diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers}, errors::MbusError, function_codes::public::EncapsulatedInterfaceType};
+use crate::{
+    app::Coils,
+    client::services::{
+        diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs,
+        fifo::FifoQueue, file_record::SubRequestParams, registers::Registers,
+    },
+    errors::MbusError,
+    function_codes::public::EncapsulatedInterfaceType,
+};
 
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
@@ -176,7 +184,13 @@ pub trait DiscreteInputResponse {
     /// - `unit_id`: The unit ID of the device that responded.
     /// - `inputs`: A `DiscreteInputs` struct containing the states of the read inputs.
     /// - `quantity`: The number of inputs that were read.
-    fn read_discrete_inputs_response(&mut self, txn_id: u16, unit_id: u8, inputs: &DiscreteInputs, quantity: u16);
+    fn read_discrete_inputs_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: u8,
+        inputs: &DiscreteInputs,
+        quantity: u16,
+    );
 
     /// Handles a response for a single discrete input read request.
     ///
@@ -231,10 +245,24 @@ pub trait DiagnosticsResponse {
     fn diagnostics_response(&self, txn_id: u16, unit_id: u8, sub_function: u16, data: &[u16]);
 
     /// Called when a Get Comm Event Counter response (FC 11) is received.
-    fn get_comm_event_counter_response(&self, txn_id: u16, unit_id: u8, status: u16, event_count: u16);
+    fn get_comm_event_counter_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        status: u16,
+        event_count: u16,
+    );
 
     /// Called when a Get Comm Event Log response (FC 12) is received.
-    fn get_comm_event_log_response(&self, txn_id: u16, unit_id: u8, status: u16, event_count: u16, message_count: u16, events: &[u8]);
+    fn get_comm_event_log_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        status: u16,
+        event_count: u16,
+        message_count: u16,
+        events: &[u8],
+    );
 
     /// Called when a Report Server ID response (FC 17) is received.
     fn report_server_id_response(&self, txn_id: u16, unit_id: u8, data: &[u8]);

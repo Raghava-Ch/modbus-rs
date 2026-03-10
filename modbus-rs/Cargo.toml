@@ -13,7 +13,7 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [dependencies]
 mbus-core ={ workspace = true }
-mbus-rtu ={ workspace = true }
+mbus-serial ={ workspace = true }
 mbus-tcp ={ workspace = true }
 
 heapless = { workspace = true }

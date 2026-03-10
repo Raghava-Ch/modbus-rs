@@ -22,6 +22,8 @@ pub enum MbusError {
     ReservedSubFunction(u16),
     /// The PDU length is invalid
     InvalidPduLength,
+    /// The ADU length is invalid
+    InvalidAduLength,
     /// Connection failed
     ConnectionFailed,
     /// Connection closed
@@ -50,6 +52,10 @@ pub enum MbusError {
     InvalidTransport,
     /// Invalid slave address
     InvalidSlaveAddress,
+    /// Checksum error
+    ChecksumError,
+    /// Invalid configuration
+    InvalidConfiguration
 }
 
 impl fmt::Display for MbusError {
@@ -94,6 +100,9 @@ impl fmt::Display for MbusError {
             MbusError::InvalidPduLength => {
                 write!(f, "Invalid PDU length: The PDU length is invalid")
             }
+            MbusError::InvalidAduLength => {
+                write!(f, "Invalid ADU length: The ADU length is invalid")
+            }
             MbusError::ConnectionFailed => write!(f, "Connection failed"),
             MbusError::ConnectionClosed => write!(f, "Connection closed"),
             MbusError::BufferTooSmall => {
@@ -128,6 +137,14 @@ impl fmt::Display for MbusError {
             MbusError::InvalidSlaveAddress => write!(
                 f,
                 "Invalid slave address: The provided slave address is invalid"
+            ),
+            MbusError::ChecksumError => write!(
+                f,
+                "Checksum error: The received frame has an invalid checksum"
+            ),
+            MbusError::InvalidConfiguration => write!(
+                f,
+                "Invalid configuration: The provided configuration is invalid"
             ),
         }
     }

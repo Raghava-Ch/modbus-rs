@@ -1,5 +1,5 @@
 [package]
-name = "mbus-rtu"
+name = "mbus-serial"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,3 +12,7 @@ categories.workspace = true
 description.workspace = true
 
 [dependencies]
+mbus-core ={ workspace = true }
+
+heapless ={ workspace = true }
+serialport = { version = "4.2.2", default-features = true }

@@ -1,5 +1,5 @@
 use crate::{
-    data_unit::common::{AdditionalAddress, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, MbapHeader, ModbusMessage, Pdu},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu},
     device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode},
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
@@ -40,17 +40,9 @@ impl DiagnosticsService {
         object_id: ObjectId,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        let pdu = DiagnosticsReqPdu::read_device_identification_request(read_device_id_code, object_id)?;
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport is not yet implemented for Read Device Identification.")
-            }
-        }
+        let pdu =
+            DiagnosticsReqPdu::read_device_identification_request(read_device_id_code, object_id)?;
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a generic Encapsulated Interface Transport request (FC 43 / 0x2B).
@@ -66,16 +58,7 @@ impl DiagnosticsService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = DiagnosticsReqPdu::encapsulated_interface_transport_request(mei_type, data)?;
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport is not yet implemented for Encapsulated Interface Transport.")
-            }
-        }
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Handles a Read Device Identification response.
@@ -111,9 +94,10 @@ impl DiagnosticsService {
         unit_id: u8,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        self.check_serial(transport_type)?;
+        self.check_serial(&transport_type)?;
         let pdu = DiagnosticsReqPdu::read_exception_status_request()?;
-        self.build_serial_adu(unit_id, pdu)
+        // txn_id is dont care in this serial transport case
+        common::compile_adu_frame(0, unit_id, pdu, transport_type)
     }
 
     /// Sends a Diagnostics request (FC 0x08). Serial Line only.
@@ -124,9 +108,10 @@ impl DiagnosticsService {
         data: &[u16],
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        self.check_serial(transport_type)?;
+        self.check_serial(&transport_type)?;
         let pdu = DiagnosticsReqPdu::diagnostics_request(sub_function, data)?;
-        self.build_serial_adu(unit_id, pdu)
+        // txn_id is dont care in this serial transport case
+        common::compile_adu_frame(0, unit_id, pdu, transport_type)
     }
 
     /// Sends a Get Comm Event Counter request (FC 0x0B). Serial Line only.
@@ -135,9 +120,10 @@ impl DiagnosticsService {
         unit_id: u8,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        self.check_serial(transport_type)?;
+        self.check_serial(&transport_type)?;
         let pdu = DiagnosticsReqPdu::get_comm_event_counter_request()?;
-        self.build_serial_adu(unit_id, pdu)
+        // txn_id is dont care in this serial transport case
+        common::compile_adu_frame(0, unit_id, pdu, transport_type)
     }
 
     /// Sends a Get Comm Event Log request (FC 0x0C). Serial Line only.
@@ -146,9 +132,10 @@ impl DiagnosticsService {
         unit_id: u8,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        self.check_serial(transport_type)?;
+        self.check_serial(&transport_type)?;
         let pdu = DiagnosticsReqPdu::get_comm_event_log_request()?;
-        self.build_serial_adu(unit_id, pdu)
+        // txn_id is dont care in this serial transport case
+        common::compile_adu_frame(0, unit_id, pdu, transport_type)
     }
 
     /// Sends a Report Server ID request (FC 0x11). Serial Line only.
@@ -157,42 +144,63 @@ impl DiagnosticsService {
         unit_id: u8,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        self.check_serial(transport_type)?;
+        self.check_serial(&transport_type)?;
         let pdu = DiagnosticsReqPdu::report_server_id_request()?;
-        self.build_serial_adu(unit_id, pdu)
+        // txn_id is dont care in this serial transport case
+        common::compile_adu_frame(0, unit_id, pdu, transport_type)
     }
 
     // --- Response Handlers ---
 
-    pub fn handle_read_exception_status_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<u8, MbusError> {
+    pub fn handle_read_exception_status_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<u8, MbusError> {
         if function_code != FunctionCode::ReadExceptionStatus {
             return Err(MbusError::InvalidFunctionCode);
         }
         DiagnosticsReqPdu::parse_read_exception_status_response(pdu)
     }
 
-    pub fn handle_diagnostics_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, Vec<u16, 125>), MbusError> {
+    pub fn handle_diagnostics_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<(u16, Vec<u16, 125>), MbusError> {
         if function_code != FunctionCode::Diagnostics {
             return Err(MbusError::InvalidFunctionCode);
         }
         DiagnosticsReqPdu::parse_diagnostics_response(pdu)
     }
 
-    pub fn handle_get_comm_event_counter_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, u16), MbusError> {
+    pub fn handle_get_comm_event_counter_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<(u16, u16), MbusError> {
         if function_code != FunctionCode::GetCommEventCounter {
             return Err(MbusError::InvalidFunctionCode);
         }
         DiagnosticsReqPdu::parse_get_comm_event_counter_response(pdu)
     }
 
-    pub fn handle_get_comm_event_log_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+    pub fn handle_get_comm_event_log_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
         if function_code != FunctionCode::GetCommEventLog {
             return Err(MbusError::InvalidFunctionCode);
         }
         DiagnosticsReqPdu::parse_get_comm_event_log_response(pdu)
     }
 
-    pub fn handle_report_server_id_rsp(&self, function_code: FunctionCode, pdu: &Pdu) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
+    pub fn handle_report_server_id_rsp(
+        &self,
+        function_code: FunctionCode,
+        pdu: &Pdu,
+    ) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
         if function_code != FunctionCode::ReportServerId {
             return Err(MbusError::InvalidFunctionCode);
         }
@@ -201,17 +209,11 @@ impl DiagnosticsService {
 
     // --- Helpers ---
 
-    fn check_serial(&self, transport_type: TransportType) -> Result<(), MbusError> {
+    fn check_serial(&self, transport_type: &TransportType) -> Result<(), MbusError> {
         match transport_type {
-            TransportType::StdSerial | TransportType::CustomSerial => Ok(()),
+            TransportType::StdSerial(_, _) | TransportType::CustomSerial(_, _) => Ok(()),
             _ => Err(MbusError::InvalidTransport), // Feature not supported on non-serial transport
         }
-    }
-
-    fn build_serial_adu(&self, _unit_id: u8, _pdu: Pdu) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        // Serial transport ADU construction is not yet implemented in this context.
-        // This placeholder allows the code to compile and the structure to be ready.
-        todo!("Serial transport ADU construction is not yet implemented.")
     }
 }
 
@@ -258,11 +260,7 @@ impl DiagnosticsReqPdu {
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
     pub fn read_exception_status_request() -> Result<Pdu, MbusError> {
-        Ok(Pdu::new(
-            FunctionCode::ReadExceptionStatus,
-            Vec::new(),
-            0,
-        ))
+        Ok(Pdu::new(FunctionCode::ReadExceptionStatus, Vec::new(), 0))
     }
 
     /// Parses a Read Exception Status (FC 0x07) response PDU.
@@ -293,7 +291,10 @@ impl DiagnosticsReqPdu {
     ///
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
-    pub fn diagnostics_request(sub_function: DiagnosticSubFunction, data: &[u16]) -> Result<Pdu, MbusError> {
+    pub fn diagnostics_request(
+        sub_function: DiagnosticSubFunction,
+        data: &[u16],
+    ) -> Result<Pdu, MbusError> {
         // Max data length in bytes = 252.
         // Sub-function takes 2 bytes.
         // Remaining for data = 250 bytes = 125 words.
@@ -379,7 +380,9 @@ impl DiagnosticsReqPdu {
 
     /// Parses a Get Comm Event Log (FC 0x0C) response PDU.
     /// Returns (Status, Event Count, Message Count, Events).
-    pub fn parse_get_comm_event_log_response(pdu: &Pdu) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+    pub fn parse_get_comm_event_log_response(
+        pdu: &Pdu,
+    ) -> Result<(u16, u16, u16, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
         if pdu.function_code() != FunctionCode::GetCommEventLog {
             return Err(MbusError::ParseError);
         }
@@ -400,10 +403,12 @@ impl DiagnosticsReqPdu {
         let status = u16::from_be_bytes([data[1], data[2]]);
         let event_count = u16::from_be_bytes([data[3], data[4]]);
         let message_count = u16::from_be_bytes([data[5], data[6]]);
-        
+
         let mut events = Vec::new();
         if data.len() > 7 {
-            events.extend_from_slice(&data[7..]).map_err(|_| MbusError::BufferTooSmall)?;
+            events
+                .extend_from_slice(&data[7..])
+                .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
         Ok((status, event_count, message_count, events))
@@ -416,7 +421,9 @@ impl DiagnosticsReqPdu {
 
     /// Parses a Report Server ID (FC 0x11) response PDU.
     /// Returns the raw data (Server ID + Run Indicator + Additional Data).
-    pub fn parse_report_server_id_response(pdu: &Pdu) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
+    pub fn parse_report_server_id_response(
+        pdu: &Pdu,
+    ) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
         if pdu.function_code() != FunctionCode::ReportServerId {
             return Err(MbusError::ParseError);
         }
@@ -431,7 +438,9 @@ impl DiagnosticsReqPdu {
 
         let mut server_data = Vec::new();
         if data.len() > 1 {
-            server_data.extend_from_slice(&data[1..]).map_err(|_| MbusError::BufferTooSmall)?;
+            server_data
+                .extend_from_slice(&data[1..])
+                .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
         Ok(server_data)
@@ -443,8 +452,12 @@ impl DiagnosticsReqPdu {
         data: &[u8],
     ) -> Result<Pdu, MbusError> {
         let mut pdu_data = Vec::new();
-        pdu_data.push(mei_type.into()).map_err(|_| MbusError::BufferTooSmall)?;
-        pdu_data.extend_from_slice(data).map_err(|_| MbusError::BufferTooSmall)?;
+        pdu_data
+            .push(mei_type.into())
+            .map_err(|_| MbusError::BufferTooSmall)?;
+        pdu_data
+            .extend_from_slice(data)
+            .map_err(|_| MbusError::BufferTooSmall)?;
 
         Ok(Pdu::new(
             FunctionCode::EncapsulatedInterfaceTransport,
@@ -469,7 +482,9 @@ impl DiagnosticsReqPdu {
         let mei_type = EncapsulatedInterfaceType::try_from(data[0])?;
         let mut response_data = Vec::new();
         if data.len() > 1 {
-            response_data.extend_from_slice(&data[1..]).map_err(|_| MbusError::BufferTooSmall)?;
+            response_data
+                .extend_from_slice(&data[1..])
+                .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
         Ok((mei_type, response_data))
@@ -557,12 +572,11 @@ impl DiagnosticsReqPdu {
             number_of_objects,
         })
     }
-    
 }
 
 impl<'a> DeviceIdObjectIterator<'a> {
     /// Parses the next `DeviceIdObject` from the raw objects data buffer.
-    /// 
+    ///
     /// Each object in the stream consists of:
     /// - Object Id (1 byte)
     /// - Object Length (1 byte)
@@ -583,8 +597,11 @@ impl<'a> DeviceIdObjectIterator<'a> {
 
         let mut value = Vec::new();
         // Copy the object value into the heapless::Vec
-        if value.extend_from_slice(&self.data[self.offset..self.offset + obj_len]).is_err() {
-             return Some(Err(MbusError::BufferTooSmall));
+        if value
+            .extend_from_slice(&self.data[self.offset..self.offset + obj_len])
+            .is_err()
+        {
+            return Some(Err(MbusError::BufferTooSmall));
         }
 
         self.offset += obj_len;
@@ -622,7 +639,11 @@ mod tests {
     #[test]
     fn test_parse_diagnostics_response() {
         let data = [0x00, 0x00, 0xA5, 0xA5, 0x5A, 0x5A];
-        let pdu = Pdu::new(FunctionCode::Diagnostics, Vec::from_slice(&data).unwrap(), 6);
+        let pdu = Pdu::new(
+            FunctionCode::Diagnostics,
+            Vec::from_slice(&data).unwrap(),
+            6,
+        );
         let (sub_func, values) = DiagnosticsReqPdu::parse_diagnostics_response(&pdu).unwrap();
         assert_eq!(sub_func, 0x0000);
         assert_eq!(values.as_slice(), &[0xA5A5, 0x5A5A]);
@@ -630,8 +651,15 @@ mod tests {
 
     #[test]
     fn test_read_device_identification_request() {
-        let pdu = DiagnosticsReqPdu::read_device_identification_request(ReadDeviceIdCode::Basic, ObjectId::from(0x00)).unwrap();
-        assert_eq!(pdu.function_code(), FunctionCode::EncapsulatedInterfaceTransport);
+        let pdu = DiagnosticsReqPdu::read_device_identification_request(
+            ReadDeviceIdCode::Basic,
+            ObjectId::from(0x00),
+        )
+        .unwrap();
+        assert_eq!(
+            pdu.function_code(),
+            FunctionCode::EncapsulatedInterfaceTransport
+        );
         assert_eq!(pdu.data().as_slice(), &[0x0E, 0x01, 0x00]);
     }
 
@@ -652,10 +680,13 @@ mod tests {
         let resp = DiagnosticsReqPdu::parse_read_device_identification_response(&pdu).unwrap();
 
         assert_eq!(resp.read_device_id_code, ReadDeviceIdCode::Basic);
-        assert_eq!(resp.conformity_level, ConformityLevel::BasicStreamAndIndividual);
+        assert_eq!(
+            resp.conformity_level,
+            ConformityLevel::BasicStreamAndIndividual
+        );
         assert_eq!(resp.more_follows, false);
         assert_eq!(resp.next_object_id, ObjectId::from(0x00));
-        
+
         let objects: Vec<DeviceIdObject, 10> = resp.objects().map(|r| r.unwrap()).collect();
         assert_eq!(objects.len(), 2);
         assert_eq!(objects[0].object_id, ObjectId::from(0x00));
@@ -668,35 +699,57 @@ mod tests {
     fn test_parse_read_device_identification_response_malformed() {
         // Case 1: Truncated header (missing Number of Objects)
         let data_short = [0x0E, 0x01, 0x81, 0x00, 0x00];
-        let pdu_short = Pdu::new(FunctionCode::EncapsulatedInterfaceTransport, Vec::from_slice(&data_short).unwrap(), 5);
-        assert_eq!(DiagnosticsReqPdu::parse_read_device_identification_response(&pdu_short).unwrap_err(), MbusError::InvalidPduLength);
+        let pdu_short = Pdu::new(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            Vec::from_slice(&data_short).unwrap(),
+            5,
+        );
+        assert_eq!(
+            DiagnosticsReqPdu::parse_read_device_identification_response(&pdu_short).unwrap_err(),
+            MbusError::InvalidPduLength
+        );
 
         // Case 2: Object length exceeds available data
         // Num Objects = 1. Obj Id = 00. Obj Len = 05. But only 3 bytes ("Foo") follow.
         let data_overflow = [
-            0x0E, 0x01, 0x81, 0x00, 0x00, 0x01, 0x00, 0x05, 0x46, 0x6F, 0x6F
+            0x0E, 0x01, 0x81, 0x00, 0x00, 0x01, 0x00, 0x05, 0x46, 0x6F, 0x6F,
         ];
-        let pdu_overflow = Pdu::new(FunctionCode::EncapsulatedInterfaceTransport, Vec::from_slice(&data_overflow).unwrap(), data_overflow.len() as u8);
-        assert_eq!(DiagnosticsReqPdu::parse_read_device_identification_response(&pdu_overflow).unwrap_err(), MbusError::InvalidPduLength);
+        let pdu_overflow = Pdu::new(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            Vec::from_slice(&data_overflow).unwrap(),
+            data_overflow.len() as u8,
+        );
+        assert_eq!(
+            DiagnosticsReqPdu::parse_read_device_identification_response(&pdu_overflow)
+                .unwrap_err(),
+            MbusError::InvalidPduLength
+        );
     }
 
     #[test]
     fn test_encapsulated_interface_transport_request() {
         let mei_type = EncapsulatedInterfaceType::CanopenGeneralReference;
         let data = [0x01, 0x02, 0x03];
-        let pdu = DiagnosticsReqPdu::encapsulated_interface_transport_request(mei_type, &data).unwrap();
-        assert_eq!(pdu.function_code(), FunctionCode::EncapsulatedInterfaceTransport);
+        let pdu =
+            DiagnosticsReqPdu::encapsulated_interface_transport_request(mei_type, &data).unwrap();
+        assert_eq!(
+            pdu.function_code(),
+            FunctionCode::EncapsulatedInterfaceTransport
+        );
         assert_eq!(pdu.data().as_slice(), &[0x0D, 0x01, 0x02, 0x03]);
     }
 
     #[test]
     fn test_parse_encapsulated_interface_transport_response() {
         let data = [0x0D, 0x01, 0x02, 0x03];
-        let pdu = Pdu::new(FunctionCode::EncapsulatedInterfaceTransport, Vec::from_slice(&data).unwrap(), 4);
-        let (mei, resp_data) = DiagnosticsReqPdu::parse_encapsulated_interface_transport_response(&pdu).unwrap();
+        let pdu = Pdu::new(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            Vec::from_slice(&data).unwrap(),
+            4,
+        );
+        let (mei, resp_data) =
+            DiagnosticsReqPdu::parse_encapsulated_interface_transport_response(&pdu).unwrap();
         assert_eq!(mei, EncapsulatedInterfaceType::CanopenGeneralReference);
         assert_eq!(resp_data.as_slice(), &[0x01, 0x02, 0x03]);
     }
-
-    
 }

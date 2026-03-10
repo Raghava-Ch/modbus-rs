@@ -1,13 +1,75 @@
+pub mod checksum;
 use core::str::FromStr;
 
-use crate::errors::MbusError;
+use crate::{data_unit::common::SlaveAddress, errors::MbusError};
 use heapless::{String, Vec};
 
+/// The default TCP port for Modbus communication.
 const MODBUS_TCP_DEFAULT_PORT: u16 = 502;
+
+/// Top-level configuration for Modbus communication, supporting different transport layers.
+#[derive(Debug)]
+pub enum ModbusConfig {
+    /// Configuration for Modbus TCP/IP.
+    Tcp(ModbusTcpConfig),
+    /// Configuration for Modbus Serial (RTU or ASCII).
+    Serial(ModbusSerialConfig),
+}
+
+/// Parity bit configuration for serial communication.
+#[derive(Debug, Default)]
+pub enum Parity {
+    /// No parity bit is used.
+    None,
+    /// Even parity: the number of 1-bits in the data plus parity bit is even.
+    #[default]
+    Even,
+    /// Odd parity: the number of 1-bits in the data plus parity bit is odd.
+    Odd,
+}
+
+/// Configuration parameters for establishing a Modbus Serial connection.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SerialMode {
+    /// Modbus RTU mode, which uses binary encoding and CRC error checking.
+    #[default]
+    Rtu,
+    /// Modbus ASCII mode, which uses ASCII encoding and LRC error checking.
+    Ascii,
+}
+
+/// Baud rate configuration for serial communication.
+#[derive(Debug, Default)]
+pub enum BaudRate {
+    /// Standard baud rate of 9600 bits per second.
+    Baud9600,
+    /// Standard baud rate of 19200 bits per second.
+    #[default]
+    Baud19200,
+    /// Custom baud rate.
+    Custom(u32), // Allow custom baud rates for flexibility
+}
+
+#[derive(Debug)]
+/// Configuration parameters for establishing a Modbus Serial connection.
+pub struct ModbusSerialConfig {
+    /// The path to the serial port (e.g., "/dev/ttyUSB0" or "COM1").
+    pub port_path: heapless::String<64>,
+    /// The serial mode to use (RTU or ASCII).
+    pub mode: SerialMode,
+    /// Communication speed in bits per second (e.g., 9600, 115200).
+    pub baud_rate: BaudRate,
+    /// Number of data bits per character (typically 8 for RTU, 7 for ASCII).
+    pub data_bits: u8,
+    /// The parity checking mode.
+    pub parity: Parity,
+    /// Timeout for waiting for a response in milliseconds.
+    pub response_timeout_ms: u32,
+}
 
 #[derive(Debug)]
 /// Configuration parameters for establishing a Modbus TCP connection.
-pub struct ModbusConfig {
+pub struct ModbusTcpConfig {
     /// The hostname or IP address of the Modbus TCP server to connect to.
     pub host: heapless::String<64>, // Increased capacity for host string to accommodate longer IP addresses/hostnames
     /// The TCP port number on which the Modbus server is listening (default is typically 502).
@@ -22,7 +84,7 @@ pub struct ModbusConfig {
 }
 
 /// The transport module defines the `Transport` trait and related types for managing Modbus TCP communication.
-impl ModbusConfig {
+impl ModbusTcpConfig {
     /// Creates a new `ModbusTcpConfig` instance with the specified host and port.
     /// # Arguments
     /// * `host` - The hostname or IP address of the Modbus TCP server to connect to.
@@ -77,7 +139,8 @@ pub enum TransportError {
     BufferTooSmall,
     /// An unexpected error occurred.
     Unexpected,
-    // Add more specific errors as needed
+    /// Invalid configuration
+    InvalidConfiguration
 }
 
 impl fmt::Display for TransportError {
@@ -89,6 +152,7 @@ impl fmt::Display for TransportError {
             TransportError::Timeout => write!(f, "Timeout"),
             TransportError::BufferTooSmall => write!(f, "Buffer too small"),
             TransportError::Unexpected => write!(f, "An unexpected error occurred"),
+            TransportError::InvalidConfiguration => write!(f, "Invalid configuration")
         }
     }
 }
@@ -102,11 +166,11 @@ pub enum TransportType {
     /// Standard library TCP transport implementation.
     StdTcp,
     /// Standard library Serial transport implementation.
-    StdSerial,
+    StdSerial(SlaveAddress, SerialMode),
     /// Custom TCP transport implementation.
     CustomTcp,
     /// Custom Serial transport implementation.
-    CustomSerial,
+    CustomSerial(SlaveAddress, SerialMode),
 }
 
 impl From<TransportError> for MbusError {
@@ -118,6 +182,7 @@ impl From<TransportError> for MbusError {
             TransportError::Timeout => MbusError::Timeout,
             TransportError::BufferTooSmall => MbusError::BufferTooSmall,
             TransportError::Unexpected => MbusError::Unexpected,
+            TransportError::InvalidConfiguration => MbusError::InvalidConfiguration,
         }
     }
 }
