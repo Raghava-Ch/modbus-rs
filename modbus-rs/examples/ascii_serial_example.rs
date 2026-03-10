@@ -10,7 +10,6 @@ use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
 use mbus_core::data_unit::common::SlaveAddress;
-use mbus_core::device_identification::{ObjectId, ReadDeviceIdCode};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper,
@@ -24,57 +23,50 @@ use std::time::SystemTime;
 #[derive(Debug, Default)]
 struct ClientApp;
 
-impl DiagnosticsResponse for ClientApp {
-    fn read_device_identification_response(
-        &self,
-        txn_id: u16,
-        unit_id: u8,
-        response: &DeviceIdentificationResponse,
-    ) {
+impl CoilResponse for ClientApp {
+    fn read_coils_response(&self, txn_id: u16, unit_id: u8, coils: &Coils, quantity: u16) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Read Device Identification",
-            txn_id, unit_id
+            "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
+            txn_id,
+            unit_id,
+            coils.from_address(),
+            quantity
         );
-        println!("  Conformity Level: {:?}", response.conformity_level);
-        println!("  More Follows: {}", response.more_follows);
-        println!("  Next Object ID: {}", response.next_object_id);
-        println!("  Objects:");
-
-        for obj_res in response.objects() {
-            match obj_res {
-                Ok(obj) => {
-                    let value_str = std::str::from_utf8(&obj.value)
-                        .map(|s| format!("\"{}\"", s))
-                        .unwrap_or_else(|_| format!("Hex: {:02X?}", obj.value));
-                    println!("    - {}: {}", obj.object_id, value_str);
-                }
-                Err(e) => println!("    - Error parsing object: {:?}", e),
+        for i in 0..quantity {
+            let addr = coils.from_address() + i;
+            match coils.value(addr) {
+                Ok(val) => println!("  Coil {}: {}", addr, val),
+                Err(e) => println!("  Coil {}: Error: {:?}", addr, e),
             }
         }
     }
-
-    fn encapsulated_interface_transport_response(
-        &self,
-        _: u16,
-        _: u8,
-        _: mbus_core::function_codes::public::EncapsulatedInterfaceType,
-        _: &[u8],
-    ) {
+    fn read_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool) {
+        println!(
+            "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {}",
+            txn_id, unit_id, address, value
+        );
     }
-    fn diagnostics_response(&self, _: u16, _: u8, _: u16, _: &[u16]) {}
-    fn get_comm_event_counter_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&self, _: u16, _: u8, _: u16, _: u16, _: u16, _: &[u8]) {}
-    fn read_exception_status_response(&self, _: u16, _: u8, _: u8) {}
-    fn report_server_id_response(&self, _: u16, _: u8, _: &[u8]) {}
+    fn write_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool) {
+        println!(
+            "Response [Txn: {}, Unit: {}]: Write Single Coil (Addr: {}, Value: {}) Success",
+            txn_id, unit_id, address, value
+        );
+    }
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        address: u16,
+        quantity: u16,
+    ) {
+        println!(
+            "Response [Txn: {}, Unit: {}]: Write Multiple Coils (Addr: {}, Qty: {}) Success",
+            txn_id, unit_id, address, quantity
+        );
+    }
 }
 
 // Implement other required traits with empty/default logic
-impl CoilResponse for ClientApp {
-    fn read_coils_response(&self, _: u16, _: u8, _: &Coils, _: u16) {}
-    fn read_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    fn write_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    fn write_multiple_coils_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-}
 impl RegisterResponse for ClientApp {
     fn read_input_register_response(&mut self, _: u16, _: u8, _: &Registers) {}
     fn read_single_input_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
@@ -113,42 +105,61 @@ impl TimeKeeper for ClientApp {
             .as_millis() as u64
     }
 }
+impl DiagnosticsResponse for ClientApp {
+    fn read_device_identification_response(&self, _: u16, _: u8, _: &DeviceIdentificationResponse) {
+    }
+    fn encapsulated_interface_transport_response(
+        &self,
+        _: u16,
+        _: u8,
+        _: mbus_core::function_codes::public::EncapsulatedInterfaceType,
+        _: &[u8],
+    ) {
+    }
+    fn diagnostics_response(&self, _: u16, _: u8, _: u16, _: &[u16]) {}
+    fn get_comm_event_counter_response(&self, _: u16, _: u8, _: u16, _: u16) {}
+    fn get_comm_event_log_response(&self, _: u16, _: u8, _: u16, _: u16, _: u16, _: &[u8]) {}
+    fn read_exception_status_response(&self, _: u16, _: u8, _: u8) {}
+    fn report_server_id_response(&self, _: u16, _: u8, _: &[u8]) {}
+}
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let port_path = if args.len() > 1 { &args[1] } else { "/dev/ttyUSB0" };
     let unit_id_val = if args.len() > 2 { args[2].parse().unwrap_or(1) } else { 1 };
 
-    println!("--- Modbus Serial Device ID Example ---");
+    println!("--- Modbus Serial ASCII Example ---");
     println!("Connecting to Serial Port: {}", port_path);
 
     let slave_address = SlaveAddress::new(unit_id_val).map_err(|e| anyhow::anyhow!(e))?;
-    let transport = StdSerialTransport::new(slave_address, SerialMode::Rtu);
+    
+    // Initialize transport with ASCII mode
+    let transport = StdSerialTransport::new(slave_address, SerialMode::Ascii);
     let app = ClientApp::default();
 
+    // Configure serial port for standard Modbus ASCII:
+    // - 7 Data Bits
+    // - Even Parity
+    // - 1 Stop Bit
+    // - ASCII Mode
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: 7, 
         stop_bits: 1,
-        parity: Parity::None,
+        parity: Parity::Even,
         response_timeout_ms: 2000,
-        mode: SerialMode::Rtu,
+        mode: SerialMode::Ascii,
     };
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client =
         ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
-    // 1. Read Basic Device Identification
-    println!("\n[1] Sending Read Device Identification (Basic)...");
+    // 1. Read Coils
+    println!("\n[1] Sending Read Coils (Addr: 0, Qty: 5)...");
     client
-        .read_device_identification(
-            1,
-            unit_id_val,
-            ReadDeviceIdCode::Basic,
-            ObjectId::from(0x00),
-        )
+        .read_multiple_coils(1, unit_id_val, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 

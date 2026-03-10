@@ -408,12 +408,8 @@ pub fn compile_adu_frame(
                     adu_bytes
                 }
                 SerialMode::Ascii => {
-                    let mut adu_bytes =
-                        ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
-                            .to_ascii_bytes()?;
-                    let lrc = checksum::lrc(&adu_bytes);
-                    adu_bytes.push(lrc).map_err(|_| MbusError::Unexpected)?;
-                    adu_bytes
+                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
+                        .to_ascii_bytes()?
                 }
             };
 

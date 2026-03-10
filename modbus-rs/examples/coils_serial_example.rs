@@ -139,6 +139,7 @@ fn main() -> Result<()> {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
         data_bits: 8,
+        stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
