@@ -61,6 +61,8 @@ pub struct ModbusSerialConfig {
     pub baud_rate: BaudRate,
     /// Number of data bits per character (typically 8 for RTU, 7 for ASCII).
     pub data_bits: u8,
+    /// Number of stop bits (This will be recalculated before calling the transport layer).
+    pub stop_bits: u8,
     /// The parity checking mode.
     pub parity: Parity,
     /// Timeout for waiting for a response in milliseconds.

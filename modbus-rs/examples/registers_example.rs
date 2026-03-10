@@ -11,7 +11,7 @@ use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper};
-use mbus_tcp::management::std_transport::StdTcpTransport;
+use mbus_tcp::StdTcpTransport;
 use std::env;
 
 // --- Client Application Implementation ---

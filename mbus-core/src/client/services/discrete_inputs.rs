@@ -81,17 +81,7 @@ impl DiscreteInputService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = DiscreteInputReqPdu::read_discrete_inputs_request(address, quantity)?;
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial(_slave_address, _serial_mode)
-            | TransportType::CustomSerial(_slave_address, _serial_mode) => {
-                todo!("Serial transport is not yet implemented for Read Discrete Inputs.")
-            }
-        }
+        crate::data_unit::common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     pub fn handle_read_discrete_inputs_rsp(
