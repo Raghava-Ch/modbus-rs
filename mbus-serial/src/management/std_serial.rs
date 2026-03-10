@@ -6,7 +6,7 @@ use mbus_core::transport::{
     BaudRate, ModbusConfig, Parity, SerialMode, Transport, TransportError, TransportType
 };
 use mbus_core::data_unit::common::SlaveAddress;
-use serialport::{DataBits, FlowControl, SerialPort, StopBits};
+use serialport::{ClearBuffer, DataBits, FlowControl, SerialPort, StopBits};
 
 /// A concrete implementation of `Transport` for Serial communication using `serialport` crate.
 /// Supports both RTU and ASCII modes.
@@ -90,11 +90,18 @@ impl Transport for StdSerialTransport {
             _ => DataBits::Eight, // Default to 8, though config should be validated upstream.
         };
 
+        // Convert the numeric stop_bits from config to the serialport enum.
+        let stop_bits = match serial_config.stop_bits {
+            1 => StopBits::One,
+            2 => StopBits::Two,
+            _ => return Err(TransportError::InvalidConfiguration),
+        };
+
         // Build the serial port configuration.
         let builder = serialport::new(serial_config.port_path.as_str(), baud_rate)
             .parity(parity)
             .data_bits(data_bits)
-            .stop_bits(StopBits::One)
+            .stop_bits(stop_bits) // Use stop_bits from config.
             .flow_control(FlowControl::None)
             .timeout(Duration::from_millis(
                 serial_config.response_timeout_ms as u64,
@@ -102,18 +109,32 @@ impl Transport for StdSerialTransport {
 
         // Attempt to open the port.
         match builder.open() {
-            Ok(port) => {
+            Ok(mut port) => {
+                if let Err(e) = port.clear(ClearBuffer::All) {
+                    eprintln!("Warning: Failed to clear serial buffers on connect: {}", e);
+                }
                 self.port = Some(port);
                 Ok(())
             }
             Err(e) => {
                 eprintln!("Failed to open serial port '{}': {}", serial_config.port_path.as_str(), e);
+                // Provide platform-specific hints for common serial port errors.
+                #[cfg(windows)]
+                {
+                    let error_string = e.to_string().to_lowercase();
+                    if error_string.contains("access is denied") {
+                        eprintln!("Hint: 'Access is denied' on Windows usually means the port is already in use by another application.");
+                    }
+                    if error_string.contains("the system cannot find the file specified") {
+                         eprintln!("Hint: 'The system cannot find the file specified' on Windows means the port does not exist. Check available ports.");
+                    }
+                }
                 if e.to_string().contains("Not a typewriter") {
                     eprintln!("Hint: This error often occurs on macOS when using a pseudo-terminal (pty) created by tools like socat.");
                     eprintln!("PTYs may not support setting serial parameters like baud rate. Consider using a physical serial port or a different virtual setup.");
                 }
                 Err(TransportError::ConnectionFailed)
-            } 
+            }
         }
     }
 
@@ -135,10 +156,25 @@ impl Transport for StdSerialTransport {
     /// `Ok(())` if the ADU is successfully sent, or an error otherwise.
     fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
         let port = self.port.as_mut().ok_or(TransportError::ConnectionClosed)?;
-        port.write_all(adu)
-            .map_err(Self::map_io_error)
-            .and_then(|_| port.flush().map_err(Self::map_io_error))?;
-        Ok(())
+        
+        port.write_all(adu).map_err(|e| {
+            eprintln!("Serial write_all failed: {}", e);
+            Self::map_io_error(e)
+        })?;
+        
+        match port.flush() {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // On Windows, some drivers (e.g. some USB-to-Serial) return "Incorrect function" (OS error 1)
+                // when FlushFileBuffers is called. Since write_all succeeded, we can often ignore this.
+                #[cfg(windows)]
+                if let Some(1) = e.raw_os_error() {
+                    return Ok(());
+                }
+                eprintln!("Serial flush failed: {}", e);
+                Err(Self::map_io_error(e))
+            }
+        }
     }
 
     /// Receives a Modbus Application Data Unit (ADU) from the serial port.

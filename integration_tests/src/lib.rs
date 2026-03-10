@@ -1,4 +1,5 @@
 mod mock_app;
+mod serial_tests;
 
 #[cfg(test)]
 mod tests {
@@ -9,7 +10,7 @@ mod tests {
     use mbus_core::errors::MbusError;
     use mbus_core::function_codes::public::EncapsulatedInterfaceType;
     use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
-    use mbus_tcp::management::std_transport::StdTcpTransport;
+    use mbus_tcp::StdTcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
