@@ -12,7 +12,7 @@ use mbus_core::client::services::registers::Registers;
 use mbus_core::device_identification::{ObjectId, ReadDeviceIdCode};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper};
-use mbus_tcp::management::std_transport::StdTcpTransport;
+use mbus_tcp::StdTcpTransport;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 

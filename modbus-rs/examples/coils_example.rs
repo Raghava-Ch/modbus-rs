@@ -14,7 +14,7 @@ use mbus_core::client::services::registers::Registers;
 // Import MAX_COIL_BYTES
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper};
-use mbus_tcp::management::std_transport::StdTcpTransport;
+use mbus_tcp::StdTcpTransport;
 use std::cell::RefCell;
 
 // --- MockApp for Client ---
