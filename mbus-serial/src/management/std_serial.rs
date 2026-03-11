@@ -15,6 +15,8 @@ pub struct StdSerialTransport {
     port: Option<Box<dyn SerialPort>>,
     unit_id: SlaveAddress, // The Modbus slave address.
     mode: SerialMode,      // The serial mode (RTU or ASCII).
+    // Store the configured timeout to restore it after dynamic adjustments in recv
+    timeout: Duration,
 }
 
 impl StdSerialTransport {
@@ -24,6 +26,7 @@ impl StdSerialTransport {
             port: None,
             unit_id,
             mode,
+            timeout: Duration::from_secs(1), // Default safe value, overwritten in connect
         }
     }
 
@@ -97,19 +100,19 @@ impl Transport for StdSerialTransport {
             _ => return Err(TransportError::InvalidConfiguration),
         };
 
+        self.timeout = Duration::from_millis(serial_config.response_timeout_ms as u64);
+
         // Build the serial port configuration.
         let builder = serialport::new(serial_config.port_path.as_str(), baud_rate)
             .parity(parity)
             .data_bits(data_bits)
             .stop_bits(stop_bits) // Use stop_bits from config.
             .flow_control(FlowControl::None)
-            .timeout(Duration::from_millis(
-                serial_config.response_timeout_ms as u64,
-            ));
+            .timeout(self.timeout);
 
         // Attempt to open the port.
         match builder.open() {
-            Ok(mut port) => {
+            Ok(port) => {
                 if let Err(e) = port.clear(ClearBuffer::All) {
                     eprintln!("Warning: Failed to clear serial buffers on connect: {}", e);
                 }
@@ -190,20 +193,77 @@ impl Transport for StdSerialTransport {
         let mut buffer = [0u8; 260];
         let mut response_vec: Vec<u8, 260> = Vec::new();
 
+        // 1. First Read: Perform a non-blocking read to see if any data is available.
+        // We set a zero timeout to make the read call return immediately.
+        if port.set_timeout(Duration::from_millis(0)).is_err() {
+            // If we can't set the timeout, we can't perform a non-blocking read.
+            return Err(TransportError::IoError);
+        }
+
         match port.read(&mut buffer) {
             Ok(bytes_read) if bytes_read > 0 => {
+                // Data is available, so we've received the start of a frame.
                 response_vec
                     .extend_from_slice(&buffer[..bytes_read])
                     .map_err(|_| TransportError::BufferTooSmall)?;
-                Ok(response_vec)
             }
             Ok(_) => {
                 // Ok(0) can indicate a closed connection.
-                Err(TransportError::ConnectionClosed)
+                let _ = port.set_timeout(self.timeout); // Restore original timeout
+                return Err(TransportError::ConnectionClosed);
             }
-            Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(TransportError::Timeout),
-            Err(e) => Err(Self::map_io_error(e)),
+            Err(e) if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock => {
+                // No data was available on the non-blocking read. This is not an error.
+                // It simply means the poll loop should continue and try again later.
+                // We return a Timeout error to signal this to the caller.
+                let _ = port.set_timeout(self.timeout); // Restore original timeout
+                return Err(TransportError::Timeout);
+            }
+            Err(e) => {
+                let _ = port.set_timeout(self.timeout); // Restore original timeout
+                return Err(Self::map_io_error(e));
+            }
         }
+
+        // 2. Subsequent Reads: Read remaining fragments until silence (inter-frame gap) or full.
+        // We assume that once data starts arriving, it comes in a continuous stream.
+        // We switch to a short timeout to detect the end of the frame (silence).
+        // 10ms - 50ms is usually sufficient for standard baud rates.
+        let inter_frame_timeout = Duration::from_millis(50);
+        if let Err(_) = port.set_timeout(inter_frame_timeout) {
+            // If we can't set a short timeout, we return what we have to avoid blocking for the full timeout again.
+            // Restore original timeout before returning.
+            let _ = port.set_timeout(self.timeout);
+            return Ok(response_vec);
+        }
+
+        loop {
+            if response_vec.len() >= 260 {
+                break;
+            }
+
+            let max_read = 260 - response_vec.len();
+            match port.read(&mut buffer[..max_read]) {
+                Ok(bytes_read) if bytes_read > 0 => {
+                    if response_vec.extend_from_slice(&buffer[..bytes_read]).is_err() {
+                         // Buffer full
+                         break;
+                    }
+                }
+                Ok(_) => break, // EOF
+                Err(e) if e.kind() == io::ErrorKind::TimedOut => break, // Silence detected, frame complete
+                Err(e) => {
+                    // On a true IO error, restore the original timeout before returning.
+                    let _ = port.set_timeout(self.timeout);
+                    return Err(Self::map_io_error(e));
+                }
+            }
+        }
+
+        // 3. Restore the original response timeout for the next transaction.
+        let _ = port.set_timeout(self.timeout);
+
+        Ok(response_vec)
     }
 
     /// Checks if the transport is currently connected to a remote host.
