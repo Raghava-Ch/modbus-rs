@@ -1,5 +1,21 @@
+//! # Modbus Public Function Codes and Sub-functions
+//!
+//! This module defines the standard function codes and sub-function codes used in the 
+//! Modbus Application Protocol. It provides enums for:
+//!
+//! - **[`FunctionCode`]**: The primary operation identifier (e.g., Read Coils, Write Register).
+//! - **[`DiagnosticSubFunction`]**: Sub-codes for serial-line diagnostics (FC 0x08).
+//! - **[`EncapsulatedInterfaceType`]**: MEI types for tunneling other protocols (FC 0x2B).
+//!
+//! All types implement `TryFrom` for safe conversion from raw bytes and include 
+//! documentation referencing the Modbus Application Protocol Specification V1.1b3.
+//!
+//! This module is `no_std` compatible and uses `repr` attributes to ensure 
+//! memory layout matches the protocol's byte-level requirements.
+
 use crate::errors::MbusError;
 
+/// The maximum data length for a Modbus PDU (excluding the function code).
 pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
 
 /// Modbus Public Function Codes.
@@ -240,6 +256,7 @@ pub enum DiagnosticSubFunction {
 }
 
 impl DiagnosticSubFunction {
+    /// Converts the `DiagnosticSubFunction` enum variant into its 2-byte big-endian representation.
     pub fn to_be_bytes(self) -> [u8; 2] {
         (self as u16).to_be_bytes()
     }

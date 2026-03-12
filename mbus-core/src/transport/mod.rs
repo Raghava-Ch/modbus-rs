@@ -1,3 +1,15 @@
+//! Modbus Transport Layer Module
+//!
+//! This module defines the abstractions and configurations required for different 
+//! Modbus transport protocols, including TCP/IP and Serial (RTU/ASCII).
+//!
+//! It provides:
+//! - The [`Transport`] trait: A common interface for sending and receiving Modbus ADUs.
+//! - Configuration structures ([`ModbusTcpConfig`], [`ModbusSerialConfig`]): Parameters 
+//!   for establishing connections.
+//! - Error handling: [`TransportError`] for mapping low-level I/O issues to Modbus-specific contexts.
+//! - Checksum utilities: CRC16 and LRC via the [`checksum`] submodule.
+
 pub mod checksum;
 use core::str::FromStr;
 
@@ -82,11 +94,15 @@ pub struct ModbusTcpConfig {
     pub port: u16,
 
     // Optional parameters for connection management (can be set to default values if not needed)
-    pub connection_timeout_ms: u32, // Timeout for establishing a connection in milliseconds
-    pub response_timeout_ms: u32,   // Timeout for waiting for a response in milliseconds
-
-    pub retry_attempts: u8, // Number of retry attempts for failed operations
-    pub keep_alive_interval_ms: u32, // Interval for sending keep-alive messages in milliseconds
+    
+    /// Timeout for establishing a connection in milliseconds
+    pub connection_timeout_ms: u32,
+    /// Timeout for waiting for a response in milliseconds
+    pub response_timeout_ms: u32,
+    /// Number of retry attempts for failed operations
+    pub retry_attempts: u8,
+    /// Interval for sending keep-alive messages in milliseconds
+    pub keep_alive_interval_ms: u32,
 }
 
 /// The transport module defines the `Transport` trait and related types for managing Modbus TCP communication.
@@ -226,8 +242,14 @@ pub trait Transport {
     fn transport_type(&self) -> TransportType;
 }
 
+/// A trait for abstracting time-related operations, primarily for mocking in tests
+/// and providing a consistent interface for `no_std` environments.
 pub trait TimeKeeper {
-    // A simple mock for current_millis for no_std compatibility in tests.
-    // In a real no_std environment, this would come from a hardware timer.
+    /// A simple mock for current_millis for no_std compatibility in tests.
+    /// In a real no_std environment, this would come from a hardware timer.
+    /// Returns the current time in milliseconds.
+    ///
+    /// # Returns
+    /// The current time in milliseconds.
     fn current_millis(&self) -> u64;
 }

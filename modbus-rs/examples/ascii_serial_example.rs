@@ -60,16 +60,25 @@ impl CoilResponse for ClientApp {
     }
 }
 
-// Implement other required traits with empty/default logic
+// Implement other required traits with empty/default logic as they are not used in this example.
 impl RegisterResponse for ClientApp {
+    /// Handles a Read Input Registers response. Not used in this example.
     fn read_input_register_response(&mut self, _: u16, _: u8, _: &Registers) {}
+    /// Handles a Read Single Input Register response. Not used in this example.
     fn read_single_input_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
+    /// Handles a Read Holding Registers response. Not used in this example.
     fn read_holding_registers_response(&mut self, _: u16, _: u8, _: &Registers) {}
+    /// Handles a Read Single Holding Register response. Not used in this example.
     fn read_single_holding_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
+    /// Handles a Write Single Register response. Not used in this example.
     fn write_single_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
+    /// Handles a Write Multiple Registers response. Not used in this example.
     fn write_multiple_registers_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
+    /// Handles a Read/Write Multiple Registers response. Not used in this example.
     fn read_write_multiple_registers_response(&mut self, _: u16, _: u8, _: &Registers) {}
+    /// Handles a Mask Write Register response. Not used in this example.
     fn mask_write_register_response(&mut self, _: u16, _: u8) {}
+    /// Handles a Read Single Register response. Not used in this example.
     fn read_single_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
 }
 impl RequestErrorNotifier for ClientApp {
@@ -81,14 +90,19 @@ impl RequestErrorNotifier for ClientApp {
     }
 }
 impl FifoQueueResponse for ClientApp {
+    /// Handles a Read FIFO Queue response. Not used in this example.
     fn read_fifo_queue_response(&mut self, _: u16, _: u8, _: &FifoQueue) {}
 }
 impl FileRecordResponse for ClientApp {
+    /// Handles a Read File Record response. Not used in this example.
     fn read_file_record_response(&mut self, _: u16, _: u8, _: &[SubRequestParams]) {}
+    /// Handles a Write File Record response. Not used in this example.
     fn write_file_record_response(&mut self, _: u16, _: u8) {}
 }
 impl DiscreteInputResponse for ClientApp {
+    /// Handles a Read Discrete Inputs response. Not used in this example.
     fn read_discrete_inputs_response(&mut self, _: u16, _: u8, _: &DiscreteInputs, _: u16) {}
+    /// Handles a Read Single Discrete Input response. Not used in this example.
     fn read_single_discrete_input_response(&mut self, _: u16, _: u8, _: u16, _: bool) {}
 }
 impl TimeKeeper for ClientApp {

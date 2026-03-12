@@ -1,3 +1,16 @@
+//! Modbus Common Data Unit Module
+//!
+//! This module defines the core building blocks of the Modbus protocol, including:
+//! - **PDU (Protocol Data Unit)**: The function code and data payload independent of the communication layer.
+//! - **ADU (Application Data Unit)**: The complete frame including addressing and error checking.
+//! - **MBAP Header**: The specific header used for Modbus TCP transactions.
+//! - **Transport Agnostic Logic**: Functions to compile and decompile frames for TCP, RTU, and ASCII modes.
+//!
+//! The module is designed for `no_std` environments, utilizing `heapless` vectors for fixed-capacity
+//! memory management to ensure deterministic behavior in embedded systems.
+
+/// Maximum data length for a PDU (excluding function code)
+
 use crate::data_unit::tcp::ModbusTcpMessage;
 use crate::errors::MbusError;
 use crate::function_codes::public::{
@@ -6,9 +19,11 @@ use crate::function_codes::public::{
 use crate::transport::{SerialMode, TransportType, checksum};
 use heapless::Vec;
 
-pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
-// Maximum length of an ADU (MBAP header + PDU)
-// Maximum length of an ADU (ASCII mode requires 513 bytes)
+/// Maximum data length for a PDU (excluding function code)
+pub const MAX_PDU_DATA_LEN: usize = 252;
+
+/// Maximum length of an ADU (MBAP header + PDU)
+/// Maximum length of an ADU (ASCII mode requires 513 bytes)
 pub const MAX_ADU_FRAME_LEN: usize = 513;
 
 const ERROR_BIT_MASK: u8 = 0x80;
@@ -106,6 +121,7 @@ impl MbapHeader {
 pub struct SlaveAddress(u8);
 
 impl SlaveAddress {
+    /// Creates a new `SlaveAddress` instance.
     pub fn new(address: u8) -> Result<Self, MbusError> {
         if !(1..=247).contains(&address) {
             return Err(MbusError::InvalidSlaveAddress);
@@ -113,6 +129,7 @@ impl SlaveAddress {
         Ok(Self(address))
     }
 
+    /// Accessor for the slave address.
     pub fn address(&self) -> u8 {
         self.0
     }
@@ -122,8 +139,9 @@ impl SlaveAddress {
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum AdditionalAddress {
-    /// The additional address field used in certain Modbus function codes.
+    /// The MBAP header for Modbus TCP messages. This includes Transaction ID, Protocol ID, Length, and Unit ID.
     MbapHeader(MbapHeader),
+    /// The slave address for Modbus RTU/ASCII messages.
     SlaveAddress(SlaveAddress),
 }
 

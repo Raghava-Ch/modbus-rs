@@ -1,3 +1,11 @@
+//! Application Layer Traits
+//!
+//! This module defines the core traits used to bridge the Modbus protocol stack with 
+//! user-defined application logic. It follows a callback-based (observer) pattern 
+//! where the stack notifies the application of successful responses or failures.
+//!
+//! Each trait corresponds to a functional group of Modbus services (Coils, Registers, etc.).
+
 use crate::{
     app::Coils,
     client::services::{
@@ -8,6 +16,10 @@ use crate::{
     function_codes::public::EncapsulatedInterfaceType,
 };
 
+/// Trait for receiving notifications about failed Modbus requests.
+///
+/// This is used to handle timeouts, connection issues, or Modbus exception responses
+/// at the application level.
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
     /// This method will be called when a Modbus request related to service request fails,
@@ -41,7 +53,13 @@ pub trait CoilResponse {
     fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16);
 }
 
+/// Trait defining the expected response handling for FIFO Queue Modbus operations.
 pub trait FifoQueueResponse {
+    /// Handles a Read FIFO Queue response.
+    /// # Parameters
+    /// `txn_id`: The transaction ID of the original request.
+    /// `unit_id`: The unit ID of the device that responded.
+    /// `fifo_queue`: A `FifoQueue` struct containing the values of the read FIFO queue.
     fn read_fifo_queue_response(&mut self, txn_id: u16, unit_id: u8, fifo_queue: &FifoQueue);
 }
 

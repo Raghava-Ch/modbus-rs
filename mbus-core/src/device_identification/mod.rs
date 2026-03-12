@@ -1,10 +1,32 @@
+//! Modbus Device Identification (Function Code 0x2B / 0x0E)
+//!
+//! This module provides the data structures and enums required to implement the
+//! "Read Device Identification" service (Function Code 0x2B / MEI Type 0x0E)
+//! as defined in the Modbus Application
+//! Protocol Specification V1.1b3.
+//!
+//! The service allows reading a server's identification and additional information
+//! (e.g., Vendor Name, Product Code, Revision Number).
+//!
+//! Key components:
+//! - [`ObjectId`]: Represents the identifier for a specific device identification object.
+//! - [`ReadDeviceIdCode`]: Defines the type of access requested (e.g., Basic, Regular, Extended, or Individual).
+//! - [`ConformityLevel`]: Indicates the device's supported level of identification.
+//!
+//! Identification objects are categorized into three levels:
+//! - **Basic**: Mandatory objects (VendorName, ProductCode, MajorMinorRevision).
+//! - **Regular**: Optional, standard-defined objects (VendorUrl, ProductName, ModelName, UserApplicationName).
+//! - **Extended**: Optional, vendor-specific objects.
+//!
+//! This module is designed to be `no_std` compatible.
+
 use crate::errors::MbusError;
 use core::fmt;
 
 /// Object IDs for Basic Device Identification.
 ///
 /// These objects are mandatory for the Basic conformity level.
-/// Access type: Stream (0x01) or Individual (0x04).
+/// Access type: Stream (ReadDeviceIdCode 0x01, 0x02, 0x03) or Individual (ReadDeviceIdCode 0x04).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BasicObjectId {
@@ -42,7 +64,7 @@ impl fmt::Display for BasicObjectId {
 /// Object IDs for Regular Device Identification.
 ///
 /// These objects are optional but defined in the standard.
-/// Access type: Stream (0x02) or Individual (0x04).
+/// Access type: Stream (ReadDeviceIdCode 0x02, 0x03) or Individual (ReadDeviceIdCode 0x04).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RegularObjectId {
@@ -84,7 +106,7 @@ impl fmt::Display for RegularObjectId {
 /// Extended Object IDs.
 ///
 /// Range 0x80 - 0xFF. These are private/vendor-specific.
-/// Access type: Stream (0x03) or Individual (0x04).
+/// Access type: Stream (ReadDeviceIdCode 0x03) or Individual (ReadDeviceIdCode 0x04).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExtendedObjectId(u8);
 
@@ -109,8 +131,11 @@ impl ExtendedObjectId {
 /// Represents any valid Modbus Device Identification Object ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectId {
+    /// Basic Device Identification Object IDs (0x00 - 0x02).
     Basic(BasicObjectId),
+    /// Regular Device Identification Object IDs (0x03 - 0x06).
     Regular(RegularObjectId),
+    /// Extended Device Identification Object IDs (0x80 - 0xFF).
     Extended(ExtendedObjectId),
     /// Reserved range (0x07 - 0x7F).
     Reserved(u8),

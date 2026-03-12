@@ -1,3 +1,13 @@
+//! Modbus Coils Service Module
+//!
+//! This module provides the necessary structures and logic to handle Modbus operations
+//! related to Coils (Function Codes 0x01, 0x05, and 0x0F).
+//!
+//! It includes functionality for:
+//! - Reading multiple or single coils.
+//! - Writing single or multiple coils.
+//! - Packing and unpacking coil states into bit-fields within bytes.
+
 use crate::data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu};
 use crate::errors::MbusError;
 use crate::function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN};

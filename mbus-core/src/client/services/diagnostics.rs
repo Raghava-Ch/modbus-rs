@@ -1,3 +1,16 @@
+//! Modbus Diagnostics and Encapsulated Interface Transport Service Module
+//!
+//! This module provides structures and logic for handling Modbus diagnostic functions
+//! and Encapsulated Interface Transport (MEI) operations.
+//!
+//! Key functionalities include:
+//! - **Read Device Identification (FC 43 / MEI 0x0E)**: Retrieving server identity (Vendor, Product Code, etc.).
+//! - **Serial Line Diagnostics**: Support for FC 0x07 (Exception Status), FC 0x08 (Diagnostics),
+//!   FC 0x0B (Comm Event Counter), FC 0x0C (Comm Event Log), and FC 0x11 (Report Server ID).
+//! - **Encapsulated Interface Transport (FC 43)**: Generic tunneling for MEI types like CANopen.
+//!
+//! This module is designed for `no_std` environments using `heapless` collections.
+
 use crate::{
     data_unit::common::{self, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu},
     device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode},
@@ -7,26 +20,38 @@ use crate::{
 };
 use heapless::Vec;
 
+/// Represents an object ID.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceIdObject {
+    /// The ID of the object.
     pub object_id: ObjectId,
+    /// The value of the object.
     pub value: Vec<u8, MAX_PDU_DATA_LEN>,
 }
 
+/// Represents a response to a Read Device Identification request (FC 43 / MEI 0E).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceIdentificationResponse {
+    /// The code defining the type of access.
     pub read_device_id_code: ReadDeviceIdCode,
+    /// The conformity level of the response.
     pub conformity_level: ConformityLevel,
+    /// Indicates if there are more objects to follow.
     pub more_follows: bool,
+    /// The ID of the next object in the response.
     pub next_object_id: ObjectId,
+    /// The raw data of the objects.
     pub objects_data: Vec<u8, MAX_PDU_DATA_LEN>,
+    /// The number of objects returned in the response.
     pub number_of_objects: u8,
 }
 
+/// Service for handling Modbus Diagnostics function codes.
 #[derive(Debug, Clone)]
 pub struct DiagnosticsService;
 
 impl DiagnosticsService {
+    /// Creates a new `DiagnosticsService`.
     pub fn new() -> Self {
         Self
     }
@@ -151,7 +176,7 @@ impl DiagnosticsService {
     }
 
     // --- Response Handlers ---
-
+    /// Handles a Read Exception Status response (FC 0x07). Serial Line only.
     pub fn handle_read_exception_status_rsp(
         &self,
         function_code: FunctionCode,
@@ -163,6 +188,7 @@ impl DiagnosticsService {
         DiagnosticsReqPdu::parse_read_exception_status_response(pdu)
     }
 
+    /// Handles a Diagnostics response (FC 0x08). Serial Line only.
     pub fn handle_diagnostics_rsp(
         &self,
         function_code: FunctionCode,
@@ -174,6 +200,7 @@ impl DiagnosticsService {
         DiagnosticsReqPdu::parse_diagnostics_response(pdu)
     }
 
+    /// Handles a Get Comm Event Counter response (FC 0x0B). Serial Line only.
     pub fn handle_get_comm_event_counter_rsp(
         &self,
         function_code: FunctionCode,
@@ -185,6 +212,7 @@ impl DiagnosticsService {
         DiagnosticsReqPdu::parse_get_comm_event_counter_response(pdu)
     }
 
+    /// Handles a Get Comm Event Log response (FC 0x0C). Serial Line only.
     pub fn handle_get_comm_event_log_rsp(
         &self,
         function_code: FunctionCode,
@@ -196,6 +224,7 @@ impl DiagnosticsService {
         DiagnosticsReqPdu::parse_get_comm_event_log_response(pdu)
     }
 
+    /// Handles a Report Server ID response (FC 0x11). Serial Line only.
     pub fn handle_report_server_id_rsp(
         &self,
         function_code: FunctionCode,
@@ -208,7 +237,8 @@ impl DiagnosticsService {
     }
 
     // --- Helpers ---
-
+    
+    /// Checks if the transport type is serial.
     fn check_serial(&self, transport_type: &TransportType) -> Result<(), MbusError> {
         match transport_type {
             TransportType::StdSerial(_) | TransportType::CustomSerial(_) => Ok(()),
@@ -229,16 +259,20 @@ impl DeviceIdentificationResponse {
     }
 }
 
+/// An iterator over the device identification objects.
 pub struct DeviceIdObjectIterator<'a> {
     data: &'a [u8],
     offset: usize,
+    /// The number of objects already parsed.
     count: u8,
+    /// The total number of objects expected.
     total: u8,
 }
 
 impl<'a> Iterator for DeviceIdObjectIterator<'a> {
     type Item = Result<DeviceIdObject, MbusError>;
 
+    /// Advances the iterator and returns the next device ID object.
     fn next(&mut self) -> Option<Self::Item> {
         if self.count >= self.total {
             return None;
@@ -250,6 +284,7 @@ impl<'a> Iterator for DeviceIdObjectIterator<'a> {
     }
 }
 
+/// Service for handling Modbus Diagnostics function codes.
 pub struct DiagnosticsReqPdu {}
 
 impl DiagnosticsReqPdu {

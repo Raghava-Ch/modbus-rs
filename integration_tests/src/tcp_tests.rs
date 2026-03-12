@@ -768,15 +768,15 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
         // Send response
         // MBAP(7) + FC(1) + MEI(1) + Data(2) = 11 bytes
         #[rustfmt::skip]
-            stream.write_all(&[
-                buf[0], buf[1], // TID
-                0x00, 0x00, // PID
-                0x00, 0x05, // Length
-                0x01,       // Unit ID
-                0x2B,       // FC
-                0x0D,       // MEI
-                0xCC, 0xDD  // Response Data
-            ])?;
+        stream.write_all(&[
+            buf[0], buf[1], // TID
+            0x00, 0x00, // PID
+            0x00, 0x05, // Length
+            0x01,       // Unit ID
+            0x2B,       // FC
+            0x0D,       // MEI
+            0xCC, 0xDD  // Response Data
+        ])?;
 
         Ok(())
     });

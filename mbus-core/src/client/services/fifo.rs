@@ -1,3 +1,16 @@
+//! Modbus FIFO Queue Service Module
+//!
+//! This module provides the necessary structures and logic to handle Modbus operations
+//! related to FIFO Queues (Function Code 0x18).
+//!
+//! It includes functionality for:
+//! - Reading the contents of a remote FIFO queue of registers.
+//! - Parsing response PDUs containing the FIFO count and register values.
+//! - Validating data integrity (byte counts vs register counts).
+//!
+//! This module is designed for `no_std` environments using `heapless` collections.
+//! The maximum number of registers in a single FIFO response is limited to 31 by the protocol.
+ 
 use heapless::Vec;
 
 use crate::{
@@ -10,13 +23,17 @@ use crate::{
 /// The maximum number of bytes that can be returned in a FIFO Queue response PDU's data section.
 pub const MAX_FIFO_QUEUE_COUNT_PER_PDU: usize = 31;
 
+/// Represents a Modbus FIFO Queue response.
 #[derive(Debug, Clone)]
 pub struct FifoQueue {
+    /// The FIFO pointer address.
     pub ptr_address: u16,
+    /// The values read from the FIFO queue.
     pub values: Vec<u16, MAX_FIFO_QUEUE_COUNT_PER_PDU>,
 }
 
 impl FifoQueue {
+    /// Creates a new `FifoQueue` instance with the given pointer address and an empty values vector.
     pub fn new(ptr_address: u16) -> Self {
         Self {
             ptr_address,
@@ -24,16 +41,19 @@ impl FifoQueue {
         }
     }
 
+    /// Sets the values of the FIFO queue.
     pub fn with_values(mut self, values: Vec<u16, MAX_FIFO_QUEUE_COUNT_PER_PDU>) -> Self {
         self.values = values;
         self
     }
 }
 
+/// Provides service operations for reading Modbus FIFO Queue.
 #[derive(Debug, Clone)]
 pub struct FifoQueueService;
 
 impl FifoQueueService {
+    /// Creates a new `FifoQueueService`.
     pub fn new() -> Self {
         Self
     }
@@ -64,9 +84,11 @@ impl FifoQueueService {
     }
 }
 
+/// Provides operations for creating and parsing Modbus FIFO Queue request/response PDUs.
 pub struct FifoQueueReqPdu {}
 
 impl FifoQueueReqPdu {
+    /// Creates a Modbus Read FIFO Queue request PDU.
     pub fn read_fifo_queue_request(address: u16) -> Result<Pdu, MbusError> {
         let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
         data_vec
@@ -76,6 +98,7 @@ impl FifoQueueReqPdu {
         Ok(Pdu::new(FunctionCode::ReadFifoQueue, data_vec, 2)) // Corrected: 2 addr
     }
 
+    /// Parses the received response for a Modbus Read FIFO Queue request.
     pub fn parse_read_fifo_queue_response(
         pdu: &Pdu,
     ) -> Result<Vec<u16, MAX_FIFO_QUEUE_COUNT_PER_PDU>, MbusError> {
