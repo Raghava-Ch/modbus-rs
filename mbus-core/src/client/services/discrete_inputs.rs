@@ -1,3 +1,15 @@
+//! Modbus Discrete Inputs Service Module
+//!
+//! This module provides the necessary structures and logic to handle Modbus operations
+//! related to Discrete Inputs (Function Code 0x02).
+//!
+//! It includes functionality for:
+//! - Reading multiple or single discrete inputs.
+//! - Packing and unpacking input states into bit-fields within bytes.
+//! - Validating and parsing response PDUs from Modbus servers.
+//!
+//! This module is designed for `no_std` environments using `heapless` collections.
+ 
 use crate::{
     data_unit::common::{MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
@@ -64,14 +76,17 @@ impl DiscreteInputs {
     }
 }
 
+/// Provides service operations for reading Modbus discrete inputs.
 #[derive(Debug, Clone)]
 pub struct DiscreteInputService;
 
 impl DiscreteInputService {
+    /// Creates a new `DiscreteInputService`.
     pub fn new() -> Self {
         Self
     }
 
+    /// Sends a Read Discrete Inputs (FC 0x02) request.
     pub fn read_discrete_inputs(
         &self,
         txn_id: u16,
@@ -84,6 +99,7 @@ impl DiscreteInputService {
         crate::data_unit::common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
+    /// Handles a Read Discrete Inputs (FC 0x02) response.
     pub fn handle_read_discrete_inputs_rsp(
         &self,
         function_code: FunctionCode,
@@ -100,7 +116,7 @@ impl DiscreteInputService {
     }
 }
 
-/// Provides operations for reading Modbus discrete inputs.
+/// Provides operations for creating and parsing Modbus discrete input request/response PDUs.
 pub struct DiscreteInputReqPdu {}
 
 impl DiscreteInputReqPdu {
