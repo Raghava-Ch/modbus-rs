@@ -9,7 +9,6 @@ use mbus_core::client::services::discrete_inputs::DiscreteInputs;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
-use mbus_core::data_unit::common::SlaveAddress;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper,
@@ -17,7 +16,8 @@ use mbus_core::transport::{
 use mbus_serial::StdSerialTransport;
 use std::env;
 use std::str::FromStr;
-use std::time::SystemTime;
+use std::thread::sleep;
+use std::time::{Duration, SystemTime};
 
 // --- Client Application Implementation ---
 #[derive(Debug, Default)]
@@ -52,13 +52,7 @@ impl CoilResponse for ClientApp {
             txn_id, unit_id, address, value
         );
     }
-    fn write_multiple_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: u8,
-        address: u16,
-        quantity: u16,
-    ) {
+    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Multiple Coils (Addr: {}, Qty: {}) Success",
             txn_id, unit_id, address, quantity
@@ -125,16 +119,22 @@ impl DiagnosticsResponse for ClientApp {
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
-    let port_path = if args.len() > 1 { &args[1] } else { "/dev/ttyUSB0" };
-    let unit_id_val = if args.len() > 2 { args[2].parse().unwrap_or(1) } else { 1 };
+    let port_path = if args.len() > 1 {
+        &args[1]
+    } else {
+        "/dev/ttyUSB0"
+    };
+    let unit_id_val = if args.len() > 2 {
+        args[2].parse().unwrap_or(1)
+    } else {
+        1
+    };
 
     println!("--- Modbus Serial ASCII Example ---");
     println!("Connecting to Serial Port: {}", port_path);
 
-    let slave_address = SlaveAddress::new(unit_id_val).map_err(|e| anyhow::anyhow!(e))?;
-    
     // Initialize transport with ASCII mode
-    let transport = StdSerialTransport::new(slave_address, SerialMode::Ascii);
+    let transport = StdSerialTransport::new(SerialMode::Ascii);
     let app = ClientApp::default();
 
     // Configure serial port for standard Modbus ASCII:
@@ -145,23 +145,28 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 7, 
+        data_bits: 7,
         stop_bits: 1,
         parity: Parity::Even,
         response_timeout_ms: 2000,
         mode: SerialMode::Ascii,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client =
-        ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
+        ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
     // 1. Read Coils
     println!("\n[1] Sending Read Coils (Addr: 0, Qty: 5)...");
     client
         .read_multiple_coils(1, unit_id_val, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    
+    for _ in 0..5 {
+        client.poll();
+        sleep(Duration::from_millis(200));
+    }
 
     Ok(())
 }

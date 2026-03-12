@@ -390,8 +390,9 @@ pub fn compile_adu_frame(
             let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
             ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
         }
-        TransportType::StdSerial(slave_address, serial_mode)
-        | TransportType::CustomSerial(slave_address, serial_mode) => {
+        TransportType::StdSerial(serial_mode)
+        | TransportType::CustomSerial(serial_mode) => {
+            let slave_address = SlaveAddress(unit_id);
             let adu_bytes = match serial_mode {
                 SerialMode::Rtu => {
                     let mut adu_bytes =
@@ -441,8 +442,8 @@ pub fn decompile_adu_frame(
                 }
             }
         }
-        TransportType::StdSerial(_slave_address, serial_mode)
-        | TransportType::CustomSerial(_slave_address, serial_mode) => {
+        TransportType::StdSerial(serial_mode)
+        | TransportType::CustomSerial(serial_mode) => {
             match serial_mode {
                 SerialMode::Rtu => {
                     // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
@@ -940,10 +941,9 @@ mod tests {
     fn test_decompile_adu_frame_rtu_valid() {
         // Frame: 01 03 00 6B 00 03 74 17 (CRC LE)
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17];
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let msg = decompile_adu_frame(
             &frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+            TransportType::StdSerial(SerialMode::Rtu),
         )
         .expect("Valid RTU");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
@@ -952,10 +952,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_rtu_too_short() {
         let frame = [0x01, 0x02, 0x03];
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             &frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+            TransportType::StdSerial(SerialMode::Rtu),
         )
         .expect_err("Too short");
         assert_eq!(err, MbusError::InvalidAduLength);
@@ -964,10 +963,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_rtu_crc_mismatch() {
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x00, 0x00]; // Bad CRC
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             &frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Rtu),
+            TransportType::StdSerial(SerialMode::Rtu),
         )
         .expect_err("CRC mismatch");
         assert_eq!(err, MbusError::ChecksumError);
@@ -977,10 +975,9 @@ mod tests {
     fn test_decompile_adu_frame_ascii_valid() {
         // :010300000001FB\r\n
         let frame = b":010300000001FB\r\n";
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let msg = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect("Valid ASCII");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
@@ -989,10 +986,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_ascii_too_short() {
         let frame = b":123\r\n";
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("Too short");
         assert_eq!(err, MbusError::InvalidAduLength);
@@ -1001,10 +997,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_ascii_missing_start() {
         let frame = b"010300000001FB\r\n";
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("Missing start");
         assert_eq!(err, MbusError::BasicParseError);
@@ -1013,10 +1008,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_ascii_missing_end() {
         let frame = b":010300000001FB\r"; // Missing \n
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("Missing end");
         assert_eq!(err, MbusError::BasicParseError);
@@ -1025,10 +1019,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_ascii_odd_hex() {
         let frame = b":010300000001F\r\n"; // Odd length hex
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("Odd hex");
         assert_eq!(err, MbusError::BasicParseError);
@@ -1037,10 +1030,9 @@ mod tests {
     #[test]
     fn test_decompile_adu_frame_ascii_lrc_mismatch() {
         let frame = b":01030000000100\r\n"; // LRC 00 is wrong, should be FB
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("LRC mismatch");
         assert_eq!(err, MbusError::ChecksumError);
@@ -1055,10 +1047,9 @@ mod tests {
             frame.extend_from_slice(b"00").unwrap();
         }
         frame.extend_from_slice(b"\r\n").unwrap();
-        let slave_addr = SlaveAddress::new(1).unwrap();
         let err = decompile_adu_frame(
             &frame,
-            TransportType::StdSerial(slave_addr, SerialMode::Ascii),
+            TransportType::StdSerial(SerialMode::Ascii),
         )
         .expect_err("Buffer overflow");
         assert_eq!(err, MbusError::BufferTooSmall);

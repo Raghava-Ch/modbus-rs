@@ -7,7 +7,7 @@ use crate::{
     },
     client::services::{diagnostics::DiagnosticsService, file_record::SubRequest},
     data_unit::{
-        common::{self, AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, Pdu},
+        common::{self, MAX_ADU_FRAME_LEN, MbapHeader},
         tcp::ModbusTcpMessage,
     },
     device_identification::{ObjectId, ReadDeviceIdCode},
@@ -119,14 +119,16 @@ pub struct ExpectedResponse {
 /// # Type Parameters
 ///
 /// * `TRANSPORT` - The transport layer implementation (e.g., TCP or RTU) that handles the physical transmission of Modbus frames.
-/// * `N` - The maximum number of concurrent outstanding requests (capacity of the expected responses queue).
+/// * `N` - The maximum number of concurrent outstanding requests (capacity of the expected responses queue). N must be 1 in serial transport type
 /// * `APP` - The application layer that handles processed Modbus responses.
 #[derive(Debug)]
-pub struct ClientServices<TRANSPORT, const N: usize, APP> {
+pub struct ClientServices<TRANSPORT, APP, const N: usize = 1> {
     /// Application layer that implements the CoilResponse trait, used to handle responses and invoke callbacks.
     pub app: APP,
     /// Transport layer used for sending and receiving Modbus frames. Must implement the Transport trait.
     transport: TRANSPORT,
+    /// A buffer to store the received frame.
+    rxed_frame: Vec<u8, MAX_ADU_FRAME_LEN>,
 
     /// Service struct for constructing coil-related requests and parsing responses.
     coil_service: coils::CoilService,
@@ -150,7 +152,6 @@ pub struct ClientServices<TRANSPORT, const N: usize, APP> {
 /// Implementation of core client services, including methods for sending requests and processing responses.
 impl<
     TRANSPORT: Transport,
-    const N: usize,
     APP: RequestErrorNotifier
         + CoilResponse
         + RegisterResponse
@@ -159,7 +160,8 @@ impl<
         + DiscreteInputResponse
         + DiagnosticsResponse
         + TimeKeeper,
-> ClientServices<TRANSPORT, N, APP>
+    const N: usize,
+> ClientServices<TRANSPORT, APP, N>
 {
     /// Creates a new instance of ClientServices, connecting to the transport layer with the provided configuration.
     pub fn new(
@@ -167,6 +169,16 @@ impl<
         app: APP,
         config: ModbusConfig,
     ) -> Result<Self, MbusError> {
+        let transport_type = transport.transport_type();
+        if matches!(
+            transport_type,
+            TransportType::StdSerial(_) | TransportType::CustomSerial(_)
+        ) {
+            if N != 1 {
+                return Err(MbusError::InvalidNumOfExpectedRsps);
+            }
+        }
+
         transport
             .connect(&config)
             .map_err(|_e| MbusError::ConnectionFailed)?;
@@ -174,6 +186,7 @@ impl<
         Ok(Self {
             app,
             transport,
+            rxed_frame: Vec::new(),
             register_service: registers::RegisterService::new(),
             coil_service: coils::CoilService::new(),
             fifo_queue_service: fifo::FifoQueueService::new(),
@@ -185,6 +198,7 @@ impl<
         })
     }
 
+    /// Returns the configured response timeout in milliseconds.
     fn response_timeout_ms(&self) -> u64 {
         match &self.config {
             ModbusConfig::Tcp(config) => config.response_timeout_ms as u64,
@@ -192,10 +206,11 @@ impl<
         }
     }
 
+    /// Returns the configured number of retries for outstanding requests.
     fn retry_attempts(&self) -> u8 {
         match &self.config {
             ModbusConfig::Tcp(config) => config.retry_attempts,
-            ModbusConfig::Serial(_) => 0,
+            ModbusConfig::Serial(config) => config.retry_attempts,
         }
     }
 
@@ -203,14 +218,20 @@ impl<
     /// It also handles timeouts and retries for outstanding requests, using the application's `TimeKeeper` for current time.
     ///
     /// # Arguments
-    /// * `current_millis` - The current monotonic time in milliseconds. This is provided
-    ///   as an argument for `no_std` compatibility, as `std::time::Instant` is not available.
+    /// * `current_millis` - The current monotonic time in milliseconds.
     pub fn poll(&mut self) {
         // 1. Attempt to receive a frame
         match self.transport.recv() {
             Ok(frame) => {
+                self.rxed_frame.extend(frame);
+
                 // If a frame is received, ingest it
-                self.ingest_frame(&frame);
+                match self.ingest_frame() {
+                    Ok(_) => {
+                        self.rxed_frame.clear();
+                    }
+                    Err(_) => {}
+                }
             }
             Err(_) => {
                 // Only log non-timeout errors for now. Timeouts are handled below.
@@ -223,10 +244,11 @@ impl<
 
         // 2. Check for timed-out requests and handle retries for all outstanding requests
         let current_millis = self.app.current_millis();
+        let response_timeout_ms = self.response_timeout_ms();
+        let expected_responses = &mut self.expected_responses;
         let mut i = 0;
-        while i < self.expected_responses.len() {
-            let response_timeout_ms = self.response_timeout_ms();
-            let expected_response = &mut self.expected_responses[i];
+        while i < expected_responses.len() {
+            let expected_response = &mut expected_responses[i];
             if current_millis
                 .checked_sub(expected_response.sent_timestamp)
                 .unwrap_or(0)
@@ -241,7 +263,7 @@ impl<
                     if let Err(_e) = self.transport.send(&expected_response.original_adu) {
                         // If re-sending fails
                         // If re-sending fails, treat as a failed request
-                        let response = self.expected_responses.swap_remove(i);
+                        let response = expected_responses.swap_remove(i);
                         self.app.request_failed(
                             response.txn_id,
                             response.unit_id,
@@ -251,7 +273,7 @@ impl<
                     }
                 } else {
                     // No retries left, report timeout to application
-                    let response = self.expected_responses.swap_remove(i); // Remove the timed-out request
+                    let response = expected_responses.swap_remove(i); // Remove the timed-out request
                     self.app.request_failed(
                         response.txn_id,
                         response.unit_id,
@@ -1177,41 +1199,39 @@ impl<
     }
 
     /// Ingests received Modbus frames from the transport layer.
-    fn ingest_frame(&mut self, frame: &[u8]) {
+    fn ingest_frame(&mut self) -> Result<(), MbusError> {
+        let frame = self.rxed_frame.as_slice();
         // Changed to &mut self, removed transport param
         let transport_type = self.transport.transport_type(); // Access self.transport directly
         let message = match common::decompile_adu_frame(frame, transport_type) {
             Ok(value) => value,
-            Err(e) => {
-                // Parse MBAP Header
-                if frame.len() >= 7 {
-                    let transaction_id = u16::from_be_bytes([frame[0], frame[1]]);
-                    let unit_id = frame[6];
-                    self.app.request_failed(transaction_id, unit_id, e);
-                }
-                return; // Malformed frame or parsing error, frame is dropped.
+            Err(err) => {
+                return Err(err); // Malformed frame or parsing error, frame is dropped.
             }
         };
-        use crate::transport::TransportType::*;
         use crate::data_unit::common::AdditionalAddress;
+        use crate::transport::TransportType::*;
         let message = match self.transport.transport_type() {
-            
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(header) => header,
-                    _ => return,
+                    _ => return Ok(()),
                 };
                 ModbusTcpMessage::new(*mbap_header, message.pdu)
             }
-            StdSerial(_, _) | CustomSerial(_, _) => {
+            StdSerial(_) | CustomSerial(_) => {
                 let slave_addr = match message.additional_address() {
                     AdditionalAddress::SlaveAddress(addr) => addr.address(),
-                    _ => return,
+                    _ => return Ok(()),
                 };
 
                 // For Serial, we assume the response matches the first expected response (FIFO).
                 // We borrow the TxnID from there to satisfy the matcher.
-                let txn_id = self.expected_responses.first().map(|r| r.txn_id).unwrap_or(0);
+                let txn_id = self
+                    .expected_responses
+                    .first()
+                    .map(|r| r.txn_id)
+                    .unwrap_or(0);
 
                 let mbap = MbapHeader::new(txn_id, 0, slave_addr);
                 ModbusTcpMessage::new(mbap, message.pdu)
@@ -1221,6 +1241,8 @@ impl<
         let mbap_header = message.mbap_header();
         let function_code = message.function_code();
         self.handle_response(&message, mbap_header, function_code);
+
+        Ok(())
     }
 
     /// Handles incoming Modbus responses by matching them with expected responses and invoking the appropriate application callbacks.
@@ -2075,6 +2097,7 @@ mod tests {
     use crate::client::services::file_record::{MAX_SUB_REQUESTS_PER_PDU, SubRequestParams};
     use crate::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
     use crate::errors::MbusError;
+    use crate::transport::TransportType;
     use crate::transport::{ModbusConfig, ModbusTcpConfig};
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
     use heapless::Deque;
@@ -2086,8 +2109,8 @@ mod tests {
     // --- Mock Transport Implementation ---
     #[derive(Debug, Default)]
     struct MockTransport {
-        pub sent_frames: RefCell<Deque<Vec<u8, 260>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
-        pub recv_frames: RefCell<Deque<Vec<u8, 260>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
+        pub sent_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
+        pub recv_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
         pub connect_should_fail: bool,
         pub send_should_fail: bool,
         pub is_connected_flag: RefCell<bool>,
@@ -2124,7 +2147,7 @@ mod tests {
             Ok(())
         }
 
-        fn recv(&mut self) -> Result<Vec<u8, 260>, Self::Error> {
+        fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
             self.recv_frames
                 .borrow_mut()
                 .pop_front()
@@ -2470,7 +2493,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
 
         let client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config);
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config);
         assert!(client_services.is_ok());
         assert!(client_services.unwrap().transport.is_connected());
     }
@@ -2484,7 +2507,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
 
         let client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config);
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config);
         assert!(client_services.is_err());
         assert_eq!(client_services.unwrap_err(), MbusError::ConnectionFailed);
     }
@@ -2496,7 +2519,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0001;
         let unit_id = 0x01;
@@ -2531,7 +2554,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0001;
         let unit_id = 0x01;
@@ -2550,7 +2573,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0001;
         let unit_id = 0x01;
@@ -2568,7 +2591,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         // ADU with FC 0x03 (Read Holding Registers) instead of 0x01 (Read Coils)
         let response_adu = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x03, 0x01, 0xB3];
@@ -2592,7 +2615,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         // Malformed ADU (too short)
         let malformed_adu = [0x01, 0x02, 0x03];
@@ -2616,7 +2639,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         // No request was sent, so no expected response is in the queue.
         let response_adu = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0xB3];
@@ -2640,7 +2663,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0001;
         let unit_id = 0x01;
@@ -2678,7 +2701,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0002;
         let unit_id = 0x01;
@@ -2746,7 +2769,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0002;
         let unit_id = 0x01;
@@ -2791,7 +2814,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0003;
         let unit_id = 0x01;
@@ -2840,7 +2863,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0003;
         let unit_id = 0x01;
@@ -2910,7 +2933,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0004;
         let unit_id = 0x01;
@@ -2964,7 +2987,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0004;
         let unit_id = 0x01;
@@ -3039,7 +3062,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0001;
         let unit_id = 0x01;
@@ -3123,7 +3146,7 @@ mod tests {
         let config = ModbusConfig::Tcp(tcp_config);
 
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0005;
         let unit_id = 0x01;
@@ -3161,7 +3184,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         // Create a client with a small capacity for expected responses
         let mut client_services =
-            ClientServices::<MockTransport, 1, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 1>::new(transport, app, config).unwrap();
 
         // Send one request, which should fill the queue
         client_services.read_multiple_coils(1, 1, 0, 1).unwrap();
@@ -3181,7 +3204,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0005;
         let unit_id = 0x01;
@@ -3216,7 +3239,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0005;
         let unit_id = 0x01;
@@ -3261,7 +3284,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0006;
         let unit_id = 0x01;
@@ -3296,7 +3319,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0006;
         let unit_id = 0x01;
@@ -3341,7 +3364,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0007;
         let unit_id = 0x01;
@@ -3376,7 +3399,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0007;
         let unit_id = 0x01;
@@ -3419,7 +3442,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0008;
         let unit_id = 0x01;
@@ -3457,7 +3480,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0008;
         let unit_id = 0x01;
@@ -3501,7 +3524,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 0x0009;
         let unit_id = 0x01;
@@ -3554,7 +3577,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         client_services
             .read_single_holding_register(10, 1, 100)
@@ -3594,7 +3617,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 10;
         let unit_id = 1;
@@ -3637,7 +3660,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         client_services
             .read_single_input_register(10, 1, 100)
@@ -3677,7 +3700,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 10;
         let unit_id = 1;
@@ -3721,7 +3744,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let write_values = [0xAAAA, 0xBBBB];
         client_services
@@ -3757,7 +3780,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         client_services
             .mask_write_register(12, 1, 30, 0xF0F0, 0x0F0F)
@@ -3788,7 +3811,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 11;
         let unit_id = 1;
@@ -3840,7 +3863,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 12;
         let unit_id = 1;
@@ -3881,7 +3904,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 13;
         let unit_id = 1;
@@ -3931,7 +3954,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 14;
         let unit_id = 1;
@@ -3982,7 +4005,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 15;
         let unit_id = 1;
@@ -4027,7 +4050,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 16;
         let unit_id = 1;
@@ -4070,7 +4093,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 17;
         let unit_id = 1;
@@ -4124,7 +4147,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 20;
         let unit_id = 1;
@@ -4187,7 +4210,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         // Request 1
         let txn_id_1 = 21;
@@ -4271,7 +4294,7 @@ mod tests {
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
-            ClientServices::<MockTransport, 10, MockApp>::new(transport, app, config).unwrap();
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
         let txn_id = 30;
         let unit_id = 1;

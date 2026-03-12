@@ -211,7 +211,7 @@ impl DiagnosticsService {
 
     fn check_serial(&self, transport_type: &TransportType) -> Result<(), MbusError> {
         match transport_type {
-            TransportType::StdSerial(_, _) | TransportType::CustomSerial(_, _) => Ok(()),
+            TransportType::StdSerial(_) | TransportType::CustomSerial(_) => Ok(()),
             _ => Err(MbusError::InvalidTransport), // Feature not supported on non-serial transport
         }
     }

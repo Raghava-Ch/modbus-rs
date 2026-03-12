@@ -2,7 +2,7 @@ use anyhow::Result;
 use heapless::Vec as HVec;
 use mbus_core::{
     client::services::ClientServices,
-    data_unit::common::SlaveAddress,
+    data_unit::common::{MAX_ADU_FRAME_LEN},
     device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode},
     transport::{
         BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
@@ -11,7 +11,7 @@ use mbus_core::{
 };
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
-use super::mock_app::MockApp;
+use crate::mock_app::MockApp;
 
 /// A custom mock transport that simulates a serial connection.
 /// It captures sent frames for verification and allows injecting response frames.
@@ -21,16 +21,14 @@ struct MockSerialTransport {
     sent_data: Rc<RefCell<Vec<u8>>>,
     /// Shared buffer to stage data to be received by the client.
     recv_data: Rc<RefCell<Vec<u8>>>,
-    unit_id: SlaveAddress,
     mode: SerialMode,
 }
 
 impl MockSerialTransport {
-    fn new(unit_id: SlaveAddress, mode: SerialMode) -> Self {
+    fn new(mode: SerialMode) -> Self {
         Self {
             sent_data: Rc::new(RefCell::new(Vec::new())),
             recv_data: Rc::new(RefCell::new(Vec::new())),
-            unit_id,
             mode,
         }
     }
@@ -52,7 +50,7 @@ impl Transport for MockSerialTransport {
         Ok(())
     }
 
-    fn recv(&mut self) -> Result<HVec<u8, 260>, Self::Error> {
+    fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
         let mut data = self.recv_data.borrow_mut();
         if data.is_empty() {
             return Err(TransportError::Timeout);
@@ -72,14 +70,13 @@ impl Transport for MockSerialTransport {
     }
 
     fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(self.unit_id, self.mode)
+        TransportType::CustomSerial(self.mode)
     }
 }
 
 #[test]
 fn test_serial_read_coils_rtu() -> Result<()> {
-    let slave_address = SlaveAddress::new(1).unwrap();
-    let transport = MockSerialTransport::new(slave_address, SerialMode::Rtu);
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -93,10 +90,11 @@ fn test_serial_read_coils_rtu() -> Result<()> {
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
-    let mut client = ClientServices::<_, 10, _>::new(transport, app, config)?;
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     let txn_id = 1;
     let unit_id = 1;
@@ -144,8 +142,7 @@ fn test_serial_read_coils_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_write_single_coil_rtu() -> Result<()> {
-    let slave_address = SlaveAddress::new(1).unwrap();
-    let transport = MockSerialTransport::new(slave_address, SerialMode::Rtu);
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -159,10 +156,11 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
-    let mut client = ClientServices::<_, 10, _>::new(transport, app, config)?;
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     client.write_single_coil(2, 1, 10, true)?;
 
@@ -191,8 +189,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_read_device_id_rtu() -> Result<()> {
-    let slave_address = SlaveAddress::new(1).unwrap();
-    let transport = MockSerialTransport::new(slave_address, SerialMode::Rtu);
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -206,10 +203,11 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
-    let mut client = ClientServices::<_, 10, _>::new(transport, app, config)?;
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     client.read_device_identification(3, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))?;
 
@@ -251,8 +249,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_read_coils_ascii() -> Result<()> {
-    let slave_address = SlaveAddress::new(1).unwrap();
-    let transport = MockSerialTransport::new(slave_address, SerialMode::Ascii);
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -267,10 +264,11 @@ fn test_serial_read_coils_ascii() -> Result<()> {
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
-    let mut client = ClientServices::<_, 10, _>::new(transport, app, config)?;
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     let txn_id = 4;
     let unit_id = 1;

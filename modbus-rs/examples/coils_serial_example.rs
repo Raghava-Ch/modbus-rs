@@ -9,7 +9,6 @@ use mbus_core::client::services::discrete_inputs::DiscreteInputs;
 use mbus_core::client::services::fifo::FifoQueue;
 use mbus_core::client::services::file_record::SubRequestParams;
 use mbus_core::client::services::registers::Registers;
-use mbus_core::data_unit::common::SlaveAddress;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper,
@@ -17,7 +16,8 @@ use mbus_core::transport::{
 use mbus_serial::StdSerialTransport;
 use std::env;
 use std::str::FromStr;
-use std::time::SystemTime;
+use std::thread::sleep;
+use std::time::{Duration, SystemTime};
 
 // --- Client Application Implementation ---
 #[derive(Debug, Default)]
@@ -52,13 +52,7 @@ impl CoilResponse for ClientApp {
             txn_id, unit_id, address, value
         );
     }
-    fn write_multiple_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: u8,
-        address: u16,
-        quantity: u16,
-    ) {
+    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Multiple Coils (Addr: {}, Qty: {}) Success",
             txn_id, unit_id, address, quantity
@@ -125,14 +119,21 @@ impl DiagnosticsResponse for ClientApp {
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
-    let port_path = if args.len() > 1 { &args[1] } else { "/dev/ttyUSB0" };
-    let unit_id_val = if args.len() > 2 { args[2].parse().unwrap_or(1) } else { 1 };
+    let port_path = if args.len() > 1 {
+        &args[1]
+    } else {
+        "/dev/ttyUSB0"
+    };
+    let unit_id_val = if args.len() > 2 {
+        args[2].parse().unwrap_or(1)
+    } else {
+        1
+    };
 
     println!("--- Modbus Serial Coils Example ---");
     println!("Connecting to Serial Port: {}", port_path);
 
-    let slave_address = SlaveAddress::new(unit_id_val).map_err(|e| anyhow::anyhow!(e))?;
-    let transport = StdSerialTransport::new(slave_address, SerialMode::Rtu);
+    let transport = StdSerialTransport::new(SerialMode::Rtu);
     let app = ClientApp::default();
 
     let serial_config = ModbusSerialConfig {
@@ -143,25 +144,32 @@ fn main() -> Result<()> {
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
+        retry_attempts: 3,
     };
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client =
-        ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
+        ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
     // 1. Write Single Coil
     println!("\n[1] Sending Write Single Coil (Addr: 0, Value: ON)...");
     client
         .write_single_coil(1, unit_id_val, 0, true)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        sleep(Duration::from_millis(200));
+    }
 
     // 2. Read Coils
     println!("\n[2] Sending Read Coils (Addr: 0, Qty: 5)...");
     client
         .read_multiple_coils(2, unit_id_val, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        sleep(Duration::from_millis(200));
+    }
 
     Ok(())
 }

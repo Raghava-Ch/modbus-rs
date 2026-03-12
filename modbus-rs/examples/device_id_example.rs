@@ -171,7 +171,7 @@ fn main() -> Result<()> {
 
     // Initialize Client Services
     let mut client =
-        ClientServices::<_, 10, _>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
+        ClientServices::<_, _, 10>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
     let unit_id = 1;
 

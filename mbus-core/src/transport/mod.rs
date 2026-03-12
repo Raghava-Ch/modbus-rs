@@ -1,7 +1,9 @@
 pub mod checksum;
 use core::str::FromStr;
 
-use crate::{data_unit::common::SlaveAddress, errors::MbusError};
+use crate::{
+    data_unit::common::MAX_ADU_FRAME_LEN, errors::MbusError,
+};
 use heapless::{String, Vec};
 
 /// The default TCP port for Modbus communication.
@@ -52,9 +54,9 @@ pub enum BaudRate {
 
 #[derive(Debug)]
 /// Configuration parameters for establishing a Modbus Serial connection.
-pub struct ModbusSerialConfig {
+pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64>{
     /// The path to the serial port (e.g., "/dev/ttyUSB0" or "COM1").
-    pub port_path: heapless::String<64>,
+    pub port_path: heapless::String<PORT_PATH_LEN>,
     /// The serial mode to use (RTU or ASCII).
     pub mode: SerialMode,
     /// Communication speed in bits per second (e.g., 9600, 115200).
@@ -67,6 +69,8 @@ pub struct ModbusSerialConfig {
     pub parity: Parity,
     /// Timeout for waiting for a response in milliseconds.
     pub response_timeout_ms: u32,
+    /// Number of retries for failed operations.
+    pub retry_attempts: u8,
 }
 
 #[derive(Debug)]
@@ -142,7 +146,7 @@ pub enum TransportError {
     /// An unexpected error occurred.
     Unexpected,
     /// Invalid configuration
-    InvalidConfiguration
+    InvalidConfiguration,
 }
 
 impl fmt::Display for TransportError {
@@ -154,7 +158,7 @@ impl fmt::Display for TransportError {
             TransportError::Timeout => write!(f, "Timeout"),
             TransportError::BufferTooSmall => write!(f, "Buffer too small"),
             TransportError::Unexpected => write!(f, "An unexpected error occurred"),
-            TransportError::InvalidConfiguration => write!(f, "Invalid configuration")
+            TransportError::InvalidConfiguration => write!(f, "Invalid configuration"),
         }
     }
 }
@@ -168,11 +172,11 @@ pub enum TransportType {
     /// Standard library TCP transport implementation.
     StdTcp,
     /// Standard library Serial transport implementation.
-    StdSerial(SlaveAddress, SerialMode),
+    StdSerial(SerialMode),
     /// Custom TCP transport implementation.
     CustomTcp,
     /// Custom Serial transport implementation.
-    CustomSerial(SlaveAddress, SerialMode),
+    CustomSerial(SerialMode),
 }
 
 impl From<TransportError> for MbusError {
@@ -213,7 +217,7 @@ pub trait Transport {
     fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error>;
 
     /// Receives a Modbus Application Data Unit (ADU) from the TCP connection.
-    fn recv(&mut self) -> Result<Vec<u8, 260>, Self::Error>;
+    fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error>;
 
     /// Checks if the transport is currently connected to a remote host.
     fn is_connected(&self) -> bool;

@@ -55,7 +55,9 @@ pub enum MbusError {
     /// Checksum error
     ChecksumError,
     /// Invalid configuration
-    InvalidConfiguration
+    InvalidConfiguration,
+    /// Invalid number of expected responses
+    InvalidNumOfExpectedRsps,
 }
 
 impl fmt::Display for MbusError {
@@ -145,6 +147,10 @@ impl fmt::Display for MbusError {
             MbusError::InvalidConfiguration => write!(
                 f,
                 "Invalid configuration: The provided configuration is invalid"
+            ),
+            MbusError::InvalidNumOfExpectedRsps => write!(
+                f,
+                "Invalid number of expected responses: The number of expected responses is invalid"
             ),
         }
     }

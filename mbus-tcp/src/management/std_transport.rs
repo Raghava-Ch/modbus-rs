@@ -3,6 +3,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
@@ -157,7 +158,7 @@ impl Transport for StdTcpTransport {
     ///
     /// # Returns
     /// `Ok(Vec<u8, 260>)` containing the received ADU, or an error otherwise.
-    fn recv(&mut self) -> Result<Vec<u8, 260>, Self::Error> {
+    fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
         let stream = self
             .stream
             .as_mut()
