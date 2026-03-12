@@ -1,3 +1,17 @@
+//! Modbus TCP Application Data Unit (ADU) Module
+//!
+//! This module implements the Modbus TCP message structure, specifically the
+//! Application Data Unit (ADU) which consists of the Modbus Application Protocol (MBAP)
+//! header and the Protocol Data Unit (PDU).
+//!
+//! Key features:
+//! - **MBAP Header Handling**: Manages Transaction ID, Protocol ID, Length, and Unit ID.
+//! - **Serialization**: Converts structured messages into raw bytes for TCP transmission.
+//! - **Deserialization**: Parses raw byte streams into structured Modbus TCP messages.
+//! - **Validation**: Ensures Protocol ID is 0 and the length field matches the payload.
+//!
+//! Designed for `no_std` environments using `heapless` for deterministic memory usage.
+
 use crate::data_unit::common::{
     AdditionalAddress, MAX_PDU_DATA_LEN, MbapHeader, ModbusMessage, Pdu,
 };
@@ -12,6 +26,18 @@ pub struct ModbusTcpMessage {
 }
 
 impl ModbusTcpMessage {
+    /// Creates a new `ModbusTcpMessage` instance.
+    ///
+    /// This constructor takes an `MbapHeader` and a `Pdu` to form a complete Modbus TCP message.
+    /// The `MbapHeader` is encapsulated within the `AdditionalAddress::MbapHeader` variant
+    /// of the internal `ModbusMessage` structure.
+    ///
+    /// # Arguments
+    /// * `mbap` - The Modbus Application Protocol (MBAP) header for the TCP message.
+    /// * `pdu` - The Protocol Data Unit containing the function code and data.
+    ///
+    /// # Returns
+    /// A new `ModbusTcpMessage` instance.
     pub fn new(mbap: MbapHeader, pdu: Pdu) -> Self {
         // Construct a ModbusTcpMessage from the given MBAP header and PDU.
         // This is a placeholder implementation; actual construction would involve

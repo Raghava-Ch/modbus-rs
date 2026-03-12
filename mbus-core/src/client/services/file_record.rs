@@ -1,3 +1,17 @@
+//! Modbus File Record Service Module
+//!
+//! This module provides the necessary structures and logic to handle Modbus operations
+//! related to File Records (Function Codes 0x14 and 0x15).
+//!
+//! It includes functionality for:
+//! - Reading multiple file records (FC 0x14) using sub-requests.
+//! - Writing multiple file records (FC 0x15) using sub-requests.
+//! - Managing sub-request parameters and validating PDU size constraints.
+//! - Parsing response PDUs for both read and write operations.
+//!
+//! This module is designed for `no_std` environments using `heapless` collections.
+//! The maximum number of sub-requests per PDU is limited to 35 by the protocol.
+ 
 use heapless::Vec;
 
 use crate::{
@@ -34,7 +48,9 @@ pub struct SubRequestParams {
 }
 /// Represents a collection of sub-requests for File Record operations.
 pub struct SubRequest {
+    /// A vector of individual sub-request parameters.
     params: Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>, // maximum of 35 sub-requests per PDU
+    /// The total length of data in bytes that will be read across all sub-requests.
     total_read_bytes_length: u16,
 }
 
@@ -145,6 +161,7 @@ impl SubRequest {
     }
 }
 
+/// Provides operations for creating and parsing Modbus File Record request/response PDUs.
 #[derive(Debug, Clone)]
 pub struct FileRecordService;
 

@@ -58,8 +58,10 @@ impl CoilResponse for ClientMockApp {
 }
 
 impl RegisterResponse for ClientMockApp {
+    /// Handles a Read Input Registers response. Not used in this example.
     fn read_input_register_response(&mut self, _txn_id: u16, _unit_id: u8, _registers: &Registers) {
     }
+    /// Handles a Read Holding Registers response. Not used in this example.
     fn read_holding_registers_response(
         &mut self,
         _txn_id: u16,
@@ -67,6 +69,7 @@ impl RegisterResponse for ClientMockApp {
         _registers: &Registers,
     ) {
     }
+    /// Handles a Write Single Register response. Not used in this example.
     fn write_single_register_response(
         &mut self,
         _txn_id: u16,
@@ -76,6 +79,7 @@ impl RegisterResponse for ClientMockApp {
     ) {
     }
 
+    /// Handles a Read Single Input Register response. Not used in this example.
     fn read_single_input_register_response(
         &mut self,
         _txn_id: u16,
@@ -84,6 +88,7 @@ impl RegisterResponse for ClientMockApp {
         _value: u16,
     ) {
     }
+    /// Handles a Write Multiple Registers response. Not used in this example.
     fn write_multiple_registers_response(
         &mut self,
         _txn_id: u16,
@@ -92,6 +97,7 @@ impl RegisterResponse for ClientMockApp {
         _quantity: u16,
     ) {
     }
+    /// Handles a Read/Write Multiple Registers response. Not used in this example.
     fn read_write_multiple_registers_response(
         &mut self,
         _txn_id: u16,
@@ -99,6 +105,7 @@ impl RegisterResponse for ClientMockApp {
         _registers: &Registers,
     ) {
     }
+    /// Handles a Read Single Register response. Not used in this example.
     fn read_single_register_response(
         &mut self,
         _txn_id: u16,
@@ -107,6 +114,7 @@ impl RegisterResponse for ClientMockApp {
         _value: u16,
     ) {
     }
+    /// Handles a Read Single Holding Register response. Not used in this example.
     fn read_single_holding_register_response(
         &mut self,
         _txn_id: u16,
@@ -115,6 +123,7 @@ impl RegisterResponse for ClientMockApp {
         _value: u16,
     ) {
     }
+    /// Handles a Mask Write Register response. Not used in this example.
     fn mask_write_register_response(&mut self, _txn_id: u16, _unit_id: u8) {}
 }
 
@@ -133,6 +142,7 @@ impl FifoQueueResponse for ClientMockApp {
     }
 }
 
+/// Handles Discrete Input responses. Not used in this example.
 impl DiscreteInputResponse for ClientMockApp {
     fn read_discrete_inputs_response(
         &mut self,
@@ -143,6 +153,7 @@ impl DiscreteInputResponse for ClientMockApp {
     ) {
     }
 
+    /// Handles a Read Single Discrete Input response. Not used in this example.
     fn read_single_discrete_input_response(
         &mut self,
         _txn_id: u16,
@@ -177,6 +188,7 @@ impl FileRecordResponse for ClientMockApp {
 }
 
 impl DiagnosticsResponse for ClientMockApp {
+    /// Handles a Read Device Identification response. Not used in this example.
     fn read_device_identification_response(
         &self,
         _txn_id: u16,
@@ -185,6 +197,7 @@ impl DiagnosticsResponse for ClientMockApp {
     ) {
     }
 
+    /// Handles an Encapsulated Interface Transport response. Not used in this example.
     fn encapsulated_interface_transport_response(
         &self,
         _txn_id: u16,
@@ -193,7 +206,9 @@ impl DiagnosticsResponse for ClientMockApp {
         _data: &[u8],
     ) {
     }
+    /// Handles a Diagnostics response. Not used in this example.
     fn diagnostics_response(&self, _txn_id: u16, _unit_id: u8, _sub_function: u16, _data: &[u16]) {}
+    // Handles a Get Comm Event Counter response. Not used in this example.
     fn get_comm_event_counter_response(
         &self,
         _txn_id: u16,
@@ -201,7 +216,9 @@ impl DiagnosticsResponse for ClientMockApp {
         _status: u16,
         _event_count: u16,
     ) {
+        // Handles a Get Comm Event Counter response. Not used in this example.
     }
+    /// Handles a Get Comm Event Log response. Not used in this example.
     fn get_comm_event_log_response(
         &self,
         _txn_id: u16,
@@ -211,6 +228,7 @@ impl DiagnosticsResponse for ClientMockApp {
         _message_count: u16,
         _events: &[u8],
     ) {
+        // Handles a Get Comm Event Log response. Not used in this example.
     }
     fn read_exception_status_response(&self, _txn_id: u16, _unit_id: u8, _status: u8) {}
     fn report_server_id_response(&self, _txn_id: u16, _unit_id: u8, _data: &[u8]) {}

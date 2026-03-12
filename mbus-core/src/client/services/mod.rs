@@ -1,3 +1,21 @@
+//! # Modbus Client Services Module
+//!
+//! This module provides the core orchestration logic for a Modbus client. It acts as the
+//! bridge between the high-level application logic and the low-level transport protocols.
+//!
+//! ## Key Components
+//! - [`ClientServices`]: The main entry point for sending Modbus requests. It manages
+//!   transaction state, handles timeouts, and performs automatic retries.
+//! - [`ExpectedResponse`]: A state tracking mechanism that maps outgoing requests to
+//!   incoming responses using Transaction IDs (for TCP) or FIFO ordering (for Serial).
+//! - Sub-services: Specialized modules (coils, registers, etc.) that handle the
+//!   serialization and deserialization of specific Modbus function codes.
+//!
+//! ## Features
+//! - Supports both TCP and Serial (RTU/ASCII) transport types.
+//! - Generic over `TRANSPORT` and `APP` traits for maximum flexibility in different environments.
+//! - Fixed-capacity response tracking using `heapless` for `no_std` compatibility.
+
 use heapless::Vec;
 
 use crate::{
@@ -35,14 +53,20 @@ enum ExpectedResponseType {
     Undefined,
     /// Expected response for a Read Coils request, includes metadata to validate the response.
     ReadCoils {
+        /// The quantity of coils expected in the response.
         expected_quantity: u16,
+        /// The starting address of the coils read.
         from_address: u16,
+        /// Indicates if the original request was for a single coil.
         single_read: bool,
     },
     /// Expected response for a Read Discrete Inputs request, includes metadata to validate the response.
     ReadDiscreteInputs {
+        /// The quantity of discrete inputs expected in the response.
         expected_quantity: u16,
+        /// The starting address of the discrete inputs read.
         from_address: u16,
+        /// Indicates if the original request was for a single discrete input.
         single_read: bool,
     },
     /// Expected response for a Write Single Coil request, includes metadata to validate the response.
@@ -51,29 +75,40 @@ enum ExpectedResponseType {
     WriteMultipleCoils { address: u16, quantity: u16 },
     /// Expected response for a Read Holding Registers request, includes metadata to validate the response.
     ReadHoldingRegisters {
+        /// The quantity of holding registers expected in the response.
         expected_quantity: u16,
+        /// The starting address of the holding registers read.
         from_address: u16,
+        /// Indicates if the original request was for a single holding register.
         single_read: bool,
     },
     /// Expected response for a Read Input Registers request, includes metadata to validate the response.
     ReadInputRegisters {
+        /// The quantity of input registers expected in the response.
         expected_quantity: u16,
+        /// The starting address of the input registers read.
         from_address: u16,
+        /// Indicates if the original request was for a single input register.
         single_read: bool,
     },
     /// Expected response for a Write Single Register request, includes metadata to validate the response.
     WriteSingleRegister { address: u16, value: u16 },
     /// Expected response for a Write Multiple Registers request, includes metadata to validate the response.
     WriteMultipleRegisters { address: u16, quantity: u16 },
-    /// Expected response for a Read/Write Multiple Registers request.
+    /// Expected response for a Read/Write Multiple Registers request, includes metadata to validate the response.
     ReadWriteMultipleRegisters {
+        /// The starting address of the registers to read.
         read_address: u16,
+        /// The quantity of registers to read.
         read_quantity: u16,
     },
     /// Expected response for a Mask Write Register request.
     MaskWriteRegister {
+        /// The address of the register to mask write.
         address: u16,
+        /// The AND mask used in the request.
         and_mask: u16,
+        /// The OR mask used in the request.
         or_mask: u16,
     },
     /// Expected response for a Read FIFO Queue request.

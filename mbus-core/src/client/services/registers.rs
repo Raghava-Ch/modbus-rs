@@ -1,3 +1,19 @@
+//! Modbus Registers Service Module
+//!
+//! This module provides the necessary structures and logic to handle Modbus operations
+//! related to Holding and Input Registers.
+//!
+//! It includes functionality for:
+//! - Reading holding registers (FC 0x03) and input registers (FC 0x04).
+//! - Writing single registers (FC 0x06) and multiple registers (FC 0x10).
+//! - Atomic Read/Write of multiple registers (FC 0x17).
+//! - Masking bits in a single register (FC 0x16).
+//! - Validating and parsing response PDUs from Modbus servers.
+//!
+//! This module is designed for `no_std` environments using `heapless` collections,
+//! ensuring memory safety and predictability for embedded systems.
+
+
 use crate::{
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
@@ -59,6 +75,7 @@ impl Registers {
     }
 }
 
+/// Provides operations for creating and parsing Modbus Register request/response PDUs.
 #[derive(Debug, Clone)]
 pub struct RegisterService;
 
@@ -155,6 +172,7 @@ impl RegisterService {
         common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
+    /// Handles a Write Single Register response.
     pub fn handle_write_single_register_rsp(
         &self,
         function_code: FunctionCode,
@@ -256,6 +274,7 @@ pub struct RegReqPdu {}
 /// - Mask write register (FC 0x16)
 /// Each method validates the input parameters and constructs a PDU with the appropriate function code and data payload for the specified operation.
 impl RegReqPdu {
+    /// Creates a Modbus PDU for a Read Holding Registers (FC 0x03) request.
     pub fn read_holding_registers_request(address: u16, quantity: u16) -> Result<Pdu, MbusError> {
         if !(1..=125).contains(&quantity) {
             return Err(MbusError::InvalidPduLength);
@@ -302,6 +321,7 @@ impl RegReqPdu {
         Ok(Pdu::new(FunctionCode::WriteSingleRegister, data_vec, 4))
     }
 
+    /// Creates a Modbus PDU for a Write Multiple Registers (FC 0x10) request.
     pub fn write_multiple_registers_request(
         address: u16,
         quantity: u16,
@@ -342,6 +362,7 @@ impl RegReqPdu {
         ))
     }
 
+    /// Creates a Modbus PDU for a Read/Write Multiple Registers (FC 0x17) request.
     pub fn read_write_multiple_registers_request(
         read_address: u16,
         read_quantity: u16,
@@ -390,6 +411,7 @@ impl RegReqPdu {
         ))
     }
 
+    /// Creates a Modbus PDU for a Mask Write Register (FC 0x16) request.
     pub fn mask_write_register_request(
         address: u16,
         and_mask: u16,
@@ -411,6 +433,7 @@ impl RegReqPdu {
 
     // --- Parsing Methods ---
 
+    /// Parses the response PDU for a Read Holding Registers (FC 0x03) response.
     pub fn parse_read_holding_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -422,6 +445,7 @@ impl RegReqPdu {
         )
     }
 
+    /// Parses the response PDU for a Read Input Registers (FC 0x04) response.
     pub fn parse_read_input_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -468,6 +492,7 @@ impl RegReqPdu {
         Ok(values)
     }
 
+    /// Parses the response PDU for a Write Single Register (FC 0x06) response.
     pub fn parse_write_single_register_response(
         pdu: &Pdu,
         expected_address: u16,
@@ -492,6 +517,7 @@ impl RegReqPdu {
         Ok(())
     }
 
+    /// Parses the response PDU for a Write Multiple Registers (FC 0x10) response.
     pub fn parse_write_multiple_registers_response(
         pdu: &Pdu,
         expected_address: u16,
@@ -516,6 +542,7 @@ impl RegReqPdu {
         Ok(())
     }
 
+    /// Parses the response PDU for a Read/Write Multiple Registers (FC 0x17) response.
     pub fn parse_read_write_multiple_registers_response(
         pdu: &Pdu,
         expected_read_quantity: u16,
@@ -527,6 +554,7 @@ impl RegReqPdu {
         )
     }
 
+    /// Parses the response PDU for a Mask Write Register (FC 0x16) response.
     pub fn parse_mask_write_register_response(
         pdu: &Pdu,
         expected_address: u16,

@@ -1,5 +1,19 @@
+
+//! Modbus Error Module
+//!
+//! This module defines the centralized error handling for the Modbus stack.
+//! It provides the [`MbusError`] enum, which covers a wide range of error conditions
+//! including protocol-specific exceptions, parsing failures, transport-layer issues,
+//! and buffer management errors.
+//!
+//! The error types are designed to be compatible with `no_std` environments while
+//! providing descriptive error messages through the `Display` trait implementation.
+//!
+//! Modbus Specification Reference: V1.1b3, Section 7 (MODBUS Exception Responses).
+
 use core::fmt;
 
+/// Represents a Modbus error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MbusError {
     /// An error occurred while parsing the Modbus ADU.
