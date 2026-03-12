@@ -1,7 +1,14 @@
 use mbus_core::{
-    app::{CoilResponse, Coils, DiscreteInputResponse, FifoQueueResponse, DiagnosticsResponse, FileRecordResponse, RegisterResponse, RequestErrorNotifier},
-    client::services::{diagnostics::{DeviceIdentificationResponse}, discrete_inputs::DiscreteInputs, fifo::FifoQueue, file_record::SubRequestParams, registers::Registers},
+    app::{
+        CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
+        FileRecordResponse, RegisterResponse, RequestErrorNotifier,
+    },
+    client::services::{
+        diagnostics::DeviceIdentificationResponse, discrete_inputs::DiscreteInputs,
+        fifo::FifoQueue, file_record::SubRequestParams, registers::Registers,
+    },
     errors::MbusError,
+    function_codes::public::EncapsulatedInterfaceType,
     transport::TimeKeeper,
 };
 use std::cell::RefCell;
@@ -15,6 +22,9 @@ pub struct MockApp {
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, u8, u16, u16)>>,
     pub received_discrete_input_responses: RefCell<Vec<(u16, u8, DiscreteInputs, u16)>>,
     pub received_read_device_id_responses: RefCell<Vec<(u16, u8, DeviceIdentificationResponse)>>,
+    pub received_encapsulated_interface_transport_responses:
+        RefCell<Vec<(u16, u8, EncapsulatedInterfaceType, Vec<u8>)>>,
+    pub failed_requests: RefCell<Vec<(u16, u8, MbusError)>>,
 }
 
 impl CoilResponse for MockApp {
@@ -57,9 +67,12 @@ impl DiscreteInputResponse for MockApp {
         inputs: &DiscreteInputs,
         quantity: u16,
     ) {
-        self.received_discrete_input_responses
-            .borrow_mut()
-            .push((txn_id, unit_id, inputs.clone(), quantity));
+        self.received_discrete_input_responses.borrow_mut().push((
+            txn_id,
+            unit_id,
+            inputs.clone(),
+            quantity,
+        ));
     }
 
     fn read_single_discrete_input_response(
@@ -79,8 +92,10 @@ impl DiscreteInputResponse for MockApp {
 }
 
 impl RequestErrorNotifier for MockApp {
-    fn request_failed(&self, _txn_id: u16, _unit_id: u8, _error: MbusError) {
-        // In a real application, this would log the error or update some state.
+    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+        self.failed_requests
+            .borrow_mut()
+            .push((txn_id, unit_id, error));
     }
 }
 
@@ -175,9 +190,13 @@ impl TimeKeeper for MockApp {
     }
 }
 
-
 impl FileRecordResponse for MockApp {
-    fn read_file_record_response(&mut self, _txn_id: u16, _unit_id: u8, _data: &[SubRequestParams]) {
+    fn read_file_record_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _data: &[SubRequestParams],
+    ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
     fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
@@ -192,6 +211,48 @@ impl DiagnosticsResponse for MockApp {
         unit_id: u8,
         response: &DeviceIdentificationResponse,
     ) {
-        self.received_read_device_id_responses.borrow_mut().push((txn_id, unit_id, response.clone()));
+        self.received_read_device_id_responses.borrow_mut().push((
+            txn_id,
+            unit_id,
+            response.clone(),
+        ));
     }
+
+    fn encapsulated_interface_transport_response(
+        &self,
+        txn_id: u16,
+        unit_id: u8,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+    ) {
+        self.received_encapsulated_interface_transport_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, mei_type, data.to_vec()));
+    }
+
+    fn read_exception_status_response(&self, _txn_id: u16, _unit_id: u8, _status: u8) {}
+
+    fn diagnostics_response(&self, _txn_id: u16, _unit_id: u8, _sub_function: u16, _data: &[u16]) {}
+
+    fn get_comm_event_counter_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _status: u16,
+        _event_count: u16,
+    ) {
+    }
+
+    fn get_comm_event_log_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: u8,
+        _status: u16,
+        _event_count: u16,
+        _message_count: u16,
+        _events: &[u8],
+    ) {
+    }
+
+    fn report_server_id_response(&self, _txn_id: u16, _unit_id: u8, _data: &[u8]) {}
 }

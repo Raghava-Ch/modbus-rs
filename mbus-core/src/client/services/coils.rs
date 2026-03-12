@@ -1,6 +1,4 @@
-use crate::data_unit::common::{
-    AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu,
-};
+use crate::data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu};
 use crate::errors::MbusError;
 use crate::function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN};
 use crate::transport::TransportType;
@@ -94,24 +92,8 @@ impl CoilService {
         quantity: u16,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        let pdu = CoilReqPdu::read_coils_request(address, quantity);
-        let pdu_request = pdu?; // Unwrap the PDU request here
-        let adu = match transport_type {
-            // adu is a ModbusMessage, not raw bytes yet
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                // Construct Modbus TCP ADU
-                // The length field is PDU length (FC + Data) + 1 (Unit ID)
-                let pdu_bytes_len = pdu_request.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu_request)
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
-                todo!("Serial transport is not yet implemented for Read Coils.")
-            }
-        };
-
-        Ok(adu.to_bytes()?)
+        let pdu = CoilReqPdu::read_coils_request(address, quantity)?;
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write Single Coil request to a Modbus server and registers the expected response.
@@ -132,21 +114,7 @@ impl CoilService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = CoilReqPdu::write_single_coil_request(address, value)?;
-        let adu = match transport_type {
-            // adu is a ModbusMessage, not raw bytes yet
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                // Construct Modbus TCP ADU
-                // The length field is PDU length (FC + Data) + 1 (Unit ID)
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu)
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
-                todo!("Serial transport is not yet implemented for Write Single Coil.")
-            }
-        };
-        Ok(adu.to_bytes()?)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write Multiple Coils request to a Modbus server and registers the expected response.
@@ -160,21 +128,7 @@ impl CoilService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = CoilReqPdu::write_multiple_coils_request(address, quantity, values)?;
-        let adu = match transport_type {
-            // adu is a ModbusMessage, not raw bytes yet
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                // Construct Modbus TCP ADU
-                // The length field is PDU length (FC + Data) + 1 (Unit ID)
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu)
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                // For Modbus RTU/ASCII, the PDU is the ADU (with framing handled by transport)
-                todo!("Serial transport is not yet implemented for Write Multiple Coils.")
-            }
-        };
-        Ok(adu.to_bytes()?)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Handles a Read Coils response by invoking the appropriate application callback.

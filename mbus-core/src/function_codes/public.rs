@@ -300,6 +300,12 @@ pub enum EncapsulatedInterfaceType {
     ReadDeviceIdentification = 0x0E,
 }
 
+impl Into<u8> for EncapsulatedInterfaceType {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
 impl TryFrom<u8> for EncapsulatedInterfaceType {
     type Error = MbusError;
 

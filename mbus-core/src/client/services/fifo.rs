@@ -1,7 +1,7 @@
 use heapless::Vec;
 
 use crate::{
-    data_unit::common::{AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN},
     transport::TransportType,
@@ -47,16 +47,7 @@ impl FifoQueueService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = FifoQueueReqPdu::read_fifo_queue_request(address)?;
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport ADU construction not implemented")
-            }
-        }
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Handles a Read FIFO Queue response.

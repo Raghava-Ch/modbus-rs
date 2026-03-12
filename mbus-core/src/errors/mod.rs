@@ -22,6 +22,8 @@ pub enum MbusError {
     ReservedSubFunction(u16),
     /// The PDU length is invalid
     InvalidPduLength,
+    /// The ADU length is invalid
+    InvalidAduLength,
     /// Connection failed
     ConnectionFailed,
     /// Connection closed
@@ -46,6 +48,16 @@ pub enum MbusError {
     FileReadPduOverflow,
     /// An unexpected response was received that does not match the expected response type for the transaction.
     UnexpectedResponse,
+    /// The transport is invalid for the requested operation
+    InvalidTransport,
+    /// Invalid slave address
+    InvalidSlaveAddress,
+    /// Checksum error
+    ChecksumError,
+    /// Invalid configuration
+    InvalidConfiguration,
+    /// Invalid number of expected responses
+    InvalidNumOfExpectedRsps,
 }
 
 impl fmt::Display for MbusError {
@@ -90,6 +102,9 @@ impl fmt::Display for MbusError {
             MbusError::InvalidPduLength => {
                 write!(f, "Invalid PDU length: The PDU length is invalid")
             }
+            MbusError::InvalidAduLength => {
+                write!(f, "Invalid ADU length: The ADU length is invalid")
+            }
             MbusError::ConnectionFailed => write!(f, "Connection failed"),
             MbusError::ConnectionClosed => write!(f, "Connection closed"),
             MbusError::BufferTooSmall => {
@@ -116,6 +131,26 @@ impl fmt::Display for MbusError {
             MbusError::UnexpectedResponse => write!(
                 f,
                 "Unexpected response: An unexpected response was received"
+            ),
+            MbusError::InvalidTransport => write!(
+                f,
+                "Invalid transport: The transport is invalid for the requested operation"
+            ),
+            MbusError::InvalidSlaveAddress => write!(
+                f,
+                "Invalid slave address: The provided slave address is invalid"
+            ),
+            MbusError::ChecksumError => write!(
+                f,
+                "Checksum error: The received frame has an invalid checksum"
+            ),
+            MbusError::InvalidConfiguration => write!(
+                f,
+                "Invalid configuration: The provided configuration is invalid"
+            ),
+            MbusError::InvalidNumOfExpectedRsps => write!(
+                f,
+                "Invalid number of expected responses: The number of expected responses is invalid"
             ),
         }
     }

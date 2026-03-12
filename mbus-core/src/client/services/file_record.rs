@@ -1,7 +1,7 @@
 use heapless::Vec;
 
 use crate::{
-    data_unit::common::{AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN},
     transport::TransportType,
@@ -9,9 +9,9 @@ use crate::{
 
 /// Maximum number of sub-requests allowed in a single PDU (35).
 pub const MAX_SUB_REQUESTS_PER_PDU: usize = 35;
-/// Byte count is 1 byte for each sub-request 
+/// Byte count is 1 byte for each sub-request
 ///(reference type + file number + record number + record length) + 1 byte for the byte count itself
-const SUB_REQ_PARAM_BYTE_LEN: usize = 6 + 1; 
+const SUB_REQ_PARAM_BYTE_LEN: usize = 6 + 1;
 /// The reference type for file record requests (0x06).
 const FILE_RECORD_REF_TYPE: u8 = 0x06;
 
@@ -145,7 +145,6 @@ impl SubRequest {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct FileRecordService;
 
@@ -164,7 +163,7 @@ impl FileRecordService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = FileRecordReqPdu::read_file_record_request(sub_request)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write File Record request.
@@ -176,27 +175,7 @@ impl FileRecordService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = FileRecordReqPdu::write_file_record_request(sub_request)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
-    }
-
-    /// Helper to build the ADU from PDU based on transport type.
-    fn build_adu(
-        &self,
-        txn_id: u16,
-        unit_id: u8,
-        pdu: Pdu,
-        transport_type: TransportType,
-    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport ADU construction not implemented")
-            }
-        }
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Handles a Read File Record response.
@@ -235,7 +214,9 @@ impl PduDataBytes for SubRequest {
 
         for param in &self.params {
             // Reference Type: 1 byte (0x06)
-            bytes.push(FILE_RECORD_REF_TYPE).map_err(|_| MbusError::BufferTooSmall)?;
+            bytes
+                .push(FILE_RECORD_REF_TYPE)
+                .map_err(|_| MbusError::BufferTooSmall)?;
             bytes
                 .extend_from_slice(&param.file_number.to_be_bytes())
                 .map_err(|_| MbusError::BufferLenMissmatch)?;
@@ -342,12 +323,14 @@ impl FileRecordReqPdu {
             }
 
             let params = SubRequestParams {
-                file_number: 0, // Not returned in response
+                file_number: 0,   // Not returned in response
                 record_number: 0, // Not returned in response
                 record_length: values.len() as u16,
                 record_data: Some(values),
             };
-            sub_requests.push(params).map_err(|_| MbusError::BufferTooSmall)?;
+            sub_requests
+                .push(params)
+                .map_err(|_| MbusError::BufferTooSmall)?;
 
             // Move to next sub-response: current index + 1 (len byte) + length of sub-response
             i += 1 + file_resp_len;
@@ -398,7 +381,7 @@ impl FileRecordReqPdu {
         }
 
         Ok(())
-    } 
+    }
 }
 
 #[cfg(test)]
@@ -517,9 +500,7 @@ mod tests {
         data.push(0x1234).unwrap();
 
         // Record length says 2, but data has 1
-        let err = sub_req
-            .add_write_sub_request(4, 1, 2, data)
-            .unwrap_err();
+        let err = sub_req.add_write_sub_request(4, 1, 2, data).unwrap_err();
         assert_eq!(err, MbusError::BufferLenMissmatch);
     }
 
@@ -620,9 +601,7 @@ mod tests {
         let mut data = Vec::new();
         data.push(0x1122).unwrap();
         // Write 1 register (0x1122) to File 4, Record 1
-        sub_req
-            .add_write_sub_request(4, 1, 1, data)
-            .unwrap();
+        sub_req.add_write_sub_request(4, 1, 1, data).unwrap();
 
         let txn_id = 0x5678;
         let unit_id = 0x02;
@@ -657,7 +636,10 @@ mod tests {
         assert!(result.is_ok());
         let sub_reqs = result.unwrap();
         assert_eq!(sub_reqs.len(), 1);
-        assert_eq!(sub_reqs[0].record_data.as_ref().unwrap().as_slice(), &[0xAABB]);
+        assert_eq!(
+            sub_reqs[0].record_data.as_ref().unwrap().as_slice(),
+            &[0xAABB]
+        );
     }
 
     /// Test case: `handle_read_file_record_rsp` returns error for incorrect function code.
@@ -668,5 +650,4 @@ mod tests {
         let result = service.handle_read_file_record_rsp(FunctionCode::ReadCoils, &pdu);
         assert_eq!(result.unwrap_err(), MbusError::InvalidFunctionCode);
     }
-    
 }

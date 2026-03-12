@@ -1,5 +1,5 @@
 use crate::{
-    data_unit::common::{AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN},
     transport::TransportType,
@@ -78,7 +78,7 @@ impl RegisterService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = RegReqPdu::read_holding_registers_request(address, quantity)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Read Input Registers request.
@@ -91,7 +91,7 @@ impl RegisterService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = RegReqPdu::read_input_registers_request(address, quantity)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write Single Register request.
@@ -104,7 +104,7 @@ impl RegisterService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = RegReqPdu::write_single_register_request(address, value)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write Multiple Registers request.
@@ -118,7 +118,7 @@ impl RegisterService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = RegReqPdu::write_multiple_registers_request(address, quantity, values)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Read/Write Multiple Registers request.
@@ -138,7 +138,7 @@ impl RegisterService {
             write_address,
             write_values,
         )?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Mask Write Register request.
@@ -152,27 +152,7 @@ impl RegisterService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = RegReqPdu::mask_write_register_request(address, and_mask, or_mask)?;
-        self.build_adu(txn_id, unit_id, pdu, transport_type)
-    }
-
-    /// Helper to build the ADU from PDU based on transport type.
-    fn build_adu(
-        &self,
-        txn_id: u16,
-        unit_id: u8,
-        pdu: Pdu,
-        transport_type: TransportType,
-    ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport ADU construction not implemented")
-            }
-        }
+        common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     pub fn handle_write_single_register_rsp(

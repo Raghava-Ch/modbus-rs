@@ -1,5 +1,5 @@
 use crate::{
-    data_unit::common::{AdditionalAddress, MAX_ADU_FRAME_LEN, MbapHeader, ModbusMessage, Pdu},
+    data_unit::common::{MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::{FunctionCode, MAX_PDU_DATA_LEN},
     transport::TransportType,
@@ -81,16 +81,7 @@ impl DiscreteInputService {
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = DiscreteInputReqPdu::read_discrete_inputs_request(address, quantity)?;
-        match transport_type {
-            TransportType::StdTcp | TransportType::CustomTcp => {
-                let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
-                let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-                ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
-            }
-            TransportType::StdSerial | TransportType::CustomSerial => {
-                todo!("Serial transport is not yet implemented for Read Discrete Inputs.")
-            }
-        }
+        crate::data_unit::common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     pub fn handle_read_discrete_inputs_rsp(
@@ -135,11 +126,7 @@ impl DiscreteInputReqPdu {
             .extend_from_slice(&quantity.to_be_bytes())
             .map_err(|_| MbusError::BufferLenMissmatch)?;
 
-        Ok(Pdu::new(
-            FunctionCode::ReadDiscreteInputs,
-            data_vec,
-            4,
-        ))
+        Ok(Pdu::new(FunctionCode::ReadDiscreteInputs, data_vec, 4))
     }
 
     /// Parses a Modbus PDU response for a Read Discrete Inputs (FC 0x02) request.
@@ -298,10 +285,7 @@ mod tests {
         assert_eq!(inputs.value(203).unwrap(), true);
 
         // Boundary checks
-        assert_eq!(
-            inputs.value(195).unwrap_err(),
-            MbusError::InvalidAddress
-        ); // Too low
+        assert_eq!(inputs.value(195).unwrap_err(), MbusError::InvalidAddress); // Too low
         assert_eq!(
             inputs.value(196 + 22).unwrap_err(),
             MbusError::InvalidAddress
@@ -336,12 +320,8 @@ mod tests {
             2,
         );
 
-        let result = service.handle_read_discrete_inputs_rsp(
-            FunctionCode::ReadDiscreteInputs,
-            &pdu,
-            8,
-            0,
-        );
+        let result =
+            service.handle_read_discrete_inputs_rsp(FunctionCode::ReadDiscreteInputs, &pdu, 8, 0);
 
         assert!(result.is_ok());
         let inputs = result.unwrap();
@@ -353,8 +333,7 @@ mod tests {
     fn test_service_handle_response_wrong_fc() {
         let service = DiscreteInputService::new();
         let pdu = Pdu::new(FunctionCode::ReadCoils, Vec::new(), 0);
-        let result =
-            service.handle_read_discrete_inputs_rsp(FunctionCode::ReadCoils, &pdu, 8, 0);
+        let result = service.handle_read_discrete_inputs_rsp(FunctionCode::ReadCoils, &pdu, 8, 0);
         assert_eq!(result.unwrap_err(), MbusError::InvalidFunctionCode);
     }
 }

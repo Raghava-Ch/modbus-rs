@@ -3,6 +3,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
@@ -55,6 +56,11 @@ impl Transport for StdTcpTransport {
     /// # Returns
     /// `Ok(())` if the connection is successfully established, or an error otherwise.
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
+        let config = match config {
+            ModbusConfig::Tcp(c) => c,
+            _ => return Err(TransportError::Unexpected),
+        };
+
         let connection_timeout = Duration::from_millis(config.connection_timeout_ms as u64);
         let response_timeout = Duration::from_millis(config.response_timeout_ms as u64);
 
@@ -152,7 +158,7 @@ impl Transport for StdTcpTransport {
     ///
     /// # Returns
     /// `Ok(Vec<u8, 260>)` containing the received ADU, or an error otherwise.
-    fn recv(&mut self) -> Result<Vec<u8, 260>, Self::Error> {
+    fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
         let stream = self
             .stream
             .as_mut()
@@ -235,7 +241,7 @@ impl StdTcpTransport {
 #[cfg(test)]
 mod tests {
     use super::super::std_transport::StdTcpTransport;
-    use mbus_core::transport::{ModbusConfig, Transport, TransportError};
+    use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, Transport, TransportError};
     use std::io::{self, Read, Write};
     use std::net::TcpListener;
     use std::sync::mpsc;
@@ -279,7 +285,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -291,7 +297,7 @@ mod tests {
     #[test]
     fn test_connect_failure_invalid_addr() {
         let mut transport = StdTcpTransport::new();
-        let config = ModbusConfig::new("invalid-address", 502).unwrap(); // Invalid host, but short enough
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("invalid-address", 502).unwrap()); // Invalid host, but short enough
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -308,7 +314,7 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         drop(listener); // Explicitly drop the listener to ensure the port is free
         let mut transport = StdTcpTransport::new();
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         let result = transport.connect(&config);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
@@ -331,7 +337,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
         assert!(transport.is_connected());
 
@@ -364,7 +370,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
         let result = transport.send(&test_data);
@@ -404,7 +410,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
 
         transport.connect(&config).unwrap();
 
@@ -443,7 +449,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -474,7 +480,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -507,7 +513,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -535,8 +541,9 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(); // Very short timeout for test
         let port = get_host_port(addr);
-        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
-        config.response_timeout_ms = 100; // Set short response timeout for test
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        tcp_config.response_timeout_ms = 100; // Set short response timeout for test
+        let config = ModbusConfig::Tcp(tcp_config);
         transport.connect(&config).unwrap();
 
         let result = transport.recv();
@@ -565,7 +572,7 @@ mod tests {
         let port = get_host_port(addr);
         assert!(!transport.is_connected());
 
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
         assert!(transport.is_connected());
@@ -643,8 +650,9 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(); // Custom timeout
         let port = get_host_port(addr);
-        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
-        config.connection_timeout_ms = 500; // Set custom connection timeout for test
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        tcp_config.connection_timeout_ms = 500; // Set custom connection timeout for test
+        let config = ModbusConfig::Tcp(tcp_config);
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -668,8 +676,9 @@ mod tests {
 
         let mut transport = StdTcpTransport::new(); // No timeout
         let port = get_host_port(addr);
-        let mut config = ModbusConfig::new("127.0.0.1", port).unwrap();
-        config.connection_timeout_ms = 500; // No timeout
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", port).unwrap();
+        tcp_config.connection_timeout_ms = 500; // No timeout
+        let config = ModbusConfig::Tcp(tcp_config);
         let result = transport.connect(&config);
         assert!(result.is_ok());
         assert!(transport.is_connected());
@@ -695,7 +704,7 @@ mod tests {
 
         let mut transport = StdTcpTransport::new();
         let port = get_host_port(addr);
-        let config = ModbusConfig::new("127.0.0.1", port).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
 
         transport.connect(&config).unwrap();
 
@@ -733,7 +742,7 @@ mod tests {
         rx.recv().expect("Failed to receive server ready signal");
 
         let mut transport = StdTcpTransport::new();
-        let config = ModbusConfig::new("127.0.0.1", addr.port()).unwrap();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap());
 
         let result = transport.connect(&config);
         assert!(
