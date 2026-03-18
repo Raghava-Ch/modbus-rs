@@ -1,10 +1,13 @@
 use crate::mock_app::MockApp;
 use anyhow::Result;
 use mbus_core;
-use mbus_core::client::services::ClientServices;
-use mbus_core::device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode};
+use modbus_client::services::{
+    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
+    ClientServices,
+};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
 use mbus_tcp::StdTcpTransport;
 use std::io::{Read, Write};
@@ -29,7 +32,7 @@ fn test_client_services_read_single_coil() -> Result<()> {
                     0x00, 0x02, // Transaction ID (2)
                     0x00, 0x00, // Protocol ID (0 = Modbus)
                     0x00, 0x06, // Length (6 bytes follow)
-                    0x00,       // Unit ID (0)
+                    0x01,       // Unit ID (1)
                     0x01,       // Function Code (1 = Read Coils)
                     0x00, 0x01, // Starting Address (1)
                     0x00, 0x01, // Quantity of Coils (1)
@@ -42,7 +45,7 @@ fn test_client_services_read_single_coil() -> Result<()> {
                 0x00, 0x02, // Transaction ID
                 0x00, 0x00, // Protocol ID
                 0x00, 0x04, // Length
-                0x00,       // Unit ID
+                0x01,       // Unit ID
                 0x01,       // Function Code (Read Coils)
                 0x01,       // Byte Count
                 0x01,       // Coil Status (Bit 0 = 1)
@@ -60,7 +63,7 @@ fn test_client_services_read_single_coil() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 2;
-    let unit_id = 0;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 1;
     client.read_single_coil(txn_id, unit_id, address).unwrap(); // Send read request
     client.poll(); // Process read response
@@ -128,7 +131,7 @@ fn test_client_services_read_coils() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 5;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 
@@ -201,7 +204,7 @@ fn test_client_services_write_single_coil() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 3;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let value = true;
 
@@ -274,7 +277,7 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 4;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 0;
     let quantity = 10;
     let values = [
@@ -332,7 +335,7 @@ fn test_client_services_server_exception_response() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 1;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 
@@ -375,7 +378,7 @@ fn test_client_services_server_closes_connection() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 1;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 
@@ -418,7 +421,7 @@ fn test_client_services_server_timeout() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 1;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 
@@ -485,7 +488,7 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 6;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 8;
 
@@ -558,7 +561,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 7;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 5;
 
     client
@@ -638,7 +641,7 @@ fn test_client_services_read_device_identification() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 8;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let read_code = ReadDeviceIdCode::Basic;
     let object_id = ObjectId::from(0x00);
 
@@ -719,11 +722,11 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
 
     // Send Request 1
     client
-        .read_device_identification(10, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+        .read_device_identification(10, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))
         .unwrap();
     // Send Request 2
     client
-        .read_device_identification(11, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+        .read_device_identification(11, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))
         .unwrap();
 
     // Poll twice to process both responses
@@ -790,7 +793,7 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     let txn_id = 100;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let mei_type = EncapsulatedInterfaceType::CanopenGeneralReference;
     let data = [0xAA, 0xBB];
 
@@ -848,7 +851,7 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
     client
         .encapsulated_interface_transport(
             101,
-            1,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
             EncapsulatedInterfaceType::CanopenGeneralReference,
             &[0x01],
         )
@@ -903,7 +906,7 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
     client
         .encapsulated_interface_transport(
             102,
-            1,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
             EncapsulatedInterfaceType::CanopenGeneralReference,
             &[0x01],
         )

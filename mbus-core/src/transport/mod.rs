@@ -1,11 +1,11 @@
 //! Modbus Transport Layer Module
 //!
-//! This module defines the abstractions and configurations required for different 
+//! This module defines the abstractions and configurations required for different
 //! Modbus transport protocols, including TCP/IP and Serial (RTU/ASCII).
 //!
 //! It provides:
 //! - The [`Transport`] trait: A common interface for sending and receiving Modbus ADUs.
-//! - Configuration structures ([`ModbusTcpConfig`], [`ModbusSerialConfig`]): Parameters 
+//! - Configuration structures ([`ModbusTcpConfig`], [`ModbusSerialConfig`]): Parameters
 //!   for establishing connections.
 //! - Error handling: [`TransportError`] for mapping low-level I/O issues to Modbus-specific contexts.
 //! - Checksum utilities: CRC16 and LRC via the [`checksum`] submodule.
@@ -13,9 +13,7 @@
 pub mod checksum;
 use core::str::FromStr;
 
-use crate::{
-    data_unit::common::MAX_ADU_FRAME_LEN, errors::MbusError,
-};
+use crate::{data_unit::common::MAX_ADU_FRAME_LEN, errors::MbusError};
 use heapless::{String, Vec};
 
 /// The default TCP port for Modbus communication.
@@ -28,6 +26,15 @@ pub enum ModbusConfig {
     Tcp(ModbusTcpConfig),
     /// Configuration for Modbus Serial (RTU or ASCII).
     Serial(ModbusSerialConfig),
+}
+
+impl ModbusConfig {
+    pub fn retry_attempts(&self) -> u8 {
+        match self {
+            ModbusConfig::Tcp(config) => config.retry_attempts,
+            ModbusConfig::Serial(config) => config.retry_attempts,
+        }
+    }
 }
 
 /// Parity bit configuration for serial communication.
@@ -66,7 +73,7 @@ pub enum BaudRate {
 
 #[derive(Debug)]
 /// Configuration parameters for establishing a Modbus Serial connection.
-pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64>{
+pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64> {
     /// The path to the serial port (e.g., "/dev/ttyUSB0" or "COM1").
     pub port_path: heapless::String<PORT_PATH_LEN>,
     /// The serial mode to use (RTU or ASCII).
@@ -94,7 +101,6 @@ pub struct ModbusTcpConfig {
     pub port: u16,
 
     // Optional parameters for connection management (can be set to default values if not needed)
-    
     /// Timeout for establishing a connection in milliseconds
     pub connection_timeout_ms: u32,
     /// Timeout for waiting for a response in milliseconds
@@ -195,6 +201,22 @@ pub enum TransportType {
     CustomSerial(SerialMode),
 }
 
+impl TransportType {
+    pub fn is_tcp_type(&self) -> bool {
+        match self {
+            TransportType::StdTcp | TransportType::CustomTcp => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_serial_type(&self) -> bool {
+        match self {
+            TransportType::StdSerial(_) | TransportType::CustomSerial(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl From<TransportError> for MbusError {
     fn from(err: TransportError) -> Self {
         match err {
@@ -206,6 +228,73 @@ impl From<TransportError> for MbusError {
             TransportError::Unexpected => MbusError::Unexpected,
             TransportError::InvalidConfiguration => MbusError::InvalidConfiguration,
         }
+    }
+}
+
+/// A wrapper type representing either a Modbus TCP Unit Identifier or a Serial Slave Address.
+///
+/// In Modbus TCP, this is the Unit ID (typically 1 byte).
+/// In Modbus RTU/ASCII, this is the Slave Address (1-247).
+/// 1 to 247: These addresses are used for individual slave devices. Each device on the network must have a unique address within this range.
+/// 0: This address is reserved for broadcast messages, meaning a request sent with Unit ID 0 will be processed by all slave devices, but no response is returned.
+/// 248 to 255: These addresses are reserved and should not be used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnitIdOrSlaveAddr(u8);
+
+impl UnitIdOrSlaveAddr {
+    /// Creates a new `SlaveAddress` instance.
+    pub fn new(address: u8) -> Result<Self, MbusError> {
+        if !(1..=247).contains(&address) {
+            return Err(MbusError::InvalidSlaveAddress);
+        }
+        Ok(Self(address))
+    }
+
+    /// Returns the raw `u8` value of the slave address.
+    ///
+    /// # Returns
+    /// The `u8` value representing the slave address.
+    pub fn get(&self) -> u8 {
+        self.0
+    }
+
+    /// Provides a default value for initialization or error states.
+    /// 
+    /// # Warning
+    /// This returns `255`, which is outside the valid Modbus slave address range (1-247).
+    /// It is intended to be used as a sentinel value to represent an uninitialized or 
+    /// invalid address state that must be handled by the application logic. This value should not be sent over the wire.
+    pub fn default() -> Self {
+        // 255 is in the reserved range (248-255) and serves as a safe 
+        // "Null" or "Error" marker in this context.
+        Self(255)
+    }
+}
+
+pub trait UidSaddrFrom {
+    fn from_u8(uid_saddr: u8) -> Self;
+}
+
+impl UidSaddrFrom for UnitIdOrSlaveAddr {
+    fn from_u8(value: u8) -> Self {
+        UnitIdOrSlaveAddr::new(value).unwrap_or(Self::default())
+    }
+}
+
+impl Into<u8> for UnitIdOrSlaveAddr {
+    fn into(self) -> u8 {
+        self.get()
+    }
+}
+
+/// Implementation of `TryFrom` to allow safe conversion from a raw `u8`
+/// to a validated `UnitIdOrSlaveAddr`.
+impl TryFrom<u8> for UnitIdOrSlaveAddr {
+    type Error = MbusError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        // Delegates to the new() constructor which performs range validation (1-247)
+        UnitIdOrSlaveAddr::new(value)
     }
 }
 

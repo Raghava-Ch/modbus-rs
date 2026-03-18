@@ -1,17 +1,9 @@
 use anyhow::Result;
-use mbus_core::app::{
-    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
-    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
-};
-use mbus_core::client::services::ClientServices;
-use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
-use mbus_core::client::services::discrete_inputs::DiscreteInputs;
-use mbus_core::client::services::fifo::FifoQueue;
-use mbus_core::client::services::file_record::SubRequestParams;
-use mbus_core::client::services::registers::Registers;
+use modbus_client::app::{RegisterResponse, RequestErrorNotifier};
+use modbus_client::services::{ClientServices, register::Registers};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper,
+    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use mbus_serial::StdSerialTransport;
 use std::env;
@@ -24,21 +16,21 @@ use std::time::{Duration, SystemTime};
 struct ClientApp;
 
 impl RegisterResponse for ClientApp {
-    fn read_input_register_response(&mut self, txn_id: u16, unit_id: u8, registers: &Registers) {
+    fn read_input_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, registers: &Registers) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Input Registers (Addr: {}, Qty: {}): {:?}",
             txn_id,
-            unit_id,
+            unit_id.get(),
             registers.from_address(),
             registers.quantity(),
             registers.values()
         );
     }
-    fn read_holding_registers_response(&mut self, txn_id: u16, unit_id: u8, registers: &Registers) {
+    fn read_holding_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, registers: &Registers) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Holding Registers (Addr: {}, Qty: {}): {:?}",
             txn_id,
-            unit_id,
+            unit_id.get(),
             registers.from_address(),
             registers.quantity(),
             registers.values()
@@ -47,71 +39,53 @@ impl RegisterResponse for ClientApp {
     fn write_single_register_response(
         &mut self,
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         value: u16,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Single Register (Addr: {}, Value: {}) Success",
-            txn_id, unit_id, address, value
+            txn_id, unit_id.get(), address, value
         );
     }
     fn write_multiple_registers_response(
         &mut self,
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         starting_address: u16,
         quantity: u16,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Multiple Registers (Addr: {}, Qty: {}) Success",
-            txn_id, unit_id, starting_address, quantity
+            txn_id, unit_id.get(), starting_address, quantity
         );
     }
     fn read_write_multiple_registers_response(
         &mut self,
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         registers: &Registers,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read/Write Multiple Registers: {:?}",
             txn_id,
-            unit_id,
+            unit_id.get(),
             registers.values()
         );
     }
-    fn read_single_input_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    fn read_single_holding_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    fn mask_write_register_response(&mut self, _: u16, _: u8) {}
-    fn read_single_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
+    fn read_single_input_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn read_single_holding_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn mask_write_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr) {}
+    fn read_single_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
-// Implement other required traits with empty/default logic
-impl CoilResponse for ClientApp {
-    fn read_coils_response(&self, _: u16, _: u8, _: &Coils, _: u16) {}
-    fn read_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    fn write_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    fn write_multiple_coils_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-}
 impl RequestErrorNotifier for ClientApp {
-    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id, error
+            txn_id, unit_id.get(), error
         );
     }
-}
-impl FifoQueueResponse for ClientApp {
-    fn read_fifo_queue_response(&mut self, _: u16, _: u8, _: &FifoQueue) {}
-}
-impl FileRecordResponse for ClientApp {
-    fn read_file_record_response(&mut self, _: u16, _: u8, _: &[SubRequestParams]) {}
-    fn write_file_record_response(&mut self, _: u16, _: u8) {}
-}
-impl DiscreteInputResponse for ClientApp {
-    fn read_discrete_inputs_response(&mut self, _: u16, _: u8, _: &DiscreteInputs, _: u16) {}
-    fn read_single_discrete_input_response(&mut self, _: u16, _: u8, _: u16, _: bool) {}
 }
 impl TimeKeeper for ClientApp {
     fn current_millis(&self) -> u64 {
@@ -120,23 +94,6 @@ impl TimeKeeper for ClientApp {
             .unwrap()
             .as_millis() as u64
     }
-}
-impl DiagnosticsResponse for ClientApp {
-    fn read_device_identification_response(&self, _: u16, _: u8, _: &DeviceIdentificationResponse) {
-    }
-    fn encapsulated_interface_transport_response(
-        &self,
-        _: u16,
-        _: u8,
-        _: mbus_core::function_codes::public::EncapsulatedInterfaceType,
-        _: &[u8],
-    ) {
-    }
-    fn diagnostics_response(&self, _: u16, _: u8, _: u16, _: &[u16]) {}
-    fn get_comm_event_counter_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&self, _: u16, _: u8, _: u16, _: u16, _: u16, _: &[u8]) {}
-    fn read_exception_status_response(&self, _: u16, _: u8, _: u8) {}
-    fn report_server_id_response(&self, _: u16, _: u8, _: &[u8]) {}
 }
 
 fn main() -> Result<()> {
@@ -173,10 +130,12 @@ fn main() -> Result<()> {
     let mut client =
         ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
+    let target_unit_id = UnitIdOrSlaveAddr::try_from(unit_id_val).unwrap();
+
     // 1. Write Single Register
     println!("\n[1] Sending Write Single Register (Addr: 10, Val: 1234)...");
     client
-        .write_single_register(1, unit_id_val, 10, 1234)
+        .write_single_register(1, target_unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -186,7 +145,7 @@ fn main() -> Result<()> {
     // 2. Read Holding Registers
     println!("\n[2] Sending Read Holding Registers (Addr: 10, Qty: 5)...");
     client
-        .read_holding_registers(2, unit_id_val, 10, 5)
+        .read_holding_registers(2, target_unit_id, 10, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -196,7 +155,7 @@ fn main() -> Result<()> {
     // 3. Read Input Registers
     println!("\n[3] Sending Read Input Registers (Addr: 0, Qty: 5)...");
     client
-        .read_input_registers(3, unit_id_val, 0, 5)
+        .read_input_registers(3, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

@@ -13,3 +13,22 @@ description.workspace = true
 [dependencies]
 heapless = { workspace = true }
 bitfields = { workspace = true }
+
+[features]
+# By default, all Modbus client services are enabled.
+# To reduce binary size or exclude unused functionality,
+# disable default features and enable only the services you need.
+default = [
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
+coils = []
+registers = []
+discrete-inputs = []
+fifo = []
+file-record = []
+diagnostics = []

@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 mbus-tcp = { path = "../mbus-tcp" }
 mbus-core = { path = "../mbus-core" }
+modbus-client = { path = "../modbus-client" }
+
 heapless = "0.8.0"
 anyhow = "1.0.86"
 tokio = { version = "1", features = ["full"] }

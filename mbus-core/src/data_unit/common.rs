@@ -10,13 +10,10 @@
 //! memory management to ensure deterministic behavior in embedded systems.
 
 /// Maximum data length for a PDU (excluding function code)
-
 use crate::data_unit::tcp::ModbusTcpMessage;
 use crate::errors::MbusError;
-use crate::function_codes::public::{
-    DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode,
-};
-use crate::transport::{SerialMode, TransportType, checksum};
+use crate::function_codes::public::FunctionCode;
+use crate::transport::{SerialMode, TransportType, UnitIdOrSlaveAddr, checksum};
 use heapless::Vec;
 
 /// Maximum data length for a PDU (excluding function code)
@@ -28,43 +25,6 @@ pub const MAX_ADU_FRAME_LEN: usize = 513;
 
 const ERROR_BIT_MASK: u8 = 0x80;
 const FUNCTION_CODE_MASK: u8 = 0x7F;
-
-/// Represents sub-function codes used by specific Modbus function codes.
-///
-/// This union allows treating the sub-code as either a 16-bit Diagnostic sub-function
-/// (FC 0x08) or an 8-bit Encapsulated Interface type (FC 0x2B).
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum SubCode {
-    /// Sub-function code for Diagnostics (Function Code 0x08).
-    DiagnosticSubFunction(DiagnosticSubFunction),
-    /// MEI type for Encapsulated Interface Transport (Function Code 0x2B).
-    EncapsulatedInterfaceType(EncapsulatedInterfaceType),
-}
-
-/// A structure combining a sub-function code with its associated payload.
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub struct SubCodeBytes {
-    /// The specific sub-function or MEI type.
-    pub sub_code: SubCode,
-    /// The remaining payload bytes for the sub-function.
-    pub bytes: [u8; MAX_PDU_DATA_LEN - 2], // Subtract 2 bytes for the sub-code itself
-}
-
-/// The data payload of a Modbus PDU.
-///
-/// This union provides different views of the PDU data depending on whether
-/// the function code uses sub-function codes or raw byte arrays.
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-#[repr(C)]
-pub enum Data {
-    /// Raw byte access to the data field (Max 252 bytes).
-    Bytes([u8; MAX_PDU_DATA_LEN]),
-    /// Structured access for functions using sub-codes (e.g., FC 0x08, 0x2B).
-    SubCodeBytes(SubCodeBytes),
-}
 
 /// Modbus Protocol Data Unit (PDU).
 ///
@@ -174,6 +134,29 @@ impl ModbusMessage {
     /// Accessor for the additional address.
     pub fn additional_address(&self) -> &AdditionalAddress {
         &self.additional_address
+    }
+
+    pub fn pdu(&self) -> &Pdu {
+        &self.pdu
+    }
+
+    pub fn unit_id_or_slave_addr(&self) -> UnitIdOrSlaveAddr {
+        match self.additional_address {
+            AdditionalAddress::MbapHeader(header) => {
+                UnitIdOrSlaveAddr::try_from(header.unit_id).unwrap_or(UnitIdOrSlaveAddr::default())
+            }
+            AdditionalAddress::SlaveAddress(slave_address) => {
+                UnitIdOrSlaveAddr::try_from(slave_address.address())
+                    .unwrap_or(UnitIdOrSlaveAddr::default())
+            }
+        }
+    }
+
+    pub fn transaction_id(&self) -> u16 {
+        match self.additional_address {
+            AdditionalAddress::MbapHeader(header) => header.transaction_id,
+            AdditionalAddress::SlaveAddress(_) => 0,
+        }
     }
 
     /// Accessor for the function code from the PDU.
@@ -408,8 +391,7 @@ pub fn compile_adu_frame(
             let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
             ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
         }
-        TransportType::StdSerial(serial_mode)
-        | TransportType::CustomSerial(serial_mode) => {
+        TransportType::StdSerial(serial_mode) | TransportType::CustomSerial(serial_mode) => {
             let slave_address = SlaveAddress(unit_id);
             let adu_bytes = match serial_mode {
                 SerialMode::Rtu => {
@@ -460,8 +442,7 @@ pub fn decompile_adu_frame(
                 }
             }
         }
-        TransportType::StdSerial(serial_mode)
-        | TransportType::CustomSerial(serial_mode) => {
+        TransportType::StdSerial(serial_mode) | TransportType::CustomSerial(serial_mode) => {
             match serial_mode {
                 SerialMode::Rtu => {
                     // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
@@ -959,33 +940,24 @@ mod tests {
     fn test_decompile_adu_frame_rtu_valid() {
         // Frame: 01 03 00 6B 00 03 74 17 (CRC LE)
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17];
-        let msg = decompile_adu_frame(
-            &frame,
-            TransportType::StdSerial(SerialMode::Rtu),
-        )
-        .expect("Valid RTU");
+        let msg = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
+            .expect("Valid RTU");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
     #[test]
     fn test_decompile_adu_frame_rtu_too_short() {
         let frame = [0x01, 0x02, 0x03];
-        let err = decompile_adu_frame(
-            &frame,
-            TransportType::StdSerial(SerialMode::Rtu),
-        )
-        .expect_err("Too short");
+        let err = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
+            .expect_err("Too short");
         assert_eq!(err, MbusError::InvalidAduLength);
     }
 
     #[test]
     fn test_decompile_adu_frame_rtu_crc_mismatch() {
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x00, 0x00]; // Bad CRC
-        let err = decompile_adu_frame(
-            &frame,
-            TransportType::StdSerial(SerialMode::Rtu),
-        )
-        .expect_err("CRC mismatch");
+        let err = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
+            .expect_err("CRC mismatch");
         assert_eq!(err, MbusError::ChecksumError);
     }
 
@@ -993,66 +965,48 @@ mod tests {
     fn test_decompile_adu_frame_ascii_valid() {
         // :010300000001FB\r\n
         let frame = b":010300000001FB\r\n";
-        let msg = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect("Valid ASCII");
+        let msg = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect("Valid ASCII");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
     #[test]
     fn test_decompile_adu_frame_ascii_too_short() {
         let frame = b":123\r\n";
-        let err = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("Too short");
+        let err = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("Too short");
         assert_eq!(err, MbusError::InvalidAduLength);
     }
 
     #[test]
     fn test_decompile_adu_frame_ascii_missing_start() {
         let frame = b"010300000001FB\r\n";
-        let err = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("Missing start");
+        let err = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("Missing start");
         assert_eq!(err, MbusError::BasicParseError);
     }
 
     #[test]
     fn test_decompile_adu_frame_ascii_missing_end() {
         let frame = b":010300000001FB\r"; // Missing \n
-        let err = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("Missing end");
+        let err = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("Missing end");
         assert_eq!(err, MbusError::BasicParseError);
     }
 
     #[test]
     fn test_decompile_adu_frame_ascii_odd_hex() {
         let frame = b":010300000001F\r\n"; // Odd length hex
-        let err = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("Odd hex");
+        let err = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("Odd hex");
         assert_eq!(err, MbusError::BasicParseError);
     }
 
     #[test]
     fn test_decompile_adu_frame_ascii_lrc_mismatch() {
         let frame = b":01030000000100\r\n"; // LRC 00 is wrong, should be FB
-        let err = decompile_adu_frame(
-            frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("LRC mismatch");
+        let err = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("LRC mismatch");
         assert_eq!(err, MbusError::ChecksumError);
     }
 
@@ -1065,11 +1019,8 @@ mod tests {
             frame.extend_from_slice(b"00").unwrap();
         }
         frame.extend_from_slice(b"\r\n").unwrap();
-        let err = decompile_adu_frame(
-            &frame,
-            TransportType::StdSerial(SerialMode::Ascii),
-        )
-        .expect_err("Buffer overflow");
+        let err = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect_err("Buffer overflow");
         assert_eq!(err, MbusError::BufferTooSmall);
     }
 }

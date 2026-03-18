@@ -520,7 +520,6 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err == TransportError::BufferTooSmall || err == TransportError::ConnectionClosed);
 
-
         server_handle.join().unwrap();
     }
 

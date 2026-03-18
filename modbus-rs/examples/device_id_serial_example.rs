@@ -1,18 +1,12 @@
 use anyhow::Result;
-use mbus_core::app::{
-    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
-    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
+use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
+use modbus_client::services::{
+    ClientServices,
+    diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode},
 };
-use mbus_core::client::services::ClientServices;
-use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
-use mbus_core::client::services::discrete_inputs::DiscreteInputs;
-use mbus_core::client::services::fifo::FifoQueue;
-use mbus_core::client::services::file_record::SubRequestParams;
-use mbus_core::client::services::registers::Registers;
-use mbus_core::device_identification::{ObjectId, ReadDeviceIdCode};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper,
+    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use mbus_serial::StdSerialTransport;
 use std::env;
@@ -28,12 +22,12 @@ impl DiagnosticsResponse for ClientApp {
     fn read_device_identification_response(
         &self,
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         response: &DeviceIdentificationResponse,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Device Identification",
-            txn_id, unit_id
+            txn_id, unit_id.get()
         );
         println!("  Conformity Level: {:?}", response.conformity_level);
         println!("  More Follows: {}", response.more_follows);
@@ -56,73 +50,25 @@ impl DiagnosticsResponse for ClientApp {
     fn encapsulated_interface_transport_response(
         &self,
         _: u16,
-        _: u8,
+        _: UnitIdOrSlaveAddr,
         _: mbus_core::function_codes::public::EncapsulatedInterfaceType,
         _: &[u8],
     ) {
     }
-    fn diagnostics_response(&self, _: u16, _: u8, _: u16, _: &[u16]) {}
-    fn get_comm_event_counter_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&self, _: u16, _: u8, _: u16, _: u16, _: u16, _: &[u8]) {}
-    fn read_exception_status_response(&self, _: u16, _: u8, _: u8) {}
-    fn report_server_id_response(&self, _: u16, _: u8, _: &[u8]) {}
+    fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: &[u16]) {}
+    fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn get_comm_event_log_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16, _: u16, _: &[u8]) {}
+    fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
+    fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
 }
 
-// Implement other required traits with empty/default logic
-// as they are not used in this example.
-impl CoilResponse for ClientApp {
-    /// Handles a Read Coils response. Not used in this example.
-    fn read_coils_response(&self, _: u16, _: u8, _: &Coils, _: u16) {}
-    /// Handles a Read Single Coil response. Not used in this example.
-    fn read_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    /// Handles a Write Single Coil response. Not used in this example.
-    fn write_single_coil_response(&self, _: u16, _: u8, _: u16, _: bool) {}
-    /// Handles a Write Multiple Coils response. Not used in this example.
-    fn write_multiple_coils_response(&self, _: u16, _: u8, _: u16, _: u16) {}
-}
-impl RegisterResponse for ClientApp {
-    /// Handles a Read Input Registers response. Not used in this example.
-    fn read_input_register_response(&mut self, _: u16, _: u8, _: &Registers) {}
-    /// Handles a Read Single Input Register response. Not used in this example.
-    fn read_single_input_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    /// Handles a Read Holding Registers response. Not used in this example.
-    fn read_holding_registers_response(&mut self, _: u16, _: u8, _: &Registers) {}
-    /// Handles a Read Single Holding Register response. Not used in this example.
-    fn read_single_holding_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    /// Handles a Write Single Register response. Not used in this example.
-    fn write_single_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    /// Handles a Write Multiple Registers response. Not used in this example.
-    fn write_multiple_registers_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-    /// Handles a Read/Write Multiple Registers response. Not used in this example.
-    fn read_write_multiple_registers_response(&mut self, _: u16, _: u8, _: &Registers) {}
-    /// Handles a Mask Write Register response. Not used in this example.
-    fn mask_write_register_response(&mut self, _: u16, _: u8) {}
-    /// Handles a Read Single Register response. Not used in this example.
-    fn read_single_register_response(&mut self, _: u16, _: u8, _: u16, _: u16) {}
-}
 impl RequestErrorNotifier for ClientApp {
-    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id, error
+            txn_id, unit_id.get(), error
         );
     }
-}
-impl FifoQueueResponse for ClientApp {
-    /// Handles a Read FIFO Queue response. Not used in this example.
-    fn read_fifo_queue_response(&mut self, _: u16, _: u8, _: &FifoQueue) {}
-}
-impl FileRecordResponse for ClientApp {
-    /// Handles a Read File Record response. Not used in this example.
-    fn read_file_record_response(&mut self, _: u16, _: u8, _: &[SubRequestParams]) {}
-    /// Handles a Write File Record response. Not used in this example.
-    fn write_file_record_response(&mut self, _: u16, _: u8) {}
-}
-impl DiscreteInputResponse for ClientApp {
-    /// Handles a Read Discrete Inputs response. Not used in this example.
-    fn read_discrete_inputs_response(&mut self, _: u16, _: u8, _: &DiscreteInputs, _: u16) {}
-    /// Handles a Read Single Discrete Input response. Not used in this example.
-    fn read_single_discrete_input_response(&mut self, _: u16, _: u8, _: u16, _: bool) {}
 }
 impl TimeKeeper for ClientApp {
     fn current_millis(&self) -> u64 {
@@ -167,12 +113,14 @@ fn main() -> Result<()> {
     let mut client =
         ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
+    let target_unit_id = UnitIdOrSlaveAddr::try_from(unit_id_val).unwrap();
+
     // 1. Read Basic Device Identification
     println!("\n[1] Sending Read Device Identification (Basic)...");
     client
         .read_device_identification(
             1,
-            unit_id_val,
+            target_unit_id,
             ReadDeviceIdCode::Basic,
             ObjectId::from(0x00),
         )

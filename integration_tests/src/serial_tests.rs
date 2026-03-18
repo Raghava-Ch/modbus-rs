@@ -1,12 +1,15 @@
 use anyhow::Result;
 use heapless::Vec as HVec;
+use modbus_client::services::{
+    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
+    ClientServices,
+};
 use mbus_core::{
-    client::services::ClientServices,
-    data_unit::common::{MAX_ADU_FRAME_LEN},
-    device_identification::{ConformityLevel, ObjectId, ReadDeviceIdCode},
+    data_unit::common::MAX_ADU_FRAME_LEN,
     transport::{
         BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
         TransportType,
+        UnitIdOrSlaveAddr,
     },
 };
 use std::{cell::RefCell, rc::Rc, str::FromStr};
@@ -97,7 +100,7 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     let txn_id = 1;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 
@@ -162,7 +165,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
-    client.write_single_coil(2, 1, 10, true)?;
+    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
 
     // Verify Sent Frame (RTU)
     // ADU: [UnitID(1)] [FC(5)] [Addr(00 0A)] [Val(FF 00)] [CRC(AC 38)]
@@ -182,7 +185,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
     let received = client.app.received_write_single_coil_responses.borrow();
     assert_eq!(received.len(), 1);
-    assert_eq!(received[0], (2, 1, 10, true));
+    assert_eq!(received[0], (2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true));
 
     Ok(())
 }
@@ -209,7 +212,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
-    client.read_device_identification(3, 1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))?;
+    client.read_device_identification(3, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))?;
 
     // Verify Sent Frame (RTU)
     // ADU: [Unit(1)] [FC(2B)] [MEI(0E)] [Code(01)] [Obj(00)] [CRC(70 77)]
@@ -236,7 +239,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
     assert_eq!(received.len(), 1);
     let (txn_id, unit_id, resp) = &received[0];
     assert_eq!(*txn_id, 3);
-    assert_eq!(*unit_id, 1);
+    assert_eq!(*unit_id, UnitIdOrSlaveAddr::try_from(1).unwrap());
     assert_eq!(
         resp.conformity_level,
         ConformityLevel::BasicStreamAndIndividual
@@ -271,7 +274,7 @@ fn test_serial_read_coils_ascii() -> Result<()> {
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
     let txn_id = 4;
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
     let quantity = 3;
 

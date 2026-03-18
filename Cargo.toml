@@ -1,5 +1,12 @@
 [workspace]
-members = ["mbus-core", "mbus-serial", "mbus-tcp", "modbus-rs", "integration_tests"]
+members = [
+    "mbus-core",
+    "mbus-serial",
+    "mbus-tcp",
+    "modbus-rs",
+    "integration_tests",
+    "modbus-client",
+]
 resolver = "2"
 
 [workspace.package]
@@ -16,9 +23,10 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [workspace.dependencies]
 # Shared dependencies across workspace
-mbus-core ={ path = "./mbus-core" }
-mbus-serial ={ path = "./mbus-serial" }
-mbus-tcp ={ path = "./mbus-tcp" }
+mbus-core = { path = "./mbus-core" }
+mbus-serial = { path = "./mbus-serial" }
+mbus-tcp = { path = "./mbus-tcp" }
+modbus-client = { path = "./modbus-client" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }

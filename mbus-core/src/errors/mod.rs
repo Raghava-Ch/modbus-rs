@@ -1,4 +1,3 @@
-
 //! Modbus Error Module
 //!
 //! This module defines the centralized error handling for the Modbus stack.
@@ -72,6 +71,22 @@ pub enum MbusError {
     InvalidConfiguration,
     /// Invalid number of expected responses
     InvalidNumOfExpectedRsps,
+    /// Invalid data length
+    InvalidDataLen,
+    /// Invalid Quantity
+    InvalidQuantity,
+    /// Invalid Value
+    InvalidValue,
+    /// Invalid Masking value
+    InvalidAndMask,
+    /// Invalid Masking value
+    InvalidOrMask,
+    /// Invalid byte count
+    InvalidByteCount,
+    /// Invalid device identification
+    InvalidDeviceIdentification,
+    /// Invalid device id code
+    InvalidDeviceIdCode,
 }
 
 impl fmt::Display for MbusError {
@@ -165,6 +180,31 @@ impl fmt::Display for MbusError {
             MbusError::InvalidNumOfExpectedRsps => write!(
                 f,
                 "Invalid number of expected responses: The number of expected responses is invalid"
+            ),
+            MbusError::InvalidDataLen => write!(
+                f,
+                "Invalid data length: The provided data length is invalid"
+            ),
+            MbusError::InvalidQuantity => {
+                write!(f, "Invalid quantity: The provided quantity is invalid")
+            }
+            MbusError::InvalidValue => write!(f, "Invalid value: The provided value is invalid"),
+            MbusError::InvalidAndMask => {
+                write!(f, "Invalid AND mask: The provided AND mask is invalid")
+            }
+            MbusError::InvalidOrMask => {
+                write!(f, "Invalid OR mask: The provided OR mask is invalid")
+            }
+            MbusError::InvalidByteCount => {
+                write!(f, "Invalid byte count: The provided byte count is invalid")
+            }
+            MbusError::InvalidDeviceIdentification => write!(
+                f,
+                "Invalid device identification: The provided device identification is invalid"
+            ),
+            MbusError::InvalidDeviceIdCode => write!(
+                f,
+                "Invalid device ID code: The provided device ID code is invalid"
             ),
         }
     }
