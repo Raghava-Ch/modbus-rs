@@ -189,7 +189,7 @@ impl fmt::Display for TransportError {
 impl core::error::Error for TransportError {}
 
 /// An enumeration to specify the type of transport to use.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportType {
     /// Standard library TCP transport implementation.
     StdTcp,
@@ -244,10 +244,23 @@ pub struct UnitIdOrSlaveAddr(u8);
 impl UnitIdOrSlaveAddr {
     /// Creates a new `SlaveAddress` instance.
     pub fn new(address: u8) -> Result<Self, MbusError> {
-        if !(1..=247).contains(&address) {
+        if (1..=247).contains(&address) {
+            return Ok(Self(address));
+        }
+
+        if 0 == address {
             return Err(MbusError::InvalidSlaveAddress);
         }
-        Ok(Self(address))
+        Err(MbusError::InvalidSlaveAddress)
+    }
+
+    pub fn new_broadcast_address() -> Self {
+        Self(0)
+    }
+
+    /// Returns `true` if the address is the Modbus broadcast address (0).
+    pub fn is_broadcast(&self) -> bool {
+        self.0 == 0
     }
 
     /// Returns the raw `u8` value of the slave address.
@@ -259,13 +272,13 @@ impl UnitIdOrSlaveAddr {
     }
 
     /// Provides a default value for initialization or error states.
-    /// 
+    ///
     /// # Warning
     /// This returns `255`, which is outside the valid Modbus slave address range (1-247).
-    /// It is intended to be used as a sentinel value to represent an uninitialized or 
+    /// It is intended to be used as a sentinel value to represent an uninitialized or
     /// invalid address state that must be handled by the application logic. This value should not be sent over the wire.
     pub fn default() -> Self {
-        // 255 is in the reserved range (248-255) and serves as a safe 
+        // 255 is in the reserved range (248-255) and serves as a safe
         // "Null" or "Error" marker in this context.
         Self(255)
     }

@@ -5,8 +5,10 @@ use crate::{
         file_record::{self, SubRequest},
     },
 };
-use mbus_core::{errors::MbusError,
-transport::{Transport, UnitIdOrSlaveAddr},};
+use mbus_core::{
+    errors::MbusError,
+    transport::{Transport, UnitIdOrSlaveAddr},
+};
 
 impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
@@ -25,6 +27,9 @@ where
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         sub_request: &SubRequest,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
         let frame = file_record::service::ServiceBuilder::read_file_record(
             txn_id,
             unit_id_slave_addr.get(),
@@ -62,6 +67,10 @@ where
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         sub_request: &SubRequest,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast for Write File Record
+        }
+
         let frame = file_record::service::ServiceBuilder::write_file_record(
             txn_id,
             unit_id_slave_addr.get(),

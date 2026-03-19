@@ -6,57 +6,114 @@
 //!
 //! Each trait corresponds to a functional group of Modbus services (Coils, Registers, etc.).
 
-use crate::services::{coil::Coils, diagnostic::DeviceIdentificationResponse, discrete_input::DiscreteInputs, fifo_queue::FifoQueue, file_record::SubRequestParams, register::Registers};
+use crate::services::{
+    coil::Coils, diagnostic::DeviceIdentificationResponse, discrete_input::DiscreteInputs,
+    fifo_queue::FifoQueue, file_record::SubRequestParams, register::Registers,
+};
 use mbus_core::{
-    errors::MbusError,
-    function_codes::public::EncapsulatedInterfaceType, transport::UnitIdOrSlaveAddr,
+    errors::MbusError, function_codes::public::EncapsulatedInterfaceType,
+    transport::UnitIdOrSlaveAddr,
 };
 
 /// Trait for receiving notifications about failed Modbus requests.
 ///
 /// This is used to handle timeouts, connection issues, or Modbus exception responses
-/// at the application level.
+/// at the application level, allowing the implementor to gracefully recover or alert the user.
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
-    /// This method will be called when a Modbus request related to service request fails,
-    /// allowing application developers to log the error,
-    /// update their application state, or take other appropriate actions based on the error information.
+    /// 
+    /// This method is invoked when:
+    /// - A Modbus device returns an Exception response.
+    /// - The request times out (after all configured retries are exhausted).
+    /// - The underlying transport connection drops.
+    ///
+    /// # Parameters
+    /// - `txn_id`: The transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `error`: The specific `MbusError` detailing why the request failed.
     fn request_failed(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, error: MbusError);
 }
 
 /// Trait defining the expected response handling for coil-related Modbus operations.
+/// 
 /// Implementors of this trait to deliver the responses to the application layer,
 /// allowing application developers to process the coil data and update their application state accordingly.
 pub trait CoilResponse {
     /// Handles a Read Coils response by invoking the appropriate application callback with the coil states.
-    /// This method will be called when a Read Coils response is received,
-    /// and application developers can use it to process the coil data and update their application state accordingly.
-    fn read_coils_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, coils: &Coils, quantity: u16);
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `coils`: A wrapper containing the bit-packed boolean statuses of the requested coils.
+    /// - `quantity`: The number of coils that were successfully read.
+    fn read_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        coils: &Coils,
+        quantity: u16,
+    );
 
-    /// Handles a Write Single Coil response by invoking the appropriate application callback with the address and
-    /// value of the coil that was written.
-    /// This method will be called when a Write Single Coil response is received,
-    fn read_single_coil_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, address: u16, value: bool);
+    /// Handles a Read Single Coil response.
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `address`: The exact address of the single coil that was read.
+    /// - `value`: The boolean state of the coil (`true` = ON, `false` = OFF).
+    fn read_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    );
 
-    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
-    /// and quantity of the coils that were written.
-    /// This method will be called when a Write Multiple Coils response is received,
-    /// and application developers can use it to update their application state accordingly.
-    fn write_single_coil_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, address: u16, value: bool);
+    /// Handles a Write Single Coil response, confirming the state change.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `address`: The address of the coil that was successfully written.
+    /// - `value`: The boolean state applied to the coil (`true` = ON, `false` = OFF).
+    fn write_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    );
 
-    /// Handles a Write Multiple Coils response by invoking the appropriate application callback with the starting address
-    /// and quantity of the coils that were written.
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, address: u16, quantity: u16);
+    /// Handles a Write Multiple Coils response, confirming the bulk state change.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `address`: The starting address where the bulk write began.
+    /// - `quantity`: The total number of consecutive coils updated.
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    );
 }
 
 /// Trait defining the expected response handling for FIFO Queue Modbus operations.
 pub trait FifoQueueResponse {
     /// Handles a Read FIFO Queue response.
+    ///
     /// # Parameters
-    /// `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// `unit_id`: The unit ID of the device that responded.
-    /// `fifo_queue`: A `FifoQueue` struct containing the values of the read FIFO queue.
-    fn read_fifo_queue_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, fifo_queue: &FifoQueue);
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
+    /// - `fifo_queue`: A `FifoQueue` struct containing the values pulled from the queue.
+    fn read_fifo_queue_response(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        fifo_queue: &FifoQueue,
+    );
 }
 
 /// Trait defining the expected response handling for File Record Modbus operations.
@@ -64,11 +121,22 @@ pub trait FileRecordResponse {
     /// Handles a Read File Record response.
     ///
     /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     /// - `data`: A slice containing the sub-request responses. Note that `file_number` and `record_number`
     ///   are not returned by the server in the response PDU and will be set to 0 in the parameters.
-    fn read_file_record_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, data: &[SubRequestParams]);
+    fn read_file_record_response(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        data: &[SubRequestParams],
+    );
 
     /// Handles a Write File Record response, confirming the write was successful.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     fn write_file_record_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr);
 }
 
@@ -82,15 +150,20 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `registers`: A `Registers` struct containing the values of the read input registers.
-    fn read_input_registers_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, registers: &Registers);
+    fn read_input_registers_response(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        registers: &Registers,
+    );
 
     /// Handles a response for a `Read Single Input Register` (FC 0x04) request.
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `address`: The address of the register that was read.
     /// - `value`: The value of the read register.
     fn read_single_input_register_response(
@@ -105,15 +178,20 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `registers`: A `Registers` struct containing the values of the read holding registers.
-    fn read_holding_registers_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, registers: &Registers);
+    fn read_holding_registers_response(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        registers: &Registers,
+    );
 
     /// Handles a response for a `Write Single Register` (FC 0x06) request, confirming a successful write.
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `address`: The address of the register that was written.
     /// - `value`: The value that was written to the register.
     fn write_single_register_response(
@@ -128,7 +206,7 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `starting_address`: The starting address of the registers that were written.
     /// - `quantity`: The number of registers that were written.
     fn write_multiple_registers_response(
@@ -143,7 +221,7 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `registers`: A `Registers` struct containing the values of the registers that were read.
     fn read_write_multiple_registers_response(
         &mut self,
@@ -158,16 +236,22 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `address`: The address of the register that was read.
     /// - `value`: The value of the read register.
-    fn read_single_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, address: u16, value: u16);
+    fn read_single_register_response(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: u16,
+    );
 
     /// Handles a response for a single holding register write request.
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `address`: The address of the register that was written.
     /// - `value`: The value that was written to the register.
     fn read_single_holding_register_response(
@@ -182,7 +266,7 @@ pub trait RegisterResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr);
 }
 
@@ -195,9 +279,9 @@ pub trait DiscreteInputResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `inputs`: A `DiscreteInputs` struct containing the states of the read inputs.
-    /// - `quantity`: The number of inputs that were read.
+    /// - `quantity`: (Deprecated in favor of `inputs.quantity()`) The number of inputs that were read.
     fn read_discrete_inputs_response(
         &mut self,
         txn_id: u16,
@@ -209,7 +293,7 @@ pub trait DiscreteInputResponse {
     ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `address`: The address of the input that was read.
     /// - `value`: The boolean state of the read input.
     fn read_single_discrete_input_response(
@@ -224,12 +308,13 @@ pub trait DiscreteInputResponse {
 /// Trait for handling Diagnostics responses.
 pub trait DiagnosticsResponse {
     /// Called when a Read Device Identification response is received.
-    /// Implementors can use this callback to process the device identification information and update their application state accordingly.
+    /// 
+    /// Implementors can use this callback to process the device identity info (Vendor, Product Code, etc.).
+    /// 
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
-    /// - `response`: A `DeviceIdentificationResponse` struct containing the device identification information returned
-
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
+    /// - `response`: Extracted device identification strings.
     fn read_device_identification_response(
         &self,
         txn_id: u16,
@@ -238,9 +323,10 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a generic Encapsulated Interface Transport response (FC 43) is received.
+    /// 
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
-    /// - `unit_id`: The unit ID of the device that responded.
+    /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     /// - `mei_type`: The MEI type returned in the response.
     /// - `data`: The data payload returned in the response.
     fn encapsulated_interface_transport_response(
@@ -252,12 +338,40 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Read Exception Status response (FC 07) is received.
-    fn read_exception_status_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, status: u8);
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `status`: The 8-bit exception status code returned by the server.
+    fn read_exception_status_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        status: u8,
+    );
 
     /// Called when a Diagnostics response (FC 08) is received.
-    fn diagnostics_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, sub_function: u16, data: &[u16]);
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `sub_function`: The sub-function code confirming the diagnostic test.
+    /// - `data`: Data payload returned by the diagnostic test (e.g., echoed loopback data).
+    fn diagnostics_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        sub_function: u16,
+        data: &[u16],
+    );
 
     /// Called when a Get Comm Event Counter response (FC 11) is received.
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `status`: The status word indicating if the device is busy.
+    /// - `event_count`: The number of successful messages processed by the device.
     fn get_comm_event_counter_response(
         &self,
         txn_id: u16,
@@ -267,6 +381,14 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Get Comm Event Log response (FC 12) is received.
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `status`: The status word indicating device state.
+    /// - `event_count`: Number of successful messages processed.
+    /// - `message_count`: Quantity of messages processed since the last restart.
+    /// - `events`: Raw byte array containing the device's internal event log.
     fn get_comm_event_log_response(
         &self,
         txn_id: u16,
@@ -278,5 +400,15 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Report Server ID response (FC 17) is received.
-    fn report_server_id_response(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, data: &[u8]);
+    /// 
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    /// - `data`: Raw identity/status data provided by the manufacturer.
+    fn report_server_id_response(
+        &self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        data: &[u8],
+    );
 }

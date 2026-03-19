@@ -23,8 +23,9 @@ pub mod fifo_queue;
 pub mod file_record;
 pub mod register;
 
-use heapless::Vec;
+use crate::app::RequestErrorNotifier;
 use diagnostic::ReadDeviceIdCode;
+use heapless::Vec;
 use mbus_core::data_unit::common::{ModbusMessage, SlaveAddress};
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::transport::{UidSaddrFrom, UnitIdOrSlaveAddr};
@@ -33,33 +34,37 @@ use mbus_core::{
     errors::MbusError,
     transport::{ModbusConfig, TimeKeeper, Transport, TransportType},
 };
-use crate::app::RequestErrorNotifier;
 
 type ResponseHandler<T, A, const N: usize> =
     fn(&mut ClientServices<T, A, N>, &ExpectedResponse<T, A, N>, &ModbusMessage);
 
+/// Internal tracking payload for a Single-address operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Single {
     address: u16,
     value: u16,
 }
+/// Internal tracking payload for a Multiple-address/quantity operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Multiple {
     address: u16,
     quantity: u16,
 }
+/// Internal tracking payload for a Masking operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Mask {
     address: u16,
     and_mask: u16,
     or_mask: u16,
 }
+/// Internal tracking payload for a Diagnostic/Encapsulated operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Diag {
     device_id_code: ReadDeviceIdCode,
     encap_type: EncapsulatedInterfaceType,
 }
 
+/// Metadata required to match responses to requests and properly parse the payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OperationMeta {
     Other,
@@ -138,18 +143,30 @@ impl OperationMeta {
     }
 }
 
+/// Represents an outstanding request that the client expects a response for.
+///
+/// # Generic Parameters
+/// * `T` - Transport implementor.
+/// * `A` - Application callbacks implementor.
+/// * `N` - Max concurrent requests supported (Queue capacity).
 #[derive(Debug)]
 pub(crate) struct ExpectedResponse<T, A, const N: usize> {
+    /// The Modbus TCP transaction identifier (0 for serial).
     pub txn_id: u16,
+    /// The destination Modbus Unit ID or Server Address.
     pub unit_id_or_slave_addr: u8,
 
+    /// The fully compiled Application Data Unit to be sent over the wire.
+    /// Retained in memory to allow automatic `retries` without recompiling.
     pub original_adu: Vec<u8, MAX_ADU_FRAME_LEN>,
 
     pub sent_timestamp: u64,
     pub retries_left: u8,
 
+    /// Pointer to the specific module's parser/handler function for this operation.
     pub handler: ResponseHandler<T, A, N>,
 
+    /// Modbus memory context (address/quantity) needed to validate the response.
     pub operation_meta: OperationMeta,
 }
 
@@ -175,7 +192,11 @@ pub struct ClientServices<TRANSPORT, APP, const N: usize = 1> {
     /// A buffer to store the received frame.
     rxed_frame: Vec<u8, MAX_ADU_FRAME_LEN>,
 
+    /// Heapless circular buffer representing the pipelined requests awaiting responses.
     expected_responses: Vec<ExpectedResponse<TRANSPORT, APP, N>, N>,
+
+    /// Cached timestamp of the earliest expected response timeout to avoid O(N) iteration on every poll.
+    next_timeout_check: Option<u64>,
 }
 
 pub trait ClientCommon: RequestErrorNotifier + TimeKeeper {}
@@ -255,17 +276,48 @@ where
         }
 
         // 2. Check for timed-out requests and handle retries for all outstanding requests
+        self.handle_timeouts();
+    }
+
+    /// Evaluates all pending requests to determine if any have exceeded their response timeout.
+    ///
+    /// This method is designed to be efficient:
+    /// 1. It immediately returns if there are no pending requests.
+    /// 2. It utilizes a fast-path cache (`next_timeout_check`) to skip an O(N) linear scan if the nearest
+    ///    timeout in the future hasn't been reached yet.
+    /// 3. If the cache expires, it iterates linearly over `expected_responses` to check the `sent_timestamp`
+    ///    against `current_millis`.
+    /// 4. If a request is timed out and has retries remaining, it automatically retransmits the original ADU
+    ///    via the transport layer. If the re-send fails, it is dropped and reported as `SendFailed`.
+    /// 5. If no retries remain, the request is removed from the pending queue and `NoRetriesLeft` is reported.
+    /// 6. Finally, it recalculates the `next_timeout_check` state to schedule the next evaluation interval.
+    fn handle_timeouts(&mut self) {
+        if self.expected_responses.is_empty() {
+            self.next_timeout_check = None;
+            return;
+        }
+
         let current_millis = self.app.current_millis();
+
+        // Fast-path: Skip O(N) iteration if the earliest timeout has not yet been reached
+        if let Some(check_at) = self.next_timeout_check {
+            if current_millis < check_at {
+                return;
+            }
+        }
+
         let response_timeout_ms = self.response_timeout_ms();
         let expected_responses = &mut self.expected_responses;
         let mut i = 0;
+        let mut new_next_check = u64::MAX;
+
         while i < expected_responses.len() {
             let expected_response = &mut expected_responses[i];
-            if current_millis
+            let elapsed = current_millis
                 .checked_sub(expected_response.sent_timestamp)
-                .unwrap_or(0)
-                > response_timeout_ms
-            {
+                .unwrap_or(0);
+
+            if elapsed > response_timeout_ms {
                 // Request timed out
                 if expected_response.retries_left > 0 {
                     // Retry the request
@@ -273,7 +325,6 @@ where
                     expected_response.sent_timestamp = current_millis;
                     // Re-send the original ADU
                     if let Err(_e) = self.transport.send(&expected_response.original_adu) {
-                        // If re-sending fails
                         // If re-sending fails, treat as a failed request
                         let response = expected_responses.swap_remove(i);
                         self.app.request_failed(
@@ -282,6 +333,11 @@ where
                             MbusError::SendFailed,
                         );
                         continue; // Move to the next item in the (now shorter) vec
+                    }
+
+                    let expires_at = current_millis.saturating_add(response_timeout_ms);
+                    if expires_at < new_next_check {
+                        new_next_check = expires_at;
                     }
                 } else {
                     // No retries left, report timeout to application
@@ -293,9 +349,45 @@ where
                     );
                     continue; // Move to the next item in the (now shorter) vec
                 }
+            } else {
+                // Not yet timed out, recalculate the next check time
+                let expires_at = expected_response
+                    .sent_timestamp
+                    .saturating_add(response_timeout_ms);
+                if expires_at < new_next_check {
+                    new_next_check = expires_at;
+                }
             }
             i += 1;
         }
+
+        if new_next_check != u64::MAX {
+            self.next_timeout_check = Some(new_next_check);
+        } else {
+            self.next_timeout_check = None;
+        }
+    }
+
+    fn add_an_expectation(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        frame: &heapless::Vec<u8, MAX_ADU_FRAME_LEN>,
+        operation_meta: OperationMeta,
+        handler: ResponseHandler<TRANSPORT, APP, N>,
+    ) -> Result<(), MbusError> {
+        self.expected_responses
+            .push(ExpectedResponse {
+                txn_id,
+                unit_id_or_slave_addr: unit_id_slave_addr.get(),
+                original_adu: frame.clone(),
+                sent_timestamp: self.app.current_millis(),
+                retries_left: self.retry_attempts(),
+                handler: handler,
+                operation_meta: operation_meta,
+            })
+            .map_err(|_| MbusError::TooManyRequests)?;
+        Ok(())
     }
 }
 
@@ -327,6 +419,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             rxed_frame: Vec::new(),
             config,
             expected_responses: Vec::new(),
+            next_timeout_check: None,
         })
     }
 
@@ -406,13 +499,13 @@ mod tests {
     use crate::services::file_record::SubRequest;
     use crate::services::file_record::SubRequestParams;
     use crate::services::register::Registers;
+    use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
+    use heapless::Deque;
+    use heapless::Vec;
     use mbus_core::errors::MbusError;
     use mbus_core::function_codes::public::DiagnosticSubFunction;
     use mbus_core::transport::TransportType;
     use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
-    use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
-    use heapless::Deque;
-    use heapless::Vec;
 
     const MOCK_DEQUE_CAPACITY: usize = 10; // Define a capacity for the mock deques
 
@@ -424,6 +517,7 @@ mod tests {
         pub connect_should_fail: bool,
         pub send_should_fail: bool,
         pub is_connected_flag: RefCell<bool>,
+        pub transport_type: Option<TransportType>,
     }
 
     impl Transport for MockTransport {
@@ -469,7 +563,7 @@ mod tests {
         }
 
         fn transport_type(&self) -> TransportType {
-            TransportType::StdTcp
+            self.transport_type.unwrap_or(TransportType::StdTcp)
         }
     }
 
@@ -618,6 +712,7 @@ mod tests {
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, error))
                 .unwrap();
+            println!("Request failed: {:?}", error);
         }
     }
 
@@ -823,21 +918,9 @@ mod tests {
         ) {
         }
 
-        fn read_exception_status_response(
-            &self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: u8,
-        ) {
-        }
+        fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
 
-        fn report_server_id_response(
-            &self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: &[u8],
-        ) {
-        }
+        fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
     }
 
     impl TimeKeeper for MockApp {
@@ -1527,6 +1610,73 @@ mod tests {
         // Verify that the request is no longer expected and an error was reported
         assert!(client_services.expected_responses.is_empty());
         // In a real scenario, MockApp::request_failed would be checked.
+    }
+
+    /// Test case: `poll` correctly handles multiple concurrent requests timing out simultaneously.
+    #[test]
+    fn test_client_services_concurrent_timeouts() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+
+        // Configure a short timeout and 1 retry for testing purposes
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config.response_timeout_ms = 100;
+        tcp_config.retry_attempts = 1;
+        let config = ModbusConfig::Tcp(tcp_config);
+
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+
+        // 1. Send two simultaneous requests
+        client_services
+            .read_single_coil(1, unit_id, 0x0000)
+            .unwrap();
+        client_services
+            .read_single_coil(2, unit_id, 0x0001)
+            .unwrap();
+
+        // Verify both requests are queued and sent once
+        assert_eq!(client_services.expected_responses.len(), 2);
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
+
+        // 2. Advance time past the timeout threshold for both requests
+        *client_services.app.current_time.borrow_mut() = 150;
+
+        // 3. Poll the client. Both requests should be evaluated, found timed out, and retried.
+        client_services.poll();
+
+        // Verify both requests are STILL in the queue (waiting for retry responses)
+        assert_eq!(client_services.expected_responses.len(), 2);
+        assert_eq!(client_services.expected_responses[0].retries_left, 0);
+        assert_eq!(client_services.expected_responses[1].retries_left, 0);
+
+        // Verify both requests were transmitted again (Total sent frames = 2 original + 2 retries = 4)
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 4);
+
+        // 4. Advance time again past the retry timeout threshold
+        *client_services.app.current_time.borrow_mut() = 300;
+
+        // 5. Poll the client. Both requests should exhaust their retries and be dropped.
+        client_services.poll();
+
+        // Verify the queue is now completely empty
+        assert!(client_services.expected_responses.is_empty());
+
+        // Verify the application was notified of BOTH failures
+        let failed_requests = client_services.app.failed_requests.borrow();
+        assert_eq!(failed_requests.len(), 2);
+
+        // Ensure both specific transaction IDs were reported as having no retries left
+        let has_txn_1 = failed_requests
+            .iter()
+            .any(|(txn, _, err)| *txn == 1 && *err == MbusError::NoRetriesLeft);
+        let has_txn_2 = failed_requests
+            .iter()
+            .any(|(txn, _, err)| *txn == 2 && *err == MbusError::NoRetriesLeft);
+        assert!(has_txn_1, "Transaction 1 should have failed");
+        assert!(has_txn_2, "Transaction 2 should have failed");
     }
 
     /// Test case: `read_multiple_coils` returns `MbusError::TooManyRequests` when the queue is full.
@@ -2696,7 +2846,7 @@ mod tests {
         // Verify failure callback WAS called with UnexpectedResponse
         let failed = client_services.app.failed_requests.borrow();
         assert_eq!(failed.len(), 1);
-        assert_eq!(failed[0].2, MbusError::UnexpectedResponse);
+        assert_eq!(failed[0].2, MbusError::InvalidDeviceIdentification);
     }
 
     /// Test case: `read_exception_status` sends a valid ADU and processes response.
@@ -2711,36 +2861,9 @@ mod tests {
         let txn_id = 40;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
 
-        client_services
-            .read_exception_status(txn_id, unit_id)
-            .unwrap();
-
-        // Verify request ADU: TID(40), PID(0), Len(2), Unit(1), FC(07)
-        let expected_request = [0x00, 0x28, 0x00, 0x00, 0x00, 0x02, 0x01, 0x07];
-        assert_eq!(
-            client_services
-                .transport
-                .sent_frames
-                .borrow()
-                .front()
-                .unwrap()
-                .as_slice(),
-            &expected_request
-        );
-
-        // Simulate response: FC(07), Status(0xA5)
-        let response_adu = [0x00, 0x28, 0x00, 0x00, 0x00, 0x03, 0x01, 0x07, 0xA5];
-        client_services
-            .transport
-            .recv_frames
-            .borrow_mut()
-            .push_back(Vec::from_slice(&response_adu).unwrap())
-            .unwrap();
-        client_services.poll();
-
-        // Note: MockApp implementation for read_exception_status_response is empty in the provided context,
-        // but we verify the expected response is cleared from the queue.
-        assert!(client_services.expected_responses.is_empty());
+        let err = client_services.read_exception_status(txn_id, unit_id).err();
+        // Error is expected since the service only available in serial transport.
+        assert_eq!(err, Some(MbusError::InvalidTransport));
     }
 
     /// Test case: `diagnostics` (Sub-function 00) Query Data sends valid ADU.
@@ -2755,38 +2878,10 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let data = [0x1234, 0x5678];
         let sub_function = DiagnosticSubFunction::ReturnQueryData;
-        client_services
+        let err = client_services
             .diagnostics(50, unit_id, sub_function, &data)
-            .unwrap();
-
-        // Request: TID(50), PID(0), Len(1 + 2 + 4 = 7), Unit(1), FC(08), Sub(0000), Data(1234, 5678)
-        let expected_request = [
-            0x00, 0x32, 0x00, 0x00, 0x00, 0x07, 0x01, 0x08, 0x00, 0x00, 0x12, 0x34, 0x56, 0x78,
-        ];
-        assert_eq!(
-            client_services
-                .transport
-                .sent_frames
-                .borrow()
-                .front()
-                .unwrap()
-                .as_slice(),
-            &expected_request
-        );
-
-        // Simulate echo response
-        let response_adu = [
-            0x00, 0x32, 0x00, 0x00, 0x00, 0x07, 0x01, 0x08, 0x00, 0x00, 0x12, 0x34, 0x56, 0x78,
-        ];
-        client_services
-            .transport
-            .recv_frames
-            .borrow_mut()
-            .push_back(Vec::from_slice(&response_adu).unwrap())
-            .unwrap();
-        client_services.poll();
-
-        assert!(client_services.expected_responses.is_empty());
+            .err();
+        assert_eq!(err, Some(MbusError::InvalidTransport));
     }
 
     /// Test case: `get_comm_event_counter` sends valid ADU.
@@ -2797,35 +2892,10 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        let err = client_services.get_comm_event_counter(60, unit_id).err();
 
-        client_services.get_comm_event_counter(60, 1).unwrap();
-
-        // Request: TID(60), Unit(1), FC(0B)
-        let expected_request = [0x00, 0x3C, 0x00, 0x00, 0x00, 0x02, 0x01, 0x0B];
-        assert_eq!(
-            client_services
-                .transport
-                .sent_frames
-                .borrow()
-                .front()
-                .unwrap()
-                .as_slice(),
-            &expected_request
-        );
-
-        // Response: FC(0B), Status(0000), Count(0123)
-        let response_adu = [
-            0x00, 0x3C, 0x00, 0x00, 0x00, 0x06, 0x01, 0x0B, 0x00, 0x00, 0x01, 0x23,
-        ];
-        client_services
-            .transport
-            .recv_frames
-            .borrow_mut()
-            .push_back(Vec::from_slice(&response_adu).unwrap())
-            .unwrap();
-        client_services.poll();
-
-        assert!(client_services.expected_responses.is_empty());
+        assert_eq!(err, Some(MbusError::InvalidTransport));
     }
 
     /// Test case: `report_server_id` sends valid ADU.
@@ -2837,33 +2907,74 @@ mod tests {
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
 
-        client_services.report_server_id(70, 1).unwrap();
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        let err = client_services.report_server_id(70, unit_id).err();
 
-        // Request: TID(70), Unit(1), FC(11)
-        let expected_request = [0x00, 0x46, 0x00, 0x00, 0x00, 0x02, 0x01, 0x11];
-        assert_eq!(
-            client_services
-                .transport
-                .sent_frames
-                .borrow()
-                .front()
-                .unwrap()
-                .as_slice(),
-            &expected_request
-        );
+        assert_eq!(err, Some(MbusError::InvalidTransport));
+    }
 
-        // Response: FC(11), ByteCount(3), Data(ID, RunStatus, Additonal)
-        let response_adu = [
-            0x00, 0x46, 0x00, 0x00, 0x00, 0x05, 0x01, 0x11, 0x03, 0x01, 0xFF, 0x00,
-        ];
-        client_services
-            .transport
-            .recv_frames
-            .borrow_mut()
-            .push_back(Vec::from_slice(&response_adu).unwrap())
-            .unwrap();
-        client_services.poll();
+    // --- Broadcast Tests ---
 
-        assert!(client_services.expected_responses.is_empty());
+    /// Test case: Broadcast read multiple coils is not allowed
+    #[test]
+    fn test_broadcast_read_multiple_coils_not_allowed() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0001;
+        let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+        let address = 0x0000;
+        let quantity = 8;
+        let res = client_services.read_multiple_coils(txn_id, unit_id, address, quantity);
+        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    }
+
+    /// Test case: Broadcast write single coil on TCP is not allowed
+    #[test]
+    fn test_broadcast_write_single_coil_tcp_not_allowed() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0002;
+        let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+        let res = client_services.write_single_coil(txn_id, unit_id, 0x0000, true);
+        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    }
+
+    /// Test case: Broadcast write multiple coils on TCP is not allowed
+    #[test]
+    fn test_broadcast_write_multiple_coils_tcp_not_allowed() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0003;
+        let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+        let values = [true, false];
+        let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, 2, &values);
+        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    }
+
+    /// Test case: Broadcast read discrete inputs is not allowed
+    #[test]
+    fn test_broadcast_read_discrete_inputs_not_allowed() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let txn_id = 0x0006;
+        let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+        let res = client_services.read_discrete_inputs(txn_id, unit_id, 0x0000, 2);
+        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
     }
 }

@@ -98,7 +98,7 @@ mod tests {
         let response_bytes = [0x03, 0x01, 0xB3];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_read_coils_response(&pdu, 8);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidFunctionCode);
     }
 
     /// Test case: `parse_read_coils_response` returns an error for an empty data slice (PDU only contains FC).
@@ -107,7 +107,7 @@ mod tests {
         // PDU: FC (0x01) only, no byte count or coil data
         let pdu = Pdu::new(FunctionCode::ReadCoils, Vec::new(), 0);
         let result = ResponseParser::parse_read_coils_response(&pdu, 8);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
     }
 
     /// Test case: `parse_read_coils_response` returns an error for byte count mismatch.
@@ -117,7 +117,7 @@ mod tests {
         let response_bytes = [0x01, 0x01, 0xB3, 0x00];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_read_coils_response(&pdu, 8);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidByteCount);
     }
 
     /// Test case: `parse_read_coils_response` returns an error for expected quantity mismatch with actual byte count.
@@ -128,7 +128,7 @@ mod tests {
         let response_bytes = [0x01, 0x01, 0xB3];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_read_coils_response(&pdu, 16);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidQuantity);
     }
 
     /// Test case: `parse_read_coils_response` handles the maximum possible quantity of coils.
@@ -217,7 +217,7 @@ mod tests {
         let response_bytes = [0x03, 0x00, 0x05, 0xFF, 0x00]; // Wrong FC
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidFunctionCode);
     }
 
     /// Test case: `parse_write_single_coil_response` returns an error for address mismatch.
@@ -226,7 +226,7 @@ mod tests {
         let response_bytes = [0x05, 0x00, 0x06, 0xFF, 0x00]; // Address 0x0006, expected 0x0005
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidAddress);
     }
 
     /// Test case: `parse_write_single_coil_response` returns an error for value mismatch.
@@ -235,7 +235,7 @@ mod tests {
         let response_bytes = [0x05, 0x00, 0x05, 0x00, 0x00]; // Value OFF, expected ON
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidValue);
     }
 
     /// Test case: `parse_write_single_coil_response` returns an error for invalid PDU length.
@@ -244,7 +244,7 @@ mod tests {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
     }
 
     // --- Write Multiple Coils Request Tests ---
@@ -317,7 +317,7 @@ mod tests {
         let response_bytes = [0x0F, 0x00, 0x02, 0x00, 0x0A]; // Address 0x0002, expected 0x0001
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidAddress);
     }
 
     /// Test case: `parse_write_multiple_coils_response` returns an error for quantity mismatch.
@@ -326,7 +326,7 @@ mod tests {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00, 0x0B]; // Quantity 11, expected 10
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
-        assert_eq!(result.unwrap_err(), MbusError::ParseError);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidQuantity);
     }
 
     /// Test case: `parse_write_multiple_coils_response` returns an error for invalid PDU length.
@@ -335,6 +335,6 @@ mod tests {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
     }
 }

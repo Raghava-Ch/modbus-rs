@@ -58,6 +58,9 @@ where
         let expected_quantity = ctx.operation_meta.quantity();
         let from_address = ctx.operation_meta.address();
         let function_code = pdu.function_code();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         let discrete_inputs =
             match discrete_input::service::ServiceDecompiler::handle_read_discrete_inputs_response(
                 function_code,
@@ -68,29 +71,36 @@ where
                 Ok(discrete_input_response) => discrete_input_response,
                 Err(e) => {
                     // Parsing or validation of the discrete input response failed. The response is dropped.
-                    self.app.request_failed(
-                        message.transaction_id(),
-                        message.unit_id_or_slave_addr(),
-                        e,
-                    );
+                    self.app
+                        .request_failed(transaction_id, unit_id_or_slave_addr, e);
                     return;
                 }
             };
+
         if ctx.operation_meta.is_single() {
-            let value = match discrete_inputs.value(0) {
+            // Query the exact address that was requested instead of address 0
+            let value = match discrete_inputs.value(from_address) {
                 Ok(v) => v,
-                Err(_) => return, // Err(MbusError::ParseError), // nothing to report, drop the response
-            }; // If no value is found for a single discrete input, the response is dropped.
+                Err(_) => {
+                    self.app.request_failed(
+                        transaction_id,
+                        unit_id_or_slave_addr,
+                        MbusError::Unexpected,
+                    );
+                    return; // nothing to report, drop the response
+                }
+            };
+
             self.app.read_single_discrete_input_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 from_address,
                 value,
             );
         } else {
             self.app.read_discrete_inputs_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 &discrete_inputs,
             );
         }

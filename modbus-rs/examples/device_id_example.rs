@@ -1,12 +1,12 @@
 use anyhow::Result;
+use mbus_core::errors::MbusError;
+use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
+use mbus_tcp::StdTcpTransport;
 use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
 use modbus_client::services::{
     ClientServices,
     diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode},
 };
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
-use mbus_tcp::StdTcpTransport;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -26,7 +26,8 @@ impl DiagnosticsResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Device Identification",
-            txn_id, unit_id.get()
+            txn_id,
+            unit_id.get()
         );
         println!("  Conformity Level: {:?}", response.conformity_level);
         println!("  More Follows: {}", response.more_follows);
@@ -60,7 +61,14 @@ impl DiagnosticsResponse for ClientApp {
         _data: &[u8],
     ) {
     }
-    fn diagnostics_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _sub_function: u16, _data: &[u16]) {}
+    fn diagnostics_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _sub_function: u16,
+        _data: &[u16],
+    ) {
+    }
     fn get_comm_event_counter_response(
         &self,
         _txn_id: u16,
@@ -79,7 +87,13 @@ impl DiagnosticsResponse for ClientApp {
         _events: &[u8],
     ) {
     }
-    fn read_exception_status_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _status: u8) {}
+    fn read_exception_status_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _status: u8,
+    ) {
+    }
     fn report_server_id_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
 }
 
@@ -89,7 +103,9 @@ impl RequestErrorNotifier for ClientApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }

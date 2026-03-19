@@ -12,12 +12,12 @@
 //! This module is designed for `no_std` environments using `heapless` collections.
 
 use crate::services::diagnostic::{ObjectId, ReadDeviceIdCode};
+use heapless::Vec;
 use mbus_core::{
     data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
 };
-use heapless::Vec;
 
 /// Service for handling Modbus Diagnostics function codes.
 pub(super) struct ReqPduCompiler {}

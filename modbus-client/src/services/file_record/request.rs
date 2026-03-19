@@ -13,11 +13,7 @@
 //! The maximum number of sub-requests per PDU is limited to 35 by the protocol.
 
 use crate::services::file_record::{PduDataBytes, SubRequest};
-use mbus_core::{
-    data_unit::common::Pdu,
-    errors::MbusError,
-    function_codes::public::FunctionCode,
-};
+use mbus_core::{data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode};
 
 /// Helper struct for creating and parsing File Record PDUs.
 pub(super) struct ReqPduCompiler {}

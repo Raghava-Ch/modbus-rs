@@ -1,11 +1,11 @@
 use anyhow::Result;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, coil::Coils};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use mbus_serial::StdSerialTransport;
+use modbus_client::app::{CoilResponse, RequestErrorNotifier};
+use modbus_client::services::{ClientServices, coil::Coils};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -16,7 +16,13 @@ use std::time::{Duration, SystemTime};
 struct ClientApp;
 
 impl CoilResponse for ClientApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils, quantity: u16) {
+    fn read_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        coils: &Coils,
+        quantity: u16,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
             txn_id,
@@ -32,22 +38,49 @@ impl CoilResponse for ClientApp {
             }
         }
     }
-    fn read_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn read_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {}",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
-    fn write_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn write_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Single Coil (Addr: {}, Value: {}) Success",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, quantity: u16) {
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Multiple Coils (Addr: {}, Qty: {}) Success",
-            txn_id, unit_id.get(), address, quantity
+            txn_id,
+            unit_id.get(),
+            address,
+            quantity
         );
     }
 }
@@ -56,7 +89,9 @@ impl RequestErrorNotifier for ClientApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }

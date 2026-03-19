@@ -1,9 +1,9 @@
 use anyhow::Result;
-use modbus_client::app::{DiscreteInputResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, discrete_input::DiscreteInputs};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_tcp::StdTcpTransport;
+use modbus_client::app::{DiscreteInputResponse, RequestErrorNotifier};
+use modbus_client::services::{ClientServices, discrete_input::DiscreteInputs};
 use std::env;
 
 // --- Client Application Implementation ---
@@ -14,13 +14,20 @@ impl RequestErrorNotifier for ClientApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }
 
 impl DiscreteInputResponse for ClientApp {
-    fn read_discrete_inputs_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, inputs: &DiscreteInputs) {
+    fn read_discrete_inputs_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        inputs: &DiscreteInputs,
+    ) {
         let quantity = inputs.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Discrete Inputs (Addr: {}, Qty: {}):",
@@ -47,7 +54,10 @@ impl DiscreteInputResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Single Discrete Input (Addr: {}): {}",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
 }

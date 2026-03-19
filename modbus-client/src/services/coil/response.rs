@@ -2,15 +2,15 @@ use heapless::Vec;
 
 use crate::{
     app::CoilResponse,
-    services::{ClientCommon, ClientServices, coil},
     services::ExpectedResponse,
     services::coil::{Coils, MAX_COIL_BYTES},
+    services::{ClientCommon, ClientServices, coil},
 };
 use mbus_core::{
-    transport::Transport,
     data_unit::common::{ModbusMessage, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
+    transport::Transport,
 };
 
 pub(super) struct ResponseParser;
@@ -203,6 +203,8 @@ where
         let pdu = message.pdu();
         let expected_quantity = ctx.operation_meta.quantity();
         let from_address = ctx.operation_meta.address();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         let coil_rsp = match coil::service::ServiceBuilder::handle_read_coil_rsp(
             pdu,
@@ -212,11 +214,8 @@ where
             Ok(coil_response) => coil_response,
             Err(e) => {
                 // Parsing or validation of the coil response failed. The response is dropped.
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
                 return;
             }
         };
@@ -228,15 +227,15 @@ where
             }; // If no value is found for a single coil, the response is dropped. This should never happen in practical.
 
             self.app.read_single_coil_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 from_address,
                 coil_value,
             );
         } else {
             self.app.read_coils_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 &coil_rsp,
                 expected_quantity, // Pass the original expected quantity
             );
@@ -253,6 +252,8 @@ where
         let function_code = pdu.function_code();
         let address = ctx.operation_meta.address();
         let value = ctx.operation_meta.value() != 0;
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         if coil::service::ServiceBuilder::handle_write_single_coil_rsp(
             function_code,
@@ -264,18 +265,15 @@ where
         {
             // If successful
             self.app.write_single_coil_response(
-                message.transaction_id(),
+                transaction_id,
                 message.unit_id_or_slave_addr().into(),
                 address,
                 value,
             );
         } else {
             // If parsing or validation fails
-            self.app.request_failed(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-                MbusError::ParseError,
-            );
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
         }
     }
 

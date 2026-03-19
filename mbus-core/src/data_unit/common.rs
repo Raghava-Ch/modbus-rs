@@ -23,8 +23,53 @@ pub const MAX_PDU_DATA_LEN: usize = 252;
 /// Maximum length of an ADU (ASCII mode requires 513 bytes)
 pub const MAX_ADU_FRAME_LEN: usize = 513;
 
-const ERROR_BIT_MASK: u8 = 0x80;
-const FUNCTION_CODE_MASK: u8 = 0x7F;
+/// Size of the Modbus Application Protocol (MBAP) Header in bytes.
+pub const MBAP_HEADER_SIZE: usize = 7;
+
+/// Minimum size of a Modbus RTU ADU in bytes (Address + Function Code + CRC).
+pub const MIN_RTU_ADU_LEN: usize = 4;
+
+/// Minimum size of a Modbus ASCII ADU in bytes (Start + Address + Function Code + LRC + End).
+pub const MIN_ASCII_ADU_LEN: usize = 9;
+
+/// Size of the Modbus RTU CRC field in bytes.
+pub const RTU_CRC_SIZE: usize = 2;
+
+/// Number of bytes in a Modbus ASCII Start character.
+pub const ASCII_START_SIZE: usize = 1;
+
+/// Number of bytes in a Modbus ASCII End sequence (CR LF).
+pub const ASCII_END_SIZE: usize = 2;
+
+/// Bit mask used to indicate a Modbus exception in the function code byte.
+pub const ERROR_BIT_MASK: u8 = 0x80;
+
+/// Bit mask used to extract the base function code from the function code byte.
+pub const FUNCTION_CODE_MASK: u8 = 0x7F;
+
+/// Checks if the given function code byte indicates an exception (error bit is set).
+///
+/// # Arguments
+/// * `function_code_byte` - The raw function code byte from the PDU.
+///
+/// # Returns
+/// `true` if the highest bit is set, indicating a Modbus exception response.
+#[inline]
+pub fn is_exception_code(function_code_byte: u8) -> bool {
+    function_code_byte & ERROR_BIT_MASK != 0
+}
+
+/// Clears the exception bit from the function code byte to retrieve the base function code.
+///
+/// # Arguments
+/// * `function_code_byte` - The raw function code byte from the PDU.
+///
+/// # Returns
+/// The base function code with the error bit cleared.
+#[inline]
+pub fn clear_exception_bit(function_code_byte: u8) -> u8 {
+    function_code_byte & FUNCTION_CODE_MASK
+}
 
 /// Modbus Protocol Data Unit (PDU).
 ///
@@ -83,7 +128,7 @@ pub struct SlaveAddress(u8);
 impl SlaveAddress {
     /// Creates a new `SlaveAddress` instance.
     pub fn new(address: u8) -> Result<Self, MbusError> {
-        if !(1..=247).contains(&address) {
+        if !(0..=247).contains(&address) {
             return Err(MbusError::InvalidSlaveAddress);
         }
         Ok(Self(address))
@@ -349,12 +394,12 @@ impl Pdu {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let error_code = if bytes[0] & ERROR_BIT_MASK != 0 {
+        let error_code = if is_exception_code(bytes[0]) {
             Some(bytes[1]) // The second byte is the exception code for error responses
         } else {
             None
         };
-        let function_code = bytes[0] & FUNCTION_CODE_MASK; // Mask out the error bit to get the actual function code
+        let function_code = clear_exception_bit(bytes[0]); // Mask out the error bit to get the actual function code
 
         let function_code = FunctionCode::try_from(function_code)?;
 
@@ -446,12 +491,12 @@ pub fn decompile_adu_frame(
             match serial_mode {
                 SerialMode::Rtu => {
                     // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
-                    // Minimum length: 1 (Addr) + 1 (FC) + 2 (CRC) = 4
-                    if frame.len() < 4 {
+                    // Minimum length: MIN_RTU_ADU_LEN (4)
+                    if frame.len() < MIN_RTU_ADU_LEN {
                         return Err(MbusError::InvalidAduLength);
                     }
 
-                    let data_len = frame.len() - 2;
+                    let data_len = frame.len() - RTU_CRC_SIZE;
                     let data_to_check = &frame[..data_len];
                     let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
 
@@ -470,8 +515,8 @@ pub fn decompile_adu_frame(
                 }
                 SerialMode::Ascii => {
                     // ASCII Frame: [Start (:)] [Address (2)] [PDU (N)] [LRC (2)] [End (\r\n)]
-                    // Minimum length: 1 + 2 + 2 (FC) + 2 + 2 = 9 bytes
-                    if frame.len() < 9 {
+                    // Minimum length: MIN_ASCII_ADU_LEN (9)
+                    if frame.len() < MIN_ASCII_ADU_LEN {
                         return Err(MbusError::InvalidAduLength);
                     }
 
@@ -484,7 +529,7 @@ pub fn decompile_adu_frame(
                     }
 
                     // Extract Hex content (excluding ':' and '\r\n')
-                    let hex_content = &frame[1..frame.len() - 2];
+                    let hex_content = &frame[ASCII_START_SIZE..frame.len() - ASCII_END_SIZE];
                     if hex_content.len() % 2 != 0 {
                         return Err(MbusError::BasicParseError); // Odd length hex string
                     }

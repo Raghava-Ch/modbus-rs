@@ -1,7 +1,6 @@
 use crate::app::RegisterResponse;
 use crate::services::{
-    ClientCommon, ClientServices, ExpectedResponse, Mask, Multiple, OperationMeta, Single,
-    register,
+    ClientCommon, ClientServices, ExpectedResponse, Mask, Multiple, OperationMeta, Single, register,
 };
 use mbus_core::{
     errors::MbusError,
@@ -22,7 +21,10 @@ where
     /// - `quantity`: The number of holding registers to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_holding_registers(
         &mut self,
         txn_id: u16,
@@ -30,6 +32,10 @@ where
         from_address: u16,
         quantity: u16,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let frame = register::service::ServiceBuilder::read_holding_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -71,7 +77,10 @@ where
     /// - `address`: The starting address of the holding registers to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_single_holding_register(
         &mut self,
         txn_id: u16,
@@ -79,6 +88,10 @@ where
         address: u16,
     ) -> Result<(), MbusError> {
         use crate::services::Single;
+
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
 
         let frame = register::service::ServiceBuilder::read_holding_registers(
             txn_id,
@@ -122,7 +135,10 @@ where
     /// - `quantity`: The number of input registers to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_input_registers(
         &mut self,
         txn_id: u16,
@@ -130,6 +146,10 @@ where
         address: u16,
         quantity: u16,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let frame = register::service::ServiceBuilder::read_input_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -171,13 +191,20 @@ where
     /// - `address`: The starting address of the input registers to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_single_input_register(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let frame = register::service::ServiceBuilder::read_input_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -220,7 +247,10 @@ where
     /// - `value`: The `u16` value to write to the register.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_single_register(
         &mut self,
         txn_id: u16,
@@ -237,18 +267,22 @@ where
             transport_type,
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // Modbus TCP typically does not support broadcast. 
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // expect a response from the server(s).
+        if unit_id_slave_addr.is_broadcast() {
+            if transport_type.is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-
-                handler: Self::handle_write_single_register_response,
-                operation_meta: OperationMeta::Single(Single { address, value }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Single(Single { address, value }),
+                Self::handle_write_single_register_response,
+            )?;
+        }
 
         self.transport
             .send(&frame)
@@ -266,7 +300,10 @@ where
     /// - `values`: A slice of `u16` values to write to the registers.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_multiple_registers(
         &mut self,
         txn_id: u16,
@@ -285,19 +322,22 @@ where
             transport_type,
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // Modbus TCP typically does not support broadcast. 
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // expect a response from the server(s).
+        if unit_id_slave_addr.is_broadcast() {
+            if transport_type.is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-
-                handler: Self::handle_write_multiple_registers_response,
-
-                operation_meta: OperationMeta::Multiple(Multiple { address, quantity }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Multiple(Multiple { address, quantity }),
+                Self::handle_write_multiple_registers_response,
+            )?;
+        }
 
         self.transport
             .send(&frame)
@@ -330,6 +370,10 @@ where
         write_address: u16,
         write_values: &[u16],
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // FC 23 explicitly forbids broadcast
+        }
+
         // 1. Construct the ADU frame using the register service
         let transport_type = self.transport.transport_type();
         let frame = register::service::ServiceBuilder::read_write_multiple_registers(
@@ -343,22 +387,16 @@ where
         )?;
 
         // 2. Queue the expected response to match against the incoming server reply
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-
-                handler: Self::handle_read_write_multiple_registers_response,
-
-                operation_meta: OperationMeta::Multiple(Multiple {
-                    address: read_address,
-                    quantity: read_quantity,
-                }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Multiple(Multiple {
+                address: read_address,
+                quantity: read_quantity,
+            }),
+            Self::handle_read_write_multiple_registers_response,
+        )?;
 
         // 3. Transmit the frame via the configured transport
         self.transport
@@ -403,23 +441,23 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        if unit_id_slave_addr.is_broadcast() {
+            if self.transport.transport_type().is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed);
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-
-                handler: Self::handle_mask_write_register_response,
-
-                operation_meta: OperationMeta::Masking(Mask {
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Masking(Mask {
                     address,
                     and_mask,
                     or_mask,
                 }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                Self::handle_mask_write_register_response,
+            )?;
+        }
 
         self.transport
             .send(&frame)

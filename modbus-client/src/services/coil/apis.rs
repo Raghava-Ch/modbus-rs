@@ -24,7 +24,10 @@ where
     /// - `quantity`: The number of coils to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_multiple_coils(
         &mut self,
         txn_id: u16,
@@ -32,6 +35,10 @@ where
         address: u16,
         quantity: u16,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
             unit_id_slave_addr.get(),
@@ -70,18 +77,30 @@ where
     /// - `address`: The address of the coil to read.
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// This method is a convenience wrapper around `read_multiple_coils` for reading a single coil, which simplifies the application logic when only one coil needs to be read.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_single_coil(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let transport_type = self.transport.transport_type();
-        let frame =
-            coil::service::ServiceBuilder::read_coils(txn_id, unit_id_slave_addr.get(), address, 1, transport_type)?;
+        let frame = coil::service::ServiceBuilder::read_coils(
+            txn_id,
+            unit_id_slave_addr.get(),
+            address,
+            1,
+            transport_type,
+        )?;
 
         self.expected_responses
             .push(ExpectedResponse {
@@ -114,7 +133,10 @@ where
     /// - `value`: The boolean value to write to the coil (true for ON, false for OFF).
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_single_coil(
         &mut self,
         txn_id: u16,
@@ -131,20 +153,22 @@ where
             transport_type,
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // Modbus TCP typically does not support broadcast. 
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // expect a response from the server(s).
+        if unit_id_slave_addr.is_broadcast() {
+            if transport_type.is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_write_single_coil_response,
-                operation_meta: OperationMeta::Single(Single {
-                    address: address,
-                    value: value as u16,
-                }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Single(Single { address, value: value as u16 }),
+                Self::handle_write_single_coil_response,
+            )?;
+        }
 
         self.transport
             .send(&frame)
@@ -162,7 +186,10 @@ where
     /// - `values`: A slice of boolean values to write to the coils (true for ON, false for OFF).
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error constructing the request or sending it.
+    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// 
+    /// # Errors
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_multiple_coils(
         &mut self,
         txn_id: u16,
@@ -181,17 +208,22 @@ where
             transport_type,
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // Modbus TCP typically does not support broadcast. 
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // expect a response from the server(s).
+        if unit_id_slave_addr.is_broadcast() {
+            if transport_type.is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_write_multiple_coils_response,
-                operation_meta: OperationMeta::Multiple(Multiple { address, quantity }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Multiple(Multiple { address, quantity }),
+                Self::handle_write_multiple_coils_response,
+            )?;
+        }
 
         self.transport
             .send(&frame)

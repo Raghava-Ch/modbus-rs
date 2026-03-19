@@ -147,11 +147,13 @@ where
 {
     pub(super) fn handle_read_file_record_response(
         &mut self,
-        _: &ExpectedResponse<TRANSPORT, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let function_code = message.function_code();
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         let data = match file_record::service::ServiceDecompiler::handle_read_file_record_rsp(
             function_code,
@@ -159,42 +161,34 @@ where
         ) {
             Ok(d) => d,
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
                 return;
             }
         };
 
-        self.app.read_file_record_response(
-            message.transaction_id(),
-            message.unit_id_or_slave_addr(),
-            &data,
-        );
+        self.app
+            .read_file_record_response(transaction_id, unit_id_or_slave_addr, &data);
     }
 
     pub(super) fn handle_write_file_record_response(
         &mut self,
-        _: &ExpectedResponse<TRANSPORT, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let function_code = message.function_code();
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         if file_record::service::ServiceDecompiler::handle_write_file_record_rsp(function_code, pdu)
             .is_ok()
         {
-            self.app.write_file_record_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-            );
+            self.app
+                .write_file_record_response(transaction_id, unit_id_or_slave_addr);
         } else {
-            self.app.request_failed(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-                MbusError::ParseError,
-            );
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
         }
     }
 }

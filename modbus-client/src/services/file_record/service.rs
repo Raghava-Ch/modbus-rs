@@ -8,10 +8,12 @@ use crate::{
         {SubRequest, SubRequestParams},
     },
 };
-use mbus_core::{data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
-errors::MbusError,
-function_codes::public::FunctionCode,
-transport::TransportType,};
+use mbus_core::{
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
+    errors::MbusError,
+    function_codes::public::FunctionCode,
+    transport::TransportType,
+};
 
 /// Provides operations for creating and parsing Modbus File Record request/response PDUs.
 #[derive(Debug, Clone)]

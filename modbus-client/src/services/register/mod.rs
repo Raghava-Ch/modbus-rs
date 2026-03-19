@@ -12,9 +12,7 @@ mod tests {
 
     use crate::services::register::{request::ReqPduCompiler, response::ResponseParser};
     use mbus_core::{
-        data_unit::common::Pdu,
-        errors::MbusError,
-        function_codes::public::FunctionCode,
+        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
     };
 
     // --- Read Holding Registers (FC 0x03) ---
@@ -271,7 +269,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_write_multiple_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidFunctionCode
         );
     }
 
@@ -281,7 +279,7 @@ mod tests {
         let pdu = Pdu::new(FunctionCode::ReadWriteMultipleRegisters, Vec::new(), 0);
         assert_eq!(
             ResponseParser::parse_read_write_multiple_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::InvalidPduLength
+            MbusError::InvalidDataLen
         );
     }
 
@@ -292,7 +290,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_write_multiple_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::InvalidPduLength
+            MbusError::InvalidByteCount
         );
     }
 
@@ -303,7 +301,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_write_multiple_registers_response(&pdu, 3).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidQuantity
         ); // Expected 3, got 2
     }
 
@@ -329,7 +327,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidFunctionCode
         );
     }
 
@@ -341,7 +339,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::InvalidPduLength
+            MbusError::InvalidDataLen
         );
     }
 
@@ -353,7 +351,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidAddress
         );
     }
 
@@ -365,7 +363,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidAndMask
         );
     }
 
@@ -377,7 +375,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidOrMask
         );
     }
 
@@ -400,7 +398,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_holding_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidFunctionCode
         );
     }
 
@@ -411,7 +409,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_holding_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::InvalidPduLength
+            MbusError::InvalidByteCount
         );
     }
 
@@ -422,7 +420,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_read_holding_registers_response(&pdu, 3).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidQuantity
         ); // Expected 3, got 2
     }
 
@@ -443,7 +441,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_write_single_register_response(&pdu, 0x0001, 0x1234).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidAddress
         );
     }
 
@@ -454,7 +452,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_write_single_register_response(&pdu, 0x0001, 0x1234).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidValue
         );
     }
 
@@ -475,7 +473,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_write_multiple_registers_response(&pdu, 0x0001, 2).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidAddress
         );
     }
 
@@ -486,7 +484,7 @@ mod tests {
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         assert_eq!(
             ResponseParser::parse_write_multiple_registers_response(&pdu, 0x0001, 2).unwrap_err(),
-            MbusError::ParseError
+            MbusError::InvalidQuantity
         );
     }
 }

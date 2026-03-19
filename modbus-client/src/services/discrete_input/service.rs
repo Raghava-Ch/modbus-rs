@@ -2,7 +2,7 @@ use heapless::Vec;
 
 use crate::services::discrete_input::{request::ReqPduCompiler, response::ResponseParser};
 use mbus_core::{
-    data_unit::common::{self, Pdu, MAX_ADU_FRAME_LEN},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
     models::discrete_input::DiscreteInputs,
@@ -33,8 +33,8 @@ impl ServiceDecompiler {
     pub(crate) fn handle_read_discrete_inputs_response(
         function_code: FunctionCode,
         pdu: &Pdu,
-        expected_quantity: u16,
         from_address: u16,
+        expected_quantity: u16,
     ) -> Result<DiscreteInputs, MbusError> {
         if function_code != FunctionCode::ReadDiscreteInputs {
             return Err(MbusError::InvalidFunctionCode);
