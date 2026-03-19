@@ -58,37 +58,34 @@ impl ResponseParser {
     }
 }
 
-impl<T, APP, const N: usize> ClientServices<T, APP, N>
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
-    T: Transport,
+    TRANSPORT: Transport,
     APP: ClientCommon + FifoQueueResponse,
 {
     pub(super) fn handle_read_fifo_queue_response(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
         let function_code = pdu.function_code();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         let register_rsp = match fifo_queue::service::ServiceDecompiler::handle_read_fifo_queue_rsp(
             function_code,
             pdu,
         ) {
             Ok(register_response) => register_response,
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
                 return;
             }
         };
 
-        self.app.read_fifo_queue_response(
-            message.transaction_id(),
-            message.unit_id_or_slave_addr(),
-            &register_rsp,
-        );
+        self.app
+            .read_fifo_queue_response(transaction_id, unit_id_or_slave_addr, &register_rsp);
     }
 }

@@ -1,16 +1,17 @@
 use anyhow::Result;
 use heapless::Vec as HVec;
+use mbus_core::{
+    data_unit::common::MAX_ADU_FRAME_LEN,
+    errors::MbusError,
+    function_codes::public::DiagnosticSubFunction,
+    transport::{
+        BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
+        TransportType, UnitIdOrSlaveAddr,
+    },
+};
 use modbus_client::services::{
     diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
     ClientServices,
-};
-use mbus_core::{
-    data_unit::common::MAX_ADU_FRAME_LEN,
-    transport::{
-        BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
-        TransportType,
-        UnitIdOrSlaveAddr,
-    },
 };
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
@@ -143,6 +144,169 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     Ok(())
 }
 
+/// Test case: Broadcast a Write Single Coil request.
+/// It should construct the frame with address 0, transmit it, and expect no response.
+#[test]
+fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let sent_data = transport.sent_data.clone();
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 8,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+
+    // 1. Send Broadcast Request
+    client.write_single_coil(5, unit_id, 10, true)?;
+
+    // 2. Verify Sent Frame (RTU)
+    // ADU: [UnitID(0)] [FC(5)] [Addr(00 0A)] [Val(FF 00)] [CRC]
+    let mut expected = vec![0x00, 0x05, 0x00, 0x0A, 0xFF, 0x00];
+    let crc = mbus_core::transport::checksum::crc16(&expected);
+    expected.extend_from_slice(&crc.to_le_bytes());
+
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, expected);
+    }
+
+    // 3. Poll and verify no expected responses are queued and no error is triggered.
+    // Because it is a broadcast, the client should not wait for a reply.
+    client.poll();
+    assert!(client.app.failed_requests.borrow().is_empty());
+
+    Ok(())
+}
+
+/// Test case: Broadcast a Write Multiple Registers request.
+/// It should transmit correctly via serial without blocking the queue waiting for a response.
+#[test]
+fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let sent_data = transport.sent_data.clone();
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 8,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+    let values = [0x1234, 0x5678];
+
+    // 1. Send Broadcast Request
+    client.write_multiple_registers(6, unit_id, 0x0001, 2, &values)?;
+
+    // 2. Verify Sent Frame (RTU)
+    let mut expected = vec![
+        0x00, // Unit ID (Broadcast)
+        0x10, // FC (16 = Write Multiple Registers)
+        0x00, 0x01, // Address
+        0x00, 0x02, // Quantity
+        0x04, // Byte count
+        0x12, 0x34, 0x56, 0x78, // Data
+    ];
+    let crc = mbus_core::transport::checksum::crc16(&expected);
+    expected.extend_from_slice(&crc.to_le_bytes());
+
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, expected);
+    }
+
+    Ok(())
+}
+
+/// Test case: Read Operations are strictly forbidden to broadcast.
+/// It should yield an immediate error and send nothing.
+#[test]
+fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let sent_data = transport.sent_data.clone();
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 8,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+
+    let res = client.read_multiple_coils(7, unit_id, 10, 3);
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+
+    // Verify nothing was sent over the wire
+    assert!(sent_data.borrow().is_empty());
+
+    Ok(())
+}
+
+/// Test case: Broadcasting Diagnostic requests.
+/// Only certain diagnostic sub-functions (like ForceListenOnlyMode) are permitted for broadcasting.
+#[test]
+fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 8,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+
+    // 0x04 Force Listen Only Mode is allowed for broadcast
+    let res = client.diagnostics(
+        8,
+        unit_id,
+        DiagnosticSubFunction::ForceListenOnlyMode,
+        &[0x0000],
+    );
+    assert!(res.is_ok());
+
+    Ok(())
+}
+
 #[test]
 fn test_serial_write_single_coil_rtu() -> Result<()> {
     let transport = MockSerialTransport::new(SerialMode::Rtu);
@@ -185,7 +349,10 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
     let received = client.app.received_write_single_coil_responses.borrow();
     assert_eq!(received.len(), 1);
-    assert_eq!(received[0], (2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true));
+    assert_eq!(
+        received[0],
+        (2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)
+    );
 
     Ok(())
 }
@@ -212,7 +379,12 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
 
-    client.read_device_identification(3, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))?;
+    client.read_device_identification(
+        3,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        ReadDeviceIdCode::Basic,
+        ObjectId::from(0x00),
+    )?;
 
     // Verify Sent Frame (RTU)
     // ADU: [Unit(1)] [FC(2B)] [MEI(0E)] [Code(01)] [Obj(00)] [CRC(70 77)]

@@ -113,7 +113,7 @@ mod tests {
                 &pdu_short
             )
             .unwrap_err(),
-            MbusError::InvalidPduLength
+            MbusError::InvalidDataLen
         );
 
         // Case 2: Object length exceeds available data
@@ -157,9 +157,8 @@ mod tests {
             Vec::from_slice(&data).unwrap(),
             4,
         );
-        let (mei, resp_data) =
+        let resp_data =
             ResponseParser::parse_encapsulated_interface_transport_response(&pdu).unwrap();
-        assert_eq!(mei, EncapsulatedInterfaceType::CanopenGeneralReference);
         assert_eq!(resp_data.as_slice(), &[0x01, 0x02, 0x03]);
     }
 }

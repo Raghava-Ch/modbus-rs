@@ -10,12 +10,12 @@
 //!
 //! This module is designed for `no_std` environments using `heapless` collections.
 
+use heapless::Vec;
 use mbus_core::{
     data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
 };
-use heapless::Vec;
 
 /// Provides operations for creating and parsing Modbus discrete input request/response PDUs.
 pub(super) struct ReqPduCompiler {}

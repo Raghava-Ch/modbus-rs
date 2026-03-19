@@ -14,11 +14,8 @@ mod tests {
         self, request::ReqPduCompiler, response::ResponseParser,
     };
     use mbus_core::{
-        data_unit::common::Pdu,
-        errors::MbusError,
-        function_codes::public::FunctionCode,
-        models::discrete_input::DiscreteInputs,
-        transport::TransportType,
+        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
+        models::discrete_input::DiscreteInputs, transport::TransportType,
     };
 
     // --- Request Creation Tests ---

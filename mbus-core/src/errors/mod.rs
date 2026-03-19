@@ -87,6 +87,13 @@ pub enum MbusError {
     InvalidDeviceIdentification,
     /// Invalid device id code
     InvalidDeviceIdCode,
+    /// Invalid MEI type
+    InvalidMeiType,
+    /// Invalid slave address (0): The provided broadcast address (0) is invalid.
+    /// Must use UnitIdOrSlaveAddr::new_broadcast_address() instead.
+    InvalidBroadcastAddress,
+    /// Broadcast not allowed for tcp transport type
+    BoradcastNotAllowed,
 }
 
 impl fmt::Display for MbusError {
@@ -205,6 +212,17 @@ impl fmt::Display for MbusError {
             MbusError::InvalidDeviceIdCode => write!(
                 f,
                 "Invalid device ID code: The provided device ID code is invalid"
+            ),
+            MbusError::InvalidMeiType => {
+                write!(f, "Invalid MEI type: The provided MEI type is invalid")
+            }
+            MbusError::InvalidBroadcastAddress => write!(
+                f,
+                "Invalid broadcast address: The provided broadcast address (0) is invalid. Must use UnitIdOrSlaveAddr::new_broadcast_address() instead."
+            ),
+            MbusError::BoradcastNotAllowed => write!(
+                f,
+                "Broadcast not allowed: Broadcast not allowed for tcp transport type"
             ),
         }
     }

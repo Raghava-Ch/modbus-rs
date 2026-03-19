@@ -1,15 +1,15 @@
 use crate::mock_app::MockApp;
 use anyhow::Result;
 use mbus_core;
-use modbus_client::services::{
-    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
-    ClientServices,
-};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
 use mbus_tcp::StdTcpTransport;
+use modbus_client::services::{
+    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
+    ClientServices,
+};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
@@ -451,18 +451,18 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
         let mut buf = [0; 12];
         stream.read_exact(&mut buf)?;
         #[rustfmt::skip]
-            assert_eq!(
-                buf,
-                [
-                    0x00, 0x06, // Transaction ID (6)
-                    0x00, 0x00, // Protocol ID
-                    0x00, 0x06, // Length
-                    0x01,       // Unit ID (1)
-                    0x02,       // Function Code (2 = Read Discrete Inputs)
-                    0x00, 0x0A, // Starting Address (10)
-                    0x00, 0x08, // Quantity (8)
-                ]
-            );
+        assert_eq!(
+            buf,
+            [
+                0x00, 0x06, // Transaction ID (6)
+                0x00, 0x00, // Protocol ID
+                0x00, 0x06, // Length
+                0x01,       // Unit ID (1)
+                0x02,       // Function Code (2 = Read Discrete Inputs)
+                0x00, 0x0A, // Starting Address (10)
+                0x00, 0x08, // Quantity (8)
+            ]
+        );
 
         // Send response: 8 inputs, value 0xAA (10101010)
         #[rustfmt::skip]
@@ -722,11 +722,21 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
 
     // Send Request 1
     client
-        .read_device_identification(10, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+        .read_device_identification(
+            10,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
+            ReadDeviceIdCode::Basic,
+            ObjectId::from(0x00),
+        )
         .unwrap();
     // Send Request 2
     client
-        .read_device_identification(11, UnitIdOrSlaveAddr::try_from(1).unwrap(), ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+        .read_device_identification(
+            11,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
+            ReadDeviceIdCode::Basic,
+            ObjectId::from(0x00),
+        )
         .unwrap();
 
     // Poll twice to process both responses
@@ -866,7 +876,7 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
         .is_empty());
     let failed = client.app.failed_requests.borrow();
     assert_eq!(failed.len(), 1);
-    assert_eq!(failed[0].2, MbusError::UnexpectedResponse);
+    assert_eq!(failed[0].2, MbusError::InvalidMeiType);
 
     server_handle.join().unwrap()?;
     Ok(())

@@ -21,20 +21,34 @@ pub struct MockApp {
     pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16)>>, // Corrected duplicate
     pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
-    pub received_discrete_input_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
-    pub received_read_device_id_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, DeviceIdentificationResponse)>>,
+    pub received_discrete_input_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
+    pub received_read_device_id_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, DeviceIdentificationResponse)>>,
     pub received_encapsulated_interface_transport_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>)>>,
     pub failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError)>>,
 }
 
 impl CoilResponse for MockApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils, quantity: u16) {
+    fn read_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        coils: &Coils,
+        quantity: u16,
+    ) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone(), quantity));
     }
-    fn read_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn read_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_coil_responses.borrow_mut().push((
             txn_id,
             unit_id,
@@ -47,13 +61,25 @@ impl CoilResponse for MockApp {
         ));
     }
 
-    fn write_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn write_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_write_single_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, value));
     }
 
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, quantity: u16) {
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) {
         self.received_write_multiple_coils_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, quantity));
@@ -61,7 +87,12 @@ impl CoilResponse for MockApp {
 }
 
 impl DiscreteInputResponse for MockApp {
-    fn read_discrete_inputs_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, inputs: &DiscreteInputs) {
+    fn read_discrete_inputs_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        inputs: &DiscreteInputs,
+    ) {
         self.received_discrete_input_responses.borrow_mut().push((
             txn_id,
             unit_id,
@@ -91,6 +122,7 @@ impl RequestErrorNotifier for MockApp {
         self.failed_requests
             .borrow_mut()
             .push((txn_id, unit_id, error));
+        println!("Request failed: {:?}", error);
     }
 }
 
@@ -176,7 +208,12 @@ impl RegisterResponse for MockApp {
 }
 
 impl FifoQueueResponse for MockApp {
-    fn read_fifo_queue_response(&mut self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _fifo_queue: &FifoQueue) {
+    fn read_fifo_queue_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _fifo_queue: &FifoQueue,
+    ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 }
@@ -230,9 +267,22 @@ impl DiagnosticsResponse for MockApp {
             .push((txn_id, unit_id, mei_type, data.to_vec()));
     }
 
-    fn read_exception_status_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _status: u8) {}
+    fn read_exception_status_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _status: u8,
+    ) {
+    }
 
-    fn diagnostics_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _sub_function: u16, _data: &[u16]) {}
+    fn diagnostics_response(
+        &self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _sub_function: u16,
+        _data: &[u16],
+    ) {
+    }
 
     fn get_comm_event_counter_response(
         &self,

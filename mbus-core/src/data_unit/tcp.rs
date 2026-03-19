@@ -13,7 +13,7 @@
 //! Designed for `no_std` environments using `heapless` for deterministic memory usage.
 
 use crate::data_unit::common::{
-    AdditionalAddress, MAX_PDU_DATA_LEN, MbapHeader, ModbusMessage, Pdu,
+    AdditionalAddress, MAX_PDU_DATA_LEN, MBAP_HEADER_SIZE, MbapHeader, ModbusMessage, Pdu,
 };
 use crate::errors::MbusError;
 use crate::function_codes::public::FunctionCode;
@@ -103,8 +103,8 @@ impl ModbusTcpMessage {
     /// # Returns
     /// `Ok(ModbusTcpMessage)` if the bytes represent a valid ADU, or an `MbusError` otherwise.
     pub fn from_adu_bytes(bytes: &[u8]) -> Result<Self, MbusError> {
-        // Minimum ADU length: 7 bytes MBAP header + 1 byte Function Code = 8 bytes
-        if bytes.len() < 8 {
+        // Minimum ADU length: MBAP header + 1 byte Function Code
+        if bytes.len() < MBAP_HEADER_SIZE + 1 {
             return Err(MbusError::InvalidPduLength); // Reusing for general invalid length
         }
 
@@ -123,13 +123,13 @@ impl ModbusTcpMessage {
         // The length field specifies the number of following bytes, including the Unit ID and PDU.
         // So, actual_pdu_and_unit_id_len = bytes.len() - 6 (MBAP header without length field)
         // And length field value should be actual_pdu_and_unit_id_len
-        let expected_total_len_from_header = length as usize + 6; // 6 bytes for TID, PID, Length field itself
+        let expected_total_len_from_header = length as usize + (MBAP_HEADER_SIZE - 1); // 6 bytes for TID, PID, Length field itself
         if bytes.len() != expected_total_len_from_header {
             return Err(MbusError::InvalidPduLength);
         }
 
-        // The PDU starts after the MBAP header (7 bytes)
-        let pdu_bytes_slice = &bytes[7..];
+        // The PDU starts after the MBAP header
+        let pdu_bytes_slice = &bytes[MBAP_HEADER_SIZE..];
 
         // Parse PDU using the existing Pdu::from_bytes method
         let pdu = Pdu::from_bytes(pdu_bytes_slice)?;

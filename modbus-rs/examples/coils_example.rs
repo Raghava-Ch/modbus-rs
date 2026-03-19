@@ -1,11 +1,11 @@
 use anyhow::Result;
 use heapless::Vec;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::ClientServices;
-use modbus_client::services::coil::Coils;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_tcp::StdTcpTransport;
+use modbus_client::app::{CoilResponse, RequestErrorNotifier};
+use modbus_client::services::ClientServices;
+use modbus_client::services::coil::Coils;
 use std::cell::RefCell;
 
 // --- MockApp for Client ---
@@ -15,17 +15,30 @@ use std::cell::RefCell;
 struct ClientMockApp {
     pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16), 10>>,
     pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
-    pub received_write_multiple_coils_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
+    pub received_write_multiple_coils_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
 }
 
 impl CoilResponse for ClientMockApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils, quantity: u16) {
+    fn read_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        coils: &Coils,
+        quantity: u16,
+    ) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone(), quantity))
             .unwrap();
     }
-    fn read_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn read_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_coil_responses
             .borrow_mut()
             .push((
@@ -40,13 +53,25 @@ impl CoilResponse for ClientMockApp {
             ))
             .unwrap();
     }
-    fn write_single_coil_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, value: bool) {
+    fn write_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_write_single_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, value))
             .unwrap();
     }
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, address: u16, quantity: u16) {
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) {
         self.received_write_multiple_coils_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, quantity))
@@ -58,7 +83,9 @@ impl RequestErrorNotifier for ClientMockApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Client: Request failed - txn_id: {}, unit_id: {}, error: {}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }

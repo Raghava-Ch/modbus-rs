@@ -85,7 +85,7 @@ impl ResponseParser {
     /// Parses an Encapsulated Interface Transport (FC 0x2B) response PDU.
     pub(super) fn parse_encapsulated_interface_transport_response(
         pdu: &Pdu,
-    ) -> Result<(EncapsulatedInterfaceType, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
+    ) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
         if pdu.function_code() != FunctionCode::EncapsulatedInterfaceTransport {
             return Err(MbusError::InvalidFunctionCode);
         }
@@ -96,6 +96,10 @@ impl ResponseParser {
         }
 
         let mei_type = EncapsulatedInterfaceType::try_from(data[0])?;
+        if EncapsulatedInterfaceType::CanopenGeneralReference != mei_type {
+            return Err(MbusError::InvalidMeiType);
+        }
+
         let mut response_data = Vec::new();
         if data.len() > 1 {
             response_data
@@ -103,7 +107,7 @@ impl ResponseParser {
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
-        Ok((mei_type, response_data))
+        Ok(response_data)
     }
 
     /// Parses a Read Device Identification (FC 0x2B / MEI 0x0E) response PDU.
@@ -122,7 +126,7 @@ impl ResponseParser {
         }
 
         if data[0] != EncapsulatedInterfaceType::ReadDeviceIdentification as u8 {
-            return Err(MbusError::InvalidDeviceIdentification);
+            return Err(MbusError::InvalidMeiType);
         }
 
         let read_device_id_code = ReadDeviceIdCode::try_from(data[1])?;
@@ -242,34 +246,33 @@ impl ResponseParser {
 }
 
 // --- Response Handlers ---
-impl<T, APP, const N: usize> ClientServices<T, APP, N>
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
-    T: Transport,
+    TRANSPORT: Transport,
     APP: ClientCommon + DiagnosticsResponse,
 {
     /// Handles a Read Device Identification response.
     pub(super) fn handle_read_device_identification_rsp(
         &mut self,
-        ctx: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
         let device_id_code = ctx.operation_meta.device_id_code();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         match ResponseParser::parse_read_device_identification_response(device_id_code, pdu) {
             Ok(response) => {
                 self.app.read_device_identification_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     &response,
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -280,25 +283,25 @@ where
     /// Returns the MEI type and the raw data payload.
     pub(super) fn handle_encapsulated_interface_transport_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         match ResponseParser::parse_encapsulated_interface_transport_response(pdu) {
             Ok(response) => {
                 self.app.encapsulated_interface_transport_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    response.0,
-                    response.1.as_slice(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
+                    EncapsulatedInterfaceType::CanopenGeneralReference,
+                    response.as_slice(),
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -306,24 +309,24 @@ where
     /// Handles a Read Exception Status response (FC 0x07). Serial Line only.
     pub(super) fn handle_read_exception_status_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         match ResponseParser::parse_read_exception_status_response(pdu) {
             Ok(response) => {
                 self.app.read_exception_status_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     response,
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -331,25 +334,25 @@ where
     /// Handles a Diagnostics response (FC 0x08). Serial Line only.
     pub(super) fn handle_diagnostics_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         match ResponseParser::parse_diagnostics_response(pdu) {
             Ok(response) => {
                 self.app.diagnostics_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     response.0,
                     response.1.as_slice(),
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -357,25 +360,25 @@ where
     /// Handles a Get Comm Event Counter response (FC 0x0B). Serial Line only.
     pub(super) fn handle_get_comm_event_counter_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         match ResponseParser::parse_get_comm_event_counter_response(pdu) {
             Ok(response) => {
                 self.app.get_comm_event_counter_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     response.0,
                     response.1,
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -383,15 +386,18 @@ where
     /// Handles a Get Comm Event Log response (FC 0x0C). Serial Line only.
     pub(super) fn handle_get_comm_event_log_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         match ResponseParser::parse_get_comm_event_log_response(pdu) {
             Ok(response) => {
                 self.app.get_comm_event_log_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     response.0,
                     response.1,
                     response.2,
@@ -399,11 +405,8 @@ where
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }
@@ -411,25 +414,24 @@ where
     /// Handles a Report Server ID response (FC 0x11). Serial Line only.
     pub(super) fn handle_report_server_id_rsp(
         &mut self,
-        _: &ExpectedResponse<T, APP, N>,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
         message: &ModbusMessage,
     ) {
         let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         match ResponseParser::parse_report_server_id_response(pdu) {
             Ok(response) => {
                 self.app.report_server_id_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
+                    transaction_id,
+                    unit_id_or_slave_addr,
                     response.as_slice(),
                 );
             }
             Err(e) => {
-                self.app.request_failed(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    e,
-                );
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
             }
         }
     }

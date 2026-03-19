@@ -12,9 +12,7 @@ mod tests {
 
     use crate::services::fifo_queue::{request::ReqPduCompiler, response::ResponseParser};
     use mbus_core::{
-        data_unit::common::Pdu,
-        errors::MbusError,
-        function_codes::public::FunctionCode,
+        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
     };
 
     // --- Read FIFO Queue (FC 0x18) ---

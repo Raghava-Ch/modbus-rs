@@ -195,6 +195,8 @@ where
         let pdu = message.pdu();
         let from_address = ctx.operation_meta.address();
         let expected_quantity = ctx.operation_meta.quantity();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         let register_rsp =
             match register::service::ServiceDecompiler::handle_read_holding_register_rsp(
@@ -204,11 +206,8 @@ where
             ) {
                 Ok(register_response) => register_response,
                 Err(e) => {
-                    self.app.request_failed(
-                        message.transaction_id(),
-                        message.unit_id_or_slave_addr(),
-                        e,
-                    );
+                    self.app
+                        .request_failed(transaction_id, unit_id_or_slave_addr, e);
                     return;
                 }
             };
@@ -216,15 +215,15 @@ where
         if ctx.operation_meta.is_single() {
             let value = register_rsp.values().get(0).copied().unwrap_or(0);
             self.app.read_single_holding_register_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 from_address,
                 value,
             );
         } else {
             self.app.read_holding_registers_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 &register_rsp,
             );
         }
@@ -239,6 +238,9 @@ where
         let pdu = message.pdu();
         let from_address = ctx.operation_meta.address();
         let quantity = ctx.operation_meta.quantity();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         let register_rsp =
             match register::service::ServiceDecompiler::handle_read_input_register_rsp(
                 pdu,
@@ -247,11 +249,8 @@ where
             ) {
                 Ok(register_response) => register_response,
                 Err(err) => {
-                    self.app.request_failed(
-                        message.transaction_id(),
-                        message.unit_id_or_slave_addr(),
-                        err,
-                    );
+                    self.app
+                        .request_failed(transaction_id, unit_id_or_slave_addr, err);
                     return;
                 }
             };
@@ -259,24 +258,21 @@ where
             let value = match register_rsp.value(from_address) {
                 Ok(v) => v,
                 Err(err) => {
-                    self.app.request_failed(
-                        message.transaction_id(),
-                        message.unit_id_or_slave_addr(),
-                        err,
-                    );
+                    self.app
+                        .request_failed(transaction_id, unit_id_or_slave_addr, err);
                     return;
                 }
             };
             self.app.read_single_input_register_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 from_address,
                 value,
             );
         } else {
             self.app.read_input_registers_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 &register_rsp,
             );
         }
@@ -291,23 +287,23 @@ where
         let pdu = message.pdu();
         let address = ctx.operation_meta.address();
         let value = ctx.operation_meta.single_value();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         if register::service::ServiceDecompiler::handle_write_single_register_rsp(
             pdu, address, value,
         )
         .is_ok()
         {
             self.app.write_single_register_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 address,
                 value,
             );
         } else {
-            self.app.request_failed(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-                MbusError::ParseError,
-            );
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
         }
     }
 
@@ -320,6 +316,9 @@ where
         let pdu = message.pdu();
         let from_address = ctx.operation_meta.address();
         let quantity = ctx.operation_meta.quantity();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         if register::service::ServiceDecompiler::handle_write_multiple_registers_rsp(
             pdu,
             from_address,
@@ -328,17 +327,14 @@ where
         .is_ok()
         {
             self.app.write_multiple_registers_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
+                transaction_id,
+                unit_id_or_slave_addr,
                 from_address,
                 quantity,
             );
         } else {
-            self.app.request_failed(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-                MbusError::ParseError,
-            );
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
         }
     }
 
@@ -350,6 +346,9 @@ where
         let pdu = message.pdu();
         let from_address = ctx.operation_meta.address();
         let read_quantity = ctx.operation_meta.quantity();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         let register_rsp =
             match register::service::ServiceDecompiler::handle_read_write_multiple_registers_rsp(
                 pdu,
@@ -358,18 +357,15 @@ where
             ) {
                 Ok(register_response) => register_response,
                 Err(e) => {
-                    self.app.request_failed(
-                        message.transaction_id(),
-                        message.unit_id_or_slave_addr(),
-                        e,
-                    );
+                    self.app
+                        .request_failed(transaction_id, unit_id_or_slave_addr, e);
                     return;
                 }
             };
 
         self.app.read_write_multiple_registers_response(
-            message.transaction_id(),
-            message.unit_id_or_slave_addr(),
+            transaction_id,
+            unit_id_or_slave_addr,
             &register_rsp,
         );
     }
@@ -383,6 +379,9 @@ where
         let ref_address = ctx.operation_meta.address();
         let and_mask = ctx.operation_meta.and_mask();
         let or_mask = ctx.operation_meta.or_mask();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
         if register::service::ServiceDecompiler::handle_mask_write_register_rsp(
             pdu,
             ref_address,
@@ -391,16 +390,11 @@ where
         )
         .is_ok()
         {
-            self.app.mask_write_register_response(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-            );
+            self.app
+                .mask_write_register_response(transaction_id, unit_id_or_slave_addr);
         } else {
-            self.app.request_failed(
-                message.transaction_id(),
-                message.unit_id_or_slave_addr(),
-                MbusError::ParseError,
-            );
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
         }
     }
 }

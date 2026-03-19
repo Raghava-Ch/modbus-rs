@@ -30,6 +30,10 @@ where
         read_device_id_code: ReadDeviceIdCode,
         object_id: ObjectId,
     ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+        }
+
         let frame = diagnostic::service::ServiceBuilder::read_device_identification(
             txn_id,
             unit_id_slave_addr.get(),
@@ -81,20 +85,23 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // If this is a broadcast and serial transport, we do not expect a response. Do not queue it.
+        if unit_id_slave_addr.is_broadcast() {
+            if self.transport.transport_type().is_tcp_type() {
+                return Err(MbusError::BoradcastNotAllowed);
+            }
+        } else {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_encapsulated_interface_transport_rsp,
-                operation_meta: OperationMeta::Diag(Diag {
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Diag(Diag {
                     device_id_code: ReadDeviceIdCode::Err,
                     encap_type: mei_type,
                 }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                Self::handle_encapsulated_interface_transport_rsp,
+            )?;
+        }
 
         self.transport
             .send(&frame)
@@ -103,23 +110,27 @@ where
     }
 
     /// Sends a Read Exception Status request (FC 07). Serial Line only.
-    pub fn read_exception_status(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr) -> Result<(), MbusError> {
+    pub fn read_exception_status(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
         let frame = diagnostic::service::ServiceBuilder::read_exception_status(
             unit_id_slave_addr.get(),
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_read_exception_status_rsp,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_read_exception_status_rsp,
+        )?;
+
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;
@@ -134,6 +145,17 @@ where
         sub_function: DiagnosticSubFunction,
         data: &[u16],
     ) -> Result<(), MbusError> {
+        const ALLOWED_BROADCAST_SUB_FUNCTIONS: [DiagnosticSubFunction; 4] = [
+            DiagnosticSubFunction::RestartCommunicationsOption,
+            DiagnosticSubFunction::ForceListenOnlyMode,
+            DiagnosticSubFunction::ClearCountersAndDiagnosticRegister,
+            DiagnosticSubFunction::ClearOverrunCounterAndFlag,
+        ];
+        if unit_id_slave_addr.is_broadcast()
+            && !ALLOWED_BROADCAST_SUB_FUNCTIONS.contains(&sub_function)
+        {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
         let frame = diagnostic::service::ServiceBuilder::diagnostics(
             unit_id_slave_addr.get(),
             sub_function,
@@ -141,17 +163,20 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
+        // If this is a broadcast and serial transport, we do not expect a response. Do not queue it.
+        // Note: TCP evaluation isn't strictly needed here because ServiceBuilder::diagnostics
+        // already restricts this to serial only, but we check broadcast to avoid queuing.
+
+        if !unit_id_slave_addr.is_broadcast() {
+            self.add_an_expectation(
                 txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_diagnostics_rsp,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+                unit_id_slave_addr,
+                &frame,
+                OperationMeta::Other,
+                Self::handle_diagnostics_rsp,
+            )?;
+        }
+
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;
@@ -159,23 +184,27 @@ where
     }
 
     /// Sends a Get Comm Event Counter request (FC 11). Serial Line only.
-    pub fn get_comm_event_counter(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+    pub fn get_comm_event_counter(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_counter(
-            unit_id,
+            unit_id_slave_addr.get(),
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id,
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_get_comm_event_counter_rsp,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_get_comm_event_counter_rsp,
+        )?;
+
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;
@@ -183,23 +212,27 @@ where
     }
 
     /// Sends a Get Comm Event Log request (FC 12). Serial Line only.
-    pub fn get_comm_event_log(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+    pub fn get_comm_event_log(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_log(
-            unit_id,
+            unit_id_slave_addr.get(),
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id,
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_get_comm_event_log_rsp,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_get_comm_event_log_rsp,
+        )?;
+
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;
@@ -207,23 +240,28 @@ where
     }
 
     /// Sends a Report Server ID request (FC 17). Serial Line only.
-    pub fn report_server_id(&mut self, txn_id: u16, unit_id: u8) -> Result<(), MbusError> {
+    pub fn report_server_id(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        if unit_id_slave_addr.is_broadcast() {
+            return Err(MbusError::BoradcastNotAllowed);
+        }
+
         let frame = diagnostic::service::ServiceBuilder::report_server_id(
-            unit_id,
+            unit_id_slave_addr.get(),
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id,
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_report_server_id_rsp,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_report_server_id_rsp,
+        )?;
+
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;

@@ -1,14 +1,14 @@
 use anyhow::Result;
-use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
-use modbus_client::services::{
-    ClientServices,
-    diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode},
-};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use mbus_serial::StdSerialTransport;
+use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
+use modbus_client::services::{
+    ClientServices,
+    diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode},
+};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -27,7 +27,8 @@ impl DiagnosticsResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Device Identification",
-            txn_id, unit_id.get()
+            txn_id,
+            unit_id.get()
         );
         println!("  Conformity Level: {:?}", response.conformity_level);
         println!("  More Follows: {}", response.more_follows);
@@ -57,7 +58,16 @@ impl DiagnosticsResponse for ClientApp {
     }
     fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: &[u16]) {}
     fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16, _: u16, _: &[u8]) {}
+    fn get_comm_event_log_response(
+        &self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: u16,
+        _: u16,
+        _: &[u8],
+    ) {
+    }
     fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
     fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
 }
@@ -66,7 +76,9 @@ impl RequestErrorNotifier for ClientApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }

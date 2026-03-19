@@ -1,9 +1,9 @@
 use anyhow::Result;
-use modbus_client::app::{RegisterResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, register::Registers};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_tcp::StdTcpTransport;
+use modbus_client::app::{RegisterResponse, RequestErrorNotifier};
+use modbus_client::services::{ClientServices, register::Registers};
 use std::env;
 
 // --- Client Application Implementation ---
@@ -12,7 +12,12 @@ use std::env;
 struct ClientApp;
 
 impl RegisterResponse for ClientApp {
-    fn read_input_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, registers: &Registers) {
+    fn read_input_registers_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        registers: &Registers,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Input Registers (Addr: {}, Qty: {}): {:?}",
             txn_id,
@@ -32,11 +37,19 @@ impl RegisterResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Single Input Register (Addr: {}): {}",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
 
-    fn read_holding_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, registers: &Registers) {
+    fn read_holding_registers_response(
+        &mut self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        registers: &Registers,
+    ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Holding Registers (Addr: {}, Qty: {}): {:?}",
             txn_id,
@@ -56,7 +69,10 @@ impl RegisterResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Single Holding Register (Addr: {}): {}",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
 
@@ -69,7 +85,10 @@ impl RegisterResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Single Register (Addr: {}, Value: {}) Success",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
 
@@ -82,7 +101,10 @@ impl RegisterResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Multiple Registers (Addr: {}, Qty: {}) Success",
-            txn_id, unit_id.get(), starting_address, quantity
+            txn_id,
+            unit_id.get(),
+            starting_address,
+            quantity
         );
     }
 
@@ -105,7 +127,8 @@ impl RegisterResponse for ClientApp {
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr) {
         println!(
             "Response [Txn: {}, Unit: {}]: Mask Write Register Success",
-            txn_id, unit_id.get()
+            txn_id,
+            unit_id.get()
         );
     }
 
@@ -118,7 +141,10 @@ impl RegisterResponse for ClientApp {
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Single Register (Addr: {}): {}",
-            txn_id, unit_id.get(), address, value
+            txn_id,
+            unit_id.get(),
+            address,
+            value
         );
     }
 }
@@ -127,7 +153,9 @@ impl RequestErrorNotifier for ClientApp {
     fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
-            txn_id, unit_id.get(), error
+            txn_id,
+            unit_id.get(),
+            error
         );
     }
 }

@@ -8,10 +8,10 @@
 //! - Writing single or multiple coils.
 //! - Packing and unpacking coil states into bit-fields within bytes.
 
+use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_PDU_DATA_LEN, Pdu};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
-use heapless::Vec;
 
 use core::usize;
 
