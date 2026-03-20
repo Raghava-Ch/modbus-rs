@@ -21,7 +21,7 @@ use mbus_core::{
 /// at the application level, allowing the implementor to gracefully recover or alert the user.
 pub trait RequestErrorNotifier {
     /// Handles a failed request by invoking the appropriate application callback with the error information.
-    /// 
+    ///
     /// This method is invoked when:
     /// - A Modbus device returns an Exception response.
     /// - The request times out (after all configured retries are exhausted).
@@ -35,12 +35,12 @@ pub trait RequestErrorNotifier {
 }
 
 /// Trait defining the expected response handling for coil-related Modbus operations.
-/// 
+///
 /// Implementors of this trait to deliver the responses to the application layer,
 /// allowing application developers to process the coil data and update their application state accordingly.
 pub trait CoilResponse {
     /// Handles a Read Coils response by invoking the appropriate application callback with the coil states.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -55,7 +55,7 @@ pub trait CoilResponse {
     );
 
     /// Handles a Read Single Coil response.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -308,9 +308,9 @@ pub trait DiscreteInputResponse {
 /// Trait for handling Diagnostics responses.
 pub trait DiagnosticsResponse {
     /// Called when a Read Device Identification response is received.
-    /// 
+    ///
     /// Implementors can use this callback to process the device identity info (Vendor, Product Code, etc.).
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
@@ -323,7 +323,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a generic Encapsulated Interface Transport response (FC 43) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request. `0` in serial transport means “don’t care”.
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
@@ -338,7 +338,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Read Exception Status response (FC 07) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -351,7 +351,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Diagnostics response (FC 08) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -366,7 +366,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Get Comm Event Counter response (FC 11) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -381,7 +381,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Get Comm Event Log response (FC 12) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
@@ -400,7 +400,7 @@ pub trait DiagnosticsResponse {
     );
 
     /// Called when a Report Server ID response (FC 17) is received.
-    /// 
+    ///
     /// # Parameters
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.

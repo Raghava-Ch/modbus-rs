@@ -1,7 +1,7 @@
 use crate::{
     app::FileRecordResponse,
     services::{
-        ClientCommon, ClientServices, ExpectedResponse, OperationMeta,
+        ClientCommon, ClientServices, OperationMeta,
         file_record::{self, SubRequest},
     },
 };
@@ -37,17 +37,13 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_read_file_record_response,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_read_file_record_response,
+        )?;
 
         self.transport
             .send(&frame)
@@ -78,17 +74,13 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_write_file_record_response,
-                operation_meta: OperationMeta::Other,
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Other,
+            Self::handle_write_file_record_response,
+        )?;
 
         self.transport
             .send(&frame)

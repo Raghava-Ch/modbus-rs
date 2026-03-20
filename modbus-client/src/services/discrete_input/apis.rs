@@ -19,10 +19,10 @@ where
     /// - `unit_id`: The Modbus unit ID of the target device.
     /// - `address`: The starting address of the inputs to read.
     /// - `quantity`: The number of inputs to read.
-    /// 
+    ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_discrete_inputs(
@@ -68,10 +68,10 @@ where
     /// - `txn_id`: The transaction ID for this request.
     /// - `unit_id_slave_addr`: The Modbus unit ID of the target device.
     /// - `address`: The exact address of the single input to read.
-    /// 
+    ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_single_discrete_input(

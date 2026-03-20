@@ -1,7 +1,7 @@
 use crate::{
     app::DiagnosticsResponse,
     services::{
-        ClientCommon, ClientServices, Diag, ExpectedResponse, OperationMeta,
+        ClientCommon, ClientServices, Diag, OperationMeta,
         diagnostic::{self, ObjectId, ReadDeviceIdCode},
     },
 };
@@ -42,20 +42,16 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_read_device_identification_rsp,
-                operation_meta: OperationMeta::Diag(Diag {
-                    device_id_code: read_device_id_code,
-                    encap_type: EncapsulatedInterfaceType::Err,
-                }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Diag(Diag {
+                device_id_code: read_device_id_code,
+                encap_type: EncapsulatedInterfaceType::Err,
+            }),
+            Self::handle_read_device_identification_rsp,
+        )?;
 
         self.transport
             .send(&frame)

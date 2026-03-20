@@ -5,9 +5,7 @@ use mbus_core::{
 
 use crate::{
     app::CoilResponse,
-    services::{
-        ClientCommon, ClientServices, ExpectedResponse, Multiple, OperationMeta, Single, coil,
-    },
+    services::{ClientCommon, ClientServices, Multiple, OperationMeta, Single, coil},
 };
 
 impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
@@ -25,7 +23,7 @@ where
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_multiple_coils(
@@ -47,20 +45,16 @@ where
             self.transport.transport_type(),
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_read_coils_response,
-                operation_meta: OperationMeta::Multiple(Multiple {
-                    address: address,
-                    quantity: quantity,
-                }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Multiple(Multiple {
+                address: address,
+                quantity: quantity,
+            }),
+            Self::handle_read_coils_response,
+        )?;
 
         self.transport
             .send(&frame)
@@ -80,7 +74,7 @@ where
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// This method is a convenience wrapper around `read_multiple_coils` for reading a single coil, which simplifies the application logic when only one coil needs to be read.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     pub fn read_single_coil(
@@ -102,20 +96,16 @@ where
             transport_type,
         )?;
 
-        self.expected_responses
-            .push(ExpectedResponse {
-                txn_id,
-                unit_id_or_slave_addr: unit_id_slave_addr.get(),
-                original_adu: frame.clone(),
-                sent_timestamp: self.app.current_millis(),
-                retries_left: self.retry_attempts(),
-                handler: Self::handle_read_coils_response,
-                operation_meta: OperationMeta::Single(Single {
-                    address: address,
-                    value: 0,
-                }),
-            })
-            .map_err(|_| MbusError::TooManyRequests)?;
+        self.add_an_expectation(
+            txn_id,
+            unit_id_slave_addr,
+            &frame,
+            OperationMeta::Single(Single {
+                address: address,
+                value: 0,
+            }),
+            Self::handle_read_coils_response,
+        )?;
 
         self.transport
             .send(&frame)
@@ -134,7 +124,7 @@ where
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_single_coil(
@@ -153,8 +143,8 @@ where
             transport_type,
         )?;
 
-        // Modbus TCP typically does not support broadcast. 
-        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // Modbus TCP typically does not support broadcast.
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
@@ -165,7 +155,10 @@ where
                 txn_id,
                 unit_id_slave_addr,
                 &frame,
-                OperationMeta::Single(Single { address, value: value as u16 }),
+                OperationMeta::Single(Single {
+                    address,
+                    value: value as u16,
+                }),
                 Self::handle_write_single_coil_response,
             )?;
         }
@@ -187,7 +180,7 @@ where
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
-    /// 
+    ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
     pub fn write_multiple_coils(
@@ -208,8 +201,8 @@ where
             transport_type,
         )?;
 
-        // Modbus TCP typically does not support broadcast. 
-        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT 
+        // Modbus TCP typically does not support broadcast.
+        // Serial Modbus (RTU/ASCII) allows broadcast writes, but the client MUST NOT
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
