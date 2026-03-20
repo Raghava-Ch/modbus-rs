@@ -132,14 +132,15 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     // 5. Verify App Callback
     let received_responses = client.app.received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
-    let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+    let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+    let rcv_quantity = rcv_coils.quantity();
 
     assert_eq!(*rcv_txn_id, txn_id);
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), quantity);
-    assert_eq!(rcv_coils.values().as_slice(), &[0x05]);
-    assert_eq!(*rcv_quantity, quantity);
+    assert_eq!(&rcv_coils.values()[..1], &[0x05]);
+    assert_eq!(rcv_quantity, quantity);
 
     Ok(())
 }
@@ -476,14 +477,15 @@ fn test_serial_read_coils_ascii() -> Result<()> {
 
     let received_responses = client.app.received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
-    let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+    let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+    let rcv_quantity = rcv_coils.quantity();
 
     assert_eq!(*rcv_txn_id, txn_id);
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), quantity);
-    assert_eq!(rcv_coils.values().as_slice(), &[0x05]);
-    assert_eq!(*rcv_quantity, quantity);
+    assert_eq!(&rcv_coils.values()[..1], &[0x05]);
+    assert_eq!(rcv_quantity, quantity);
 
     Ok(())
 }

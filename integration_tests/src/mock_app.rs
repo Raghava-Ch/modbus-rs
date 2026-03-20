@@ -1,6 +1,7 @@
 use mbus_core::{
-    errors::MbusError, function_codes::public::EncapsulatedInterfaceType, transport::TimeKeeper,
-    transport::UnitIdOrSlaveAddr,
+    errors::MbusError,
+    function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType},
+    transport::{TimeKeeper, UnitIdOrSlaveAddr},
 };
 use modbus_client::{
     app::{
@@ -18,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MockApp {
-    pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16)>>, // Corrected duplicate
+    pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>, // Corrected duplicate
     pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     pub received_discrete_input_responses:
@@ -36,11 +37,10 @@ impl CoilResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         coils: &Coils,
-        quantity: u16,
     ) {
         self.received_coil_responses
             .borrow_mut()
-            .push((txn_id, unit_id, coils.clone(), quantity));
+            .push((txn_id, unit_id, coils.clone()));
     }
     fn read_single_coil_response(
         &self,
@@ -49,15 +49,15 @@ impl CoilResponse for MockApp {
         address: u16,
         value: bool,
     ) {
+        let mut coils = Coils::new(
+                address,
+                1,
+            );
+        coils.set_value(address, value).unwrap();
         self.received_coil_responses.borrow_mut().push((
             txn_id,
             unit_id,
-            Coils::new(
-                address,
-                1,
-                heapless::Vec::from_slice(&[if value { 1 } else { 0 }]).unwrap(),
-            ),
-            1,
+            coils,
         ));
     }
 
@@ -87,7 +87,7 @@ impl CoilResponse for MockApp {
 }
 
 impl DiscreteInputResponse for MockApp {
-    fn read_discrete_inputs_response(
+    fn read_multiple_discrete_inputs_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
@@ -127,7 +127,7 @@ impl RequestErrorNotifier for MockApp {
 }
 
 impl RegisterResponse for MockApp {
-    fn read_holding_registers_response(
+    fn read_multiple_holding_registers_response(
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
@@ -136,7 +136,7 @@ impl RegisterResponse for MockApp {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
 
-    fn read_input_registers_response(
+    fn read_multiple_input_registers_response(
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
@@ -279,7 +279,7 @@ impl DiagnosticsResponse for MockApp {
         &self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _sub_function: u16,
+        _sub_function: DiagnosticSubFunction,
         _data: &[u16],
     ) {
     }

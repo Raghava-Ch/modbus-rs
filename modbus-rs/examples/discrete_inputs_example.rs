@@ -22,7 +22,7 @@ impl RequestErrorNotifier for ClientApp {
 }
 
 impl DiscreteInputResponse for ClientApp {
-    fn read_discrete_inputs_response(
+    fn read_multiple_discrete_inputs_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,

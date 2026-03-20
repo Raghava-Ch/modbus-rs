@@ -570,7 +570,7 @@ mod tests {
     // --- Mock App Implementation ---
     #[derive(Debug, Default)]
     struct MockApp {
-        pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16), 10>>, // Corrected duplicate
+        pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils), 10>>, // Corrected duplicate
         pub received_write_single_coil_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
         pub received_write_multiple_coils_responses:
@@ -614,11 +614,10 @@ mod tests {
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             coils: &Coils,
-            quantity: u16,
         ) {
             self.received_coil_responses
                 .borrow_mut()
-                .push((txn_id, unit_id_slave_addr, coils.clone(), quantity))
+                .push((txn_id, unit_id_slave_addr, coils.clone()))
                 .unwrap();
         }
 
@@ -630,12 +629,13 @@ mod tests {
             value: bool,
         ) {
             // For single coil, we create a Coils struct with quantity 1 and the single value
-            let mut values_vec = Vec::new();
-            values_vec.push(if value { 0x01 } else { 0x00 }).unwrap(); // Store the single bit in a byte
-            let coils = Coils::new(address, 1, values_vec);
+            let mut values_vec = [0x00, 1];
+            values_vec[0] = if value { 0x01 } else { 0x00 }; // Store the single bit in a byte
+            let mut coils = Coils::new(address, 1);
+            coils.set_values(&values_vec, 1);
             self.received_coil_responses
                 .borrow_mut()
-                .push((txn_id, unit_id_slave_addr, coils, 1))
+                .push((txn_id, unit_id_slave_addr, coils))
                 .unwrap();
         }
 
@@ -667,7 +667,7 @@ mod tests {
     }
 
     impl DiscreteInputResponse for MockApp {
-        fn read_discrete_inputs_response(
+        fn read_multiple_discrete_inputs_response(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
@@ -717,7 +717,7 @@ mod tests {
     }
 
     impl RegisterResponse for MockApp {
-        fn read_holding_registers_response(
+        fn read_multiple_holding_registers_response(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
@@ -762,7 +762,7 @@ mod tests {
                 .unwrap();
         }
 
-        fn read_input_registers_response(
+        fn read_multiple_input_registers_response(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
@@ -903,7 +903,14 @@ mod tests {
         ) {
         }
 
-        fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: &[u16]) {}
+        fn diagnostics_response(
+            &self,
+            _: u16,
+            _: UnitIdOrSlaveAddr,
+            _: DiagnosticSubFunction,
+            _: &[u16],
+        ) {
+        }
 
         fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 
@@ -1008,7 +1015,7 @@ mod tests {
         let quantity = 0; // Invalid quantity
 
         let result = client_services.read_multiple_coils(txn_id, unit_id, address, quantity); // current_millis() is called internally
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidQuantity);
     }
 
     /// Test case: `read_multiple_coils` returns an error if sending fails.
@@ -1196,13 +1203,14 @@ mod tests {
         let received_responses = client_services.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
 
-        let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+        let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+        let rcv_quantity = rcv_coils.quantity();
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_coils.from_address(), address);
         assert_eq!(rcv_coils.quantity(), 1); // Quantity should be 1
-        assert_eq!(rcv_coils.values().as_slice(), &[0x01]); // Value should be 0x01 for true
-        assert_eq!(*rcv_quantity, 1);
+        assert_eq!(&rcv_coils.values()[..1], &[0x01]); // Value should be 0x01 for true
+        assert_eq!(rcv_quantity, 1);
 
         // 4. Assert that the expected response was removed from the queue
         assert!(client_services.expected_responses.is_empty());
@@ -1379,12 +1387,15 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x0000;
         let quantity = 10;
-        let values = [
-            true, false, true, false, true, false, true, false, true, false,
-        ]; // 0x55, 0x01
+        
+        // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
+        let mut values = Coils::new(address, quantity);
+        for i in 0..quantity {
+            values.set_value(address + i, i % 2 == 0).unwrap();
+        }
 
         client_services
-            .write_multiple_coils(txn_id, unit_id, address, quantity, &values) // current_millis() is called internally
+            .write_multiple_coils(txn_id, unit_id, address, &values) // current_millis() is called internally
             .unwrap();
 
         let sent_frames = client_services.transport.sent_frames.borrow();
@@ -1431,13 +1442,16 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x0000;
         let quantity = 10;
-        let values = [
-            true, false, true, false, true, false, true, false, true, false,
-        ];
+        
+        // Initialize a Coils instance with alternating true/false values
+        let mut values = Coils::new(address, quantity);
+        for i in 0..quantity {
+            values.set_value(address + i, i % 2 == 0).unwrap();
+        }
 
         // 1. Send a Write Multiple Coils request
         client_services // current_millis() is called internally
-            .write_multiple_coils(txn_id, unit_id, address, quantity, &values)
+            .write_multiple_coils(txn_id, unit_id, address, &values)
             .unwrap();
 
         // Verify that the request was sent via the mock transport
@@ -1557,13 +1571,14 @@ mod tests {
         let received_responses = client_services.app.received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
 
-        let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+        let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+        let rcv_quantity = rcv_coils.quantity();
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_coils.from_address(), address);
         assert_eq!(rcv_coils.quantity(), quantity);
-        assert_eq!(rcv_coils.values().as_slice(), &[0xB3]);
-        assert_eq!(*rcv_quantity, quantity);
+        assert_eq!(&rcv_coils.values()[..1], &[0xB3]);
+        assert_eq!(rcv_quantity, quantity);
 
         // 4. Assert that the expected response was removed from the queue
         assert!(client_services.expected_responses.is_empty());
@@ -2958,8 +2973,11 @@ mod tests {
 
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
-        let values = [true, false];
-        let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, 2, &values);
+        let mut values = Coils::new(0x0000, 2);
+        values.set_value(0x0000, true).unwrap();
+        values.set_value(0x0001, false).unwrap();
+        
+        let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, &values);
         assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
     }
 

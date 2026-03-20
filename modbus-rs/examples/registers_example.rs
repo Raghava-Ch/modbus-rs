@@ -12,7 +12,7 @@ use std::env;
 struct ClientApp;
 
 impl RegisterResponse for ClientApp {
-    fn read_input_registers_response(
+    fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
@@ -44,7 +44,7 @@ impl RegisterResponse for ClientApp {
         );
     }
 
-    fn read_holding_registers_response(
+    fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,

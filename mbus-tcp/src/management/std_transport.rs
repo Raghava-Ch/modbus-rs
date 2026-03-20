@@ -97,9 +97,9 @@ impl Transport for StdTcpTransport {
 
                 // Set TCP keep-alive if configured
                 // if config.keep_alive_interval_ms > 0 {
-                    // For now, this line is commented out to resolve the compilation error.
-                    // This feature isn't available yet.
-                    // stream.set_keepalive(Some(Duration::from_millis(config.keep_alive_interval_ms as u64))).unwrap_or_else(|e| eprintln!("Failed to set keep-alive: {:?}", e));
+                // For now, this line is commented out to resolve the compilation error.
+                // This feature isn't available yet.
+                // stream.set_keepalive(Some(Duration::from_millis(config.keep_alive_interval_ms as u64))).unwrap_or_else(|e| eprintln!("Failed to set keep-alive: {:?}", e));
                 // }
 
                 self.stream = Some(stream); // Store the connected stream

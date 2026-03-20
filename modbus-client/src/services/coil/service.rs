@@ -60,7 +60,7 @@ impl ServiceBuilder {
         unit_id: u8,
         address: u16,
         quantity: u16,
-        values: &[bool],
+        values: &Coils,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let pdu = ReqPduCompiler::write_multiple_coils_request(address, quantity, values)?;

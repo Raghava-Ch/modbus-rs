@@ -21,8 +21,8 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         coils: &Coils,
-        quantity: u16,
     ) {
+        let quantity = coils.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
             txn_id,

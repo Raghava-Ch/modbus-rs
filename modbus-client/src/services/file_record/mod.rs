@@ -1,3 +1,12 @@
+//! # Modbus File Record Services
+//!
+//! This module provides the implementation for handling Modbus operations related
+//! to generalized File Records.
+//!
+//! ## Supported Function Codes
+//! - **Read File Record (FC 0x14)**: Reads structured data from specific file and record references.
+//! - **Write File Record (FC 0x15)**: Writes structured data to specific file and record references.
+
 pub mod request;
 pub mod response;
 

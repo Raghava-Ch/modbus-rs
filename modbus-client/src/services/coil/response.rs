@@ -74,7 +74,10 @@ impl ResponseParser {
         from_address: u16,
     ) -> Result<Coils, MbusError> {
         let coil_response = Self::parse_read_coils_response(pdu, expected_quantity)?;
-        Ok(Coils::new(from_address, expected_quantity, coil_response))
+        let mut coils = Coils::new(from_address, expected_quantity);
+        coils.set_values(&coil_response, expected_quantity)?;
+        
+        Ok(coils)
     }
 
     /// Parses a Modbus PDU response for a Read Coils (FC 0x01) request for a single coil.
@@ -237,7 +240,6 @@ where
                 transaction_id,
                 unit_id_or_slave_addr,
                 &coil_rsp,
-                expected_quantity, // Pass the original expected quantity
             );
         }
     }
