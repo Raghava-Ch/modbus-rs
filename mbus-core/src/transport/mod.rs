@@ -108,6 +108,9 @@ pub struct ModbusTcpConfig {
     /// Number of retry attempts for failed operations
     pub retry_attempts: u8,
     /// Interval for sending keep-alive messages in milliseconds
+    /// This value is only applicable for `StdTcp` transport type
+    /// The default `mbus-tcp` crate does not support this feature. It is intended for custom `Transport` trait implementations
+    /// where keep-alive functionality might be desired.
     pub keep_alive_interval_ms: u32,
 }
 
