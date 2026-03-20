@@ -26,12 +26,10 @@
 //! This crate is typically used as a dependency for specific transport implementations like `mbus-tcp`
 //! or `mbus-rtu`, or by users implementing custom Modbus devices.
 #![cfg_attr(not(doc), no_std)]
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
-pub mod app;
-pub mod client;
 pub mod data_unit;
-pub mod device_identification;
 pub mod errors;
 pub mod function_codes;
+pub mod models;
 pub mod transport;

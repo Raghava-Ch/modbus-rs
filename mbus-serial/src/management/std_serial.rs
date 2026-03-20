@@ -2,7 +2,7 @@ use std::io::{self, Read, Write};
 use std::time::Duration;
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN};
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, Parity, SerialMode, Transport, TransportError, TransportType,
 };
@@ -13,7 +13,7 @@ use serialport::{ClearBuffer, DataBits, FlowControl, SerialPort, StopBits};
 #[derive(Debug)]
 pub struct StdSerialTransport {
     port: Option<Box<dyn SerialPort>>,
-    mode: SerialMode,      // The serial mode (RTU or ASCII).
+    mode: SerialMode, // The serial mode (RTU or ASCII).
     // Store the configured timeout to restore it after dynamic adjustments in recv
     timeout: Duration,
     // Store the baud rate to calculate inter-frame delays dynamically.

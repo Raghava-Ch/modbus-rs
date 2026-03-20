@@ -1,20 +1,11 @@
 use anyhow::Result;
-use heapless::Vec as HeaplessVec;
-use mbus_core::app::{
-    CoilResponse, Coils, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
-    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
-};
-use mbus_core::client::services::ClientServices;
-use mbus_core::client::services::coils::MAX_COIL_BYTES;
-use mbus_core::client::services::diagnostics::DeviceIdentificationResponse;
-use mbus_core::client::services::discrete_inputs::DiscreteInputs;
-use mbus_core::client::services::fifo::FifoQueue;
-use mbus_core::client::services::file_record::SubRequestParams;
-use mbus_core::client::services::registers::Registers;
-// Import MAX_COIL_BYTES
+use heapless::Vec;
 use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper};
+use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_tcp::StdTcpTransport;
+use modbus_client::app::{CoilResponse, RequestErrorNotifier};
+use modbus_client::services::ClientServices;
+use modbus_client::services::coil::Coils;
 use std::cell::RefCell;
 
 // --- MockApp for Client ---
@@ -22,34 +13,65 @@ use std::cell::RefCell;
 // to receive and store responses from the Modbus server.
 #[derive(Debug, Default)]
 struct ClientMockApp {
-    pub received_coil_responses: RefCell<HeaplessVec<(u16, u8, Coils, u16), 10>>,
-    pub received_write_single_coil_responses: RefCell<HeaplessVec<(u16, u8, u16, bool), 10>>,
-    pub received_write_multiple_coils_responses: RefCell<HeaplessVec<(u16, u8, u16, u16), 10>>,
+    pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16), 10>>,
+    pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
+    pub received_write_multiple_coils_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
 }
 
 impl CoilResponse for ClientMockApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: u8, coils: &Coils, quantity: u16) {
+    fn read_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        coils: &Coils,
+        quantity: u16,
+    ) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone(), quantity))
             .unwrap();
     }
-    fn read_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool) {
-        let mut values_vec = heapless::Vec::<u8, MAX_COIL_BYTES>::new();
-        values_vec.push(if value { 0x01 } else { 0x00 }).unwrap();
-        let coils = Coils::new(address, 1, values_vec);
+    fn read_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_coil_responses
             .borrow_mut()
-            .push((txn_id, unit_id, coils, 1))
+            .push((
+                txn_id,
+                unit_id,
+                Coils::new(
+                    address,
+                    1,
+                    Vec::from_slice(&[if value { 1 } else { 0 }]).unwrap(),
+                ),
+                1,
+            ))
             .unwrap();
     }
-    fn write_single_coil_response(&self, txn_id: u16, unit_id: u8, address: u16, value: bool) {
+    fn write_single_coil_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) {
         self.received_write_single_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, value))
             .unwrap();
     }
-    fn write_multiple_coils_response(&self, txn_id: u16, unit_id: u8, address: u16, quantity: u16) {
+    fn write_multiple_coils_response(
+        &self,
+        txn_id: u16,
+        unit_id: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) {
         self.received_write_multiple_coils_responses
             .borrow_mut()
             .push((txn_id, unit_id, address, quantity))
@@ -57,110 +79,14 @@ impl CoilResponse for ClientMockApp {
     }
 }
 
-impl RegisterResponse for ClientMockApp {
-    /// Handles a Read Input Registers response. Not used in this example.
-    fn read_input_register_response(&mut self, _txn_id: u16, _unit_id: u8, _registers: &Registers) {
-    }
-    /// Handles a Read Holding Registers response. Not used in this example.
-    fn read_holding_registers_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _registers: &Registers,
-    ) {
-    }
-    /// Handles a Write Single Register response. Not used in this example.
-    fn write_single_register_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _address: u16,
-        _value: u16,
-    ) {
-    }
-
-    /// Handles a Read Single Input Register response. Not used in this example.
-    fn read_single_input_register_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _address: u16,
-        _value: u16,
-    ) {
-    }
-    /// Handles a Write Multiple Registers response. Not used in this example.
-    fn write_multiple_registers_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _starting_address: u16,
-        _quantity: u16,
-    ) {
-    }
-    /// Handles a Read/Write Multiple Registers response. Not used in this example.
-    fn read_write_multiple_registers_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _registers: &Registers,
-    ) {
-    }
-    /// Handles a Read Single Register response. Not used in this example.
-    fn read_single_register_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _address: u16,
-        _value: u16,
-    ) {
-    }
-    /// Handles a Read Single Holding Register response. Not used in this example.
-    fn read_single_holding_register_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _address: u16,
-        _value: u16,
-    ) {
-    }
-    /// Handles a Mask Write Register response. Not used in this example.
-    fn mask_write_register_response(&mut self, _txn_id: u16, _unit_id: u8) {}
-}
-
 impl RequestErrorNotifier for ClientMockApp {
-    fn request_failed(&self, txn_id: u16, unit_id: u8, error: MbusError) {
+    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Client: Request failed - txn_id: {}, unit_id: {}, error: {}",
-            txn_id, unit_id, error
+            txn_id,
+            unit_id.get(),
+            error
         );
-    }
-}
-
-impl FifoQueueResponse for ClientMockApp {
-    fn read_fifo_queue_response(&mut self, _txn_id: u16, _unit_id: u8, _values: &FifoQueue) {
-        // Not used in this example
-    }
-}
-
-/// Handles Discrete Input responses. Not used in this example.
-impl DiscreteInputResponse for ClientMockApp {
-    fn read_discrete_inputs_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _inputs: &DiscreteInputs,
-        _quantity: u16,
-    ) {
-    }
-
-    /// Handles a Read Single Discrete Input response. Not used in this example.
-    fn read_single_discrete_input_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _address: u16,
-        _value: bool,
-    ) {
     }
 }
 
@@ -173,72 +99,11 @@ impl TimeKeeper for ClientMockApp {
     }
 }
 
-impl FileRecordResponse for ClientMockApp {
-    fn read_file_record_response(
-        &mut self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _data: &[SubRequestParams],
-    ) {
-        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
-    }
-    fn write_file_record_response(&mut self, _txn_id: u16, _unit_id: u8) {
-        // For simplicity, we won't implement this in the mock since it's not used in the current tests.
-    }
-}
-
-impl DiagnosticsResponse for ClientMockApp {
-    /// Handles a Read Device Identification response. Not used in this example.
-    fn read_device_identification_response(
-        &self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _response: &DeviceIdentificationResponse,
-    ) {
-    }
-
-    /// Handles an Encapsulated Interface Transport response. Not used in this example.
-    fn encapsulated_interface_transport_response(
-        &self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _mei_type: mbus_core::function_codes::public::EncapsulatedInterfaceType,
-        _data: &[u8],
-    ) {
-    }
-    /// Handles a Diagnostics response. Not used in this example.
-    fn diagnostics_response(&self, _txn_id: u16, _unit_id: u8, _sub_function: u16, _data: &[u16]) {}
-    // Handles a Get Comm Event Counter response. Not used in this example.
-    fn get_comm_event_counter_response(
-        &self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _status: u16,
-        _event_count: u16,
-    ) {
-        // Handles a Get Comm Event Counter response. Not used in this example.
-    }
-    /// Handles a Get Comm Event Log response. Not used in this example.
-    fn get_comm_event_log_response(
-        &self,
-        _txn_id: u16,
-        _unit_id: u8,
-        _status: u16,
-        _event_count: u16,
-        _message_count: u16,
-        _events: &[u8],
-    ) {
-        // Handles a Get Comm Event Log response. Not used in this example.
-    }
-    fn read_exception_status_response(&self, _txn_id: u16, _unit_id: u8, _status: u8) {}
-    fn report_server_id_response(&self, _txn_id: u16, _unit_id: u8, _data: &[u8]) {}
-}
-
 fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut tcp_config = ModbusTcpConfig::default("192.168.55.101")
+    let mut tcp_config = ModbusTcpConfig::new("192.168.55.104", 502)
         .map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
     tcp_config.connection_timeout_ms = 500;
     let config = ModbusConfig::Tcp(tcp_config);
@@ -246,15 +111,22 @@ fn main() -> Result<()> {
     let mut client =
         ClientServices::<_, _, 10>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
 
-    let unit_id = 1;
+    let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
 
     println!("\n--- Testing Read Single Coil ---");
     let read_single_address = 1;
     let txn_id_read_single = 100;
     client
         .read_single_coil(txn_id_read_single, unit_id, read_single_address)
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send read single coil: {:?}", e))?;
+
+    // In a real-world scenario, you would call poll() in a loop.
+    // For this example, we poll a few times to allow for network latency.
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     {
         let received_read_single = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_single.len(), 1);
@@ -277,8 +149,13 @@ fn main() -> Result<()> {
             write_single_address,
             write_single_value,
         )
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send write single coil: {:?}", e))?;
+
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     {
         let received_write_single = client.app.received_write_single_coil_responses.borrow();
         assert_eq!(received_write_single.len(), 1);
@@ -291,8 +168,13 @@ fn main() -> Result<()> {
     println!("\n--- Verifying Write Single Coil by Reading Back ---");
     client
         .read_single_coil(txn_id_read_single + 1, unit_id, write_single_address)
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send verification read: {:?}", e))?;
+
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     {
         let received_read_back = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_back.len(), 2); // One for initial read, one for read back
@@ -319,8 +201,13 @@ fn main() -> Result<()> {
             read_multi_address,
             read_multi_quantity,
         )
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send read multiple coils: {:?}", e))?;
+
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     {
         let received_read_multi = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_multi.len(), 3); // Initial read, read back, multi read
@@ -355,8 +242,13 @@ fn main() -> Result<()> {
             write_multi_quantity,
             &write_multi_values,
         )
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send write multiple coils: {:?}", e))?;
+
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     {
         let received_write_multi = client.app.received_write_multiple_coils_responses.borrow();
         assert_eq!(received_write_multi.len(), 1);
@@ -377,8 +269,13 @@ fn main() -> Result<()> {
             write_multi_address,
             write_multi_quantity,
         )
-        .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process the response
+        .map_err(|e| anyhow::anyhow!("Failed to send verification read multi: {:?}", e))?;
+
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     let received_read_back_multi = client.app.received_coil_responses.borrow();
     assert_eq!(received_read_back_multi.len(), 4);
     let (_, _, coils_read_back_multi, _) = &received_read_back_multi[3];

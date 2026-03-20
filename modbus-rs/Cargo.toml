@@ -12,12 +12,32 @@ categories = ["embedded", "no-std"]
 description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
 
 [dependencies]
-mbus-core ={ workspace = true }
-mbus-serial ={ workspace = true }
-mbus-tcp ={ workspace = true }
+mbus-core = { workspace = true }
+mbus-serial = { workspace = true }
+mbus-tcp = { workspace = true }
+modbus-client = { workspace = true }
 
 heapless = { workspace = true }
-bitfields = { workspace = true }
 anyhow = "1.0.102"
 
 [build-dependencies]
+
+[features]
+# By default, all Modbus client services are enabled.
+# To reduce binary size or exclude unused functionality,
+# disable default features and enable only the services you need.
+# These features are re-exported from the `mbus-core` crate.
+default = [
+    "mbus-core/coils",
+    "mbus-core/registers",
+    "mbus-core/discrete-inputs",
+    "mbus-core/fifo",
+    "mbus-core/file-record",
+    "mbus-core/diagnostics",
+]
+coils = ["mbus-core/coils"]
+registers = ["mbus-core/registers"]
+discrete-inputs = ["mbus-core/discrete-inputs"]
+fifo = ["mbus-core/fifo"]
+file-record = ["mbus-core/file-record"]
+diagnostics = ["mbus-core/diagnostics"]
