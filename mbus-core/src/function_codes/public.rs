@@ -1,22 +1,19 @@
 //! # Modbus Public Function Codes and Sub-functions
 //!
-//! This module defines the standard function codes and sub-function codes used in the 
+//! This module defines the standard function codes and sub-function codes used in the
 //! Modbus Application Protocol. It provides enums for:
 //!
 //! - **[`FunctionCode`]**: The primary operation identifier (e.g., Read Coils, Write Register).
 //! - **[`DiagnosticSubFunction`]**: Sub-codes for serial-line diagnostics (FC 0x08).
 //! - **[`EncapsulatedInterfaceType`]**: MEI types for tunneling other protocols (FC 0x2B).
 //!
-//! All types implement `TryFrom` for safe conversion from raw bytes and include 
+//! All types implement `TryFrom` for safe conversion from raw bytes and include
 //! documentation referencing the Modbus Application Protocol Specification V1.1b3.
 //!
-//! This module is `no_std` compatible and uses `repr` attributes to ensure 
+//! This module is `no_std` compatible and uses `repr` attributes to ensure
 //! memory layout matches the protocol's byte-level requirements.
 
 use crate::errors::MbusError;
-
-/// The maximum data length for a Modbus PDU (excluding the function code).
-pub const MAX_PDU_DATA_LEN: usize = 252; // Maximum data length for a PDU (excluding function code)
 
 /// Modbus Public Function Codes.
 ///
@@ -41,24 +38,28 @@ pub enum FunctionCode {
     #[default]
     Default = 0x00, // Placeholder for uninitialized or unknown function code
 
+    #[cfg(feature = "coils")]
     /// 0x01 — Read Coils
     ///
     /// Reads the ON/OFF status of discrete output coils.
     /// Section 6.1
     ReadCoils = 0x01,
 
+    #[cfg(feature = "discrete-inputs")]
     /// 0x02 — Read Discrete Inputs
     ///
     /// Reads the ON/OFF status of discrete input contacts.
     /// Section 6.2
     ReadDiscreteInputs = 0x02,
 
+    #[cfg(feature = "coils")]
     /// 0x05 — Write Single Coil
     ///
     /// Forces a single coil to ON (0xFF00) or OFF (0x0000).
     /// Section 6.5
     WriteSingleCoil = 0x05,
 
+    #[cfg(feature = "coils")]
     /// 0x0F — Write Multiple Coils
     ///
     /// Forces multiple coils to ON/OFF.
@@ -68,12 +69,14 @@ pub enum FunctionCode {
     // ============================================================
     // 16-bit Register Access
     // ============================================================
+    #[cfg(feature = "registers")]
     /// 0x03 — Read Holding Registers
     ///
     /// Reads one or more 16-bit holding registers.
     /// Section 6.3
     ReadHoldingRegisters = 0x03,
 
+    #[cfg(feature = "registers")]
     /// 0x04 — Read Input Registers
     ///
     /// Reads one or more 16-bit input registers.
@@ -81,29 +84,34 @@ pub enum FunctionCode {
     ReadInputRegisters = 0x04,
 
     /// 0x06 — Write Single Register
+    #[cfg(feature = "registers")]
     ///
     /// Writes a single 16-bit holding register.
     /// Section 6.6
     WriteSingleRegister = 0x06,
 
+    #[cfg(feature = "registers")]
     /// 0x10 — Write Multiple Registers
     ///
     /// Writes multiple 16-bit holding registers.
     /// Section 6.12
     WriteMultipleRegisters = 0x10,
 
+    #[cfg(feature = "registers")]
     /// 0x16 — Mask Write Register
     ///
     /// Performs a bitwise mask write on a single register.
     /// Section 6.16
     MaskWriteRegister = 0x16,
 
+    #[cfg(feature = "registers")]
     /// 0x17 — Read/Write Multiple Registers
     ///
     /// Reads and writes multiple registers in a single transaction.
     /// Section 6.17
     ReadWriteMultipleRegisters = 0x17,
 
+    #[cfg(feature = "fifo")]
     /// 0x18 — Read FIFO Queue
     ///
     /// Reads the contents of a FIFO queue.
@@ -113,6 +121,7 @@ pub enum FunctionCode {
     // ============================================================
     // File Record Access
     // ============================================================
+    #[cfg(feature = "file-record")]
     /// 0x14 — Read File Record
     ///
     /// Reads structured file records.
@@ -120,6 +129,7 @@ pub enum FunctionCode {
     ReadFileRecord = 0x14,
 
     /// 0x15 — Write File Record
+    #[cfg(feature = "file-record")]
     ///
     /// Writes structured file records.
     /// Section 6.15
@@ -128,12 +138,14 @@ pub enum FunctionCode {
     // ============================================================
     // Diagnostics & Device Information
     // ============================================================
+    #[cfg(feature = "diagnostics")]
     /// 0x07 — Read Exception Status (Serial Line Only)
     ///
     /// Returns 8-bit exception status.
     /// Section 6.7
     ReadExceptionStatus = 0x07,
 
+    #[cfg(feature = "diagnostics")]
     /// 0x08 — Diagnostics (Serial Line Only)
     ///
     /// Provides diagnostic and loopback tests.
@@ -141,24 +153,28 @@ pub enum FunctionCode {
     /// Section 6.8
     Diagnostics = 0x08,
 
+    #[cfg(feature = "diagnostics")]
     /// 0x0B — Get Communication Event Counter (Serial Line Only)
     ///
     /// Returns communication event counter.
     /// Section 6.9
     GetCommEventCounter = 0x0B,
 
+    #[cfg(feature = "diagnostics")]
     /// 0x0C — Get Communication Event Log (Serial Line Only)
     ///
     /// Returns communication event log.
     /// Section 6.10
     GetCommEventLog = 0x0C,
 
+    #[cfg(feature = "diagnostics")]
     /// 0x11 — Report Server ID (Serial Line Only)
     ///
     /// Returns server identification.
     /// Section 6.13
     ReportServerId = 0x11,
 
+    #[cfg(feature = "diagnostics")]
     /// 0x2B — Encapsulated Interface Transport
     ///
     /// Used for:
@@ -176,24 +192,43 @@ impl TryFrom<u8> for FunctionCode {
         use FunctionCode::*;
 
         match value {
+            #[cfg(feature = "coils")]
             0x01 => Ok(ReadCoils),
+            #[cfg(feature = "discrete-inputs")]
             0x02 => Ok(ReadDiscreteInputs),
+            #[cfg(feature = "registers")]
             0x03 => Ok(ReadHoldingRegisters),
+            #[cfg(feature = "registers")]
             0x04 => Ok(ReadInputRegisters),
+            #[cfg(feature = "coils")]
             0x05 => Ok(WriteSingleCoil),
+            #[cfg(feature = "registers")]
             0x06 => Ok(WriteSingleRegister),
+            #[cfg(feature = "diagnostics")]
             0x07 => Ok(ReadExceptionStatus),
+            #[cfg(feature = "diagnostics")]
             0x08 => Ok(Diagnostics),
+            #[cfg(feature = "diagnostics")]
             0x0B => Ok(GetCommEventCounter),
+            #[cfg(feature = "diagnostics")]
             0x0C => Ok(GetCommEventLog),
+            #[cfg(feature = "coils")]
             0x0F => Ok(WriteMultipleCoils),
+            #[cfg(feature = "registers")]
             0x10 => Ok(WriteMultipleRegisters),
+            #[cfg(feature = "diagnostics")]
             0x11 => Ok(ReportServerId),
+            #[cfg(feature = "file-record")]
             0x14 => Ok(ReadFileRecord),
+            #[cfg(feature = "file-record")]
             0x15 => Ok(WriteFileRecord),
+            #[cfg(feature = "registers")]
             0x16 => Ok(MaskWriteRegister),
+            #[cfg(feature = "registers")]
             0x17 => Ok(ReadWriteMultipleRegisters),
+            #[cfg(feature = "fifo")]
             0x18 => Ok(ReadFifoQueue),
+            #[cfg(feature = "diagnostics")]
             0x2B => Ok(EncapsulatedInterfaceTransport),
             _ => Err(MbusError::UnsupportedFunction(value)),
         }
@@ -307,9 +342,12 @@ impl TryFrom<u16> for DiagnosticSubFunction {
 /// See Section 6.19–6.21 of the specification.
 ///
 /// Encoded as 1 byte following the function code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum EncapsulatedInterfaceType {
+    /// Just a palceholder, Never should have come here in practical
+    #[default]
+    Err,
     /// 0x0D — CANopen General Reference
     CanopenGeneralReference = 0x0D,
 

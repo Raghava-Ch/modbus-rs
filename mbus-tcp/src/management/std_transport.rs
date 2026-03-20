@@ -3,7 +3,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MBAP_HEADER_SIZE};
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
@@ -177,10 +177,10 @@ impl Transport for StdTcpTransport {
             .resize(MAX_ADU_FRAME_LEN, 0)
             .map_err(|_| TransportError::BufferTooSmall)?;
 
-        // 1. Read MBAP header (7 bytes)
+        // 1. Read MBAP header
         let mut bytes_read_total = 0;
-        while bytes_read_total < 7 {
-            match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..7]) {
+        while bytes_read_total < MBAP_HEADER_SIZE {
+            match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..MBAP_HEADER_SIZE]) {
                 Ok(0) => {
                     return Err(handle_error(
                         TransportError::ConnectionClosed,
@@ -194,7 +194,7 @@ impl Transport for StdTcpTransport {
 
         // Parse length field
         let pdu_and_unit_id_len = u16::from_be_bytes([buffer[4], buffer[5]]);
-        let total_adu_len = 6 + pdu_and_unit_id_len as usize;
+        let total_adu_len = (MBAP_HEADER_SIZE - 1) + pdu_and_unit_id_len as usize;
 
         if total_adu_len > MAX_ADU_FRAME_LEN {
             return Err(TransportError::BufferTooSmall);
@@ -519,7 +519,6 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err == TransportError::BufferTooSmall || err == TransportError::ConnectionClosed);
-
 
         server_handle.join().unwrap();
     }

@@ -1,0 +1,194 @@
+use heapless::Vec;
+
+use crate::{
+    app::FileRecordResponse,
+    services::file_record::{
+        FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SUB_REQ_PARAM_BYTE_LEN,
+    },
+    services::{
+        ClientCommon, ClientServices, ExpectedResponse,
+        file_record::{self, SubRequestParams},
+    },
+};
+use mbus_core::{
+    data_unit::common::{ModbusMessage, Pdu},
+    errors::MbusError,
+    function_codes::public::FunctionCode,
+    transport::Transport,
+};
+
+pub(super) struct ResponseParser;
+
+impl ResponseParser {
+    /// Parses a Read File Record (FC 0x14) response PDU.
+    pub(super) fn parse_read_file_record_response(
+        pdu: &Pdu,
+    ) -> Result<Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>, MbusError> {
+        if pdu.function_code() != FunctionCode::ReadFileRecord {
+            return Err(MbusError::ParseError);
+        }
+        let data = pdu.data().as_slice();
+        if data.is_empty() {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let byte_count = data[0] as usize;
+        // Check if data length matches byte count + 1 (for the byte count field itself)
+        if data.len() != byte_count + 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let mut sub_requests = Vec::new();
+        let mut i = 1;
+
+        while i < data.len() {
+            // Expect at least File Resp Len (1 byte) + Ref Type (1 byte) = 2 bytes
+            if i + 2 > data.len() {
+                return Err(MbusError::ParseError);
+            }
+
+            let file_resp_len = data[i] as usize;
+            let ref_type = data[i + 1];
+
+            if ref_type != FILE_RECORD_REF_TYPE {
+                return Err(MbusError::ParseError);
+            }
+
+            // file_resp_len includes the ref_type byte.
+            if file_resp_len < 1 {
+                return Err(MbusError::ParseError);
+            }
+            let data_len = file_resp_len - 1;
+
+            // Check if the sub-response fits in the buffer
+            // i + 1 (len byte) + file_resp_len
+            if i + 1 + file_resp_len > data.len() {
+                return Err(MbusError::ParseError);
+            }
+
+            // Extract data bytes: skip len byte (1) + ref type byte (1)
+            let raw_data = &data[i + 2..i + 2 + data_len];
+            if raw_data.len() % 2 != 0 {
+                return Err(MbusError::ParseError);
+            }
+
+            let mut values = Vec::new();
+            for chunk in raw_data.chunks(2) {
+                let val = u16::from_be_bytes([chunk[0], chunk[1]]);
+                values.push(val).map_err(|_| MbusError::BufferTooSmall)?;
+            }
+
+            let params = SubRequestParams {
+                file_number: 0,   // Not returned in response
+                record_number: 0, // Not returned in response
+                record_length: values.len() as u16,
+                record_data: Some(values),
+            };
+            sub_requests
+                .push(params)
+                .map_err(|_| MbusError::BufferTooSmall)?;
+
+            // Move to next sub-response: current index + 1 (len byte) + length of sub-response
+            i += 1 + file_resp_len;
+        }
+
+        Ok(sub_requests)
+    }
+
+    /// Parses a Write File Record (FC 0x15) response PDU.
+    pub(super) fn parse_write_file_record_response(pdu: &Pdu) -> Result<(), MbusError> {
+        if pdu.function_code() != FunctionCode::WriteFileRecord {
+            return Err(MbusError::ParseError);
+        }
+
+        let data = pdu.data().as_slice();
+        if data.is_empty() {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        // Byte Count: 1 byte indicating the length of the response data that follows
+        let byte_count = data[0] as usize;
+        if data.len() != byte_count + 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let mut i = 1;
+        while i < data.len() {
+            // Fixed header part: Ref(1) + File(2) + RecNum(2) + RecLen(2) = 7 bytes
+            if i + SUB_REQ_PARAM_BYTE_LEN > data.len() {
+                return Err(MbusError::InvalidPduLength);
+            }
+
+            let ref_type = data[i];
+            if ref_type != FILE_RECORD_REF_TYPE {
+                return Err(MbusError::ParseError);
+            }
+
+            // Record length is at offset 5 and 6 relative to the start of the sub-request
+            let record_len = u16::from_be_bytes([data[i + 5], data[i + 6]]) as usize;
+            let data_byte_len = record_len * 2;
+
+            let sub_req_len = SUB_REQ_PARAM_BYTE_LEN + data_byte_len;
+            if i + sub_req_len > data.len() {
+                return Err(MbusError::ParseError);
+            }
+
+            i += sub_req_len;
+        }
+
+        Ok(())
+    }
+}
+
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + FileRecordResponse,
+{
+    pub(super) fn handle_read_file_record_response(
+        &mut self,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
+        message: &ModbusMessage,
+    ) {
+        let function_code = message.function_code();
+        let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        let data = match file_record::service::ServiceDecompiler::handle_read_file_record_rsp(
+            function_code,
+            pdu,
+        ) {
+            Ok(d) => d,
+            Err(e) => {
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
+                return;
+            }
+        };
+
+        self.app
+            .read_file_record_response(transaction_id, unit_id_or_slave_addr, &data);
+    }
+
+    pub(super) fn handle_write_file_record_response(
+        &mut self,
+        ctx: &ExpectedResponse<TRANSPORT, APP, N>,
+        message: &ModbusMessage,
+    ) {
+        let function_code = message.function_code();
+        let pdu = message.pdu();
+        let transaction_id = ctx.txn_id;
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        if file_record::service::ServiceDecompiler::handle_write_file_record_rsp(function_code, pdu)
+            .is_ok()
+        {
+            self.app
+                .write_file_record_response(transaction_id, unit_id_or_slave_addr);
+        } else {
+            self.app
+                .request_failed(transaction_id, unit_id_or_slave_addr, MbusError::ParseError);
+        }
+    }
+}
