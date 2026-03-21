@@ -97,7 +97,7 @@ fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut tcp_config = ModbusTcpConfig::new("192.168.55.104", 502)
+    let mut tcp_config = ModbusTcpConfig::new("192.168.55.200", 502)
         .map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
     tcp_config.connection_timeout_ms = 500;
     let config = ModbusConfig::Tcp(tcp_config);

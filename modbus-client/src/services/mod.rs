@@ -26,7 +26,7 @@ pub mod register;
 use crate::app::RequestErrorNotifier;
 use diagnostic::ReadDeviceIdCode;
 use heapless::Vec;
-use mbus_core::data_unit::common::{ModbusMessage, SlaveAddress};
+use mbus_core::data_unit::common::{ModbusMessage, SlaveAddress, derive_length_from_bytes};
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::transport::{UidSaddrFrom, UnitIdOrSlaveAddr};
 use mbus_core::{
@@ -160,7 +160,9 @@ pub(crate) struct ExpectedResponse<T, A, const N: usize> {
     /// Retained in memory to allow automatic `retries` without recompiling.
     pub original_adu: Vec<u8, MAX_ADU_FRAME_LEN>,
 
+    /// Time stamp when request is posted
     pub sent_timestamp: u64,
+    /// The number of retries left for this request.
     pub retries_left: u8,
 
     /// Pointer to the specific module's parser/handler function for this operation.
@@ -256,14 +258,43 @@ where
         // 1. Attempt to receive a frame
         match self.transport.recv() {
             Ok(frame) => {
-                self.rxed_frame.extend(frame);
+                if self.rxed_frame.extend_from_slice(frame.as_slice()).is_err() {
+                    // Buffer overflowed without forming a valid frame. Must be noise.
+                    self.rxed_frame.clear();
+                }
 
-                // If a frame is received, ingest it
-                match self.ingest_frame() {
-                    Ok(_) => {
-                        self.rxed_frame.clear();
+                // Process as many pipelined/concatenated frames as exist in the buffer
+                while !self.rxed_frame.is_empty() {
+                    match self.ingest_frame() {
+                        Ok(consumed) => {
+                            let len = self.rxed_frame.len();
+                            if consumed < len {
+                                // Shift array to the left to drain processed bytes (no_std compatible)
+                                for i in 0..(len - consumed) {
+                                    self.rxed_frame[i] = self.rxed_frame[consumed + i];
+                                }
+                                self.rxed_frame.truncate(len - consumed);
+                            } else {
+                                self.rxed_frame.clear();
+                            }
+                        }
+                        Err(MbusError::BufferTooSmall) => {
+                            // Reached an incomplete frame, break and wait for more bytes
+                            break;
+                        }
+                        Err(_) => {
+                            // Garbage or parsing error, drop the first byte and try again to resync the stream
+                            let len = self.rxed_frame.len();
+                            if len > 1 {
+                                for i in 0..(len - 1) {
+                                    self.rxed_frame[i] = self.rxed_frame[1 + i];
+                                }
+                                self.rxed_frame.truncate(len - 1);
+                            } else {
+                                self.rxed_frame.clear();
+                            }
+                        }
                     }
-                    Err(_) => {}
                 }
             }
             Err(_) => {
@@ -440,11 +471,24 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     }
 
     /// Ingests received Modbus frames from the transport layer.
-    pub fn ingest_frame(&mut self) -> Result<(), MbusError> {
+    pub fn ingest_frame(&mut self) -> Result<usize, MbusError> {
         let frame = self.rxed_frame.as_slice();
-        // Changed to &mut self, removed transport param
-        let transport_type = self.transport.transport_type(); // Access self.transport directly
-        let message = match common::decompile_adu_frame(frame, transport_type) {
+        let transport_type = self.transport.transport_type();
+
+        let expected_length = match derive_length_from_bytes(frame, transport_type) {
+            Some(len) => len,
+            None => return Err(MbusError::BufferTooSmall),
+        };
+
+        if expected_length > MAX_ADU_FRAME_LEN {
+            return Err(MbusError::BasicParseError);
+        }
+
+        if self.rxed_frame.len() < expected_length {
+            return Err(MbusError::BufferTooSmall);
+        }
+
+        let message = match common::decompile_adu_frame(&frame[..expected_length], transport_type) {
             Ok(value) => value,
             Err(err) => {
                 return Err(err); // Malformed frame or parsing error, frame is dropped.
@@ -456,7 +500,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(header) => header,
-                    _ => return Ok(()),
+                    _ => return Ok(expected_length),
                 };
                 let additional_addr = AdditionalAddress::MbapHeader(*mbap_header);
                 ModbusMessage::new(additional_addr, message.pdu)
@@ -464,7 +508,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             StdSerial(_) | CustomSerial(_) => {
                 let slave_addr = match message.additional_address() {
                     AdditionalAddress::SlaveAddress(addr) => addr.address(),
-                    _ => return Ok(()),
+                    _ => return Ok(expected_length),
                 };
 
                 let additional_address =
@@ -475,7 +519,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
 
         self.dispatch_response(&message);
 
-        Ok(())
+        Ok(expected_length)
     }
 }
 
@@ -632,7 +676,7 @@ mod tests {
             let mut values_vec = [0x00, 1];
             values_vec[0] = if value { 0x01 } else { 0x00 }; // Store the single bit in a byte
             let mut coils = Coils::new(address, 1);
-            coils.set_values(&values_vec, 1);
+            let _ = coils.set_values(&values_vec, 1);
             self.received_coil_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, coils))
@@ -1387,7 +1431,7 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x0000;
         let quantity = 10;
-        
+
         // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
         let mut values = Coils::new(address, quantity);
         for i in 0..quantity {
@@ -1442,7 +1486,7 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x0000;
         let quantity = 10;
-        
+
         // Initialize a Coils instance with alternating true/false values
         let mut values = Coils::new(address, quantity);
         for i in 0..quantity {
@@ -2976,7 +3020,7 @@ mod tests {
         let mut values = Coils::new(0x0000, 2);
         values.set_value(0x0000, true).unwrap();
         values.set_value(0x0001, false).unwrap();
-        
+
         let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, &values);
         assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
     }
@@ -2994,5 +3038,37 @@ mod tests {
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
         let res = client_services.read_discrete_inputs(txn_id, unit_id, 0x0000, 2);
         assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    }
+
+    /// Test case: `poll` clears the internal receive buffer if it overflows with garbage bytes.
+    /// This simulates a high-noise environment where fragments accumulate beyond `MAX_ADU_FRAME_LEN`.
+    #[test]
+    fn test_client_services_clears_buffer_on_overflow() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        // Fill the internal buffer close to its capacity (MAX_ADU_FRAME_LEN = 513) with unparsable garbage
+        let initial_garbage = [0xFF; MAX_ADU_FRAME_LEN - 10];
+        client_services.rxed_frame.extend_from_slice(&initial_garbage).unwrap();
+
+        // Inject another chunk of bytes that will cause an overflow when appended
+        let chunk = [0xAA; 20];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&chunk).unwrap())
+            .unwrap();
+
+        // Poll should attempt to extend the buffer, fail because 503 + 20 > 513, and clear the buffer to recover.
+        client_services.poll();
+
+        assert!(
+            client_services.rxed_frame.is_empty(),
+            "Buffer should be cleared on overflow to prevent crashing and recover from stream noise."
+        );
     }
 }

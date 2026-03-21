@@ -489,3 +489,106 @@ fn test_serial_read_coils_ascii() -> Result<()> {
 
     Ok(())
 }
+
+/// Test case: Simulates a fragmented stream receiving a complete RTU frame attached to a half-frame.
+/// It verifies the client processes the complete frame and queues the remainder seamlessly.
+#[test]
+fn test_serial_fragmented_frames_rtu() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let sent_data = transport.sent_data.clone();
+    let recv_data = transport.recv_data.clone();
+
+    let app = MockApp::default();
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 8,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    // 1. Send Request 1 (Read Coils)
+    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)?;
+    sent_data.borrow_mut().clear();
+
+    // Prepared mock responses
+    let frame1 = [0x01, 0x01, 0x01, 0x05, 0x91, 0x8B]; // Complete Response 1
+    let frame2 = [0x01, 0x05, 0x00, 0x0A, 0xFF, 0x00, 0xAC, 0x38]; // Response 2
+
+    // 2. Inject Frame 1 entirely, and ONLY the first 4 bytes of Frame 2 (fragmentation boundary)
+    {
+        let mut recv = recv_data.borrow_mut();
+        recv.extend_from_slice(&frame1);
+        recv.extend_from_slice(&frame2[..4]);
+    }
+
+    // 3. Poll: This should successfully process Request 1, and securely keep the 4 bytes in the buffer
+    client.poll();
+    {
+        let received = client.app.received_coil_responses.borrow();
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].0, 1);
+    }
+
+    // 4. Send Request 2 (Write Single Coil) - Only allowed to pipiline after Req 1 completes for serial
+    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
+    sent_data.borrow_mut().clear();
+
+    // 5. Inject the remaining 4 bytes of Frame 2
+    {
+        let mut recv = recv_data.borrow_mut();
+        recv.extend_from_slice(&frame2[4..]);
+    }
+
+    // 6. Poll: This should stitch the remaining bytes to the buffer and successfully process Request 2
+    client.poll();
+    {
+        let received_writes = client.app.received_write_single_coil_responses.borrow();
+        assert_eq!(received_writes.len(), 1);
+        assert_eq!(received_writes[0].0, 2);
+    }
+
+    Ok(())
+}
+
+/// Test case: Simulates fragmented frames over Modbus ASCII where delimiting characters determine boundaries.
+#[test]
+fn test_serial_fragmented_frames_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let recv_data = transport.recv_data.clone();
+
+    let app = MockApp::default();
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: 7,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let frame1 = b":01010105F8\r\n";
+    let frame2 = b":0105000AFF00F1\r\n";
+
+    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)?;
+    recv_data.borrow_mut().extend_from_slice(frame1);
+    recv_data.borrow_mut().extend_from_slice(&frame2[..8]);
+    client.poll();
+    assert_eq!(client.app.received_coil_responses.borrow()[0].0, 1);
+
+    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
+    recv_data.borrow_mut().extend_from_slice(&frame2[8..]);
+    client.poll();
+    assert_eq!(client.app.received_write_single_coil_responses.borrow()[0].0, 2);
+
+    Ok(())
+}
