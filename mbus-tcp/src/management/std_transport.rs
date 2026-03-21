@@ -3,7 +3,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MBAP_HEADER_SIZE};
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN};
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
@@ -150,72 +150,55 @@ impl Transport for StdTcpTransport {
         Ok(())
     }
 
-    /// Receives a Modbus Application Data Unit (ADU) from the TCP connection.
+    /// Receives available Modbus bytes from the TCP connection.
     ///
-    /// This method first reads the 7-byte MBAP header to determine the expected
-    /// length of the full ADU, then reads the remaining bytes. It ensures that
-    /// a complete ADU, as indicated by the MBAP length field, is received.
+    /// This implementation performs a single, non-blocking read operation. It retrieves
+    /// whatever bytes are currently available in the socket buffer up to the maximum ADU size.
+    /// The higher-level Modbus Client Services (`ClientServices::ingest_frame`) is responsible
+    /// for buffering and isolating the complete frames.
     ///
     /// # Returns
-    /// `Ok(Vec<u8, 260>)` containing the received ADU, or an error otherwise.
+    /// `Ok(Vec<u8, MAX_ADU_FRAME_LEN>)` containing the received bytes, or an error otherwise.
     fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
         let stream = self
             .stream
             .as_mut()
             .ok_or(TransportError::ConnectionClosed)?;
 
-        // Helper closure to handle errors and update state
-        let handle_error = |err: TransportError, stream_opt: &mut Option<TcpStream>| {
-            if err == TransportError::ConnectionClosed {
-                *stream_opt = None;
+        // Temporarily set the stream to non-blocking to immediately return available bytes
+        // without blocking the caller's polling loop.
+        let _ = stream.set_nonblocking(true);
+
+        let mut temp_buf = [0u8; MAX_ADU_FRAME_LEN];
+        let read_result = stream.read(&mut temp_buf);
+
+        // Restore the stream to blocking mode so that `send` (which uses `write_all`)
+        // continues to respect the configured timeouts without failing prematurely on a full buffer.
+        let _ = stream.set_nonblocking(false);
+
+        match read_result {
+            Ok(0) => {
+                // A read of 0 bytes indicates the peer gracefully closed the TCP connection.
+                self.stream = None;
+                Err(TransportError::ConnectionClosed)
             }
-            err
-        };
-
-        let mut buffer = Vec::new();
-        buffer
-            .resize(MAX_ADU_FRAME_LEN, 0)
-            .map_err(|_| TransportError::BufferTooSmall)?;
-
-        // 1. Read MBAP header
-        let mut bytes_read_total = 0;
-        while bytes_read_total < MBAP_HEADER_SIZE {
-            match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..MBAP_HEADER_SIZE]) {
-                Ok(0) => {
-                    return Err(handle_error(
-                        TransportError::ConnectionClosed,
-                        &mut self.stream,
-                    ));
+            Ok(n) => {
+                let mut buffer = Vec::new();
+                // Copy the read bytes into our heapless vector.
+                if buffer.extend_from_slice(&temp_buf[..n]).is_err() {
+                    return Err(TransportError::BufferTooSmall);
                 }
-                Ok(n) => bytes_read_total += n,
-                Err(e) => return Err(handle_error(Self::map_io_error(e), &mut self.stream)),
+                Ok(buffer)
             }
-        }
-
-        // Parse length field
-        let pdu_and_unit_id_len = u16::from_be_bytes([buffer[4], buffer[5]]);
-        let total_adu_len = (MBAP_HEADER_SIZE - 1) + pdu_and_unit_id_len as usize;
-
-        if total_adu_len > MAX_ADU_FRAME_LEN {
-            return Err(TransportError::BufferTooSmall);
-        }
-
-        // 2. Read remaining bytes
-        while bytes_read_total < total_adu_len {
-            match stream.read(&mut buffer.as_mut_slice()[bytes_read_total..total_adu_len]) {
-                Ok(0) => {
-                    return Err(handle_error(
-                        TransportError::ConnectionClosed,
-                        &mut self.stream,
-                    ));
+            Err(e) => {
+                let err = Self::map_io_error(e);
+                if err == TransportError::ConnectionClosed {
+                    self.stream = None;
                 }
-                Ok(n) => bytes_read_total += n,
-                Err(e) => return Err(handle_error(Self::map_io_error(e), &mut self.stream)),
+                // WouldBlock gets mapped to TransportError::Timeout, signaling no data is currently ready.
+                Err(err)
             }
         }
-
-        buffer.truncate(total_adu_len);
-        Ok(buffer)
     }
 
     /// Checks if the transport is currently connected to a remote host.
@@ -414,8 +397,24 @@ mod tests {
 
         transport.connect(&config).unwrap();
 
-        let received_adu = transport.recv().unwrap();
-        assert_eq!(received_adu.as_slice(), adu_to_send);
+        // The non-blocking receiver might fetch fragments if testing fast enough, so
+        // we buffer and await until the full transmission is verified in the test.
+        let mut combined_adu = std::vec::Vec::new();
+        for _ in 0..50 {
+            match transport.recv() {
+                Ok(bytes) => {
+                    combined_adu.extend_from_slice(&bytes);
+                    if combined_adu.len() == adu_to_send.len() {
+                        break;
+                    }
+                }
+                Err(TransportError::Timeout) => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+        }
+        assert_eq!(combined_adu.as_slice(), adu_to_send);
 
         server_handle.join().unwrap();
     }
@@ -452,7 +451,17 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
-        let result = transport.recv();
+        let mut result = transport.recv();
+        for _ in 0..50 {
+            if let Err(TransportError::Timeout) = result {
+                std::thread::sleep(Duration::from_millis(10));
+                result = transport.recv();
+            } else if let Ok(_) = result {
+                result = transport.recv();
+            } else {
+                break;
+            }
+        }
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionClosed);
 
@@ -483,42 +492,19 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
         transport.connect(&config).unwrap();
 
-        let result = transport.recv();
+        let mut result = transport.recv();
+        for _ in 0..50 {
+            if let Err(TransportError::Timeout) = result {
+                std::thread::sleep(Duration::from_millis(10));
+                result = transport.recv();
+            } else if let Ok(_) = result {
+                result = transport.recv();
+            } else {
+                break;
+            }
+        }
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TransportError::ConnectionClosed);
-
-        server_handle.join().unwrap();
-    }
-
-    /// Test case: `recv` returns `BufferTooSmall` or `ConnectionClosed`
-    #[test]
-    fn test_recv_failure_buffer_too_small() {
-        // Corrected function name
-        let listener = create_test_listener();
-        let addr = listener.local_addr().unwrap();
-        let (tx, rx) = mpsc::channel();
-        // Craft an ADU header that indicates a length greater than 260 bytes.
-        // Max ADU is 260. If length field is 255 (0xFF), total ADU is 6 + 255 = 261.
-        let oversized_adu_header = [0x00, 0x01, 0x00, 0x00, 0x00, 0xFF, 0x01]; // Length = 255
-
-        let server_handle = thread::spawn(move || {
-            tx.send(()).expect("Failed to send server ready signal");
-            let (mut stream, _) = listener.accept().unwrap();
-            stream.write_all(&oversized_adu_header).unwrap();
-            // The client should detect the oversized ADU after reading the header
-        });
-
-        rx.recv().expect("Failed to receive server ready signal");
-
-        let mut transport = StdTcpTransport::new();
-        let port = get_host_port(addr);
-        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
-        transport.connect(&config).unwrap();
-
-        let result = transport.recv();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err == TransportError::BufferTooSmall || err == TransportError::ConnectionClosed);
 
         server_handle.join().unwrap();
     }
@@ -712,7 +698,15 @@ mod tests {
 
         // Attempt a receive operation to force the client's TcpStream to detect the peer's closure.
         // This should result in TransportError::ConnectionClosed and update the transport's state.
-        let recv_result = transport.recv();
+        let mut recv_result = transport.recv();
+        for _ in 0..50 {
+            if let Err(TransportError::Timeout) = recv_result {
+                std::thread::sleep(Duration::from_millis(10));
+                recv_result = transport.recv();
+            } else {
+                break;
+            }
+        }
         assert!(recv_result.is_err());
         assert_eq!(recv_result.unwrap_err(), TransportError::ConnectionClosed);
         // Now, the transport should report as disconnected.
