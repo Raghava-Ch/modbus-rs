@@ -9,8 +9,6 @@
 //! The module is designed for `no_std` environments, utilizing `heapless` vectors for fixed-capacity
 //! memory management to ensure deterministic behavior in embedded systems.
 
-/// Maximum data length for a PDU (excluding function code)
-use crate::data_unit::tcp::ModbusTcpMessage;
 use crate::errors::MbusError;
 use crate::function_codes::public::FunctionCode;
 use crate::transport::{SerialMode, TransportType, UnitIdOrSlaveAddr, checksum};
@@ -18,6 +16,8 @@ use heapless::Vec;
 
 /// Maximum data length for a PDU (excluding function code)
 pub const MAX_PDU_DATA_LEN: usize = 252;
+
+pub const MODBUS_PROTOCOL_ID: u16 = 0x0000;
 
 /// Maximum length of an ADU (MBAP header + PDU)
 /// Maximum length of an ADU (ASCII mode requires 513 bytes)
@@ -34,6 +34,21 @@ pub const MIN_ASCII_ADU_LEN: usize = 9;
 
 /// Size of the Modbus RTU CRC field in bytes.
 pub const RTU_CRC_SIZE: usize = 2;
+
+/// Offset of the Transaction ID in the MBAP header.
+pub const MBAP_TXN_ID_OFFSET_1B: usize = 0;
+/// Offset of the Transaction ID in the MBAP header.
+pub const MBAP_TXN_ID_OFFSET_2B: usize = MBAP_TXN_ID_OFFSET_1B + 1;
+/// Offset of the Protocol ID in the MBAP header.
+pub const MBAP_PROTO_ID_OFFSET_1B: usize = 2;
+/// Offset of the Protocol ID in the MBAP header.
+pub const MBAP_PROTO_ID_OFFSET_2B: usize = MBAP_PROTO_ID_OFFSET_1B + 1;
+/// Offset of  Length field in the MBAP header.
+pub const MBAP_LENGTH_OFFSET_1B: usize = 4;
+/// Offset of the 2nd byte of the Length field in the MBAP header.
+pub const MBAP_LENGTH_OFFSET_2B: usize = MBAP_LENGTH_OFFSET_1B + 1;
+/// Offset of the Unit ID in the MBAP header.
+pub const MBAP_UNIT_ID_OFFSET: usize = 6;
 
 /// Number of bytes in a Modbus ASCII Start character.
 pub const ASCII_START_SIZE: usize = 1;
@@ -261,6 +276,71 @@ impl ModbusMessage {
         Ok(adu_bytes)
     }
 
+    /// Creates a `ModbusMessage` from its byte representation (ADU).
+    ///
+    /// This method parses the MBAP header and the PDU from the given byte slice.
+    ///
+    /// # Arguments
+    /// * `bytes` - A byte slice containing the complete Modbus TCP ADU.
+    ///
+    /// # Returns
+    /// `Ok((ModbusMessage, usize))` containing the parsed message and the number of consumed bytes.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, MbusError> {
+        // Minimum ADU length: MBAP header + 1 byte Function Code
+        if bytes.len() < MBAP_HEADER_SIZE + 1 {
+            return Err(MbusError::InvalidAduLength); // Reusing for general invalid length
+        }
+
+        // Parse MBAP Header
+        // Transaction ID: 2 bytes starting at offset 0
+        let transaction_id =
+            u16::from_be_bytes([bytes[MBAP_TXN_ID_OFFSET_1B], bytes[MBAP_TXN_ID_OFFSET_2B]]);
+        // Protocol ID: 2 bytes starting at offset 2
+        let protocol_id = u16::from_be_bytes([
+            bytes[MBAP_PROTO_ID_OFFSET_1B],
+            bytes[MBAP_PROTO_ID_OFFSET_2B],
+        ]);
+        // Length: 2 bytes starting at offset 4
+        let length =
+            u16::from_be_bytes([bytes[MBAP_LENGTH_OFFSET_1B], bytes[MBAP_LENGTH_OFFSET_2B]]);
+        // Unit ID: 1 byte at offset 6
+        let unit_id = bytes[MBAP_UNIT_ID_OFFSET];
+
+        // Validate Protocol Identifier
+        if protocol_id != MODBUS_PROTOCOL_ID {
+            return Err(MbusError::BasicParseError); // Invalid protocol ID
+        }
+
+        // Validate Length field
+        // The length field specifies the number of following bytes, including the Unit ID and PDU.
+        // So, actual_pdu_and_unit_id_len = bytes.len() - 6 (MBAP header without length field)
+        // And length field value should be actual_pdu_and_unit_id_len
+        const INITIAL_FRAME_LEN: usize = MBAP_HEADER_SIZE - 1; // MBAP
+        let expected_total_len_from_header = length as usize + INITIAL_FRAME_LEN; // 6 bytes for TID, PID, Length field itself
+
+        // Ensure we have enough bytes in the buffer to form the complete expected frame
+        if bytes.len() < expected_total_len_from_header {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        // Slice exactly the frame length indicated by the header to support pipelined streams
+        let frame_bytes = &bytes[..expected_total_len_from_header];
+        // The PDU starts after the MBAP header
+        let pdu_bytes_slice = &frame_bytes[MBAP_HEADER_SIZE..];
+
+        // Parse PDU using the existing Pdu::from_bytes method
+        let pdu = Pdu::from_bytes(pdu_bytes_slice)?;
+
+        let additional_addr = AdditionalAddress::MbapHeader(MbapHeader {
+            transaction_id,
+            protocol_id,
+            length,
+            unit_id,
+        });
+
+        Ok(ModbusMessage::new(additional_addr, pdu))
+    }
+
     /// Converts the `ModbusMessage` into its ASCII ADU byte representation.
     ///
     /// This method serializes the message to binary, calculates the LRC,
@@ -310,6 +390,90 @@ impl ModbusMessage {
             .map_err(|_| MbusError::BufferTooSmall)?;
 
         Ok(ascii_data)
+    }
+
+    pub fn from_rtu_bytes(frame: &[u8]) -> Result<Self, MbusError> {
+        // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
+        // Minimum length: MIN_RTU_ADU_LEN (4)
+        if frame.len() < MIN_RTU_ADU_LEN {
+            return Err(MbusError::InvalidAduLength);
+        }
+
+        let data_len = frame.len() - RTU_CRC_SIZE;
+        let data_to_check = &frame[..data_len];
+        let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
+
+        let calculated_crc = checksum::crc16(data_to_check);
+
+        if calculated_crc != received_crc {
+            return Err(MbusError::ChecksumError); // CRC Mismatch
+        }
+
+        let slave_address = SlaveAddress::new(frame[0])?;
+        // PDU is from byte 1 to end of data (excluding CRC)
+        let pdu_bytes = &frame[1..data_len];
+        let pdu = Pdu::from_bytes(pdu_bytes)?;
+
+        Ok(ModbusMessage::new(
+            AdditionalAddress::SlaveAddress(slave_address),
+            pdu,
+        ))
+    }
+
+    pub fn from_ascii_bytes(frame: &[u8]) -> Result<Self, MbusError> {
+        // ASCII Frame: [Start (:)] [Address (2)] [PDU (N)] [LRC (2)] [End (\r\n)]
+        // Minimum length: MIN_ASCII_ADU_LEN (9)
+        if frame.len() < MIN_ASCII_ADU_LEN {
+            return Err(MbusError::InvalidAduLength);
+        }
+
+        // Check Start and End characters
+        if frame[0] != b':' {
+            return Err(MbusError::BasicParseError); // Missing start char
+        }
+        if frame[frame.len() - 2] != b'\r' || frame[frame.len() - 1] != b'\n' {
+            return Err(MbusError::BasicParseError); // Missing end chars
+        }
+
+        // Extract Hex content (excluding ':' and '\r\n')
+        let hex_content = &frame[ASCII_START_SIZE..frame.len() - ASCII_END_SIZE];
+        if hex_content.len() % 2 != 0 {
+            return Err(MbusError::BasicParseError); // Odd length hex string
+        }
+
+        // Decode Hex to Binary
+        // Max binary length = (513 - 3) / 2 = 255. Using 260 for safety.
+        let mut binary_data: Vec<u8, 260> = Vec::new();
+        for chunk in hex_content.chunks(2) {
+            let byte = hex_pair_to_byte(chunk[0], chunk[1])?;
+            binary_data
+                .push(byte)
+                .map_err(|_| MbusError::BufferTooSmall)?;
+        }
+
+        // Binary structure: [Slave Address (1)] [PDU (N)] [LRC (1)]
+        if binary_data.len() < 2 {
+            return Err(MbusError::InvalidAduLength);
+        }
+
+        let data_len = binary_data.len() - 1;
+        let data_to_check = &binary_data[..data_len];
+        let received_lrc = binary_data[data_len];
+
+        let calculated_lrc = checksum::lrc(data_to_check);
+
+        if calculated_lrc != received_lrc {
+            return Err(MbusError::ChecksumError); // LRC Mismatch
+        }
+
+        let slave_address = SlaveAddress::new(binary_data[0])?;
+        let pdu_bytes = &binary_data[1..data_len];
+        let pdu = Pdu::from_bytes(pdu_bytes)?;
+
+        Ok(ModbusMessage::new(
+            AdditionalAddress::SlaveAddress(slave_address),
+            pdu,
+        ))
     }
 }
 
@@ -464,7 +628,7 @@ pub fn compile_adu_frame(
     }
 }
 
-/// Decodes a raw transport frame into a ModbusTcpMessage based on the transport type.
+/// Decodes a raw transport frame into a ModbusMessage based on the transport type.
 pub fn decompile_adu_frame(
     frame: &[u8],
     transport_type: TransportType,
@@ -472,103 +636,193 @@ pub fn decompile_adu_frame(
     let message = match transport_type {
         TransportType::StdTcp | TransportType::CustomTcp => {
             // Parse MBAP header and PDU
-            match ModbusTcpMessage::from_adu_bytes(frame) {
-                Ok(msg) => {
-                    let additional_address =
-                        AdditionalAddress::MbapHeader(msg.mbap_header().clone());
-                    ModbusMessage {
-                        additional_address: additional_address,
-                        pdu: msg.pdu().clone(),
-                    } // Successfully decoded the frame.
-                }
-                // If decoding fails, the frame is dropped.
-                Err(_e) => {
-                    return Err(MbusError::BasicParseError);
-                }
-            }
+            ModbusMessage::from_bytes(frame)
         }
         TransportType::StdSerial(serial_mode) | TransportType::CustomSerial(serial_mode) => {
             match serial_mode {
-                SerialMode::Rtu => {
-                    // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
-                    // Minimum length: MIN_RTU_ADU_LEN (4)
-                    if frame.len() < MIN_RTU_ADU_LEN {
-                        return Err(MbusError::InvalidAduLength);
-                    }
-
-                    let data_len = frame.len() - RTU_CRC_SIZE;
-                    let data_to_check = &frame[..data_len];
-                    let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
-
-                    let calculated_crc = checksum::crc16(data_to_check);
-
-                    if calculated_crc != received_crc {
-                        return Err(MbusError::ChecksumError); // CRC Mismatch
-                    }
-
-                    let slave_address = SlaveAddress::new(frame[0])?;
-                    // PDU is from byte 1 to end of data (excluding CRC)
-                    let pdu_bytes = &frame[1..data_len];
-                    let pdu = Pdu::from_bytes(pdu_bytes)?;
-
-                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
-                }
-                SerialMode::Ascii => {
-                    // ASCII Frame: [Start (:)] [Address (2)] [PDU (N)] [LRC (2)] [End (\r\n)]
-                    // Minimum length: MIN_ASCII_ADU_LEN (9)
-                    if frame.len() < MIN_ASCII_ADU_LEN {
-                        return Err(MbusError::InvalidAduLength);
-                    }
-
-                    // Check Start and End characters
-                    if frame[0] != b':' {
-                        return Err(MbusError::BasicParseError); // Missing start char
-                    }
-                    if frame[frame.len() - 2] != b'\r' || frame[frame.len() - 1] != b'\n' {
-                        return Err(MbusError::BasicParseError); // Missing end chars
-                    }
-
-                    // Extract Hex content (excluding ':' and '\r\n')
-                    let hex_content = &frame[ASCII_START_SIZE..frame.len() - ASCII_END_SIZE];
-                    if hex_content.len() % 2 != 0 {
-                        return Err(MbusError::BasicParseError); // Odd length hex string
-                    }
-
-                    // Decode Hex to Binary
-                    // Max binary length = (513 - 3) / 2 = 255. Using 260 for safety.
-                    let mut binary_data: Vec<u8, 260> = Vec::new();
-                    for chunk in hex_content.chunks(2) {
-                        let byte = hex_pair_to_byte(chunk[0], chunk[1])?;
-                        binary_data
-                            .push(byte)
-                            .map_err(|_| MbusError::BufferTooSmall)?;
-                    }
-
-                    // Binary structure: [Slave Address (1)] [PDU (N)] [LRC (1)]
-                    if binary_data.len() < 2 {
-                        return Err(MbusError::InvalidAduLength);
-                    }
-
-                    let data_len = binary_data.len() - 1;
-                    let data_to_check = &binary_data[..data_len];
-                    let received_lrc = binary_data[data_len];
-
-                    let calculated_lrc = checksum::lrc(data_to_check);
-
-                    if calculated_lrc != received_lrc {
-                        return Err(MbusError::ChecksumError); // LRC Mismatch
-                    }
-
-                    let slave_address = SlaveAddress::new(binary_data[0])?;
-                    let pdu_bytes = &binary_data[1..data_len];
-                    let pdu = Pdu::from_bytes(pdu_bytes)?;
-
-                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
-                }
+                SerialMode::Rtu => ModbusMessage::from_rtu_bytes(frame),
+                SerialMode::Ascii => ModbusMessage::from_ascii_bytes(frame),
             }
         }
     };
-    Ok(message)
+
+    message
+}
+
+/// Derives the expected total length of a Modbus frame from its initial bytes.
+///
+/// This function is used by stream-based transports to determine if a complete
+/// Application Data Unit (ADU) has been received before attempting full decompression.
+///
+/// # Arguments
+/// * `frame` - The raw byte buffer containing the partial or full frame.
+/// * `transport_type` - The Modbus variant (TCP, RTU, or ASCII).
+///
+/// # Returns
+/// * `Some(usize)` - The calculated total length of the frame if enough metadata is present.
+/// * `None` - If the buffer is too short to determine the length.
+pub fn derive_length_from_bytes(frame: &[u8], transport_type: TransportType) -> Option<usize> {
+    match transport_type {
+        TransportType::StdTcp | TransportType::CustomTcp => {
+            // TCP (MBAP) requires at least 6 bytes to read the 'Length' field.
+            // MBAP structure: TID(2), PID(2), Length(2), UnitID(1)
+            if frame.len() < 6 {
+                return None;
+            }
+
+            // In Modbus TCP, the Protocol ID MUST be 0x0000.
+            // If it's not, this is garbage data. We return a huge length to trigger a parse error 
+            // downstream and force the window to slide and resync.
+            let protocol_id = u16::from_be_bytes([frame[2], frame[3]]);
+            if protocol_id != MODBUS_PROTOCOL_ID {
+                return Some(usize::MAX);
+            }
+
+            // The Length field in MBAP (offset 4) counts all following bytes (UnitID + PDU).
+            // Total ADU = 6 bytes (Header up to Length) + value of Length field.
+            let length_field = u16::from_be_bytes([frame[4], frame[5]]) as usize;
+            Some(6 + length_field)
+        }
+        TransportType::StdSerial(SerialMode::Rtu)
+        | TransportType::CustomSerial(SerialMode::Rtu) => {
+            if frame.len() < 2 {
+                return None;
+            }
+
+            let fc = frame[1];
+
+            // Exception responses are universally 5 bytes: [ID][FC+0x80][ExcCode][CRC_L][CRC_H]
+            if is_exception_code(fc) {
+                return Some(5);
+            }
+
+            // Helper: Opportunistically verifies if a potential frame boundary has a valid CRC.
+            // This allows us to disambiguate Requests vs Responses dynamically as the stream arrives.
+            let check_crc = |len: usize| -> bool {
+                if frame.len() >= len && len >= MIN_RTU_ADU_LEN {
+                    let data_len = len - RTU_CRC_SIZE;
+                    let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
+                    checksum::crc16(&frame[..data_len]) == received_crc
+                } else {
+                    false
+                }
+            };
+
+            get_byte_count_from_frame(frame, fc, check_crc)
+        }
+        TransportType::StdSerial(SerialMode::Ascii)
+        | TransportType::CustomSerial(SerialMode::Ascii) => {
+            // ASCII frames are delimited by ':' and '\r\n'.
+            // We scan for the end-of-frame marker.
+            if frame.len() < MIN_ASCII_ADU_LEN {
+                return None;
+            }
+
+            // Fast linear scan for the LF character which terminates the frame
+            frame.iter().position(|&b| b == b'\n').map(|pos| pos + 1)
+        }
+    }
+}
+
+fn get_byte_count_from_frame(
+    frame: &[u8],
+    fc: u8,
+    check_crc: impl Fn(usize) -> bool,
+) -> Option<usize> {
+    let mut candidates = heapless::Vec::<usize, 4>::new();
+    let mut min_needed = usize::MAX;
+
+    // Helper function to safely calculate dynamic lengths based on a byte in the frame.
+    // We pass candidates as a mutable reference to avoid "multiple mutable borrow" errors
+    // that occur when a closure captures a mutable variable and is called multiple times.
+    let mut add_dyn = |cands: &mut heapless::Vec<usize, 4>, offset: usize, base: usize| {
+        if frame.len() > offset {
+            let _ = cands.push(base + frame[offset] as usize);
+        } else {
+            min_needed = core::cmp::min(min_needed, offset + 1);
+        }
+    };
+
+    // Map structural candidates (Requests and Responses combined) based on Modbus definitions
+    match fc {
+        1 | 2 | 3 | 4 => {
+            let _ = candidates.push(8);
+            add_dyn(&mut candidates, 2, 5);
+        }
+        5 | 6 | 8 => {
+            let _ = candidates.push(8);
+        }
+        7 => {
+            let _ = candidates.push(4);
+            let _ = candidates.push(5);
+        }
+        11 => {
+            let _ = candidates.push(4);
+            let _ = candidates.push(8);
+        }
+        12 | 17 => {
+            let _ = candidates.push(4);
+            add_dyn(&mut candidates, 2, 5);
+        }
+        15 | 16 => {
+            let _ = candidates.push(8);
+            add_dyn(&mut candidates, 6, 9);
+        }
+        20 | 21 => add_dyn(&mut candidates, 2, 5),
+        22 => {
+            let _ = candidates.push(10);
+        }
+        23 => {
+            add_dyn(&mut candidates, 2, 5);
+            add_dyn(&mut candidates, 10, 13);
+        }
+        24 => {
+            let _ = candidates.push(6);
+            if frame.len() >= 4 {
+                let byte_count = u16::from_be_bytes([frame[2], frame[3]]) as usize;
+                let _ = candidates.push(6 + byte_count);
+            } else {
+                min_needed = core::cmp::min(min_needed, 4);
+            }
+        }
+        43 => {
+            if check_crc(7) {
+                return Some(7);
+            }
+            // Response is unpredictable. Scan opportunistically forwards to support pipelined frames.
+            for len in MIN_RTU_ADU_LEN..=frame.len() {
+                if check_crc(len) {
+                    return Some(len);
+                }
+            }
+            return None;
+        }
+        _ => {
+            for len in MIN_RTU_ADU_LEN..=frame.len() {
+                if check_crc(len) {
+                    return Some(len);
+                }
+            }
+            return None;
+        }
+    }
+
+    // 1. Opportunistic CRC checks to lock in an exact frame boundary
+    for &len in &candidates {
+        if check_crc(len) {
+            return Some(len);
+        }
+    }
+
+    // 2. If no CRC matched yet, determine the max length we might need to wait for
+    let max_candidate = candidates.iter().copied().max().unwrap_or(0);
+    let target = if min_needed != usize::MAX {
+        core::cmp::max(min_needed, max_candidate)
+    } else {
+        max_candidate
+    };
+
+    if target > 0 { Some(target) } else { None }
 }
 
 /// Helper function to convert a 4-bit nibble to its ASCII hex representation.
@@ -978,15 +1232,16 @@ mod tests {
     fn test_decompile_adu_frame_tcp_invalid() {
         let frame = [0x00]; // Too short
         let err = decompile_adu_frame(&frame, TransportType::StdTcp).expect_err("Should fail");
-        assert_eq!(err, MbusError::BasicParseError);
+        assert_eq!(err, MbusError::InvalidAduLength);
     }
 
     #[test]
     fn test_decompile_adu_frame_rtu_valid() {
         // Frame: 01 03 00 6B 00 03 74 17 (CRC LE)
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17];
-        let msg = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
-            .expect("Valid RTU");
+        let msg =
+            decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
+                .expect("Valid RTU");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
@@ -1010,8 +1265,9 @@ mod tests {
     fn test_decompile_adu_frame_ascii_valid() {
         // :010300000001FB\r\n
         let frame = b":010300000001FB\r\n";
-        let msg = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
-            .expect("Valid ASCII");
+        let msg =
+            decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+                .expect("Valid ASCII");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
@@ -1067,5 +1323,114 @@ mod tests {
         let err = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Ascii))
             .expect_err("Buffer overflow");
         assert_eq!(err, MbusError::BufferTooSmall);
+    }
+
+    // --- Tests for derive_length_from_bytes ---
+
+    #[test]
+    fn test_derive_length_tcp() {
+        // TCP frame requires minimum 6 bytes to read the length offset.
+        let short_frame = [0x00, 0x01, 0x00, 0x00, 0x00];
+        assert_eq!(
+            derive_length_from_bytes(&short_frame, TransportType::StdTcp),
+            None
+        );
+
+        // TCP MBAP: TID(2) PID(2) LEN(2) = 0x0006. Total length should be 6 + 6 = 12.
+        let full_frame = [
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01,
+        ];
+        assert_eq!(
+            derive_length_from_bytes(&full_frame, TransportType::StdTcp),
+            Some(12)
+        );
+
+        // TCP MBAP with invalid Protocol ID should return usize::MAX to trigger garbage disposal.
+        let garbage_frame = [
+            0x00, 0x01, 0xAA, 0xBB, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01,
+        ];
+        assert_eq!(
+            derive_length_from_bytes(&garbage_frame, TransportType::StdTcp),
+            Some(usize::MAX)
+        );
+    }
+
+    #[test]
+    fn test_derive_length_rtu_fixed() {
+        // FC 5 (Write Single Coil) is uniformly 8 bytes for requests and responses.
+        let request = [0x01, 0x05, 0x00, 0x0A, 0xFF, 0x00, 0x00, 0x00];
+        assert_eq!(
+            derive_length_from_bytes(&request, TransportType::StdSerial(SerialMode::Rtu)),
+            Some(8)
+        );
+    }
+
+    #[test]
+    fn test_derive_length_rtu_dynamic() {
+        // Read Holding Registers Response (FC 03)
+        // Schema: Address(1) + FC(03) + ByteCount(2) + Data(0x12, 0x34) + CRC(2)
+        let mut resp = [0x01, 0x03, 0x02, 0x12, 0x34, 0x00, 0x00];
+        let crc = checksum::crc16(&resp[..5]);
+        let crc_bytes = crc.to_le_bytes();
+        resp[5] = crc_bytes[0];
+        resp[6] = crc_bytes[1];
+
+        // Opportunistic CRC should instantly lock on an exact length of 7.
+        assert_eq!(
+            derive_length_from_bytes(&resp, TransportType::StdSerial(SerialMode::Rtu)),
+            Some(7)
+        );
+
+        // A partial frame (4 bytes) should predict up to 8 (max candidate comparison logic).
+        assert_eq!(
+            derive_length_from_bytes(&resp[..4], TransportType::StdSerial(SerialMode::Rtu)),
+            Some(8)
+        );
+    }
+
+    #[test]
+    fn test_derive_length_rtu_exception() {
+        // Exception responses are universally 5 bytes.
+        let exception = [0x01, 0x81, 0x02, 0x00, 0x00];
+        assert_eq!(
+            derive_length_from_bytes(&exception, TransportType::StdSerial(SerialMode::Rtu)),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn test_derive_length_rtu_forward_scan() {
+        // Build a frame with unknown/custom Function Code (e.g. 0x44)
+        let mut custom_frame = [0x01, 0x44, 0xAA, 0xBB, 0x00, 0x00];
+        let crc = checksum::crc16(&custom_frame[..4]);
+        let crc_bytes = crc.to_le_bytes();
+        custom_frame[4] = crc_bytes[0];
+        custom_frame[5] = crc_bytes[1];
+
+        assert_eq!(
+            derive_length_from_bytes(&custom_frame, TransportType::StdSerial(SerialMode::Rtu)),
+            Some(6)
+        );
+
+        // Without the valid CRC, it will continuously scan forward but yield None if unmatched.
+        assert_eq!(
+            derive_length_from_bytes(&custom_frame[..4], TransportType::StdSerial(SerialMode::Rtu)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_derive_length_ascii() {
+        let frame = b":010300000001FB\r\n";
+        assert_eq!(
+            derive_length_from_bytes(frame, TransportType::StdSerial(SerialMode::Ascii)),
+            Some(17)
+        );
+
+        let partial = b":010300000001F";
+        assert_eq!(
+            derive_length_from_bytes(partial, TransportType::StdSerial(SerialMode::Ascii)),
+            None
+        );
     }
 }

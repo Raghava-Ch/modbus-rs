@@ -14,4 +14,3 @@
 //! where dynamic allocation is often restricted.
 
 pub mod common;
-pub mod tcp;

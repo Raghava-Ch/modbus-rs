@@ -12,6 +12,7 @@ use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_PDU_DATA_LEN, Pdu};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::models::coil::Coils;
 
 use core::usize;
 
@@ -37,7 +38,7 @@ impl ReqPduCompiler {
     /// quantity is out of the valid Modbus range (1 to 2000).
     pub(super) fn read_coils_request(address: u16, quantity: u16) -> Result<Pdu, MbusError> {
         if !(1..=2000).contains(&quantity) {
-            return Err(MbusError::InvalidPduLength); // Quantity out of range
+            return Err(MbusError::InvalidQuantity); // Quantity out of range
         }
 
         let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
@@ -104,7 +105,7 @@ impl ReqPduCompiler {
     pub(super) fn write_multiple_coils_request(
         address: u16,
         quantity: u16,
-        values: &[bool],
+        values: &Coils,
     ) -> Result<Pdu, MbusError> {
         // Max quantity for Write Multiple Coils is 1968.
         // PDU data: Address (2 bytes) + Quantity (2 bytes) + Byte Count (1 byte) + Coil Status (N bytes)
@@ -112,9 +113,6 @@ impl ReqPduCompiler {
         // 2 + 2 + 1 + ceil(1968/8) = 5 + 246 = 251 bytes. This fits.
         if !(1..=1968).contains(&quantity) {
             return Err(MbusError::InvalidPduLength);
-        }
-        if values.len() as u16 != quantity {
-            return Err(MbusError::InvalidPduLength); // Mismatch between quantity and values length
         }
 
         let byte_count = ((quantity + 7) / 8) as u8;
@@ -130,19 +128,11 @@ impl ReqPduCompiler {
             .push(byte_count)
             .map_err(|_| MbusError::BufferLenMissmatch)?;
 
-        // Initialize bytes for coil data
+        // Append the exact number of coil bytes needed
         let num_coil_bytes = byte_count as usize;
         data_vec
-            .resize(data_vec.len() + num_coil_bytes, 0)
+            .extend_from_slice(&values.values()[..num_coil_bytes])
             .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        for (i, &value) in values.iter().enumerate() {
-            if value {
-                let byte_index = 5 + (i / 8); // Offset by 5 (addr, qty, byte_count) in the PDU data
-                let bit_index = i % 8;
-                data_vec[byte_index] |= 1 << bit_index;
-            }
-        }
 
         Ok(Pdu::new(
             FunctionCode::WriteMultipleCoils,

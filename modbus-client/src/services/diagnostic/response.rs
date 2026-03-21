@@ -10,7 +10,7 @@ use crate::{
 use mbus_core::{
     data_unit::common::{MAX_PDU_DATA_LEN, ModbusMessage, Pdu},
     errors::MbusError,
-    function_codes::public::{EncapsulatedInterfaceType, FunctionCode},
+    function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
     transport::Transport,
 };
 
@@ -341,20 +341,28 @@ where
         let transaction_id = ctx.txn_id;
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
-        match ResponseParser::parse_diagnostics_response(pdu) {
-            Ok(response) => {
-                self.app.diagnostics_response(
-                    transaction_id,
-                    unit_id_or_slave_addr,
-                    response.0,
-                    response.1.as_slice(),
-                );
-            }
+        let response = match ResponseParser::parse_diagnostics_response(pdu) {
+            Ok(response) => response,
             Err(e) => {
                 self.app
                     .request_failed(transaction_id, unit_id_or_slave_addr, e);
+                return;
             }
-        }
+        };
+        let sub_function = match DiagnosticSubFunction::try_from(response.0) {
+            Ok(sub_function) => sub_function,
+            Err(e) => {
+                self.app
+                    .request_failed(transaction_id, unit_id_or_slave_addr, e);
+                return;
+            }
+        };
+        self.app.diagnostics_response(
+            transaction_id,
+            unit_id_or_slave_addr,
+            sub_function,
+            response.1.as_slice(),
+        );
     }
 
     /// Handles a Get Comm Event Counter response (FC 0x0B). Serial Line only.

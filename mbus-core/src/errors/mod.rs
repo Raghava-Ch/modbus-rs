@@ -49,6 +49,8 @@ pub enum MbusError {
     SendFailed,
     /// Invalid address
     InvalidAddress,
+    /// Invalid offset
+    InvalidOffset,
     /// Too many requests in flight, expected responses buffer is full
     TooManyRequests,
     /// Invalid function code
@@ -224,6 +226,7 @@ impl fmt::Display for MbusError {
                 f,
                 "Broadcast not allowed: Broadcast not allowed for tcp transport type"
             ),
+            MbusError::InvalidOffset => write!(f, "Invalid offset: The provided offset is invalid"),
         }
     }
 }

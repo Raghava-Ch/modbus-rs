@@ -221,7 +221,7 @@ where
                 value,
             );
         } else {
-            self.app.read_holding_registers_response(
+            self.app.read_multiple_holding_registers_response(
                 transaction_id,
                 unit_id_or_slave_addr,
                 &register_rsp,
@@ -270,7 +270,7 @@ where
                 value,
             );
         } else {
-            self.app.read_input_registers_response(
+            self.app.read_multiple_input_registers_response(
                 transaction_id,
                 unit_id_or_slave_addr,
                 &register_rsp,

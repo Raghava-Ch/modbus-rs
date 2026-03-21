@@ -98,7 +98,7 @@ where
                 value,
             );
         } else {
-            self.app.read_discrete_inputs_response(
+            self.app.read_multiple_discrete_inputs_response(
                 transaction_id,
                 unit_id_or_slave_addr,
                 &discrete_inputs,

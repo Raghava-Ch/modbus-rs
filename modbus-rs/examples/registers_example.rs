@@ -12,7 +12,7 @@ use std::env;
 struct ClientApp;
 
 impl RegisterResponse for ClientApp {
-    fn read_input_registers_response(
+    fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
@@ -44,7 +44,7 @@ impl RegisterResponse for ClientApp {
         );
     }
 
-    fn read_holding_registers_response(
+    fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
@@ -180,7 +180,7 @@ fn main() -> Result<()> {
     let host = if args.len() > 1 {
         &args[1]
     } else {
-        "192.168.55.106"
+        "192.168.55.200"
     };
     let port = if args.len() > 2 {
         args[2].parse().unwrap_or(502)

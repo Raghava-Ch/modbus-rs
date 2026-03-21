@@ -21,8 +21,8 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         coils: &Coils,
-        quantity: u16,
     ) {
+        let quantity = coils.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
             txn_id,
@@ -154,6 +154,22 @@ fn main() -> Result<()> {
     println!("\n[2] Sending Read Coils (Addr: 0, Qty: 5)...");
     client
         .read_multiple_coils(2, target_unit_id, 0, 5)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    for _ in 0..5 {
+        client.poll();
+        sleep(Duration::from_millis(200));
+    }
+
+    // 3. Write Multiple Coils
+    println!("\n[3] Sending Write Multiple Coils (Addr: 10, Qty: 3)...");
+    let mut multi_coils = Coils::new(10, 3);
+    // Initialize with some test data
+    multi_coils.set_value(10, true).unwrap();
+    multi_coils.set_value(11, false).unwrap();
+    multi_coils.set_value(12, true).unwrap();
+
+    client
+        .write_multiple_coils(3, target_unit_id, 10, &multi_coils)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

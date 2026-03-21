@@ -1,5 +1,6 @@
 use anyhow::Result;
 use mbus_core::errors::MbusError;
+use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::transport::{
     BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
 };
@@ -56,7 +57,7 @@ impl DiagnosticsResponse for ClientApp {
         _: &[u8],
     ) {
     }
-    fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: &[u16]) {}
+    fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: DiagnosticSubFunction, _: &[u16]) {}
     fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn get_comm_event_log_response(
         &self,

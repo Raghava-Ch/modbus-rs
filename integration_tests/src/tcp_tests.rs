@@ -7,6 +7,7 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
 use mbus_tcp::StdTcpTransport;
 use modbus_client::services::{
+    coil::Coils,
     diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
     ClientServices,
 };
@@ -26,30 +27,30 @@ fn test_client_services_read_single_coil() -> Result<()> {
         let mut buf = [0; 12];
         stream.read_exact(&mut buf)?;
         #[rustfmt::skip]
-            assert_eq!(
-                buf,
-                [
-                    0x00, 0x02, // Transaction ID (2)
-                    0x00, 0x00, // Protocol ID (0 = Modbus)
-                    0x00, 0x06, // Length (6 bytes follow)
-                    0x01,       // Unit ID (1)
-                    0x01,       // Function Code (1 = Read Coils)
-                    0x00, 0x01, // Starting Address (1)
-                    0x00, 0x01, // Quantity of Coils (1)
-                ]
-            );
+        assert_eq!(
+            buf,
+            [
+                0x00, 0x02, // Transaction ID (2)
+                0x00, 0x00, // Protocol ID (0 = Modbus)
+                0x00, 0x06, // Length (6 bytes follow)
+                0x01,       // Unit ID (1)
+                0x01,       // Function Code (1 = Read Coils)
+                0x00, 0x01, // Starting Address (1)
+                0x00, 0x01, // Quantity of Coils (1)
+            ]
+        );
 
         // Send a Read Coils response for 1 coil at address 1 with value true
         #[rustfmt::skip]
-            stream.write_all(&[
-                0x00, 0x02, // Transaction ID
-                0x00, 0x00, // Protocol ID
-                0x00, 0x04, // Length
-                0x01,       // Unit ID
-                0x01,       // Function Code (Read Coils)
-                0x01,       // Byte Count
-                0x01,       // Coil Status (Bit 0 = 1)
-            ])?;
+        stream.write_all(&[
+            0x00, 0x02, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x04, // Length
+            0x01,       // Unit ID
+            0x01,       // Function Code (Read Coils)
+            0x01,       // Byte Count
+            0x01,       // Coil Status (Bit 0 = 1)
+        ])?;
 
         Ok(())
     });
@@ -66,18 +67,27 @@ fn test_client_services_read_single_coil() -> Result<()> {
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 1;
     client.read_single_coil(txn_id, unit_id, address).unwrap(); // Send read request
-    client.poll(); // Process read response
+
+    for _ in 0..50 {
+        client.poll(); // Process read response
+        if !client.app.received_coil_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // Assert that the MockApp received the correct response
     let received_responses = client.app.received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
-    let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+    let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+    let rcv_quantity = rcv_coils.quantity();
+
     assert_eq!(*rcv_txn_id, txn_id);
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), 1);
-    assert_eq!(rcv_coils.values().as_slice(), &[0x01]); // Value should be 0x01 for true
-    assert_eq!(*rcv_quantity, 1);
+    assert_eq!(&rcv_coils.values()[..1], &[0x01]); // Value should be 0x01 for true
+    assert_eq!(rcv_quantity, 1);
     server_handle.join().unwrap()?;
     Ok(())
 }
@@ -138,18 +148,26 @@ fn test_client_services_read_coils() -> Result<()> {
     client
         .read_multiple_coils(txn_id, unit_id, address, quantity)
         .unwrap();
-    client.poll(); // Process read response
+
+    for _ in 0..50 {
+        client.poll(); // Process read response
+        if !client.app.received_coil_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
-    let (rcv_txn_id, rcv_unit_id, rcv_coils, rcv_quantity) = &received_responses[0];
+    let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
+    let rcv_quantity = rcv_coils.quantity();
 
     assert_eq!(*rcv_txn_id, txn_id);
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), quantity);
-    assert_eq!(rcv_coils.values().as_slice(), &[0x05]);
-    assert_eq!(*rcv_quantity, quantity);
+    assert_eq!(&rcv_coils.values()[..1], &[0x05]);
+    assert_eq!(rcv_quantity, quantity);
 
     server_handle.join().unwrap()?;
     Ok(())
@@ -167,30 +185,30 @@ fn test_client_services_write_single_coil() -> Result<()> {
         let mut buf = [0; 12];
         stream.read_exact(&mut buf)?;
         #[rustfmt::skip]
-            assert_eq!(
-                buf,
-                [
-                    0x00, 0x03, // Transaction ID (3)
-                    0x00, 0x00, // Protocol ID
-                    0x00, 0x06, // Length
-                    0x01,       // Unit ID (1)
-                    0x05,       // Function Code (5 = Write Single Coil)
-                    0x00, 0x0A, // Address (10)
-                    0xFF, 0x00, // Value (ON)
-                ]
-            );
+        assert_eq!(
+            buf,
+            [
+                0x00, 0x03, // Transaction ID (3)
+                0x00, 0x00, // Protocol ID
+                0x00, 0x06, // Length
+                0x01,       // Unit ID (1)
+                0x05,       // Function Code (5 = Write Single Coil)
+                0x00, 0x0A, // Address (10)
+                0xFF, 0x00, // Value (ON)
+            ]
+        );
 
         // Send response: echo back the request
         #[rustfmt::skip]
-            stream.write_all(&[
-                0x00, 0x03, // Transaction ID
-                0x00, 0x00, // Protocol ID
-                0x00, 0x06, // Length
-                0x01,       // Unit ID
-                0x05,       // Function Code
-                0x00, 0x0A, // Address
-                0xFF, 0x00, // Value
-            ])?;
+        stream.write_all(&[
+            0x00, 0x03, // Transaction ID
+            0x00, 0x00, // Protocol ID
+            0x00, 0x06, // Length
+            0x01,       // Unit ID
+            0x05,       // Function Code
+            0x00, 0x0A, // Address
+            0xFF, 0x00, // Value
+        ])?;
 
         Ok(())
     });
@@ -211,7 +229,14 @@ fn test_client_services_write_single_coil() -> Result<()> {
     client
         .write_single_coil(txn_id, unit_id, address, value)
         .unwrap();
-    client.poll(); // Process write response
+
+    for _ in 0..50 {
+        client.poll(); // Process write response
+        if !client.app.received_write_single_coil_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_write_single_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
@@ -238,20 +263,20 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
         let mut buf = [0; 15]; // 12 (MBAP + FC + Addr + Qty) + 1 (Byte Count) + 2 (Data)
         stream.read_exact(&mut buf)?;
         #[rustfmt::skip]
-            assert_eq!(
-                buf,
-                [
-                    0x00, 0x04, // Transaction ID (4)
-                    0x00, 0x00, // Protocol ID
-                    0x00, 0x09, // Length (9 bytes follow)
-                    0x01,       // Unit ID (1)
-                    0x0F,       // Function Code (15 = Write Multiple Coils)
-                    0x00, 0x00, // Address (0)
-                    0x00, 0x0A, // Quantity (10)
-                    0x02,       // Byte Count (2)
-                    0x55, 0x01, // Data (0x55, 0x01)
-                ]
-            );
+        assert_eq!(
+            buf,
+            [
+                0x00, 0x04, // Transaction ID (4)
+                0x00, 0x00, // Protocol ID
+                0x00, 0x09, // Length (9 bytes follow)
+                0x01,       // Unit ID (1)
+                0x0F,       // Function Code (15 = Write Multiple Coils)
+                0x00, 0x00, // Address (0)
+                0x00, 0x0A, // Quantity (10)
+                0x02,       // Byte Count (2)
+                0x55, 0x01, // Data (0x55, 0x01)
+            ]
+        );
 
         // Send response: echo back address and quantity
         #[rustfmt::skip]
@@ -280,14 +305,24 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 0;
     let quantity = 10;
-    let values = [
-        true, false, true, false, true, false, true, false, true, false,
-    ];
+
+    // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
+    let mut values = Coils::new(address, quantity);
+    for i in 0..quantity {
+        values.set_value(address + i, i % 2 == 0).unwrap();
+    }
 
     client
-        .write_multiple_coils(txn_id, unit_id, address, quantity, &values)
+        .write_multiple_coils(txn_id, unit_id, address, &values)
         .unwrap();
-    client.poll(); // Process write response
+
+    for _ in 0..50 {
+        client.poll(); // Process write response
+        if !client.app.received_write_multiple_coils_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_write_multiple_coils_responses.borrow();
     assert_eq!(received_responses.len(), 1);
@@ -342,7 +377,14 @@ fn test_client_services_server_exception_response() -> Result<()> {
     client
         .read_multiple_coils(txn_id, unit_id, address, quantity)
         .unwrap();
-    client.poll(); // Process the exception response
+
+    for _ in 0..50 {
+        client.poll(); // Process the exception response
+        if !client.app.failed_requests.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // The client should receive an error, not a successful response
     assert!(client.app.received_coil_responses.borrow().is_empty());
@@ -385,10 +427,15 @@ fn test_client_services_server_closes_connection() -> Result<()> {
     client
         .read_multiple_coils(txn_id, unit_id, address, quantity)
         .unwrap();
-    // Poll multiple times to allow for connection closed error detection and timeout
-    std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
-    client.poll();
-    client.poll();
+
+    // Poll to allow for connection closed error detection and timeout
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.failed_requests.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // The client should eventually report a connection closed or timeout error.
     assert!(client.app.received_coil_responses.borrow().is_empty());
@@ -428,8 +475,14 @@ fn test_client_services_server_timeout() -> Result<()> {
     client
         .read_multiple_coils(txn_id, unit_id, address, quantity)
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(200)); // Ensure timeout
-    client.poll(); // This poll should detect the timeout
+
+    for _ in 0..50 {
+        client.poll(); // This poll should detect the timeout
+        if !client.app.failed_requests.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // The client should eventually report a timeout error.
     assert!(client.app.received_coil_responses.borrow().is_empty());
@@ -495,7 +548,14 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
     client
         .read_discrete_inputs(txn_id, unit_id, address, quantity)
         .unwrap();
-    client.poll(); // Process read response
+
+    for _ in 0..50 {
+        client.poll(); // Process read response
+        if !client.app.received_discrete_input_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_discrete_input_responses.borrow();
     assert_eq!(received_responses.len(), 1);
@@ -567,7 +627,14 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     client
         .read_single_discrete_input(txn_id, unit_id, address)
         .unwrap();
-    client.poll(); // Process read response
+
+    for _ in 0..50 {
+        client.poll(); // Process read response
+        if !client.app.received_discrete_input_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_discrete_input_responses.borrow();
     assert_eq!(received_responses.len(), 1);
@@ -648,7 +715,14 @@ fn test_client_services_read_device_identification() -> Result<()> {
     client
         .read_device_identification(txn_id, unit_id, read_code, object_id)
         .unwrap();
-    client.poll();
+
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.received_read_device_id_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_read_device_id_responses.borrow();
     assert_eq!(received_responses.len(), 1);
@@ -739,9 +813,14 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
         )
         .unwrap();
 
-    // Poll twice to process both responses
-    client.poll();
-    client.poll();
+    // Poll to process both responses
+    for _ in 0..50 {
+        client.poll();
+        if client.app.received_read_device_id_responses.borrow().len() == 2 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received_responses = client.app.received_read_device_id_responses.borrow();
     assert_eq!(received_responses.len(), 2);
@@ -810,7 +889,14 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
     client
         .encapsulated_interface_transport(txn_id, unit_id, mei_type, &data)
         .unwrap();
-    client.poll();
+
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.received_encapsulated_interface_transport_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     let received = client
         .app
@@ -866,7 +952,14 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
             &[0x01],
         )
         .unwrap();
-    client.poll();
+
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.failed_requests.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // Should fail
     assert!(client
@@ -921,7 +1014,14 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
             &[0x01],
         )
         .unwrap();
-    client.poll();
+
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.failed_requests.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 
     // Should fail
     assert!(client
@@ -932,6 +1032,145 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
     let failed = client.app.failed_requests.borrow();
     assert_eq!(failed.len(), 1);
     assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
+
+    server_handle.join().unwrap()?;
+    Ok(())
+}
+
+/// Test case: Simulates a fragmented TCP stream.
+/// This ensures `StdTcpTransport` handles partial reads cleanly, eventually completing the frame
+/// perfectly without hanging or corrupting the `ClientServices` queue pipeline.
+#[test]
+fn test_client_services_tcp_fragmented_stream() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+
+    let server_handle = thread::spawn(move || -> Result<()> {
+        let (mut stream, _) = listener.accept()?;
+
+        // Expect Request 1
+        let mut buf = [0; 12];
+        stream.read_exact(&mut buf)?;
+
+        // Send Response 1 in staggered chunks to emulate network fragmentation
+        let adu1_part1 = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04];
+        let adu1_part2 = [0x01, 0x01, 0x01, 0x05];
+
+        stream.write_all(&adu1_part1)?;
+        stream.flush()?;
+        thread::sleep(std::time::Duration::from_millis(50));
+        stream.write_all(&adu1_part2)?;
+        stream.flush()?;
+
+        // Expect Request 2
+        stream.read_exact(&mut buf)?;
+
+        // Send Response 2 in full
+        let adu2 = [0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0x0A];
+        stream.write_all(&adu2)?;
+        stream.flush()?;
+
+        Ok(())
+    });
+
+    let transport = StdTcpTransport::new();
+    let app = MockApp::default();
+    let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+    tcp_config.connection_timeout_ms = 500;
+    let config = ModbusConfig::Tcp(tcp_config);
+
+    let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+
+    // 1. Queue Request 1 and Poll. StdTcpTransport internally receives fragmented chunks.
+    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+
+    for _ in 0..50 {
+        client.poll();
+        if !client.app.received_coil_responses.borrow().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    
+    let responses_1 = client.app.received_coil_responses.borrow();
+    assert_eq!(responses_1.len(), 1);
+    assert_eq!(responses_1[0].0, 1);
+    drop(responses_1);
+
+    // 2. Queue Request 2 and Poll.
+    client.read_multiple_coils(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+
+    for _ in 0..50 {
+        client.poll();
+        if client.app.received_coil_responses.borrow().len() == 2 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let responses_2 = client.app.received_coil_responses.borrow();
+    assert_eq!(responses_2.len(), 2);
+    assert_eq!(responses_2[1].0, 2);
+
+    server_handle.join().unwrap()?;
+    Ok(())
+}
+
+/// Test case: Simulates malformed/noise byte injection into the TCP stream.
+/// It verifies that `StdTcpTransport` gracefully drops oversized garbage (by advancing the stream)
+/// without crashing, and eventually processes a correctly aligned valid Modbus frame.
+#[test]
+fn test_client_services_tcp_noise_injection() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+
+    let server_handle = thread::spawn(move || -> Result<()> {
+        let (mut stream, _) = listener.accept()?;
+
+        // Expect Request 1
+        let mut buf = [0; 12];
+        stream.read_exact(&mut buf)?;
+
+        // Inject exactly 70 bytes of pure garbage (10 * 7 bytes of MBAP).
+        // StdTcpTransport will read this in 7-byte chunks, determine the length is wildly out of bounds,
+        // and return BufferTooSmall, thereby safely consuming and dropping the garbage from the socket.
+        let garbage = [0xAA; 70];
+        stream.write_all(&garbage)?;
+        stream.flush()?;
+
+        thread::sleep(std::time::Duration::from_millis(50));
+
+        // Send Valid Response 1 immediately after the noise
+        let adu1 = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0x05];
+        stream.write_all(&adu1)?;
+        stream.flush()?;
+
+        Ok(())
+    });
+
+    let transport = StdTcpTransport::new();
+    let app = MockApp::default();
+    let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", addr.port()).unwrap();
+    tcp_config.connection_timeout_ms = 500;
+    let config = ModbusConfig::Tcp(tcp_config);
+
+    let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+
+    // 1. Queue Request 1
+    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+
+    // 2. Poll repeatedly to consume the garbage chunks and eventually the valid response
+    for _ in 0..20 {
+        client.poll();
+        thread::sleep(std::time::Duration::from_millis(10));
+        if client.app.received_coil_responses.borrow().len() > 0 {
+            break;
+        }
+    }
+
+    let responses_1 = client.app.received_coil_responses.borrow();
+    assert_eq!(responses_1.len(), 1, "The valid response should be successfully parsed after clearing stream noise.");
+    assert_eq!(responses_1[0].0, 1);
 
     server_handle.join().unwrap()?;
     Ok(())

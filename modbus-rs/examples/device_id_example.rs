@@ -1,5 +1,6 @@
 use anyhow::Result;
 use mbus_core::errors::MbusError;
+use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_tcp::StdTcpTransport;
 use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
@@ -65,7 +66,7 @@ impl DiagnosticsResponse for ClientApp {
         &self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _sub_function: u16,
+        _sub_function: DiagnosticSubFunction,
         _data: &[u16],
     ) {
     }
@@ -126,7 +127,7 @@ fn main() -> Result<()> {
     let host = if args.len() > 1 {
         &args[1]
     } else {
-        "192.168.55.105"
+        "192.168.55.200"
     };
     let port = if args.len() > 2 {
         args[2].parse().unwrap_or(502)

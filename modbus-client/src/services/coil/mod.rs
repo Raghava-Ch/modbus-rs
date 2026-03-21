@@ -1,3 +1,15 @@
+//! # Modbus Coils Client Services
+//!
+//! This module provides the orchestration, API surface, and payload parsing required
+//! to execute Modbus coil operations over a network transport.
+//!
+//! ## Supported Function Codes
+//! - **Read Coils (FC 0x01)**: Retrieve the ON/OFF status of one or multiple discrete coils.
+//! - **Write Single Coil (FC 0x05)**: Force a single coil to `ON` or `OFF`.
+//! - **Write Multiple Coils (FC 0x0F)**: Force a continuous block of coils to specific states.
+//!
+//! It re-exports the fundamental [`Coils`] data model used to interact with the packed bit states.
+
 pub mod request;
 pub mod response;
 
@@ -9,6 +21,7 @@ mod service;
 #[cfg(test)]
 mod tests {
     use heapless::Vec;
+    use mbus_core::models::coil::Coils;
 
     use crate::services::coil::request::ReqPduCompiler;
     use crate::services::coil::response::ResponseParser;
@@ -35,14 +48,14 @@ mod tests {
     #[test]
     fn test_read_coils_request_invalid_quantity_low() {
         let result = ReqPduCompiler::read_coils_request(0x0001, 0);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidQuantity);
     }
 
     /// Test case: `read_coils_request` returns an error for an invalid quantity (too high).
     #[test]
     fn test_read_coils_request_invalid_quantity_high() {
         let result = ReqPduCompiler::read_coils_request(0x0001, 2001);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidQuantity);
     }
 
     // --- Parse Read Coils Response Tests ---
@@ -253,11 +266,17 @@ mod tests {
     #[test]
     fn test_write_multiple_coils_request_valid() {
         let address = 0x0001;
-        let quantity = 10;
-        let values = [
-            true, false, true, false, true, false, true, false, true, false,
-        ]; // 0xAA, 0x02
-        let pdu = ReqPduCompiler::write_multiple_coils_request(address, quantity, &values).unwrap();
+        let quantity = 10; // 10 coils requires 2 bytes
+        
+        // Initialize Coils model and set specific bits
+        // 0x55 = 0b0101_0101 (Bits 0, 2, 4, 6 are ON)
+        // 0x01 = 0b0000_0001 (Bit 8 is ON)
+        let mut coils = Coils::new(address, quantity);
+        for i in (0..quantity).step_by(2) {
+            coils.set_value(address + i, true).unwrap();
+        }
+
+        let pdu = ReqPduCompiler::write_multiple_coils_request(address, quantity, &coils).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteMultipleCoils);
         assert_eq!(pdu.data_len(), 5 + 2); // Addr (2) + Qty (2) + Byte Count (1) + Data (2) = 7
@@ -270,24 +289,18 @@ mod tests {
     /// Test case: `write_multiple_coils_request` returns an error for invalid quantity (too low).
     #[test]
     fn test_write_multiple_coils_request_invalid_quantity_low() {
-        let values = [true];
-        let result = ReqPduCompiler::write_multiple_coils_request(0x0001, 0, &values);
+        let coils = Coils::new(0x0001, 1);
+        // Manually passing 0 as quantity to trigger validation in compiler
+        let result = ReqPduCompiler::write_multiple_coils_request(0x0001, 0, &coils);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
     /// Test case: `write_multiple_coils_request` returns an error for invalid quantity (too high).
     #[test]
     fn test_write_multiple_coils_request_invalid_quantity_high() {
-        let values = [true; 1969]; // Too many
-        let result = ReqPduCompiler::write_multiple_coils_request(0x0001, 1969, &values);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
-    }
-
-    /// Test case: `write_multiple_coils_request` returns an error for quantity-values mismatch.
-    #[test]
-    fn test_write_multiple_coils_request_quantity_values_mismatch() {
-        let values = [true, false];
-        let result = ReqPduCompiler::write_multiple_coils_request(0x0001, 3, &values); // Quantity 3, but only 2 values
+        let coils = Coils::new(0x0001, 1968);
+        // Manually passing 1969 to exceed Modbus limit for FC 0x0F
+        let result = ReqPduCompiler::write_multiple_coils_request(0x0001, 1969, &coils);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 

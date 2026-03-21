@@ -13,7 +13,7 @@ use std::cell::RefCell;
 // to receive and store responses from the Modbus server.
 #[derive(Debug, Default)]
 struct ClientMockApp {
-    pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils, u16), 10>>,
+    pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils), 10>>,
     pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
     pub received_write_multiple_coils_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
@@ -25,11 +25,10 @@ impl CoilResponse for ClientMockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         coils: &Coils,
-        quantity: u16,
     ) {
         self.received_coil_responses
             .borrow_mut()
-            .push((txn_id, unit_id, coils.clone(), quantity))
+            .push((txn_id, unit_id, coils.clone()))
             .unwrap();
     }
     fn read_single_coil_response(
@@ -39,18 +38,13 @@ impl CoilResponse for ClientMockApp {
         address: u16,
         value: bool,
     ) {
+        let mut coils = Coils::new(address, 1);
+        let val_byte = if value { 1 } else { 0 };
+        coils.set_values(&[val_byte], 1).unwrap();
+        
         self.received_coil_responses
             .borrow_mut()
-            .push((
-                txn_id,
-                unit_id,
-                Coils::new(
-                    address,
-                    1,
-                    Vec::from_slice(&[if value { 1 } else { 0 }]).unwrap(),
-                ),
-                1,
-            ))
+            .push((txn_id, unit_id, coils))
             .unwrap();
     }
     fn write_single_coil_response(
@@ -103,7 +97,7 @@ fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut tcp_config = ModbusTcpConfig::new("192.168.55.104", 502)
+    let mut tcp_config = ModbusTcpConfig::new("192.168.55.200", 502)
         .map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
     tcp_config.connection_timeout_ms = 500;
     let config = ModbusConfig::Tcp(tcp_config);
@@ -130,7 +124,7 @@ fn main() -> Result<()> {
     {
         let received_read_single = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_single.len(), 1);
-        let (_, _, coils, _) = &received_read_single[0];
+        let (_, _, coils) = &received_read_single[0];
         println!(
             "Client: Read single coil at address {}: {}",
             read_single_address,
@@ -178,7 +172,7 @@ fn main() -> Result<()> {
     {
         let received_read_back = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_back.len(), 2); // One for initial read, one for read back
-        let (_, _, coils_read_back, _) = &received_read_back[1];
+        let (_, _, coils_read_back) = &received_read_back[1];
         println!(
             "Client: Read back coil at address {}: {}",
             write_single_address,
@@ -211,7 +205,7 @@ fn main() -> Result<()> {
     {
         let received_read_multi = client.app.received_coil_responses.borrow();
         assert_eq!(received_read_multi.len(), 3); // Initial read, read back, multi read
-        let (_, _, coils_multi, _) = &received_read_multi[2];
+        let (_, _, coils_multi) = &received_read_multi[2];
         println!(
             "Client: Read multiple coils from address {} quantity {}:",
             read_multi_address, read_multi_quantity
@@ -232,15 +226,19 @@ fn main() -> Result<()> {
     println!("\n--- Testing Write Multiple Coils ---");
     let write_multi_address = 0;
     let write_multi_quantity = 3;
-    let write_multi_values = [false, true, true]; // Address 0, 1, 2
+    
+    let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity);
+    write_multi_coils.set_value(write_multi_address + 0, false).unwrap();
+    write_multi_coils.set_value(write_multi_address + 1, true).unwrap();
+    write_multi_coils.set_value(write_multi_address + 2, true).unwrap();
+    
     let txn_id_write_multi = 103; // This line is fine
     client
         .write_multiple_coils(
             txn_id_write_multi,
             unit_id,
             write_multi_address,
-            write_multi_quantity,
-            &write_multi_values,
+            &write_multi_coils,
         )
         .map_err(|e| anyhow::anyhow!("Failed to send write multiple coils: {:?}", e))?;
 
@@ -278,11 +276,13 @@ fn main() -> Result<()> {
 
     let received_read_back_multi = client.app.received_coil_responses.borrow();
     assert_eq!(received_read_back_multi.len(), 4);
-    let (_, _, coils_read_back_multi, _) = &received_read_back_multi[3];
+    let (_, _, coils_read_back_multi) = &received_read_back_multi[3];
     println!(
         "Client: Read back multiple coils from address {} quantity {}:",
         write_multi_address, write_multi_quantity
     );
+    
+    let expected_values = [false, true, true];
     for i in 0..write_multi_quantity {
         let current_address = write_multi_address + i;
         println!(
@@ -292,7 +292,7 @@ fn main() -> Result<()> {
         );
         assert_eq!(
             coils_read_back_multi.value(current_address)?,
-            write_multi_values[i as usize]
+            expected_values[i as usize]
         );
     }
 
