@@ -1,5 +1,7 @@
 use mbus_core::{
-    errors::MbusError, models::coil::Coils, transport::{Transport, UnitIdOrSlaveAddr}
+    errors::MbusError,
+    models::coil::Coils,
+    transport::{Transport, UnitIdOrSlaveAddr},
 };
 
 use crate::{
@@ -15,13 +17,12 @@ where
     /// Sends a Read Coils request to the specified unit ID and address range, and records the expected response.
     ///
     /// # Parameters
-    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII) 
-    ///     does not natively use transaction IDs, the stack preserves the ID provided in 
-    ///     the request and returns it here to allow for asynchronous tracking.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
-    ///     - `unit_id`: if transport is tcp
-    ///     - `slave_addr`: if transport is serial
-    /// - `address`: The starting address of the coils to read.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `address`: The starting address of the coils to read.
     /// - `quantity`: The number of coils to read.
     ///
     /// # Returns
@@ -55,8 +56,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address: address,
-                quantity: quantity,
+                address, // Starting address of the read operation
+                quantity, // Number of coils to read
             }),
             Self::handle_read_coils_response,
         )?;
@@ -70,17 +71,16 @@ where
     }
 
     /// Sends a Read Single Coil request to the specified unit ID and address, and records the expected response.
-    /// This method is a convenience wrapper around `read_multiple_coils` for 
+    /// This method is a convenience wrapper around `read_multiple_coils` for
     /// reading a single coil, which simplifies the application logic when only one coil needs to be read.
     ///
     /// # Parameters
-    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII) 
-    ///     does not natively use transaction IDs, the stack preserves the ID provided in 
-    ///     the request and returns it here to allow for asynchronous tracking.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
-    ///     - `unit_id`: if transport is tcp
-    ///     - `slave_addr`: if transport is serial
-    /// - `address`: The address of the coil to read.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `address`: The address of the coil to read.
     ///
     /// # Returns
     /// - `Ok(())`: If the request was successfully compiled, registered in the expectation queue, and sent.
@@ -113,8 +113,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address: address,
-                value: 0,
+                address, // Address of the single coil
+                value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_coils_response,
         )?;
@@ -129,13 +129,12 @@ where
     /// Sends a Write Single Coil request to the specified unit ID and address with the given value, and records the expected response.
     ///
     /// # Parameters
-    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII) 
-    ///     does not natively use transaction IDs, the stack preserves the ID provided in 
-    ///     the request and returns it here to allow for asynchronous tracking.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
-    ///     - `unit_id`: if transport is tcp
-    ///     - `slave_addr`: if transport is serial
-    /// - `address`: The address of the coil to write.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `address`: The address of the coil to write.
     /// - `value`: The boolean value to write to the coil (true for ON, false for OFF).
     ///
     /// # Returns
@@ -149,7 +148,7 @@ where
         value: bool,
     ) -> Result<(), MbusError> {
         let transport_type = self.transport.transport_type(); // Access self.transport directly
-        
+
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_single_coil_request
         let frame = coil::service::ServiceBuilder::write_single_coil(
             txn_id,
@@ -173,8 +172,8 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Single(Single {
-                    address,
-                    value: value as u16,
+                    address, // Address of the coil
+                    value: value as u16, // Value written (0x0000 or 0xFF00)
                 }),
                 Self::handle_write_single_coil_response,
             )?;
@@ -189,13 +188,12 @@ where
     /// Sends a Write Multiple Coils request to the specified unit ID and address with the given values, and records the expected response.
     ///
     /// # Parameters
-    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII) 
-    ///     does not natively use transaction IDs, the stack preserves the ID provided in 
-    ///     the request and returns it here to allow for asynchronous tracking.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
-    ///     - `unit_id`: if transport is tcp
-    ///     - `slave_addr`: if transport is serial
-    /// - `address`: The starting address of the coils to write.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `address`: The starting address of the coils to write.
     /// - `quantity`: The number of coils to write.
     /// - `values`: A slice of boolean values to write to the coils (true for ON, false for OFF).
     ///
@@ -210,7 +208,7 @@ where
         values: &Coils,
     ) -> Result<(), MbusError> {
         let transport_type = self.transport.transport_type(); // Access self.transport directly
-        
+
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_multiple_coils_request
         let frame = coil::service::ServiceBuilder::write_multiple_coils(
             txn_id,
@@ -233,7 +231,10 @@ where
                 txn_id,
                 unit_id_slave_addr,
                 &frame,
-                OperationMeta::Multiple(Multiple { address, quantity: values.quantity() }),
+                OperationMeta::Multiple(Multiple {
+                    address, // Starting address of the coils
+                    quantity: values.quantity(), // Number of coils written
+                }),
                 Self::handle_write_multiple_coils_response,
             )?;
         }

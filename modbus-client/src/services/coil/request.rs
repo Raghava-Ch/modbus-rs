@@ -14,8 +14,6 @@ use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::models::coil::Coils;
 
-use core::usize;
-
 /// Provides operations for reading and writing Modbus coils.
 ///
 /// This struct is stateless and provides static methods to create request PDUs
@@ -115,7 +113,7 @@ impl ReqPduCompiler {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let byte_count = ((quantity + 7) / 8) as u8;
+        let byte_count = quantity.div_ceil(8) as u8;
         let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
 
         data_vec
@@ -137,7 +135,7 @@ impl ReqPduCompiler {
         Ok(Pdu::new(
             FunctionCode::WriteMultipleCoils,
             data_vec,
-            5 + byte_count as u8, // 2 bytes addr + 2 bytes qty + 1 byte byte_count + N bytes coil data
+            5 + byte_count, // 2 bytes addr + 2 bytes qty + 1 byte byte_count + N bytes coil data
         ))
     }
 }

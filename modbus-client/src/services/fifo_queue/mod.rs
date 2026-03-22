@@ -1,3 +1,23 @@
+//! # Modbus FIFO Queue Service
+//!
+//! This module implements the client-side logic for **Function Code 24 (0x18): Read FIFO Queue**.
+//!
+//! The Read FIFO Queue function allows the client to read the contents of a First-In-First-Out (FIFO)
+//! queue of 16-bit registers in a remote device. The function returns a count of the registers
+//! in the queue, followed by the queue data.
+//!
+//! ## Module Structure
+//! - `apis`: High-level public API for triggering FIFO queue reads via `ClientServices`.
+//! - `request`: Handles the construction and serialization of the Read FIFO Queue request PDU.
+//! - `response`: Handles parsing, validation of byte counts, and register extraction from response PDUs.
+//! - `service`: Internal orchestration logic for building ADUs and handling de-encapsulation.
+//!
+//! ## Constraints
+//! - **Max Capacity**: The Modbus specification limits the FIFO queue to a maximum of 31 registers.
+//! - **Read-Only**: This function code is specifically for reading; writing to FIFOs is typically
+//!   handled via standard register write functions (FC 06 or 16) depending on the server implementation.
+//! - **no_std**: Fully compatible with embedded environments using fixed-size buffers.
+
 pub mod request;
 pub mod response;
 
@@ -35,8 +55,8 @@ mod tests {
         // PDU data: [0x00, 0x04, 0x00, 0x01, 0x12, 0x34]
         let response_bytes = [0x18, 0x00, 0x04, 0x00, 0x01, 0x12, 0x34];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let registers = ResponseParser::parse_read_fifo_queue_response(&pdu).unwrap();
-        assert_eq!(registers.as_slice(), &[0x1234]);
+        let (values, count) = ResponseParser::parse_read_fifo_queue_response(&pdu).unwrap();
+        assert_eq!(&values[..count], &[0x1234]);
     }
 
     /// Test case: `parse_read_fifo_queue_response` successfully parses a valid response with multiple registers.
@@ -46,8 +66,8 @@ mod tests {
         // PDU data: [0x00, 0x06, 0x00, 0x02, 0x12, 0x34, 0x56, 0x78]
         let response_bytes = [0x18, 0x00, 0x06, 0x00, 0x02, 0x12, 0x34, 0x56, 0x78];
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let registers = ResponseParser::parse_read_fifo_queue_response(&pdu).unwrap();
-        assert_eq!(registers.as_slice(), &[0x1234, 0x5678]);
+        let (values, count) = ResponseParser::parse_read_fifo_queue_response(&pdu).unwrap();
+        assert_eq!(&values[..count], &[0x1234, 0x5678]);
     }
 
     /// Test case: `parse_read_fifo_queue_response` returns an error for wrong function code.

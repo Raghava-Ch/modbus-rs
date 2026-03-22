@@ -19,9 +19,12 @@ where
     /// Sends a Read Device Identification request (FC 43 / 14).
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID.
-    /// - `unit_id`: The Modbus unit ID.
-    /// - `read_device_id_code`: The type of access (01=Basic, 02=Regular, 03=Extended, 04=Specific).
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `read_device_id_code`: The type of access (01=Basic, 02=Regular, 03=Extended, 04=Specific).
     /// - `object_id`: The object ID to start reading from.
     pub fn read_device_identification(
         &mut self,
@@ -62,9 +65,12 @@ where
     /// Sends a generic Encapsulated Interface Transport request (FC 43).
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `mei_type`: The MEI type (e.g., `CanopenGeneralReference`).
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `mei_type`: The MEI type (e.g., `CanopenGeneralReference`).
     /// - `data`: The data payload to be sent with the request.
     pub fn encapsulated_interface_transport(
         &mut self,
@@ -105,20 +111,35 @@ where
         Ok(())
     }
 
-    /// Sends a Read Exception Status request (FC 07). Serial Line only.
+    /// Sends a Read Exception Status request (Function Code 07).
+    ///
+    /// This function is specific to **Serial Line** Modbus. It is used to read the contents
+    /// of eight Exception Status outputs in a remote device. The meaning of these status
+    /// bits is device-dependent.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     pub fn read_exception_status(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
+        // FC 07 does not support broadcast addresses as it requires a specific device response.
         if unit_id_slave_addr.is_broadcast() {
             return Err(MbusError::BoradcastNotAllowed);
         }
+        // Delegate PDU and ADU construction to the ServiceBuilder.
         let frame = diagnostic::service::ServiceBuilder::read_exception_status(
             unit_id_slave_addr.get(),
             self.transport.transport_type(),
         )?;
 
+        // Register the expectation so the client knows how to handle the incoming response byte.
         self.add_an_expectation(
             txn_id,
             unit_id_slave_addr,
@@ -127,13 +148,40 @@ where
             Self::handle_read_exception_status_rsp,
         )?;
 
+        // Dispatch the frame through the configured serial transport.
         self.transport
             .send(&frame)
             .map_err(|_| MbusError::SendFailed)?;
         Ok(())
     }
 
-    /// Sends a Diagnostics request (FC 08). Serial Line only.
+    /// Sends a Diagnostics request (Function Code 08).
+    ///
+    /// This function provides a series of tests for checking the communication system
+    /// between a client (Master) and a server (Slave), or for checking various internal
+    /// error conditions within a server.
+    ///
+    /// **Note:** This function code is supported on **Serial Line only** (RTU/ASCII).
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial/// - `sub_function`: The specific diagnostic test to perform (e.g., `ReturnQueryData`,
+    ///     `RestartCommunicationsOption`, `ClearCounters`).
+    /// - `data`: A slice of 16-bit words required by the specific sub-function. Many
+    ///   sub-functions expect a single word (e.g., `0x0000` or `0xFF00`).
+    ///
+    /// # Broadcast Support
+    /// Only the following sub-functions are allowed with a broadcast address:
+    /// - `RestartCommunicationsOption`
+    /// - `ForceListenOnlyMode`
+    /// - `ClearCountersAndDiagnosticRegister`
+    /// - `ClearOverrunCounterAndFlag`
+    ///
+    /// If a broadcast is sent, no response is expected and no expectation is queued.
     pub fn diagnostics(
         &mut self,
         txn_id: u16,
@@ -180,6 +228,14 @@ where
     }
 
     /// Sends a Get Comm Event Counter request (FC 11). Serial Line only.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     pub fn get_comm_event_counter(
         &mut self,
         txn_id: u16,
@@ -208,6 +264,14 @@ where
     }
 
     /// Sends a Get Comm Event Log request (FC 12). Serial Line only.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     pub fn get_comm_event_log(
         &mut self,
         txn_id: u16,
@@ -236,6 +300,14 @@ where
     }
 
     /// Sends a Report Server ID request (FC 17). Serial Line only.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     pub fn report_server_id(
         &mut self,
         txn_id: u16,

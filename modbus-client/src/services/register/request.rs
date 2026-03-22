@@ -31,6 +31,7 @@ pub(super) struct ReqPduCompiler {}
 /// - Writing multiple registers (FC 0x10)
 /// - Read/Write multiple registers (FC 0x17)
 /// - Mask write register (FC 0x16)
+/// 
 /// Each method validates the input parameters and constructs a PDU with the appropriate function code and data payload for the specified operation.
 impl ReqPduCompiler {
     /// Creates a Modbus PDU for a Read Holding Registers (FC 0x03) request.

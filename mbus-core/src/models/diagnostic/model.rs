@@ -1,3 +1,32 @@
+//! Modbus Device Identification Models
+//!
+//! This module provides the data structures and types required for Function Code 43 (0x2B),
+//! specifically the Encapsulated Interface Transport for Read Device Identification (MEI Type 0x0E).
+//!
+//! It includes:
+//! - `DeviceIdentificationResponse`: The top-level response structure.
+//! - `DeviceIdObject`: Individual identification objects (e.g., Vendor Name, Product Code).
+//! - `ObjectId`: Strongly typed identifiers for basic, regular, and extended objects.
+//! - `DeviceIdObjectIterator`: A memory-efficient iterator for parsing objects from raw buffers.
+//!
+//! # Example
+//! ```
+//! # use mbus_core::models::diagnostic::{DeviceIdentificationResponse, ReadDeviceIdCode, ConformityLevel, ObjectId};
+//! # let resp = DeviceIdentificationResponse {
+//! #     read_device_id_code: ReadDeviceIdCode::Basic,
+//! #     conformity_level: ConformityLevel::BasicStreamAndIndividual,
+//! #     more_follows: false,
+//! #     next_object_id: ObjectId::from(0x00),
+//! #     objects_data: [0; 252],
+//! #     number_of_objects: 0,
+//! # };
+//! // Assuming a response has been received and parsed into `resp`
+//! for obj_result in resp.objects() {
+//!     let obj = obj_result.expect("Valid object");
+//!     println!("Object ID: {}, Value: {:?}", obj.object_id, obj.value);
+//! }
+//! ```
+
 use crate::{data_unit::common::MAX_PDU_DATA_LEN, errors::MbusError};
 use core::fmt;
 use heapless::Vec;
@@ -12,12 +41,17 @@ pub struct DeviceIdObject {
 }
 
 /// An iterator over the device identification objects.
+///
+/// This iterator performs lazy parsing of the `objects_data` buffer, ensuring
+/// that memory is only allocated for one object at a time during iteration.
 pub struct DeviceIdObjectIterator<'a> {
-    data: &'a [u8],
+    /// Reference to the raw byte buffer containing the objects.
+    pub(crate) data: &'a [u8],
+    /// Current byte offset within the data buffer.
     offset: usize,
-    /// The number of objects already parsed.
+    /// Current object count.
     count: u8,
-    /// The total number of objects expected.
+    /// Total number of objects.
     total: u8,
 }
 
@@ -88,7 +122,7 @@ pub struct DeviceIdentificationResponse {
     /// The ID of the next object in the response.
     pub next_object_id: ObjectId,
     /// The raw data of the objects.
-    pub objects_data: Vec<u8, MAX_PDU_DATA_LEN>,
+    pub objects_data: [u8; MAX_PDU_DATA_LEN],
     /// The number of objects returned in the response.
     pub number_of_objects: u8,
 }

@@ -114,10 +114,7 @@ impl OperationMeta {
     }
 
     fn is_single(&self) -> bool {
-        match self {
-            OperationMeta::Single(_) => true,
-            _ => false,
-        }
+        matches!(self, OperationMeta::Single(_))
     }
 
     fn single_value(&self) -> u16 {
@@ -201,6 +198,13 @@ pub struct ClientServices<TRANSPORT, APP, const N: usize = 1> {
     next_timeout_check: Option<u64>,
 }
 
+/// A marker trait that aggregates the necessary capabilities for a Modbus client application.
+///
+/// Any type implementing `ClientCommon` must be able to:
+/// 1. **Notify** the application when a Modbus request fails ([`RequestErrorNotifier`]).
+/// 2. **Provide** monotonic time in milliseconds to manage timeouts and retries ([`TimeKeeper`]).
+///
+/// This trait simplifies the generic bounds used throughout the `ClientServices` implementation.
 pub trait ClientCommon: RequestErrorNotifier + TimeKeeper {}
 
 impl<T> ClientCommon for T where T: RequestErrorNotifier + TimeKeeper {}
@@ -249,11 +253,47 @@ where
     TRANSPORT: Transport,
     APP: RequestErrorNotifier + TimeKeeper,
 {
-    /// Polls the transport layer for incoming Modbus frames and processes them.
-    /// It also handles timeouts and retries for outstanding requests, using the application's `TimeKeeper` for current time.
+    /// The main execution loop for the Modbus Client.
     ///
-    /// # Arguments
-    /// * `current_millis` - The current monotonic time in milliseconds.
+    /// This method orchestrates the entire lifecycle of Modbus transactions by performing
+    /// three critical tasks in a non-blocking manner:
+    ///
+    /// ### 1. Data Ingestion & Stream Resynchronization
+    /// It pulls raw bytes from the `TRANSPORT` layer into an internal `rxed_frame` buffer.
+    /// Because Modbus streams (especially Serial) can contain noise or fragmented packets,
+    /// the logic handles:
+    /// * **Fragmentation**: If a partial frame is received, it stays in the buffer until more data arrives.
+    /// * **Pipelining**: If multiple ADUs are received in a single TCP packet, it processes them sequentially.
+    /// * **Noise Recovery**: If the buffer contains garbage that doesn't form a valid Modbus header,
+    ///   it drops bytes one-by-one to "slide" the window and find the next valid start-of-frame.
+    ///
+    /// ### 2. Response Dispatching
+    /// Once a complete ADU is validated (via checksums in RTU or length checks in TCP), it is
+    /// decompiled into a `ModbusMessage`. The client then:
+    /// * Matches the response to an `ExpectedResponse` using the **Transaction ID** (TCP)
+    ///   or **Unit ID/Slave Address** (Serial, where only one request is active at a time).
+    /// * Validates the Function Code and handles Modbus Exceptions (0x80 + FC).
+    /// * Routes the payload to the specific `handler` (e.g., `handle_read_coils_rsp`) which
+    ///   ultimately triggers the user-defined callback in the `APP` layer.
+    ///
+    /// ### 3. Timeout & Retry Management
+    /// The client maintains a queue of "Outstanding Requests". For every poll:
+    /// * It checks if the `current_millis` (provided by `APP`) has exceeded the `sent_timestamp`
+    ///   plus the configured `response_timeout_ms`.
+    /// * **Automatic Retries**: If a timeout occurs and `retries_left > 0`, the original ADU
+    ///   is re-transmitted immediately. This is transparent to the high-level application.
+    /// * **Failure Notification**: If all retries are exhausted, the request is dropped from
+    ///   the queue, and `app.request_failed` is called with `MbusError::NoRetriesLeft`.
+    ///
+    /// ### Performance Note
+    /// This method uses a `next_timeout_check` cache. If the earliest possible timeout is in
+    /// the future, it skips the O(N) scan of the expected responses queue, making it
+    /// highly efficient for high-concurrency TCP scenarios.
+    ///
+    /// # Constraints
+    /// * For **Serial** transports, the queue size `N` **must** be 1 (1 is default) to comply with the
+    ///   half-duplex nature of RS-485/RS-232.
+    /// * For **TCP**, `N` can be larger to support request pipelining.
     pub fn poll(&mut self) {
         // 1. Attempt to receive a frame
         match self.transport.recv() {
@@ -331,10 +371,10 @@ where
         let current_millis = self.app.current_millis();
 
         // Fast-path: Skip O(N) iteration if the earliest timeout has not yet been reached
-        if let Some(check_at) = self.next_timeout_check {
-            if current_millis < check_at {
-                return;
-            }
+        if let Some(check_at) = self.next_timeout_check
+            && current_millis < check_at
+        {
+            return;
         }
 
         let response_timeout_ms = self.response_timeout_ms();
@@ -345,8 +385,7 @@ where
         while i < expected_responses.len() {
             let expected_response = &mut expected_responses[i];
             let elapsed = current_millis
-                .checked_sub(expected_response.sent_timestamp)
-                .unwrap_or(0);
+                .saturating_sub(expected_response.sent_timestamp);
 
             if elapsed > response_timeout_ms {
                 // Request timed out
@@ -414,8 +453,8 @@ where
                 original_adu: frame.clone(),
                 sent_timestamp: self.app.current_millis(),
                 retries_left: self.retry_attempts(),
-                handler: handler,
-                operation_meta: operation_meta,
+                handler,
+                operation_meta,
             })
             .map_err(|_| MbusError::TooManyRequests)?;
         Ok(())
@@ -434,10 +473,9 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         if matches!(
             transport_type,
             TransportType::StdSerial(_) | TransportType::CustomSerial(_)
-        ) {
-            if N != 1 {
-                return Err(MbusError::InvalidNumOfExpectedRsps);
-            }
+        ) && N != 1
+        {
+            return Err(MbusError::InvalidNumOfExpectedRsps);
         }
 
         transport
@@ -675,8 +713,10 @@ mod tests {
             // For single coil, we create a Coils struct with quantity 1 and the single value
             let mut values_vec = [0x00, 1];
             values_vec[0] = if value { 0x01 } else { 0x00 }; // Store the single bit in a byte
-            let mut coils = Coils::new(address, 1);
-            let _ = coils.set_values(&values_vec, 1);
+            let coils = Coils::new(address, 1)
+                .unwrap()
+                .with_values(&values_vec, 1)
+                .unwrap();
             self.received_coil_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, coils))
@@ -735,9 +775,12 @@ mod tests {
             address: u16,
             value: bool,
         ) {
-            let mut values = Vec::new();
-            values.push(if value { 0x01 } else { 0x00 }).unwrap();
-            let inputs = DiscreteInputs::new(address, 1, values);
+            let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
+            values[0] = if value { 0x01 } else { 0x00 };
+            let inputs = DiscreteInputs::new(address, 1)
+                .unwrap()
+                .with_values(&values, 1)
+                .unwrap();
             self.received_discrete_input_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, inputs, 1))
@@ -756,7 +799,6 @@ mod tests {
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, error))
                 .unwrap();
-            println!("Request failed: {:?}", error);
         }
     }
 
@@ -781,9 +823,12 @@ mod tests {
             address: u16,
             value: u16,
         ) {
-            let mut values = Vec::new();
-            values.push(value).unwrap();
-            let registers = Registers::new(address, 1, values);
+            // Create a temporary slice to load the single register value
+            let values = [value];
+            let registers = Registers::new(address, 1)
+                .unwrap()
+                .with_values(&values, 1)
+                .unwrap();
             self.received_input_register_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, registers, 1))
@@ -797,9 +842,14 @@ mod tests {
             address: u16,
             value: u16,
         ) {
-            let mut values = Vec::new();
-            values.push(value).unwrap();
-            let registers = Registers::new(address, 1, values);
+            // Create a temporary slice to load the single register value
+            let data = [value];
+            // Initialize Registers with default capacity (MAX_REGISTERS_PER_PDU)
+            let registers = Registers::new(address, 1)
+                .unwrap()
+                .with_values(&data, 1)
+                .unwrap();
+
             self.received_holding_register_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, registers, 1))
@@ -875,9 +925,14 @@ mod tests {
             address: u16,
             value: u16,
         ) {
-            let mut values = Vec::new();
-            values.push(value).unwrap();
-            let registers = Registers::new(address, 1, values);
+            // Create a temporary slice to load the single register value
+            let data = [value];
+            // Initialize Registers with default capacity (MAX_REGISTERS_PER_PDU)
+            let registers = Registers::new(address, 1)
+                .unwrap()
+                .with_values(&data, 1)
+                .unwrap();
+
             self.received_holding_register_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, registers, 1))
@@ -1433,7 +1488,7 @@ mod tests {
         let quantity = 10;
 
         // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
-        let mut values = Coils::new(address, quantity);
+        let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
             values.set_value(address + i, i % 2 == 0).unwrap();
         }
@@ -1488,7 +1543,7 @@ mod tests {
         let quantity = 10;
 
         // Initialize a Coils instance with alternating true/false values
-        let mut values = Coils::new(address, quantity);
+        let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
             values.set_value(address + i, i % 2 == 0).unwrap();
         }
@@ -1838,7 +1893,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_registers.from_address(), address);
         assert_eq!(rcv_registers.quantity(), quantity);
-        assert_eq!(rcv_registers.values().as_slice(), &[0x1234, 0x5678]);
+        assert_eq!(&rcv_registers.values()[..2], &[0x1234, 0x5678]);
         assert_eq!(*rcv_quantity, quantity);
         assert!(client_services.expected_responses.is_empty());
     }
@@ -1918,7 +1973,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_registers.from_address(), address);
         assert_eq!(rcv_registers.quantity(), quantity);
-        assert_eq!(rcv_registers.values().as_slice(), &[0xAABB, 0xCCDD]);
+        assert_eq!(&rcv_registers.values()[..2], &[0xAABB, 0xCCDD]);
         assert_eq!(*rcv_quantity, quantity);
         assert!(client_services.expected_responses.is_empty());
     }
@@ -2213,7 +2268,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_registers.from_address(), address);
         assert_eq!(rcv_registers.quantity(), 1);
-        assert_eq!(rcv_registers.values().as_slice(), &[0x1234]);
+        assert_eq!(&rcv_registers.values()[..1], &[0x1234]);
         assert_eq!(*rcv_quantity, 1);
     }
 
@@ -2295,7 +2350,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_registers.from_address(), address);
         assert_eq!(rcv_registers.quantity(), 1);
-        assert_eq!(rcv_registers.values().as_slice(), &[0x1234]);
+        assert_eq!(&rcv_registers.values()[..1], &[0x1234]);
         assert_eq!(*rcv_quantity, 1);
     }
 
@@ -2417,7 +2472,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_registers.from_address(), read_address);
         assert_eq!(rcv_registers.quantity(), read_quantity);
-        assert_eq!(rcv_registers.values().as_slice(), &[0x1234, 0x5678]);
+        assert_eq!(&rcv_registers.values()[..2], &[0x1234, 0x5678]);
     }
 
     /// Test case: `ClientServices` successfully sends and processes a `mask_write_register` request.
@@ -2507,8 +2562,8 @@ mod tests {
         let (rcv_txn_id, rcv_unit_id, rcv_fifo_queue) = &received_responses[0];
         assert_eq!(*rcv_txn_id, txn_id);
         assert_eq!(*rcv_unit_id, unit_id);
-        assert_eq!(rcv_fifo_queue.values.len(), 2);
-        assert_eq!(rcv_fifo_queue.values.as_slice(), &[0xAAAA, 0xBBBB]);
+        assert_eq!(rcv_fifo_queue.length(), 2);
+        assert_eq!(&rcv_fifo_queue.queue()[..2], &[0xAAAA, 0xBBBB]);
     }
 
     /// Test case: `ClientServices` successfully sends and processes a `read_file_record` request.
@@ -2646,7 +2701,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_inputs.from_address(), address);
         assert_eq!(rcv_inputs.quantity(), quantity);
-        assert_eq!(rcv_inputs.values().as_slice(), &[0xAA]);
+        assert_eq!(rcv_inputs.values(), &[0xAA]);
         assert_eq!(*rcv_quantity, quantity);
     }
 
@@ -2764,7 +2819,10 @@ mod tests {
             rcv_resp.conformity_level,
             ConformityLevel::BasicStreamAndIndividual
         );
-        assert_eq!(rcv_resp.objects_data.len(), 5); // Id(1)+Len(1)+Val(3)
+        assert_eq!(rcv_resp.number_of_objects, 1);
+
+        // Ensure the correct raw bytes were stored for the parsed objects (Id: 0x00, Len: 0x03, Val: "Foo")
+        assert_eq!(&rcv_resp.objects_data[..5], &[0x00, 0x03, 0x46, 0x6F, 0x6F]);
     }
 
     /// Test case: `ClientServices` handles multiple concurrent `read_device_identification` requests.
@@ -3017,7 +3075,7 @@ mod tests {
 
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
-        let mut values = Coils::new(0x0000, 2);
+        let mut values = Coils::new(0x0000, 2).unwrap();
         values.set_value(0x0000, true).unwrap();
         values.set_value(0x0001, false).unwrap();
 
@@ -3052,7 +3110,10 @@ mod tests {
 
         // Fill the internal buffer close to its capacity (MAX_ADU_FRAME_LEN = 513) with unparsable garbage
         let initial_garbage = [0xFF; MAX_ADU_FRAME_LEN - 10];
-        client_services.rxed_frame.extend_from_slice(&initial_garbage).unwrap();
+        client_services
+            .rxed_frame
+            .extend_from_slice(&initial_garbage)
+            .unwrap();
 
         // Inject another chunk of bytes that will cause an overflow when appended
         let chunk = [0xAA; 20];

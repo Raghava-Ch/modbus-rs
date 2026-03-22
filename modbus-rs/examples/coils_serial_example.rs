@@ -16,12 +16,7 @@ use std::time::{Duration, SystemTime};
 struct ClientApp;
 
 impl CoilResponse for ClientApp {
-    fn read_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: UnitIdOrSlaveAddr,
-        coils: &Coils,
-    ) {
+    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         let quantity = coils.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
@@ -162,7 +157,7 @@ fn main() -> Result<()> {
 
     // 3. Write Multiple Coils
     println!("\n[3] Sending Write Multiple Coils (Addr: 10, Qty: 3)...");
-    let mut multi_coils = Coils::new(10, 3);
+    let mut multi_coils = Coils::new(10, 3).unwrap();
     // Initialize with some test data
     multi_coils.set_value(10, true).unwrap();
     multi_coils.set_value(11, false).unwrap();

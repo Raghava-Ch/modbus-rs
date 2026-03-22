@@ -15,9 +15,13 @@ where
     /// Sends a Read Holding Registers request to the specified unit ID and address range, and records the expected response.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `address`: The starting address of the holding registers to read.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `from_address`: The starting address of the holding registers to read.
     /// - `quantity`: The number of holding registers to read.
     ///
     /// # Returns
@@ -49,8 +53,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address: from_address,
-                quantity: quantity,
+                address: from_address, // Starting address of the read operation
+                quantity, // Number of registers to read
             }),
             Self::handle_read_holding_registers_response,
         )?;
@@ -62,11 +66,19 @@ where
         Ok(())
     }
 
-    /// Sends a Read Holding Registers request to the specified unit ID and address range, and records the expected response.
+    /// Sends a Read Holding Registers request for a single register (Function Code 0x03).
+    ///
+    /// This is a convenience wrapper around `read_holding_registers` with a quantity of 1.
+    /// It allows the application to receive a simplified `read_single_holding_register_response`
+    /// callback instead of handling a register collection.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     /// - `address`: The starting address of the holding registers to read.
     ///
     /// # Returns
@@ -82,10 +94,12 @@ where
     ) -> Result<(), MbusError> {
         use crate::services::Single;
 
+        // Modbus protocol specification: Broadcast is not supported for Read operations.
         if unit_id_slave_addr.is_broadcast() {
             return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
+        // Construct the ADU frame using the register service builder with quantity = 1
         let frame = register::service::ServiceBuilder::read_holding_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -94,17 +108,20 @@ where
             self.transport.transport_type(),
         )?;
 
+        // Register an expectation. We use OperationMeta::Single to signal the response
+        // handler to trigger the single-register specific callback in the app layer.
         self.add_an_expectation(
             txn_id,
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address: address,
-                value: 0,
+                address, // Address of the single register
+                value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_holding_registers_response,
         )?;
 
+        // Dispatch the compiled frame through the underlying transport.
         self.transport
             .send(&frame)
             .map_err(|_e| MbusError::SendFailed)?;
@@ -112,16 +129,24 @@ where
         Ok(())
     }
 
-    /// Sends a Read Input Registers request to the specified unit ID and address range, and records the expected response.
+    /// Sends a Read Input Registers request (Function Code 0x04).
+    ///
+    /// This function is used to read from 1 to 125 contiguous input registers in a remote device.
+    /// Input registers are typically used for read-only data like sensor readings.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `address`: The starting address of the input registers to read.
-    /// - `quantity`: The number of input registers to read.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `address`: The starting address of the input registers to read (0x0000 to 0xFFFF).
+    /// - `quantity`: The number of input registers to read (1 to 125).
     ///
     /// # Returns
-    /// `Ok(())` if the request was successfully enqueued and transmitted.
+    /// - `Ok(())`: If the request was successfully built, the expectation was queued,
+    ///   and the frame was transmitted.
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
@@ -149,8 +174,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address: address,
-                quantity: quantity,
+                address, // Starting address of the read operation
+                quantity, // Number of registers to read
             }),
             Self::handle_read_input_registers_response,
         )?;
@@ -162,18 +187,26 @@ where
         Ok(())
     }
 
-    /// Sends a Read Input Registers request to the specified unit ID and address range, and records the expected response.
+    /// Sends a Read Input Registers request for a single register (Function Code 0x04).
+    ///
+    /// This is a convenience wrapper around `read_input_registers` with a quantity of 1.
+    /// It allows the application to receive a simplified `read_single_input_register_response`
+    /// callback instead of handling a register collection.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `address`: The starting address of the input registers to read.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `address`: The exact address of the input register to read.
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from a broadcast address.
     pub fn read_single_input_register(
         &mut self,
         txn_id: u16,
@@ -197,8 +230,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address: address,
-                value: 0,
+                address, // Address of the single register
+                value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_input_registers_response,
         )?;
@@ -210,16 +243,26 @@ where
         Ok(())
     }
 
-    /// Sends a Write Single Register request to the specified unit ID and address with the given value, and records the expected response.
+    /// Sends a Write Single Register request (Function Code 0x06).
+    ///
+    /// This function is used to write a single holding register in a remote device.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `address`: The address of the register to write.
-    /// - `value`: The `u16` value to write to the register.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `address`: The address of the holding register to be written.
+    /// - `value`: The 16-bit value to be written to the register.
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
+    ///
+    /// # Broadcast Support
+    /// Serial Modbus (RTU/ASCII) allows broadcast writes (Slave Address 0). In this case,
+    /// the request is sent to all slaves, and no response is expected or queued.
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
@@ -252,8 +295,8 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Single(Single { address, value }),
-                Self::handle_write_single_register_response,
-            )?;
+                Self::handle_write_single_register_response, // Callback for successful response
+            )?; // Expect a response for non-broadcast writes
         }
 
         self.transport
@@ -262,17 +305,26 @@ where
         Ok(())
     }
 
-    /// Sends a Write Multiple Registers request to the specified unit ID and address with the given values, and records the expected response.
+    /// Sends a Write Multiple Registers request (Function Code 0x10).
+    ///
+    /// This function is used to write a block of contiguous registers (1 to 123 registers)
+    /// in a remote device.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
-    /// - `address`: The starting address of the registers to write.
-    /// - `quantity`: The number of registers to write.
-    /// - `values`: A slice of `u16` values to write to the registers.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `quantity`: The number of registers to write (1 to 123).
+    /// - `values`: A slice of `u16` values to be written. The length must match `quantity`.
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted.
+    ///
+    /// # Broadcast Support
+    /// Serial Modbus allows broadcast. No response is expected for broadcast requests.
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
@@ -307,8 +359,8 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Multiple(Multiple { address, quantity }),
-                Self::handle_write_multiple_registers_response,
-            )?;
+                Self::handle_write_multiple_registers_response, // Callback for successful response
+            )?; // Expect a response for non-broadcast writes
         }
 
         self.transport
@@ -323,8 +375,12 @@ where
     /// Modbus transaction. The write operation is performed before the read.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     /// - `read_address`: The starting address of the registers to read.
     /// - `read_quantity`: The number of registers to read.
     /// - `write_address`: The starting address of the registers to write.
@@ -364,8 +420,8 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address: read_address,
-                quantity: read_quantity,
+                address: read_address, // Starting address of the read operation
+                quantity: read_quantity, // Number of registers to read
             }),
             Self::handle_read_write_multiple_registers_response,
         )?;
@@ -386,8 +442,12 @@ where
     /// The request is added to the `expected_responses` queue to await a corresponding reply from the Modbus server.
     ///
     /// # Parameters
-    /// - `txn_id`: The transaction ID for this request, used to match responses.
-    /// - `unit_id`: The Modbus unit ID of the target device.
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register to apply the mask to.
     /// - `and_mask`: The 16-bit AND mask to apply to the current register value.
     /// - `or_mask`: The 16-bit OR mask to apply to the current register value.
@@ -423,9 +483,9 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Masking(Mask {
-                    address,
-                    and_mask,
-                    or_mask,
+                    address, // Address of the register to mask
+                    and_mask, // AND mask used in the request
+                    or_mask, // OR mask used in the request
                 }),
                 Self::handle_mask_write_register_response,
             )?;

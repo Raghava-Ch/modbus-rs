@@ -57,7 +57,14 @@ impl DiagnosticsResponse for ClientApp {
         _: &[u8],
     ) {
     }
-    fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: DiagnosticSubFunction, _: &[u16]) {}
+    fn diagnostics_response(
+        &self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: DiagnosticSubFunction,
+        _: &[u16],
+    ) {
+    }
     fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn get_comm_event_log_response(
         &self,
