@@ -1,3 +1,24 @@
+//! # Modbus Discrete Input Service
+//!
+//! This module implements the client-side logic for **Function Code 02 (Read Discrete Inputs)**.
+//!
+//! Discrete Inputs are single-bit, read-only values typically representing digital states
+//! from external devices (e.g., proximity sensors, switch states).
+//!
+//! ## Module Structure
+//! - `apis`: Provides the high-level public API for the `ClientServices` struct.
+//! - `request`: Handles the construction and serialization of Read Discrete Input request PDUs.
+//! - `response`: Handles parsing, validation, and bit-unpacking of response PDUs.
+//! - `service`: Internal orchestration logic for building ADUs and handling de-encapsulation.
+//!
+//! ## Features
+//! - **Bit-Packed Efficiency**: Handles the conversion between Modbus byte-stream bit-packing
+//!   and accessible boolean states.
+//! - **Validation**: Ensures that the server response matches the requested quantity and
+//!   address range.
+//! - **no_std**: Fully compatible with embedded environments, using fixed-size buffers
+//!   via `mbus-core`.
+
 pub mod request;
 pub mod response;
 
@@ -66,7 +87,7 @@ mod tests {
             4,
         );
         let inputs = ResponseParser::parse_read_discrete_inputs_response(&pdu, 196, 22).unwrap();
-        assert_eq!(inputs.values(), &[0xAC, 0xDB, 0x35]);
+        assert_eq!(&inputs.values()[..3], &[0xAC, 0xDB, 0x35]);
     }
 
     #[test]
@@ -133,10 +154,18 @@ mod tests {
         //   Bit 5 (201): 1
         //   Bit 6 (202): 0
         //   Bit 7 (203): 1
-        let values = Vec::from_slice(&[0xAC, 0xDB, 0x35]).unwrap();
-        let inputs = DiscreteInputs::new(196, 22, values);
+        let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
+        values[0] = 0xAC;
+        values[1] = 0xDB;
+        values[2] = 0x35;
 
-        assert_eq!(inputs.value(196).unwrap(), false);
+        // Initialize DiscreteInputs and load the bit-packed values
+        let inputs = DiscreteInputs::new(196, 22)
+            .unwrap()
+            .with_values(&values, 22)
+            .expect("Should load values");
+
+        assert_eq!(inputs.value(196).unwrap(), false); // Bit 0 of 0xAC is 0
         assert_eq!(inputs.value(198).unwrap(), true);
         assert_eq!(inputs.value(203).unwrap(), true);
 
@@ -186,7 +215,7 @@ mod tests {
         assert!(result.is_ok());
         let inputs = result.unwrap();
         assert_eq!(inputs.quantity(), 8);
-        assert_eq!(inputs.values().as_slice(), &[0x01]);
+        assert_eq!(inputs.values(), &[0x01]);
     }
 
     #[test]

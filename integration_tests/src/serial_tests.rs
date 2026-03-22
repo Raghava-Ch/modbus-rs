@@ -588,7 +588,10 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
     recv_data.borrow_mut().extend_from_slice(&frame2[8..]);
     client.poll();
-    assert_eq!(client.app.received_write_single_coil_responses.borrow()[0].0, 2);
+    assert_eq!(
+        client.app.received_write_single_coil_responses.borrow()[0].0,
+        2
+    );
 
     Ok(())
 }

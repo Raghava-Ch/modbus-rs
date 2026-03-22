@@ -3,12 +3,13 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN};
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
 ///
 /// This struct manages a standard TCP connection for Modbus TCP communication.
+#[derive(Debug, Default)]
 pub struct StdTcpTransport {
     stream: Option<TcpStream>,
 }

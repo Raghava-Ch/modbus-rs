@@ -121,7 +121,9 @@ impl ServiceDecompiler {
             return Err(MbusError::InvalidFunctionCode);
         }
         let values = ResponseParser::parse_read_holding_registers_response(pdu, expected_quantity)?;
-        Ok(Registers::new(from_address, expected_quantity, values))
+        let registers = Registers::new(from_address, expected_quantity)?
+            .with_values(values.as_slice(), values.len() as u16)?;
+        Ok(registers)
     }
 
     /// Handles a Read Input Registers response.
@@ -134,7 +136,9 @@ impl ServiceDecompiler {
             return Err(MbusError::InvalidFunctionCode);
         }
         let values = ResponseParser::parse_read_input_registers_response(pdu, expected_quantity)?;
-        Ok(Registers::new(from_address, expected_quantity, values))
+        let registers = Registers::new(from_address, expected_quantity)?
+            .with_values(values.as_slice(), values.len() as u16)?;
+        Ok(registers)
     }
 
     /// Handles a Write Multiple Registers response.
@@ -156,17 +160,17 @@ impl ServiceDecompiler {
     /// Handles a Read/Write Multiple Registers response.
     pub(super) fn handle_read_write_multiple_registers_rsp(
         pdu: &Pdu,
-        expected_read_quantity: u16,
+        expected_quantity: u16,
         from_address: u16,
     ) -> Result<Registers, MbusError> {
         if pdu.function_code() != FunctionCode::ReadWriteMultipleRegisters {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let values = ResponseParser::parse_read_write_multiple_registers_response(
-            pdu,
-            expected_read_quantity,
-        )?;
-        Ok(Registers::new(from_address, expected_read_quantity, values))
+        let values =
+            ResponseParser::parse_read_write_multiple_registers_response(pdu, expected_quantity)?;
+        let registers = Registers::new(from_address, expected_quantity)?
+            .with_values(values.as_slice(), values.len() as u16)?;
+        Ok(registers)
     }
 
     /// Handles a Mask Write Register response.

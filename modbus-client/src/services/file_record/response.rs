@@ -1,3 +1,22 @@
+//! # Modbus File Record Response Handling
+//!
+//! This module provides the logic for parsing and dispatching responses related to
+//! Modbus File Records (Function Codes 0x14 and 0x15).
+//!
+//! ## Responsibilities
+//! - **Parsing**: Validates the complex PDU structure of file record responses, which consist of
+//!   multiple sub-requests within a single frame.
+//! - **De-encapsulation**: Extracts register data from Read File Record responses and validates
+//!   echoed metadata for Write File Record responses.
+//! - **Dispatching**: Routes the parsed sub-request data to the application layer via the
+//!   `FileRecordResponse` trait.
+//!
+//! ## Architecture
+//! - `ResponseParser`: Contains low-level logic to iterate through the byte stream and reconstruct
+//!   `SubRequestParams` from the bitstream.
+//! - `ClientServices` implementation: Orchestrates the high-level handling, converting the PDU
+//!   into a collection of sub-requests and triggering the appropriate application callback.
+
 use heapless::Vec;
 
 use crate::{
@@ -17,7 +36,14 @@ use mbus_core::{
     transport::Transport,
 };
 
-pub(super) struct ResponseParser;
+/// # ResponseParser
+///
+/// A low-level utility for decoding Modbus Protocol Data Units (PDUs) specific to File Record operations.
+///
+/// This struct provides stateless methods to validate function codes (0x14, 0x15), verify byte counts,
+/// and extract sub-request data from raw byte buffers. It handles the complex, variable-length
+/// structure of file record responses which can contain multiple data blocks in a single frame.
+ pub(super) struct ResponseParser;
 
 impl ResponseParser {
     /// Parses a Read File Record (FC 0x14) response PDU.
@@ -67,8 +93,8 @@ impl ResponseParser {
             }
 
             // Extract data bytes: skip len byte (1) + ref type byte (1)
-            let raw_data = &data[i + 2..i + 2 + data_len];
-            if raw_data.len() % 2 != 0 {
+            let raw_data = &data[i + 2..i + 2 + data_len]; // raw_data is the actual register data
+            if !raw_data.len().is_multiple_of(2) { // The length of register data must be a multiple of 2
                 return Err(MbusError::ParseError);
             }
 

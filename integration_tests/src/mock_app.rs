@@ -16,6 +16,12 @@ use modbus_client::{
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use std::vec::Vec; // Import standard Vec for the type alias
+
+/// Type alias for the complex tuple representing a received encapsulated interface transport response.
+type ReceivedEncapsulatedInterfaceTransportResponse = (u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>);
+
+
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MockApp {
@@ -26,18 +32,12 @@ pub struct MockApp {
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
     pub received_read_device_id_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DeviceIdentificationResponse)>>,
-    pub received_encapsulated_interface_transport_responses:
-        RefCell<Vec<(u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>)>>,
+    pub received_encapsulated_interface_transport_responses: RefCell<Vec<ReceivedEncapsulatedInterfaceTransportResponse>>,
     pub failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError)>>,
 }
 
 impl CoilResponse for MockApp {
-    fn read_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: UnitIdOrSlaveAddr,
-        coils: &Coils,
-    ) {
+    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone()));
@@ -49,16 +49,11 @@ impl CoilResponse for MockApp {
         address: u16,
         value: bool,
     ) {
-        let mut coils = Coils::new(
-                address,
-                1,
-            );
+        let mut coils = Coils::new(address, 1).unwrap();
         coils.set_value(address, value).unwrap();
-        self.received_coil_responses.borrow_mut().push((
-            txn_id,
-            unit_id,
-            coils,
-        ));
+        self.received_coil_responses
+            .borrow_mut()
+            .push((txn_id, unit_id, coils));
     }
 
     fn write_single_coil_response(
@@ -108,9 +103,16 @@ impl DiscreteInputResponse for MockApp {
         address: u16,
         value: bool,
     ) {
-        let mut values = heapless::Vec::new();
-        values.push(if value { 1 } else { 0 }).unwrap();
-        let inputs = DiscreteInputs::new(address, 1, values);
+        // Create a DiscreteInputs container for a single bit.
+        // The value is packed into the first byte of the heapless Vec.
+        let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
+        values[0] = if value { 0x01 } else { 0x00 };
+
+        let inputs = DiscreteInputs::new(address, 1)
+            .expect("Failed to create DiscreteInputs")
+            .with_values(&values, 1)
+            .expect("Failed to set discrete input values");
+
         self.received_discrete_input_responses
             .borrow_mut()
             .push((txn_id, unit_id, inputs, 1));

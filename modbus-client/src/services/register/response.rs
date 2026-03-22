@@ -1,3 +1,18 @@
+//! # Modbus Register Response Handling
+//!
+//! This module provides the logic for parsing and dispatching responses related to
+//! Modbus Registers (Function Codes 0x03, 0x04, 0x06, 0x10, 0x16, 0x17).
+//!
+//! ## Responsibilities
+//! - **Parsing**: Validates PDU structure, function codes, and byte counts for various register operations.
+//! - **De-encapsulation**: Extracts 16-bit register values or confirmation metadata from the Modbus PDU.
+//! - **Dispatching**: Routes the parsed data to the application layer via the `RegisterResponse` trait.
+//!
+//! ## Architecture
+//! - `ResponseParser`: Contains low-level logic to transform raw PDU bytes into `u16` collections or success signals.
+//! - `ClientServices` implementation: Orchestrates the high-level handling, distinguishing between
+//!   single-register requests and multiple-register requests to trigger the appropriate application callback.
+
 use heapless::Vec;
 
 use crate::{
@@ -101,12 +116,12 @@ impl ResponseParser {
     /// Parses the response PDU for a Read/Write Multiple Registers (FC 0x17) response.
     pub(super) fn parse_read_write_multiple_registers_response(
         pdu: &Pdu,
-        expected_read_quantity: u16,
+        expected_quantity: u16,
     ) -> Result<Vec<u16, MAX_REGISTERS_PER_PDU>, MbusError> {
         Self::parse_read_registers_response(
             pdu,
             FunctionCode::ReadWriteMultipleRegisters,
-            expected_read_quantity,
+            expected_quantity,
         )
     }
 
@@ -145,6 +160,7 @@ impl ResponseParser {
         Ok(())
     }
 
+    /// Internal helper function to parse common read register responses (FC 0x03, 0x04, 0x17).
     fn parse_read_registers_response(
         pdu: &Pdu,
         expected_fc: FunctionCode,
@@ -213,8 +229,8 @@ where
             };
 
         if ctx.operation_meta.is_single() {
-            let value = register_rsp.values().get(0).copied().unwrap_or(0);
-            self.app.read_single_holding_register_response(
+            let value = register_rsp.values().first().cloned().unwrap_or(0);
+            self.app.read_single_holding_register_response( // Notify the application of the single register value
                 transaction_id,
                 unit_id_or_slave_addr,
                 from_address,

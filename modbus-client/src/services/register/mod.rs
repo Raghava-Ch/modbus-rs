@@ -1,3 +1,26 @@
+//! # Modbus Register Service
+//!
+//! This module implements the client-side logic for Modbus Register operations,
+//! supporting both **Holding Registers** and **Input Registers**.
+//!
+//! ## Supported Function Codes
+//! - **FC 03 (0x03)**: Read Holding Registers
+//! - **FC 04 (0x04)**: Read Input Registers
+//! - **FC 06 (0x06)**: Write Single Register
+//! - **FC 16 (0x10)**: Write Multiple Registers
+//! - **FC 22 (0x16)**: Mask Write Register
+//! - **FC 23 (0x17)**: Read/Write Multiple Registers
+//!
+//! ## Module Structure
+//! - `apis`: High-level public API for the `ClientServices` struct to trigger register operations.
+//! - `request`: Handles the construction and serialization of register-related request PDUs.
+//! - `response`: Handles parsing, validation, and dispatching of response PDUs to the application.
+//! - `service`: Internal orchestration logic for building ADUs and handling de-encapsulation.
+//!
+//! ## Features
+//! - **no_std**: Fully compatible with embedded environments using fixed-size buffers via `heapless`.
+//! - **Validation**: Ensures response addresses, quantities, and values match the original request.
+
 pub mod request;
 pub mod response;
 

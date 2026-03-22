@@ -355,9 +355,9 @@ pub enum EncapsulatedInterfaceType {
     ReadDeviceIdentification = 0x0E,
 }
 
-impl Into<u8> for EncapsulatedInterfaceType {
-    fn into(self) -> u8 {
-        self as u8
+impl From<EncapsulatedInterfaceType> for u8 {
+    fn from(val: EncapsulatedInterfaceType) -> Self {
+        val as u8
     }
 }
 
