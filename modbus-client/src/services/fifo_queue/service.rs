@@ -37,7 +37,7 @@ impl ServiceDecompiler {
         if function_code != FunctionCode::ReadFifoQueue {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let values = ResponseParser::parse_read_fifo_queue_response(pdu)?;
-        Ok(FifoQueue::new(0).with_values(values))
+        let (values, length) = ResponseParser::parse_read_fifo_queue_response(pdu)?;
+        Ok(FifoQueue::new(0).with_values(values, length))
     }
 }

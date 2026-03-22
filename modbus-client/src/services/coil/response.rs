@@ -1,3 +1,18 @@
+//! # Modbus Coil Response Handling
+//!
+//! This module provides the logic for parsing and dispatching responses related to
+//! Modbus Coils (Function Codes 0x01, 0x05, 0x0F).
+//!
+//! ## Responsibilities
+//! - **Parsing**: Validates PDU structure, function codes, and byte counts for coil operations.
+//! - **De-encapsulation**: Extracts bit-packed coil states or confirmation metadata from the Modbus PDU.
+//! - **Dispatching**: Routes the parsed data to the application layer via the `CoilResponse` trait.
+//!
+//! ## Architecture
+//! - `ResponseParser`: Contains low-level logic to transform raw PDU bytes into boolean collections or success signals.
+//! - `ClientServices` implementation: Orchestrates the high-level handling, distinguishing between
+//!   single-coil requests and multiple-coil requests to trigger the appropriate application callback.
+
 use heapless::Vec;
 
 use crate::{
@@ -13,6 +28,12 @@ use mbus_core::{
     transport::Transport,
 };
 
+/// # ResponseParser
+///
+/// A low-level utility for decoding Modbus Protocol Data Units (PDUs) specific to coil operations.
+///
+/// This struct provides stateless methods to validate function codes, verify byte counts,
+/// and extract boolean states or confirmation metadata from raw byte buffers.
 pub(super) struct ResponseParser;
 
 impl ResponseParser {
@@ -74,9 +95,9 @@ impl ResponseParser {
         from_address: u16,
     ) -> Result<Coils, MbusError> {
         let coil_response = Self::parse_read_coils_response(pdu, expected_quantity)?;
-        let mut coils = Coils::new(from_address, expected_quantity);
-        coils.set_values(&coil_response, expected_quantity)?;
-        
+        let coils = Coils::new(from_address, expected_quantity)?
+            .with_values(&coil_response, expected_quantity)?;
+
         Ok(coils)
     }
 
@@ -126,7 +147,7 @@ impl ResponseParser {
         }
 
         // Calculate expected byte count: ceil(expected_quantity / 8)
-        let expected_byte_count = ((expected_quantity + 7) / 8) as usize;
+        let expected_byte_count = expected_quantity.div_ceil(8) as usize;
         if byte_count != expected_byte_count {
             return Err(MbusError::InvalidQuantity); // Mismatch in expected byte count
         }
@@ -236,11 +257,8 @@ where
                 coil_value,
             );
         } else {
-            self.app.read_coils_response(
-                transaction_id,
-                unit_id_or_slave_addr,
-                &coil_rsp,
-            );
+            self.app
+                .read_coils_response(transaction_id, unit_id_or_slave_addr, &coil_rsp);
         }
     }
 
@@ -268,7 +286,7 @@ where
             // If successful
             self.app.write_single_coil_response(
                 transaction_id,
-                message.unit_id_or_slave_addr().into(),
+                message.unit_id_or_slave_addr(),
                 address,
                 value,
             );

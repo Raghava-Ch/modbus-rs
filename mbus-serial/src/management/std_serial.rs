@@ -251,7 +251,7 @@ impl Transport for StdSerialTransport {
 
     /// Returns the type of transport.
     fn transport_type(&self) -> TransportType {
-        let mode = self.mode.clone();
+        let mode = self.mode; // SerialMode implements Copy, so no need to clone
         TransportType::StdSerial(mode)
     }
 }

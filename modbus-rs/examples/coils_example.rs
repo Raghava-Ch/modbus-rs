@@ -20,12 +20,7 @@ struct ClientMockApp {
 }
 
 impl CoilResponse for ClientMockApp {
-    fn read_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: UnitIdOrSlaveAddr,
-        coils: &Coils,
-    ) {
+    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone()))
@@ -38,10 +33,12 @@ impl CoilResponse for ClientMockApp {
         address: u16,
         value: bool,
     ) {
-        let mut coils = Coils::new(address, 1);
         let val_byte = if value { 1 } else { 0 };
-        coils.set_values(&[val_byte], 1).unwrap();
-        
+        let coils = Coils::new(address, 1)
+            .unwrap()
+            .with_values(&[val_byte], 1)
+            .unwrap();
+
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils))
@@ -226,12 +223,18 @@ fn main() -> Result<()> {
     println!("\n--- Testing Write Multiple Coils ---");
     let write_multi_address = 0;
     let write_multi_quantity = 3;
-    
-    let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity);
-    write_multi_coils.set_value(write_multi_address + 0, false).unwrap();
-    write_multi_coils.set_value(write_multi_address + 1, true).unwrap();
-    write_multi_coils.set_value(write_multi_address + 2, true).unwrap();
-    
+
+    let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity).unwrap();
+    write_multi_coils
+        .set_value(write_multi_address + 0, false)
+        .unwrap();
+    write_multi_coils
+        .set_value(write_multi_address + 1, true)
+        .unwrap();
+    write_multi_coils
+        .set_value(write_multi_address + 2, true)
+        .unwrap();
+
     let txn_id_write_multi = 103; // This line is fine
     client
         .write_multiple_coils(
@@ -281,7 +284,7 @@ fn main() -> Result<()> {
         "Client: Read back multiple coils from address {} quantity {}:",
         write_multi_address, write_multi_quantity
     );
-    
+
     let expected_values = [false, true, true];
     for i in 0..write_multi_quantity {
         let current_address = write_multi_address + i;

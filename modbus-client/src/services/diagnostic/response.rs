@@ -156,12 +156,20 @@ impl ResponseParser {
             offset += obj_len;
         }
 
-        // Store the raw objects data (everything after the 6-byte header)
-        let mut objects_data = Vec::new();
-        if data.len() > 6 {
-            objects_data
-                .extend_from_slice(&data[6..])
-                .map_err(|_| MbusError::BufferTooSmall)?;
+        // Initialize the fixed-size array for objects data with zeros.
+        // This buffer stores the raw PDU data following the 6-byte identification header.
+        let mut objects_data = [0u8; MAX_PDU_DATA_LEN];
+        let payload_len = data.len() - 6;
+
+        // Safety Check: Ensure the payload does not exceed our fixed-size buffer.
+        // While Modbus PDUs are limited, a malformed ADU could theoretically trigger an overflow.
+        if payload_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+
+        if payload_len > 0 {
+            // Copy the variable-length objects payload into the fixed-size array.
+            objects_data[..payload_len].copy_from_slice(&data[6..]);
         }
 
         Ok(DeviceIdentificationResponse {
@@ -210,7 +218,7 @@ impl ResponseParser {
         if data.len() < 2 {
             return Err(MbusError::InvalidDataLen);
         }
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             return Err(MbusError::InvalidDataLen);
         }
 

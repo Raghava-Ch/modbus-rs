@@ -10,13 +10,33 @@ where
     TRANSPORT: Transport,
     APP: ClientCommon + FifoQueueResponse,
 {
-    /// Sends a Read FIFO Queue request.
+    /// Sends a Read FIFO Queue request (Function Code 0x18).
+    ///
+    /// This function allows reading the contents of a remote FIFO queue of registers.
+    /// The FIFO structure is address-specific, and the response contains the current
+    /// count of registers in the queue followed by the register data itself.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request. While Modbus Serial (RTU/ASCII)
+    ///   does not natively use transaction IDs, the stack preserves the ID provided in
+    ///   the request and returns it here to allow for asynchronous tracking.
+    /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
+    ///   - `unit_id`: if transport is tcp
+    ///   - `slave_addr`: if transport is serial
+    /// - `address`: The starting address of the FIFO queue.
+    ///
+    /// # Returns
+    /// - `Ok(())`: If the request was successfully built, the expectation was queued,
+    ///   and the frame was transmitted via the transport layer.
+    /// - `Err(MbusError)`: If the address is a broadcast address, if the frame
+    ///   construction fails, or if the transport layer fails to send.
     pub fn read_fifo_queue(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
     ) -> Result<(), MbusError> {
+        // Modbus protocol specification: Broadcast is not supported for Read operations.
         if unit_id_slave_addr.is_broadcast() {
             return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
         }
@@ -28,6 +48,8 @@ where
             self.transport.transport_type(),
         )?;
 
+        // Register an expectation in the client state machine.
+        // This ensures that when a response arrives, it is routed to the correct handler.
         self.add_an_expectation(
             txn_id,
             unit_id_slave_addr,
@@ -36,6 +58,7 @@ where
             Self::handle_read_fifo_queue_response,
         )?;
 
+        // Dispatch the compiled ADU frame through the underlying transport (TCP/RTU/ASCII).
         self.transport
             .send(&frame)
             .map_err(|_e| MbusError::SendFailed)?;

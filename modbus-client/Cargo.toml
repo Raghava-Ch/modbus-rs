@@ -15,3 +15,22 @@ description.workspace = true
 mbus-core = { workspace = true }
 
 heapless = { workspace = true }
+
+[features]
+# By default, all Modbus function code services are enabled for ease of use.
+# Users can disable default features to reduce binary size if specific services are not required.
+default = [
+    "coils",
+    "registers",
+    "discrete_inputs",
+    "fifo_queues",
+    "file_records",
+    "diagnostics"
+]
+
+coils = []      # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
+registers = []  # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
+discrete_inputs = [] # Enables Modbus Discrete Input (FC 0x02) services
+fifo_queues = []     # Enables Modbus FIFO Queue (FC 0x18) services
+file_records = []    # Enables Modbus File Record (FC 0x14, 0x15) services
+diagnostics = []     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services

@@ -1,14 +1,27 @@
-//! Modbus Transport Layer Module
+//! # Modbus Transport Layer
 //!
-//! This module defines the abstractions and configurations required for different
-//! Modbus transport protocols, including TCP/IP and Serial (RTU/ASCII).
+//! This module defines the abstractions and configurations required for transmitting
+//! Modbus Application Data Units (ADUs) over various physical and logical mediums.
 //!
-//! It provides:
-//! - The [`Transport`] trait: A common interface for sending and receiving Modbus ADUs.
-//! - Configuration structures ([`ModbusTcpConfig`], [`ModbusSerialConfig`]): Parameters
-//!   for establishing connections.
-//! - Error handling: [`TransportError`] for mapping low-level I/O issues to Modbus-specific contexts.
-//! - Checksum utilities: CRC16 and LRC via the [`checksum`] submodule.
+//! ## Core Concepts
+//! - **[`Transport`]**: A unified trait that abstracts the underlying communication
+//!   (TCP, Serial, or Mock) from the high-level protocol logic.
+//! - **[`ModbusConfig`]**: A comprehensive configuration enum for setting up
+//!   TCP/IP or Serial (RTU/ASCII) parameters.
+//! - **[`UnitIdOrSlaveAddr`]**: A type-safe wrapper ensuring that Modbus addresses
+//!   stay within the valid range (1-247) and handling broadcast (0) explicitly.
+//!
+//! ## Design Goals
+//! - **`no_std` Compatibility**: Uses `heapless` data structures and `core` traits
+//!   to ensure the library can run on bare-metal embedded systems.
+//! - **Non-blocking I/O**: The `Transport::recv` interface is designed to be polled,
+//!   allowing the client to remain responsive without requiring an OS-level thread.
+//! - **Extensibility**: Users can implement the `Transport` trait to support
+//!   custom hardware (e.g., specialized UART drivers or proprietary TCP stacks).
+//!
+//! ## Error Handling
+//! Errors are categorized into [`TransportError`], which can be seamlessly converted
+//! into the top-level [`MbusError`] used throughout the crate.
 
 pub mod checksum;
 use core::str::FromStr;
@@ -209,18 +222,12 @@ pub enum TransportType {
 impl TransportType {
     /// Returns `true` if the transport type is TCP (StdTcp or CustomTcp).
     pub fn is_tcp_type(&self) -> bool {
-        match self {
-            TransportType::StdTcp | TransportType::CustomTcp => true,
-            _ => false,
-        }
+        matches!(self, TransportType::StdTcp | TransportType::CustomTcp)
     }
 
     /// Returns `true` if the transport type is serial (RTU or ASCII).
     pub fn is_serial_type(&self) -> bool {
-        match self {
-            TransportType::StdSerial(_) | TransportType::CustomSerial(_) => true,
-            _ => false,
-        }
+        matches!(self, TransportType::StdSerial(_) | TransportType::CustomSerial(_))
     }
 }
 
@@ -239,20 +246,20 @@ impl From<TransportError> for MbusError {
 }
 
 /// A type-safe wrapper for Modbus Unit Identifiers (TCP) and Slave Addresses (Serial).
-/// 
+///
 /// ### Address Ranges:
 /// - **1 to 247**: Valid Unicast addresses for individual slave devices.
 /// - **0**: Reserved for **BROADCAST** operations.
 /// - **248 to 255**: Reserved/Invalid addresses.
-/// 
+///
 /// ### ⚠️ Important: Broadcasting (Address 0)
-/// To prevent accidental broadcast requests (which are processed by all devices and 
-/// **never** return a response), address `0` cannot be passed to the standard `new()` 
+/// To prevent accidental broadcast requests (which are processed by all devices and
+/// **never** return a response), address `0` cannot be passed to the standard `new()`
 /// or `try_from()` constructors.
-/// 
-/// Developers **must** explicitly use [`UnitIdOrSlaveAddr::new_broadcast_address()`] 
+///
+/// Developers **must** explicitly use [`UnitIdOrSlaveAddr::new_broadcast_address()`]
 /// to signal intent for a broadcast operation.
-/// 
+///
 /// *Note: Broadcasts are generally only supported for Write operations on Serial transports.*
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnitIdOrSlaveAddr(u8);
@@ -264,15 +271,15 @@ impl UnitIdOrSlaveAddr {
     /// - **1 to 247**: Valid Unicast addresses for individual slave devices.
     /// - **0**: Reserved for **BROADCAST** operations.
     /// - **248 to 255**: Reserved/Invalid addresses.
-    /// 
+    ///
     /// ### ⚠️ Important: Broadcasting (Address 0)
-    /// To prevent accidental broadcast requests (which are processed by all devices and 
-    /// **never** return a response), address `0` cannot be passed to the standard `new()` 
+    /// To prevent accidental broadcast requests (which are processed by all devices and
+    /// **never** return a response), address `0` cannot be passed to the standard `new()`
     /// or `try_from()` constructors.
-    /// 
-    /// Developers **must** explicitly use [`UnitIdOrSlaveAddr::new_broadcast_address()`] 
+    ///
+    /// Developers **must** explicitly use [`UnitIdOrSlaveAddr::new_broadcast_address()`]
     /// to signal intent for a broadcast operation.
-    /// 
+    ///
     /// # Arguments:
     /// - `address`: The `u8` value representing the Unit ID or Slave Address.
     pub fn new(address: u8) -> Result<Self, MbusError> {
@@ -287,7 +294,7 @@ impl UnitIdOrSlaveAddr {
     }
 
     /// Creates a new `UnitIdOrSlaveAddr` instance representing the broadcast address (`0`).
-    /// 
+    ///
     /// *Note: Broadcasts are generally only supported for Write operations on Serial transports.*
     pub fn new_broadcast_address() -> Self {
         Self(0)
@@ -305,15 +312,17 @@ impl UnitIdOrSlaveAddr {
     pub fn get(&self) -> u8 {
         self.0
     }
+}
 
+impl Default for UnitIdOrSlaveAddr {
     /// Provides a default value for initialization or error states.
     ///
     /// # ⚠️ Warning
     /// This returns `255`, which is outside the valid Modbus slave address range (1-247).
     /// It is intended to be used as a sentinel value to represent an uninitialized or
-    /// invalid address state that must be handled by the application logic. 
+    /// invalid address state that must be handled by the application logic.
     /// This value will/should not be sent over the wire.
-    pub fn default() -> Self {
+    fn default() -> Self {
         // 255 is in the reserved range (248-255) and serves as a safe
         // "Null" or "Error" marker in this context.
         Self(255)
@@ -336,20 +345,20 @@ impl UidSaddrFrom for UnitIdOrSlaveAddr {
     /// # Returns
     /// A new `UnitIdOrSlaveAddr` instance.
     fn from_u8(value: u8) -> Self {
-        UnitIdOrSlaveAddr::new(value).unwrap_or(Self::default())
+        UnitIdOrSlaveAddr::new(value).unwrap_or_default()
     }
 }
 
-impl Into<u8> for UnitIdOrSlaveAddr {
-    /// Implementation of `Into<u8>` for `UnitIdOrSlaveAddr`.
+impl From<UnitIdOrSlaveAddr> for u8 {
+    /// Implementation of `From<UnitIdOrSlaveAddr>` for `u8`.
     ///
     /// This allows `UnitIdOrSlaveAddr` to be converted into a `u8` value.
     ///
     /// # Returns
     /// The raw `u8` value of the `UnitIdOrSlaveAddr`.
     ///
-    fn into(self) -> u8 {
-        self.get()
+    fn from(val: UnitIdOrSlaveAddr) -> Self {
+        val.get()
     }
 }
 
@@ -358,7 +367,7 @@ impl Into<u8> for UnitIdOrSlaveAddr {
 impl TryFrom<u8> for UnitIdOrSlaveAddr {
     type Error = MbusError;
     /// Attempts to create a new `UnitIdOrSlaveAddr` from a raw `u8` value.
-    /// 
+    ///
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         // Delegates to the new() constructor which performs range validation (1-247)
         UnitIdOrSlaveAddr::new(value)
@@ -395,7 +404,7 @@ pub trait Transport {
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error>;
 
     /// Gracefully closes the active connection and releases underlying resources.
-    /// 
+    ///
     /// After calling this method, subsequent calls to `send` or `recv` should fail until
     /// `connect` is called again.
     fn disconnect(&mut self) -> Result<(), Self::Error>;

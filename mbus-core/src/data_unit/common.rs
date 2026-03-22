@@ -17,6 +17,7 @@ use heapless::Vec;
 /// Maximum data length for a PDU (excluding function code)
 pub const MAX_PDU_DATA_LEN: usize = 252;
 
+/// Modbus Protocol Identifier (PID)
 pub const MODBUS_PROTOCOL_ID: u16 = 0x0000;
 
 /// Maximum length of an ADU (MBAP header + PDU)
@@ -196,10 +197,22 @@ impl ModbusMessage {
         &self.additional_address
     }
 
+    /// Accessor for the Protocol Data Unit (PDU).
+    ///
+    /// The PDU contains the function code and the data payload, which are
+    /// independent of the underlying transport layer (TCP, RTU, or ASCII).
+    ///
     pub fn pdu(&self) -> &Pdu {
         &self.pdu
     }
 
+    /// Extracts the target device identifier from the message.
+    ///
+    /// This method abstracts the difference between TCP (Unit ID) and Serial (Slave Address)
+    /// addressing, returning a unified `UnitIdOrSlaveAddr` type.
+    ///
+    /// # Returns
+    /// A `UnitIdOrSlaveAddr` representing the destination or source device.
     pub fn unit_id_or_slave_addr(&self) -> UnitIdOrSlaveAddr {
         match self.additional_address {
             AdditionalAddress::MbapHeader(header) => {
@@ -212,6 +225,10 @@ impl ModbusMessage {
         }
     }
 
+    /// Retrieves the transaction identifier for the message.
+    ///
+    /// For TCP messages, this returns the ID from the MBAP header.
+    /// For Serial (RTU/ASCII) messages, this returns 0 as they are inherently synchronous.
     pub fn transaction_id(&self) -> u16 {
         match self.additional_address {
             AdditionalAddress::MbapHeader(header) => header.transaction_id,
@@ -392,6 +409,17 @@ impl ModbusMessage {
         Ok(ascii_data)
     }
 
+    /// Creates a `ModbusMessage` from a raw Modbus RTU byte slice.
+    ///
+    /// This method validates the RTU frame by checking the minimum length and
+    /// verifying the 16-bit CRC (Cyclic Redundancy Check).
+    ///
+    /// # Arguments
+    /// * `frame` - A byte slice containing the complete Modbus RTU ADU.
+    ///
+    /// # Returns
+    /// * `Ok(ModbusMessage)` if the CRC is valid and the PDU is correctly parsed.
+    /// * `Err(MbusError)` if the frame is too short, the checksum fails, or the PDU is invalid.
     pub fn from_rtu_bytes(frame: &[u8]) -> Result<Self, MbusError> {
         // RTU Frame: [Slave Address (1)] [PDU (N)] [CRC (2)]
         // Minimum length: MIN_RTU_ADU_LEN (4)
@@ -399,19 +427,24 @@ impl ModbusMessage {
             return Err(MbusError::InvalidAduLength);
         }
 
+        // The CRC is the last 2 bytes of the frame
         let data_len = frame.len() - RTU_CRC_SIZE;
         let data_to_check = &frame[..data_len];
-        let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
 
+        // Modbus RTU uses Little-Endian for CRC transmission
+        let received_crc = u16::from_le_bytes([frame[data_len], frame[data_len + 1]]);
         let calculated_crc = checksum::crc16(data_to_check);
 
+        // Verify data integrity
         if calculated_crc != received_crc {
             return Err(MbusError::ChecksumError); // CRC Mismatch
         }
 
+        // Extract Slave Address (1st byte)
         let slave_address = SlaveAddress::new(frame[0])?;
+
         // PDU is from byte 1 to end of data (excluding CRC)
-        let pdu_bytes = &frame[1..data_len];
+        let pdu_bytes = &data_to_check[1..];
         let pdu = Pdu::from_bytes(pdu_bytes)?;
 
         Ok(ModbusMessage::new(
@@ -420,6 +453,20 @@ impl ModbusMessage {
         ))
     }
 
+    /// Creates a `ModbusMessage` from a raw Modbus ASCII byte slice.
+    ///
+    /// This method performs the following validation and transformation steps:
+    /// 1. Validates the frame structure (starts with ':', ends with "\r\n").
+    /// 2. Decodes the hexadecimal ASCII representation into binary data.
+    /// 3. Verifies the Longitudinal Redundancy Check (LRC) checksum.
+    /// 4. Parses the resulting binary into a `SlaveAddress` and `Pdu`.
+    ///
+    /// # Arguments
+    /// * `frame` - A byte slice containing the complete Modbus ASCII ADU.
+    ///
+    /// # Returns
+    /// * `Ok(ModbusMessage)` if the frame is valid and checksum matches.
+    /// * `Err(MbusError)` for invalid length, malformed hex, or checksum failure.
     pub fn from_ascii_bytes(frame: &[u8]) -> Result<Self, MbusError> {
         // ASCII Frame: [Start (:)] [Address (2)] [PDU (N)] [LRC (2)] [End (\r\n)]
         // Minimum length: MIN_ASCII_ADU_LEN (9)
@@ -437,7 +484,7 @@ impl ModbusMessage {
 
         // Extract Hex content (excluding ':' and '\r\n')
         let hex_content = &frame[ASCII_START_SIZE..frame.len() - ASCII_END_SIZE];
-        if hex_content.len() % 2 != 0 {
+        if !hex_content.len().is_multiple_of(2) {
             return Err(MbusError::BasicParseError); // Odd length hex string
         }
 
@@ -496,7 +543,7 @@ impl Pdu {
         Self {
             function_code,
             error_code: None, // Default to None for normal responses; can be set for exceptions
-            data: data,       // Ensure the heapless::Vec is moved here
+            data,       // Ensure the heapless::Vec is moved here
             data_len,
         }
     }
@@ -633,7 +680,7 @@ pub fn decompile_adu_frame(
     frame: &[u8],
     transport_type: TransportType,
 ) -> Result<ModbusMessage, MbusError> {
-    let message = match transport_type {
+    match transport_type {
         TransportType::StdTcp | TransportType::CustomTcp => {
             // Parse MBAP header and PDU
             ModbusMessage::from_bytes(frame)
@@ -644,9 +691,7 @@ pub fn decompile_adu_frame(
                 SerialMode::Ascii => ModbusMessage::from_ascii_bytes(frame),
             }
         }
-    };
-
-    message
+    }
 }
 
 /// Derives the expected total length of a Modbus frame from its initial bytes.
@@ -671,7 +716,7 @@ pub fn derive_length_from_bytes(frame: &[u8], transport_type: TransportType) -> 
             }
 
             // In Modbus TCP, the Protocol ID MUST be 0x0000.
-            // If it's not, this is garbage data. We return a huge length to trigger a parse error 
+            // If it's not, this is garbage data. We return a huge length to trigger a parse error
             // downstream and force the window to slide and resync.
             let protocol_id = u16::from_be_bytes([frame[2], frame[3]]);
             if protocol_id != MODBUS_PROTOCOL_ID {
@@ -745,7 +790,7 @@ fn get_byte_count_from_frame(
 
     // Map structural candidates (Requests and Responses combined) based on Modbus definitions
     match fc {
-        1 | 2 | 3 | 4 => {
+        1..=4 => {
             let _ = candidates.push(8);
             add_dyn(&mut candidates, 2, 5);
         }
@@ -1239,9 +1284,8 @@ mod tests {
     fn test_decompile_adu_frame_rtu_valid() {
         // Frame: 01 03 00 6B 00 03 74 17 (CRC LE)
         let frame = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17];
-        let msg =
-            decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
-                .expect("Valid RTU");
+        let msg = decompile_adu_frame(&frame, TransportType::StdSerial(SerialMode::Rtu))
+            .expect("Valid RTU");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
@@ -1265,9 +1309,8 @@ mod tests {
     fn test_decompile_adu_frame_ascii_valid() {
         // :010300000001FB\r\n
         let frame = b":010300000001FB\r\n";
-        let msg =
-            decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
-                .expect("Valid ASCII");
+        let msg = decompile_adu_frame(frame, TransportType::StdSerial(SerialMode::Ascii))
+            .expect("Valid ASCII");
         assert_eq!(msg.function_code(), FunctionCode::ReadHoldingRegisters);
     }
 
@@ -1414,7 +1457,10 @@ mod tests {
 
         // Without the valid CRC, it will continuously scan forward but yield None if unmatched.
         assert_eq!(
-            derive_length_from_bytes(&custom_frame[..4], TransportType::StdSerial(SerialMode::Rtu)),
+            derive_length_from_bytes(
+                &custom_frame[..4],
+                TransportType::StdSerial(SerialMode::Rtu)
+            ),
             None
         );
     }
