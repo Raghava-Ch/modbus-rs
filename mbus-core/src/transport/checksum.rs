@@ -1,5 +1,30 @@
-//! This module provides functions for calculating Modbus-specific checksums,
-//! namely CRC16 for RTU mode and LRC for ASCII mode.
+//! # Modbus Checksum Utilities
+//!
+//! This module provides error-detection algorithms used by the Modbus protocol to ensure
+//! data integrity across different transport layers.
+//!
+//! ## Supported Algorithms
+//!
+//! ### 1. Cyclic Redundancy Check (CRC-16)
+//! Used primarily in **Modbus RTU**. It employs the polynomial `0xA001` (the reverse of `0x8005`)
+//! with an initial value of `0xFFFF`. This implementation uses a precomputed lookup table
+//! to provide high-performance calculations suitable for real-time embedded systems.
+//!
+//! ### 2. Longitudinal Redundancy Check (LRC)
+//! Used primarily in **Modbus ASCII**. It is a simpler 8-bit checksum calculated as the
+//! two's complement of the sum of all bytes in the message.
+//!
+//! ## Usage Examples
+//!
+//! ```rust
+//! use mbus_core::transport::checksum::{crc16, lrc};
+//!
+//! let rtu_data = [0x01, 0x03, 0x00, 0x6B, 0x00, 0x03];
+//! let rtu_checksum = crc16(&rtu_data); // Returns 0x1774
+//!
+//! let ascii_data = [0x01, 0x03, 0x00, 0x00, 0x00, 0x01];
+//! let ascii_checksum = lrc(&ascii_data); // Returns 0xFB
+//! ```
 
 // CRC-16-MODBUS lookup table
 const CRC16_TABLE: [u16; 256] = [

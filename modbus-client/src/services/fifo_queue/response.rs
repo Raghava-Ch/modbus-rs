@@ -1,4 +1,17 @@
-use heapless::Vec;
+//! # Modbus FIFO Queue Response Handling
+//!
+//! This module provides the logic for parsing and dispatching responses related to
+//! Modbus Read FIFO Queue (Function Code 0x18).
+//!
+//! ## Responsibilities
+//! - **Parsing**: Validates PDU structure, function codes, and byte counts for FIFO responses.
+//! - **De-encapsulation**: Extracts the 16-bit register values from the Modbus PDU.
+//! - **Dispatching**: Routes the parsed data to the application layer via the `FifoQueueResponse` trait.
+//!
+//! ## Architecture
+//! - `ResponseParser`: Contains low-level logic to transform raw PDU bytes into a list of register values.
+//! - `ClientServices` implementation: Orchestrates the high-level handling, converting the PDU
+//!   into a `FifoQueue` model and triggering the application callback.
 
 use crate::app::FifoQueueResponse;
 use crate::services::fifo_queue::MAX_FIFO_QUEUE_COUNT_PER_PDU;
@@ -13,10 +26,10 @@ use mbus_core::{
 pub(super) struct ResponseParser;
 
 impl ResponseParser {
-    /// Parses the received response for a Modbus Read FIFO Queue request.
+    /// Internal parser for Read FIFO Queue response PDUs (FC 0x18).
     pub(super) fn parse_read_fifo_queue_response(
         pdu: &Pdu,
-    ) -> Result<Vec<u16, MAX_FIFO_QUEUE_COUNT_PER_PDU>, MbusError> {
+    ) -> Result<([u16; MAX_FIFO_QUEUE_COUNT_PER_PDU], usize), MbusError> {
         if pdu.function_code() != FunctionCode::ReadFifoQueue {
             return Err(MbusError::InvalidFunctionCode);
         }
@@ -40,21 +53,25 @@ impl ResponseParser {
             return Err(MbusError::ParseError);
         }
 
-        // FIFO Count is at data[2..4]
-        // Values start at data[4..]
-        let mut values = Vec::new();
-        for chunk in data[4..].chunks_exact(2) {
-            let val = u16::from_be_bytes([chunk[0], chunk[1]]);
-            values
-                .push(val)
-                .map_err(|_| MbusError::BufferLenMissmatch)?;
+        if fifo_count > MAX_FIFO_QUEUE_COUNT_PER_PDU {
+            return Err(MbusError::BufferLenMissmatch);
         }
 
-        if values.len() != fifo_count {
+        let mut values = [0u16; MAX_FIFO_QUEUE_COUNT_PER_PDU];
+        let mut index = 0;
+        for chunk in data[4..].chunks_exact(2) {
+            if index >= MAX_FIFO_QUEUE_COUNT_PER_PDU {
+                return Err(MbusError::BufferLenMissmatch);
+            }
+            values[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+            index += 1;
+        }
+
+        if index != fifo_count {
             return Err(MbusError::ParseError);
         }
 
-        Ok(values)
+        Ok((values, fifo_count))
     }
 }
 
@@ -63,6 +80,10 @@ where
     TRANSPORT: Transport,
     APP: ClientCommon + FifoQueueResponse,
 {
+    /// Orchestrates the processing of a Read FIFO Queue response.
+    ///
+    /// This method decompiles the PDU, validates the content, and notifies the
+    /// application layer of success or failure.
     pub(super) fn handle_read_fifo_queue_response(
         &mut self,
         ctx: &ExpectedResponse<TRANSPORT, APP, N>,

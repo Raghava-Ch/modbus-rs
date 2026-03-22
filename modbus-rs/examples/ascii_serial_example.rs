@@ -16,12 +16,7 @@ use std::time::{Duration, SystemTime};
 struct ClientApp;
 
 impl CoilResponse for ClientApp {
-    fn read_coils_response(
-        &self,
-        txn_id: u16,
-        unit_id: UnitIdOrSlaveAddr,
-        coils: &Coils,
-    ) {
+    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         let quantity = coils.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",

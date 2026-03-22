@@ -232,7 +232,12 @@ fn test_client_services_write_single_coil() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process write response
-        if !client.app.received_write_single_coil_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_write_single_coil_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -307,7 +312,7 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     let quantity = 10;
 
     // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
-    let mut values = Coils::new(address, quantity);
+    let mut values = Coils::new(address, quantity).unwrap();
     for i in 0..quantity {
         values.set_value(address + i, i % 2 == 0).unwrap();
     }
@@ -318,7 +323,12 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process write response
-        if !client.app.received_write_multiple_coils_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_write_multiple_coils_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -551,7 +561,12 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process read response
-        if !client.app.received_discrete_input_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_discrete_input_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -565,7 +580,7 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_inputs.from_address(), address);
     assert_eq!(rcv_inputs.quantity(), quantity);
-    assert_eq!(rcv_inputs.values().as_slice(), &[0xAA]);
+    assert_eq!(rcv_inputs.values(), &[0xAA]);
     assert_eq!(*rcv_quantity, quantity);
 
     server_handle.join().unwrap()?;
@@ -630,7 +645,12 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process read response
-        if !client.app.received_discrete_input_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_discrete_input_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -718,7 +738,12 @@ fn test_client_services_read_device_identification() -> Result<()> {
 
     for _ in 0..50 {
         client.poll();
-        if !client.app.received_read_device_id_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_read_device_id_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -892,7 +917,12 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
 
     for _ in 0..50 {
         client.poll();
-        if !client.app.received_encapsulated_interface_transport_responses.borrow().is_empty() {
+        if !client
+            .app
+            .received_encapsulated_interface_transport_responses
+            .borrow()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -1082,7 +1112,9 @@ fn test_client_services_tcp_fragmented_stream() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     // 1. Queue Request 1 and Poll. StdTcpTransport internally receives fragmented chunks.
-    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+    client
+        .read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)
+        .unwrap();
 
     for _ in 0..50 {
         client.poll();
@@ -1091,14 +1123,16 @@ fn test_client_services_tcp_fragmented_stream() -> Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    
+
     let responses_1 = client.app.received_coil_responses.borrow();
     assert_eq!(responses_1.len(), 1);
     assert_eq!(responses_1[0].0, 1);
     drop(responses_1);
 
     // 2. Queue Request 2 and Poll.
-    client.read_multiple_coils(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+    client
+        .read_multiple_coils(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)
+        .unwrap();
 
     for _ in 0..50 {
         client.poll();
@@ -1157,7 +1191,9 @@ fn test_client_services_tcp_noise_injection() -> Result<()> {
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
 
     // 1. Queue Request 1
-    client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3).unwrap();
+    client
+        .read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)
+        .unwrap();
 
     // 2. Poll repeatedly to consume the garbage chunks and eventually the valid response
     for _ in 0..20 {
@@ -1169,7 +1205,11 @@ fn test_client_services_tcp_noise_injection() -> Result<()> {
     }
 
     let responses_1 = client.app.received_coil_responses.borrow();
-    assert_eq!(responses_1.len(), 1, "The valid response should be successfully parsed after clearing stream noise.");
+    assert_eq!(
+        responses_1.len(),
+        1,
+        "The valid response should be successfully parsed after clearing stream noise."
+    );
     assert_eq!(responses_1[0].0, 1);
 
     server_handle.join().unwrap()?;

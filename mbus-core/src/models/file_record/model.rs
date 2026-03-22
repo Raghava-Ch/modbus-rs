@@ -1,3 +1,23 @@
+//! # Modbus File Record Models
+//!
+//! This module provides the data structures for handling **Read File Record** (Function Code 0x14)
+//! and **Write File Record** (Function Code 0x15).
+//!
+//! File records allow access to a large, structured memory area organized into files and records.
+//! Unlike coils or registers, file record operations are composed of one or more "sub-requests"
+//! within a single Modbus PDU.
+//!
+//! ## Key Components
+//! - [`SubRequest`]: A container that aggregates multiple read or write operations into a single PDU.
+//! - [`SubRequestParams`]: The specific parameters (File No, Record No, Length, Data) for an individual operation.
+//! - [`MAX_SUB_REQUESTS_PER_PDU`]: The protocol limit of 35 sub-requests per frame.
+//!
+//! ## Constraints
+//! - The total size of all sub-requests (including headers and data) must not exceed the
+//!   maximum Modbus PDU data length of 252 bytes.
+//! - For Read requests, the response size is also validated during sub-request addition to
+//!   ensure the server can fit the requested data into a single response PDU.
+
 use crate::{data_unit::common::MAX_PDU_DATA_LEN, errors::MbusError};
 use heapless::Vec;
 
@@ -9,6 +29,10 @@ pub const SUB_REQ_PARAM_BYTE_LEN: usize = 6 + 1;
 /// The reference type for file record requests (0x06).
 pub const FILE_RECORD_REF_TYPE: u8 = 0x06;
 
+/// A trait for converting Modbus PDU data structures into a byte vector.
+///
+/// This is specifically used for file record sub-requests to serialize their parameters
+/// into the format expected within a Modbus PDU.
 pub trait PduDataBytes {
     /// Converts the sub-request parameters into a byte vector for the PDU.
     fn to_sub_req_pdu_bytes(&self) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError>;
@@ -17,21 +41,36 @@ pub trait PduDataBytes {
 /// Parameters for a single file record sub-request.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubRequestParams {
-    /// The file number to be read/written.
+    /// The file number to be read/written (0x0001 to 0xFFFF).
+    /// In Modbus, files are logical groupings of records.
     pub file_number: u16,
-    /// The starting record number.
+    /// The starting record number within the file (0x0000 to 0x270F).
+    /// Each record is typically 2 bytes (one 16-bit register).
     pub record_number: u16,
-    /// The length of the record (number of registers).
+    /// The length of the record in number of 16-bit registers.
+    /// For Read (FC 0x14), this is the amount to retrieve.
+    /// For Write (FC 0x15), this must match the length of `record_data`.
     pub record_length: u16,
-    /// The data to be written (only for write requests).
-    pub record_data: Option<Vec<u16, MAX_PDU_DATA_LEN>>, // Only used for write requests, None for read requests
+    /// The actual register values to be written to the file.
+    /// This field is `Some` for Write File Record (FC 0x15) and `None` for Read File Record (FC 0x14).
+    /// The data is stored in a `heapless::Vec` to ensure `no_std` compatibility.
+    pub record_data: Option<Vec<u16, MAX_PDU_DATA_LEN>>,
 }
 
-/// Represents a collection of sub-requests for File Record operations.
+/// Represents a collection of sub-requests for Modbus File Record operations.
+///
+/// A single Modbus PDU for FC 0x14 or 0x15 can contain multiple sub-requests,
+/// allowing the client to read from or write to different files and records in one transaction.
+///
+/// This struct manages the aggregation of these requests and performs validation to ensure
+/// the resulting PDU does not exceed the Modbus protocol limit of 253 bytes.
+#[derive(Debug, Clone, Default)]
 pub struct SubRequest {
-    /// A vector of individual sub-request parameters.
-    params: Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>, // maximum of 35 sub-requests per PDU
-    /// The total length of data in bytes that will be read across all sub-requests.
+    /// A fixed-capacity vector of individual sub-request parameters.
+    /// The capacity is limited to 35 as per the Modbus specification.
+    params: Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU>,
+    /// The cumulative count of registers (16-bit words) requested for reading.
+    /// Used to calculate and validate the expected response size.
     total_read_bytes_length: u16,
 }
 

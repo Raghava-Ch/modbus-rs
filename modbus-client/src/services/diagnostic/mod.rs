@@ -1,3 +1,34 @@
+//! # Modbus Diagnostic Services
+//!
+//! This module provides the implementation for Modbus diagnostic and maintenance services.
+//! It supports standard function codes used for device identification, health checks,
+//! and transport-specific diagnostics.
+//!
+//! ## Supported Function Codes
+//! - **FC 08 (0x08): Diagnostics** - Provides a series of tests for checking the communication
+//!   system between a client and a server, or for checking various internal error conditions
+//!   within a server.
+//! - **FC 11 (0x0B): Get Comm Event Counter** - Used to get a status word and an event count
+//!   from the remote device's communication event counter.
+//! - **FC 12 (0x0C): Get Comm Event Log** - Used to get a status word, event count, message
+//!   count, and a field of event bytes from the remote device.
+//! - **FC 07 (0x07): Read Exception Status** - Used to read the contents of eight Exception
+//!   Status outputs in a remote device.
+//! - **FC 17 (0x11): Report Server ID** - Used to read the description of the type, the
+//!   current status, and other information specific to a remote device.
+//! - **FC 43 / MEI 14 (0x2B / 0x0E): Read Device Identification** - Allows reading
+//!   identification and additional information relative to the physical and functional
+//!   description of a remote device.
+//!
+//! ## Architecture
+//! - `apis`: High-level methods exposed to the `ClientServices` struct.
+//! - `request`: Logic for compiling request Protocol Data Units (PDUs).
+//! - `response`: Logic for parsing and validating response PDUs.
+//! - `service`: Internal orchestration of diagnostic operations.
+//!
+//! This module is designed to be `no_std` compatible, utilizing `heapless` collections
+//! for memory efficiency.
+
 mod request;
 mod response;
 
