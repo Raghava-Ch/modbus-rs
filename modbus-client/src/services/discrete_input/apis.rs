@@ -26,6 +26,7 @@ where
     ///
     /// # Returns
     /// `Ok(())` if the request was successfully enqueued and transmitted. Or else Error
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_discrete_inputs(
         &mut self,
         txn_id: u16,
@@ -79,6 +80,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_discrete_input(
         &mut self,
         txn_id: u16,

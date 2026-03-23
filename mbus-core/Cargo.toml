@@ -19,6 +19,7 @@ bitfields = { workspace = true }
 # To reduce binary size or exclude unused functionality,
 # disable default features and enable only the services you need.
 default = [
+    "serial-ascii",
     "coils",
     "registers",
     "discrete-inputs",
@@ -26,6 +27,7 @@ default = [
     "file-record",
     "diagnostics",
 ]
+serial-ascii = []
 coils = []
 registers = []
 discrete-inputs = []

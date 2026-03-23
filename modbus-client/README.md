@@ -24,6 +24,7 @@ Transport implementations are provided by helper crates such as:
 ## What Is Included
 
 - `services::ClientServices`: the central client orchestrator.
+- `services::SerialClientServices`: convenience alias for serial clients (`N = 1`).
 - Feature-gated service modules:
   - `services::coil`
   - `services::register`
@@ -34,6 +35,72 @@ Transport implementations are provided by helper crates such as:
 - `app` callback traits:
   - `RequestErrorNotifier`
   - response traits for each function group
+
+## Retry Backoff and Jitter
+
+Retries are poll-driven and timestamp-scheduled. The client never sleeps or blocks.
+
+- Timeout detection happens inside `ClientServices::poll()`.
+- Retries are scheduled using `BackoffStrategy` from `mbus-core::transport`.
+- Optional jitter is applied using `JitterStrategy`.
+- Randomness for jitter is application-provided via `retry_random_fn` on config.
+
+Example (TCP with exponential backoff + percentage jitter):
+
+```rust
+use mbus_core::transport::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
+
+fn app_random_u32() -> u32 {
+  // Replace with your MCU/OS RNG source.
+  42
+}
+
+let mut tcp = ModbusTcpConfig::new("127.0.0.1", 502)?;
+tcp.retry_attempts = 3;
+tcp.retry_backoff_strategy = BackoffStrategy::Exponential {
+  base_delay_ms: 100,
+  max_delay_ms: 2000,
+};
+tcp.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
+tcp.retry_random_fn = Some(app_random_u32);
+```
+
+If `retry_random_fn` is `None`, jitter strategies gracefully fall back to non-jittered delays.
+
+## Reconnect and Connection State
+
+`ClientServices` now exposes explicit connection management helpers:
+
+- `client.is_connected()` to query transport connection state.
+- `client.reconnect()` to re-establish transport using the current config.
+
+Reconnect behavior:
+
+- Pending in-flight requests are failed immediately with `MbusError::ConnectionLost`.
+- Internal receive buffers and timeout checkpoints are cleared.
+- `disconnect()` is attempted, then `connect(&config)` is called.
+- Requests are not auto re-sent; the application should requeue explicitly.
+
+This behavior is suitable for long-running daemons and embedded systems that must
+recover from temporary link loss.
+
+## App Handler Access
+
+`ClientServices` keeps the application callback handler encapsulated.
+
+- Use `client.app()` for immutable inspection.
+- There is no public replacement/mutable handler API.
+
+This preserves callback identity for in-flight requests and avoids accidental
+handler swaps during active transactions.
+
+## Serial Queue Constraint
+
+For serial transports, Modbus is half-duplex and only one request may be in flight.
+
+- Runtime-safe path: `ClientServices::new(...)` validates serial `N == 1`.
+- Compile-time-safe path: `ClientServices::new_serial(...)` enforces `N == 1`.
+- Recommended type alias: `SerialClientServices<TRANSPORT, APP>`.
 
 ## Feature Flags
 
@@ -47,6 +114,7 @@ Available features:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `serial-ascii` (forwards to `mbus-core/serial-ascii` to enable ASCII-sized ADU buffers)
 
 Default behavior:
 

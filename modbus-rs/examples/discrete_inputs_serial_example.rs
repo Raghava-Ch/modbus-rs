@@ -97,12 +97,15 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 

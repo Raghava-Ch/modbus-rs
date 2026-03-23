@@ -41,7 +41,7 @@ default = [
 ]
 client = ["modbus-client"]
 serial-rtu = ["mbus-serial"]
-serial-ascii = ["mbus-serial"]
+serial-ascii = ["mbus-serial", "mbus-core/serial-ascii"]
 tcp = ["mbus-tcp"]
 coils = ["mbus-core/coils"]
 registers = ["mbus-core/registers"]

@@ -4,9 +4,10 @@ use std::time::Duration;
 use heapless::Vec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{
-    BaudRate, ModbusConfig, Parity, SerialMode, Transport, TransportError, TransportType,
+    BaudRate, DataBits as ConfigDataBits, ModbusConfig, Parity, SerialMode, Transport,
+    TransportError, TransportType,
 };
-use serialport::{ClearBuffer, DataBits, FlowControl, SerialPort, StopBits};
+use serialport::{ClearBuffer, DataBits as SerialPortDataBits, FlowControl, SerialPort, StopBits};
 
 /// A concrete implementation of `Transport` for Serial communication using `serialport` crate.
 /// Supports both RTU and ASCII modes.
@@ -87,11 +88,10 @@ impl Transport for StdSerialTransport {
         };
 
         let data_bits = match serial_config.data_bits {
-            5 => DataBits::Five,
-            6 => DataBits::Six,
-            7 => DataBits::Seven,
-            8 => DataBits::Eight,
-            _ => DataBits::Eight, // Default to 8, though config should be validated upstream.
+            ConfigDataBits::Five => SerialPortDataBits::Five,
+            ConfigDataBits::Six => SerialPortDataBits::Six,
+            ConfigDataBits::Seven => SerialPortDataBits::Seven,
+            ConfigDataBits::Eight => SerialPortDataBits::Eight,
         };
 
         // Convert the numeric stop_bits from config to the serialport enum.

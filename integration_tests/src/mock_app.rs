@@ -211,7 +211,7 @@ impl RegisterResponse for MockApp {
 
 impl FifoQueueResponse for MockApp {
     fn read_fifo_queue_response(
-        &mut self,
+        &self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _fifo_queue: &FifoQueue,

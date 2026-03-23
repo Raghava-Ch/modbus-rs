@@ -61,7 +61,7 @@ fn connect_serial() -> Result<(), MbusError> {
 		port_path: "/dev/ttyUSB0".try_into().map_err(|_| MbusError::BufferTooSmall)?,
 		mode: SerialMode::Rtu,
 		baud_rate: BaudRate::Baud19200,
-		data_bits: 8,
+		data_bits: mbus_core::transport::DataBits::Eight,
 		stop_bits: 1,
 		parity: Parity::Even,
 		response_timeout_ms: 1000,

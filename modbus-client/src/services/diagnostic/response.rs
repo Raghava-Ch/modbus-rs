@@ -85,7 +85,7 @@ impl ResponseParser {
     /// Parses an Encapsulated Interface Transport (FC 0x2B) response PDU.
     pub(super) fn parse_encapsulated_interface_transport_response(
         pdu: &Pdu,
-    ) -> Result<Vec<u8, MAX_PDU_DATA_LEN>, MbusError> {
+    ) -> Result<(EncapsulatedInterfaceType, Vec<u8, MAX_PDU_DATA_LEN>), MbusError> {
         if pdu.function_code() != FunctionCode::EncapsulatedInterfaceTransport {
             return Err(MbusError::InvalidFunctionCode);
         }
@@ -96,9 +96,6 @@ impl ResponseParser {
         }
 
         let mei_type = EncapsulatedInterfaceType::try_from(data[0])?;
-        if EncapsulatedInterfaceType::CanopenGeneralReference != mei_type {
-            return Err(MbusError::InvalidMeiType);
-        }
 
         let mut response_data = Vec::new();
         if data.len() > 1 {
@@ -107,7 +104,7 @@ impl ResponseParser {
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
-        Ok(response_data)
+        Ok((mei_type, response_data))
     }
 
     /// Parses a Read Device Identification (FC 0x2B / MEI 0x0E) response PDU.
@@ -297,13 +294,23 @@ where
         let pdu = message.pdu();
         let transaction_id = ctx.txn_id;
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+        let expected_mei_type = ctx.operation_meta.encap_type();
 
         match ResponseParser::parse_encapsulated_interface_transport_response(pdu) {
-            Ok(response) => {
+            Ok((mei_type, response)) => {
+                if mei_type != expected_mei_type {
+                    self.app.request_failed(
+                        transaction_id,
+                        unit_id_or_slave_addr,
+                        MbusError::InvalidMeiType,
+                    );
+                    return;
+                }
+
                 self.app.encapsulated_interface_transport_response(
                     transaction_id,
                     unit_id_or_slave_addr,
-                    EncapsulatedInterfaceType::CanopenGeneralReference,
+                    mei_type,
                     response.as_slice(),
                 );
             }

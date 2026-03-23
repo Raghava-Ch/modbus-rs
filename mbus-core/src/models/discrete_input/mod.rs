@@ -11,6 +11,7 @@
 //! - **no_std Compatible**: Designed for embedded systems without heap allocation.
 //! - **Safe Access**: Provides methods to retrieve individual bit states by their Modbus address
 //!   with automatic boundary checking.
+//! 
 //! A collection of discrete input states retrieved from a Modbus server.
 //!
 //! This structure maintains the context of the read operation (starting address and quantity)

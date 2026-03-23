@@ -155,6 +155,7 @@ fn main() -> Result<(), MbusError> {
 - [registers_example.rs](examples/registers_example.rs)
 - [discrete_inputs_example.rs](examples/discrete_inputs_example.rs)
 - [device_id_example.rs](examples/device_id_example.rs)
+- [tcp_backoff_jitter_example.rs](examples/tcp_backoff_jitter_example.rs)
 
 ### Serial RTU examples
 
@@ -162,6 +163,7 @@ fn main() -> Result<(), MbusError> {
 - [registers_serial_example.rs](examples/registers_serial_example.rs)
 - [discrete_inputs_serial_example.rs](examples/discrete_inputs_serial_example.rs)
 - [device_id_serial_example.rs](examples/device_id_serial_example.rs)
+- [serial_rtu_backoff_jitter_example.rs](examples/serial_rtu_backoff_jitter_example.rs)
 
 ### Serial ASCII examples
 

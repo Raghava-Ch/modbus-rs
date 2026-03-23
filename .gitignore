@@ -26,6 +26,7 @@ temp
 **.dylib
 **.debug.json
 **.aiexclude
+.vscode
 
 # CMake project ignores
 CMakeLists.txt.user

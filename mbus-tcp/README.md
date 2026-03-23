@@ -72,8 +72,6 @@ fn connect_tcp() -> Result<(), MbusError> {
 	Passing a serial config returns a transport configuration error.
 - `connection_timeout_ms` and `response_timeout_ms` from `ModbusTcpConfig` are
 	applied to the underlying stream.
-- `keep_alive_interval_ms` exists in core config, but keep-alive is not currently
-	enabled in `StdTcpTransport`.
 
 ## Receive Behavior
 

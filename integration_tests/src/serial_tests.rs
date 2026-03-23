@@ -89,12 +89,15 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -130,7 +133,7 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     client.poll();
 
     // 5. Verify App Callback
-    let received_responses = client.app.received_coil_responses.borrow();
+    let received_responses = client.app().received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
     let rcv_quantity = rcv_coils.quantity();
@@ -156,12 +159,15 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -186,7 +192,7 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
     // 3. Poll and verify no expected responses are queued and no error is triggered.
     // Because it is a broadcast, the client should not wait for a reply.
     client.poll();
-    assert!(client.app.failed_requests.borrow().is_empty());
+    assert!(client.app().failed_requests.borrow().is_empty());
 
     Ok(())
 }
@@ -202,12 +208,15 @@ fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -250,12 +259,15 @@ fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -283,12 +295,15 @@ fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -319,12 +334,15 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -348,7 +366,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
     client.poll();
 
-    let received = client.app.received_write_single_coil_responses.borrow();
+    let received = client.app().received_write_single_coil_responses.borrow();
     assert_eq!(received.len(), 1);
     assert_eq!(
         received[0],
@@ -369,12 +387,15 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -408,7 +429,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
 
     client.poll();
 
-    let received = client.app.received_read_device_id_responses.borrow();
+    let received = client.app().received_read_device_id_responses.borrow();
     assert_eq!(received.len(), 1);
     let (txn_id, unit_id, resp) = &received[0];
     assert_eq!(*txn_id, 3);
@@ -435,12 +456,15 @@ fn test_serial_read_coils_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 7,
+        data_bits: mbus_core::transport::DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -475,7 +499,7 @@ fn test_serial_read_coils_ascii() -> Result<()> {
 
     client.poll();
 
-    let received_responses = client.app.received_coil_responses.borrow();
+    let received_responses = client.app().received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
     let rcv_quantity = rcv_coils.quantity();
@@ -486,6 +510,233 @@ fn test_serial_read_coils_ascii() -> Result<()> {
     assert_eq!(rcv_coils.quantity(), quantity);
     assert_eq!(&rcv_coils.values()[..1], &[0x05]);
     assert_eq!(rcv_quantity, quantity);
+
+    Ok(())
+}
+
+#[test]
+fn test_serial_write_single_coil_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let sent_data = transport.sent_data.clone();
+    let recv_data = transport.recv_data.clone();
+
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: mbus_core::transport::DataBits::Seven,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    client.write_single_coil(20, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
+
+    // Binary payload: 01 05 00 0A FF 00, LRC = F1
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, b":0105000AFF00F1\r\n");
+    }
+
+    // Echo response in ASCII mode.
+    recv_data
+        .borrow_mut()
+        .extend_from_slice(b":0105000AFF00F1\r\n");
+
+    client.poll();
+
+    let received = client.app().received_write_single_coil_responses.borrow();
+    assert_eq!(received.len(), 1);
+    assert_eq!(received[0].0, 20);
+    assert_eq!(received[0].1, UnitIdOrSlaveAddr::try_from(1).unwrap());
+    assert_eq!(received[0].2, 10);
+    assert!(received[0].3);
+
+    Ok(())
+}
+
+#[test]
+fn test_serial_read_holding_registers_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let sent_data = transport.sent_data.clone();
+    let recv_data = transport.recv_data.clone();
+
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: mbus_core::transport::DataBits::Seven,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    client.read_holding_registers(21, UnitIdOrSlaveAddr::try_from(1).unwrap(), 1, 2)?;
+
+    // Binary payload: 01 03 00 01 00 02, LRC = F9
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, b":010300010002F9\r\n");
+    }
+
+    // Response payload: 01 03 04 12 34 56 78, LRC = E4
+    recv_data
+        .borrow_mut()
+        .extend_from_slice(b":01030412345678E4\r\n");
+
+    client.poll();
+
+    // Register callbacks in MockApp are no-op; assert parse path did not report failure.
+    assert!(client.app().failed_requests.borrow().is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn test_serial_read_device_id_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let sent_data = transport.sent_data.clone();
+    let recv_data = transport.recv_data.clone();
+
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: mbus_core::transport::DataBits::Seven,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    client.read_device_identification(
+        22,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        ReadDeviceIdCode::Basic,
+        ObjectId::from(0x00),
+    )?;
+
+    // Binary payload: 01 2B 0E 01 00, LRC = C5
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, b":012B0E0100C5\r\n");
+    }
+
+    // Response payload: 01 2B 0E 01 81 00 00 01 00 03 46 6F 6F, LRC = 1C
+    recv_data
+        .borrow_mut()
+        .extend_from_slice(b":012B0E01810000010003466F6F1C\r\n");
+
+    client.poll();
+
+    let received = client.app().received_read_device_id_responses.borrow();
+    assert_eq!(received.len(), 1);
+    let (txn_id, unit_id, resp) = &received[0];
+    assert_eq!(*txn_id, 22);
+    assert_eq!(*unit_id, UnitIdOrSlaveAddr::try_from(1).unwrap());
+    assert_eq!(
+        resp.conformity_level,
+        ConformityLevel::BasicStreamAndIndividual
+    );
+    let objects: Vec<_> = resp.objects().map(|r| r.unwrap()).collect();
+    assert_eq!(objects[0].value.as_slice(), b"Foo");
+
+    Ok(())
+}
+
+#[test]
+fn test_serial_broadcast_write_single_coil_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let sent_data = transport.sent_data.clone();
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: mbus_core::transport::DataBits::Seven,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+    client.write_single_coil(23, unit_id, 10, true)?;
+
+    // Binary payload: 00 05 00 0A FF 00, LRC = F2
+    {
+        let sent = sent_data.borrow();
+        assert_eq!(*sent, b":0005000AFF00F2\r\n");
+    }
+
+    // Broadcast write should not wait for reply or trigger error.
+    client.poll();
+    assert!(client.app().failed_requests.borrow().is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
+    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let sent_data = transport.sent_data.clone();
+    let app = MockApp::default();
+
+    let serial_config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: mbus_core::transport::DataBits::Seven,
+        parity: Parity::Even,
+        stop_bits: 1,
+        response_timeout_ms: 1000,
+        mode: SerialMode::Ascii,
+        retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
+    };
+    let config = ModbusConfig::Serial(serial_config);
+
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+
+    let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
+    let res = client.read_multiple_coils(24, unit_id, 10, 3);
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    assert!(sent_data.borrow().is_empty());
 
     Ok(())
 }
@@ -502,12 +753,15 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: mbus_core::transport::DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
@@ -530,7 +784,7 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     // 3. Poll: This should successfully process Request 1, and securely keep the 4 bytes in the buffer
     client.poll();
     {
-        let received = client.app.received_coil_responses.borrow();
+        let received = client.app().received_coil_responses.borrow();
         assert_eq!(received.len(), 1);
         assert_eq!(received[0].0, 1);
     }
@@ -548,7 +802,7 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     // 6. Poll: This should stitch the remaining bytes to the buffer and successfully process Request 2
     client.poll();
     {
-        let received_writes = client.app.received_write_single_coil_responses.borrow();
+        let received_writes = client.app().received_write_single_coil_responses.borrow();
         assert_eq!(received_writes.len(), 1);
         assert_eq!(received_writes[0].0, 2);
     }
@@ -566,12 +820,15 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 7,
+        data_bits: mbus_core::transport::DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
+        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
+        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
@@ -583,13 +840,13 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     recv_data.borrow_mut().extend_from_slice(frame1);
     recv_data.borrow_mut().extend_from_slice(&frame2[..8]);
     client.poll();
-    assert_eq!(client.app.received_coil_responses.borrow()[0].0, 1);
+    assert_eq!(client.app().received_coil_responses.borrow()[0].0, 1);
 
     client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
     recv_data.borrow_mut().extend_from_slice(&frame2[8..]);
     client.poll();
     assert_eq!(
-        client.app.received_write_single_coil_responses.borrow()[0].0,
+        client.app().received_write_single_coil_responses.borrow()[0].0,
         2
     );
 

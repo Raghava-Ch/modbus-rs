@@ -122,6 +122,25 @@ fn main() -> Result<(), MbusError> {
 }
 ```
 
+  ### Connection Recovery
+
+  `ClientServices` supports explicit reconnection:
+
+  - `client.is_connected()` checks transport state.
+  - `client.reconnect()` reconnects with existing config.
+
+  On reconnect, pending in-flight requests are failed with `MbusError::ConnectionLost`
+  and removed from the queue. Applications should requeue requests explicitly after
+  reconnection succeeds.
+
+  ### Serial Compile-Time Queue Safety
+
+  For serial RTU/ASCII clients, only one request may be in flight.
+
+  - `ClientServices::new(...)` enforces this at runtime.
+  - `ClientServices::new_serial(...)` enforces this at compile time.
+  - Use `SerialClientServices<TRANSPORT, APP>` for readability.
+
 ## 3. Example Programs
 
 The workspace contains real examples in `modbus-rs/examples/`.

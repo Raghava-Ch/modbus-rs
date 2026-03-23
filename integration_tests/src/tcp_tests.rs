@@ -70,14 +70,14 @@ fn test_client_services_read_single_coil() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process read response
-        if !client.app.received_coil_responses.borrow().is_empty() {
+        if !client.app().received_coil_responses.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     // Assert that the MockApp received the correct response
-    let received_responses = client.app.received_coil_responses.borrow();
+    let received_responses = client.app().received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
     let rcv_quantity = rcv_coils.quantity();
@@ -151,13 +151,13 @@ fn test_client_services_read_coils() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process read response
-        if !client.app.received_coil_responses.borrow().is_empty() {
+        if !client.app().received_coil_responses.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_coil_responses.borrow();
+    let received_responses = client.app().received_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
     let rcv_quantity = rcv_coils.quantity();
@@ -233,7 +233,7 @@ fn test_client_services_write_single_coil() -> Result<()> {
     for _ in 0..50 {
         client.poll(); // Process write response
         if !client
-            .app
+            .app()
             .received_write_single_coil_responses
             .borrow()
             .is_empty()
@@ -243,7 +243,7 @@ fn test_client_services_write_single_coil() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_write_single_coil_responses.borrow();
+    let received_responses = client.app().received_write_single_coil_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_address, rcv_value) = &received_responses[0];
 
@@ -324,7 +324,7 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     for _ in 0..50 {
         client.poll(); // Process write response
         if !client
-            .app
+            .app()
             .received_write_multiple_coils_responses
             .borrow()
             .is_empty()
@@ -334,7 +334,7 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_write_multiple_coils_responses.borrow();
+    let received_responses = client.app().received_write_multiple_coils_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_address, rcv_quantity) = &received_responses[0];
 
@@ -390,14 +390,14 @@ fn test_client_services_server_exception_response() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // Process the exception response
-        if !client.app.failed_requests.borrow().is_empty() {
+        if !client.app().failed_requests.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     // The client should receive an error, not a successful response
-    assert!(client.app.received_coil_responses.borrow().is_empty());
+    assert!(client.app().received_coil_responses.borrow().is_empty());
     // In a real application, the `request_failed` callback would be checked.
     // For this mock, we just ensure no successful response was processed.
 
@@ -441,14 +441,14 @@ fn test_client_services_server_closes_connection() -> Result<()> {
     // Poll to allow for connection closed error detection and timeout
     for _ in 0..50 {
         client.poll();
-        if !client.app.failed_requests.borrow().is_empty() {
+        if !client.app().failed_requests.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     // The client should eventually report a connection closed or timeout error.
-    assert!(client.app.received_coil_responses.borrow().is_empty());
+    assert!(client.app().received_coil_responses.borrow().is_empty());
     // In a real application, the `request_failed` callback would be checked for MbusError::ConnectionClosed or MbusError::Timeout.
 
     server_handle.join().unwrap()?;
@@ -488,14 +488,14 @@ fn test_client_services_server_timeout() -> Result<()> {
 
     for _ in 0..50 {
         client.poll(); // This poll should detect the timeout
-        if !client.app.failed_requests.borrow().is_empty() {
+        if !client.app().failed_requests.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
     // The client should eventually report a timeout error.
-    assert!(client.app.received_coil_responses.borrow().is_empty());
+    assert!(client.app().received_coil_responses.borrow().is_empty());
     // In a real application, the `request_failed` callback would be checked for MbusError::Timeout.
 
     server_handle.join().unwrap()?;
@@ -562,7 +562,7 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
     for _ in 0..50 {
         client.poll(); // Process read response
         if !client
-            .app
+            .app()
             .received_discrete_input_responses
             .borrow()
             .is_empty()
@@ -572,7 +572,7 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_discrete_input_responses.borrow();
+    let received_responses = client.app().received_discrete_input_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
 
@@ -646,7 +646,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     for _ in 0..50 {
         client.poll(); // Process read response
         if !client
-            .app
+            .app()
             .received_discrete_input_responses
             .borrow()
             .is_empty()
@@ -656,7 +656,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_discrete_input_responses.borrow();
+    let received_responses = client.app().received_discrete_input_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_inputs, rcv_quantity) = &received_responses[0];
 
@@ -739,7 +739,7 @@ fn test_client_services_read_device_identification() -> Result<()> {
     for _ in 0..50 {
         client.poll();
         if !client
-            .app
+            .app()
             .received_read_device_id_responses
             .borrow()
             .is_empty()
@@ -749,7 +749,7 @@ fn test_client_services_read_device_identification() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_read_device_id_responses.borrow();
+    let received_responses = client.app().received_read_device_id_responses.borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_resp) = &received_responses[0];
 
@@ -841,13 +841,13 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
     // Poll to process both responses
     for _ in 0..50 {
         client.poll();
-        if client.app.received_read_device_id_responses.borrow().len() == 2 {
+        if client.app().received_read_device_id_responses.borrow().len() == 2 {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app.received_read_device_id_responses.borrow();
+    let received_responses = client.app().received_read_device_id_responses.borrow();
     assert_eq!(received_responses.len(), 2);
 
     assert_eq!(received_responses[0].0, 10);
@@ -918,7 +918,7 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
     for _ in 0..50 {
         client.poll();
         if !client
-            .app
+            .app()
             .received_encapsulated_interface_transport_responses
             .borrow()
             .is_empty()
@@ -929,7 +929,7 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
     }
 
     let received = client
-        .app
+        .app()
         .received_encapsulated_interface_transport_responses
         .borrow();
     assert_eq!(received.len(), 1);
@@ -985,7 +985,7 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
 
     for _ in 0..50 {
         client.poll();
-        if !client.app.failed_requests.borrow().is_empty() {
+        if !client.app().failed_requests.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -993,11 +993,11 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
 
     // Should fail
     assert!(client
-        .app
+        .app()
         .received_encapsulated_interface_transport_responses
         .borrow()
         .is_empty());
-    let failed = client.app.failed_requests.borrow();
+    let failed = client.app().failed_requests.borrow();
     assert_eq!(failed.len(), 1);
     assert_eq!(failed[0].2, MbusError::InvalidMeiType);
 
@@ -1047,7 +1047,7 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
 
     for _ in 0..50 {
         client.poll();
-        if !client.app.failed_requests.borrow().is_empty() {
+        if !client.app().failed_requests.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -1055,11 +1055,11 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
 
     // Should fail
     assert!(client
-        .app
+        .app()
         .received_encapsulated_interface_transport_responses
         .borrow()
         .is_empty());
-    let failed = client.app.failed_requests.borrow();
+    let failed = client.app().failed_requests.borrow();
     assert_eq!(failed.len(), 1);
     assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
 
@@ -1118,13 +1118,13 @@ fn test_client_services_tcp_fragmented_stream() -> Result<()> {
 
     for _ in 0..50 {
         client.poll();
-        if !client.app.received_coil_responses.borrow().is_empty() {
+        if !client.app().received_coil_responses.borrow().is_empty() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let responses_1 = client.app.received_coil_responses.borrow();
+    let responses_1 = client.app().received_coil_responses.borrow();
     assert_eq!(responses_1.len(), 1);
     assert_eq!(responses_1[0].0, 1);
     drop(responses_1);
@@ -1136,13 +1136,13 @@ fn test_client_services_tcp_fragmented_stream() -> Result<()> {
 
     for _ in 0..50 {
         client.poll();
-        if client.app.received_coil_responses.borrow().len() == 2 {
+        if client.app().received_coil_responses.borrow().len() == 2 {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let responses_2 = client.app.received_coil_responses.borrow();
+    let responses_2 = client.app().received_coil_responses.borrow();
     assert_eq!(responses_2.len(), 2);
     assert_eq!(responses_2[1].0, 2);
 
@@ -1199,12 +1199,12 @@ fn test_client_services_tcp_noise_injection() -> Result<()> {
     for _ in 0..20 {
         client.poll();
         thread::sleep(std::time::Duration::from_millis(10));
-        if client.app.received_coil_responses.borrow().len() > 0 {
+        if client.app().received_coil_responses.borrow().len() > 0 {
             break;
         }
     }
 
-    let responses_1 = client.app.received_coil_responses.borrow();
+    let responses_1 = client.app().received_coil_responses.borrow();
     assert_eq!(
         responses_1.len(),
         1,

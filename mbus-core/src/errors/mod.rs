@@ -12,6 +12,7 @@
 
 use core::fmt;
 
+
 /// Represents a Modbus error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MbusError {
@@ -71,7 +72,10 @@ pub enum MbusError {
     ChecksumError,
     /// Invalid configuration
     InvalidConfiguration,
-    /// Invalid number of expected responses
+    /// Invalid number of expected responses.
+    ///
+    /// For Modbus Serial transports, only one request may be in flight at a time,
+    /// so the expected-response queue size must be exactly `1`.
     InvalidNumOfExpectedRsps,
     /// Invalid data length
     InvalidDataLen,
@@ -94,7 +98,7 @@ pub enum MbusError {
     /// Invalid slave address (0): The provided broadcast address (0) is invalid.
     /// Must use UnitIdOrSlaveAddr::new_broadcast_address() instead.
     InvalidBroadcastAddress,
-    /// Broadcast not allowed for tcp transport type
+    /// Broadcast not allowed
     BoradcastNotAllowed,
 }
 
@@ -188,7 +192,7 @@ impl fmt::Display for MbusError {
             ),
             MbusError::InvalidNumOfExpectedRsps => write!(
                 f,
-                "Invalid number of expected responses: The number of expected responses is invalid"
+                "Invalid number of expected responses: for serial transports the queue size N must be exactly 1"
             ),
             MbusError::InvalidDataLen => write!(
                 f,
@@ -224,7 +228,7 @@ impl fmt::Display for MbusError {
             ),
             MbusError::BoradcastNotAllowed => write!(
                 f,
-                "Broadcast not allowed: Broadcast not allowed for tcp transport type"
+                "Broadcast not allowed: Broadcast not allowed"
             ),
             MbusError::InvalidOffset => write!(f, "Invalid offset: The provided offset is invalid"),
         }

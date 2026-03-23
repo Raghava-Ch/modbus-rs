@@ -39,11 +39,19 @@ use mbus_core::transport::{UidSaddrFrom, UnitIdOrSlaveAddr};
 use mbus_core::{
     data_unit::common::{self, MAX_ADU_FRAME_LEN},
     errors::MbusError,
-    transport::{ModbusConfig, TimeKeeper, Transport, TransportType},
+    transport::{ModbusConfig, ModbusSerialConfig, TimeKeeper, Transport, TransportType},
 };
 
 type ResponseHandler<T, A, const N: usize> =
     fn(&mut ClientServices<T, A, N>, &ExpectedResponse<T, A, N>, &ModbusMessage);
+
+// Compile-time marker: only `[(); 1]` implements this trait.
+#[doc(hidden)]
+pub trait SerialQueueSizeOne {}
+impl SerialQueueSizeOne for [(); 1] {}
+
+/// Convenience alias for serial clients where queue size is always one.
+pub type SerialClientServices<TRANSPORT, APP> = ClientServices<TRANSPORT, APP, 1>;
 
 /// Internal tracking payload for a Single-address operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,7 +149,6 @@ impl OperationMeta {
         }
     }
 
-    #[allow(dead_code)]
     fn encap_type(&self) -> EncapsulatedInterfaceType {
         match self {
             #[cfg(feature = "diagnostics")]
@@ -172,6 +179,13 @@ pub(crate) struct ExpectedResponse<T, A, const N: usize> {
     pub sent_timestamp: u64,
     /// The number of retries left for this request.
     pub retries_left: u8,
+    /// Number of retries that have already been sent for this request.
+    pub retry_attempt_index: u8,
+    /// Timestamp when the next retry is eligible to be sent.
+    ///
+    /// `None` means there is no retry currently scheduled and the request is waiting
+    /// for a response to the most recent send.
+    pub next_retry_timestamp: Option<u64>,
 
     /// Pointer to the specific module's parser/handler function for this operation.
     pub handler: ResponseHandler<T, A, N>,
@@ -187,12 +201,14 @@ pub(crate) struct ExpectedResponse<T, A, const N: usize> {
 /// # Type Parameters
 ///
 /// * `TRANSPORT` - The transport layer implementation (e.g., TCP or RTU) that handles the physical transmission of Modbus frames.
-/// * `N` - The maximum number of concurrent outstanding requests (capacity of the expected responses queue). N must be 1 in serial transport type
+/// * `N` - The maximum number of concurrent outstanding requests (capacity of the expected responses queue).
+///   - For TCP, `N` can be > 1 for pipelining.
+///   - For Serial, `N` must be 1 because Modbus serial is half-duplex and supports only one in-flight request.
 /// * `APP` - The application layer that handles processed Modbus responses.
 #[derive(Debug)]
 pub struct ClientServices<TRANSPORT, APP, const N: usize = 1> {
     /// Application layer that implements the CoilResponse trait, used to handle responses and invoke callbacks.
-    pub app: APP,
+    app: APP,
     /// Transport layer used for sending and receiving Modbus frames. Must implement the Transport trait.
     transport: TRANSPORT,
 
@@ -240,6 +256,8 @@ where
         };
 
         let expected = match index {
+            // Deliberately use O(1) removal. Request matching uses txn/unit id,
+            // so stable queue order is not required for correctness.
             Some(i) => self.expected_responses.swap_remove(i),
             None => return,
         };
@@ -262,6 +280,7 @@ where
 impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
     TRANSPORT: Transport,
+    TRANSPORT::Error: Into<MbusError>,
     APP: RequestErrorNotifier + TimeKeeper,
 {
     /// The main execution loop for the Modbus Client.
@@ -291,8 +310,13 @@ where
     /// The client maintains a queue of "Outstanding Requests". For every poll:
     /// * It checks if the `current_millis` (provided by `APP`) has exceeded the `sent_timestamp`
     ///   plus the configured `response_timeout_ms`.
-    /// * **Automatic Retries**: If a timeout occurs and `retries_left > 0`, the original ADU
-    ///   is re-transmitted immediately. This is transparent to the high-level application.
+    /// * **Scheduled Retries**: If a timeout occurs and `retries_left > 0`, the next retry is
+    ///   scheduled using the configured backoff strategy (and optional jitter).
+    /// * Scheduled retries are only sent when the poll loop reaches or passes the scheduled
+    ///   retry timestamp. The client never sleeps or blocks internally.
+    /// * **Connection Loss Handling**: If `recv()` reports a connection-level transport error
+    ///   (or transport reports disconnected state), all pending requests are immediately failed
+    ///   with `MbusError::ConnectionLost` and removed from the queue.
     /// * **Failure Notification**: If all retries are exhausted, the request is dropped from
     ///   the queue, and `app.request_failed` is called with `MbusError::NoRetriesLeft`.
     ///
@@ -320,10 +344,8 @@ where
                         Ok(consumed) => {
                             let len = self.rxed_frame.len();
                             if consumed < len {
-                                // Shift array to the left to drain processed bytes (no_std compatible)
-                                for i in 0..(len - consumed) {
-                                    self.rxed_frame[i] = self.rxed_frame[consumed + i];
-                                }
+                                // Shift array to the left to drain processed bytes.
+                                self.rxed_frame.copy_within(consumed.., 0);
                                 self.rxed_frame.truncate(len - consumed);
                             } else {
                                 self.rxed_frame.clear();
@@ -337,9 +359,7 @@ where
                             // Garbage or parsing error, drop the first byte and try again to resync the stream
                             let len = self.rxed_frame.len();
                             if len > 1 {
-                                for i in 0..(len - 1) {
-                                    self.rxed_frame[i] = self.rxed_frame[1 + i];
-                                }
+                                self.rxed_frame.copy_within(1.., 0);
                                 self.rxed_frame.truncate(len - 1);
                             } else {
                                 self.rxed_frame.clear();
@@ -348,17 +368,37 @@ where
                     }
                 }
             }
-            Err(_) => {
-                // Only log non-timeout errors for now. Timeouts are handled below.
+            Err(err) => {
+                let recv_error: MbusError = err.into();
+                let is_connection_loss = matches!(
+                    recv_error,
+                    MbusError::ConnectionClosed
+                        | MbusError::ConnectionFailed
+                        | MbusError::ConnectionLost
+                        | MbusError::IoError
+                ) || !self.transport.is_connected();
 
-                // FUTURE: Consider more robust error handling, e.g., disconnecting
-                // and notifying the application if the connection is lost.
-                // eprintln!("Transport receive error: {:?}", e);
+                if is_connection_loss {
+                    self.fail_all_pending_requests(MbusError::ConnectionLost);
+                    let _ = self.transport.disconnect();
+                    self.rxed_frame.clear();
+                }
             }
         }
 
         // 2. Check for timed-out requests and handle retries for all outstanding requests
         self.handle_timeouts();
+    }
+
+    fn fail_all_pending_requests(&mut self, error: MbusError) {
+        while let Some(response) = self.expected_responses.pop() {
+            self.app.request_failed(
+                response.txn_id,
+                UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+                error,
+            );
+        }
+        self.next_timeout_check = None;
     }
 
     /// Evaluates all pending requests to determine if any have exceeded their response timeout.
@@ -369,10 +409,12 @@ where
     ///    timeout in the future hasn't been reached yet.
     /// 3. If the cache expires, it iterates linearly over `expected_responses` to check the `sent_timestamp`
     ///    against `current_millis`.
-    /// 4. If a request is timed out and has retries remaining, it automatically retransmits the original ADU
-    ///    via the transport layer. If the re-send fails, it is dropped and reported as `SendFailed`.
-    /// 5. If no retries remain, the request is removed from the pending queue and `NoRetriesLeft` is reported.
-    /// 6. Finally, it recalculates the `next_timeout_check` state to schedule the next evaluation interval.
+    /// 4. If a request is timed out and has retries remaining, it schedules a retry timestamp based on
+    ///    the configured backoff strategy, and optionally applies jitter using an application-provided callback.
+    /// 5. When the scheduled retry timestamp is reached, it retransmits the original ADU. If the re-send fails,
+    ///    it is dropped and reported as `SendFailed`.
+    /// 6. If no retries remain, the request is removed from the pending queue and `NoRetriesLeft` is reported.
+    /// 7. Finally, it recalculates the `next_timeout_check` state to schedule the next evaluation interval.
     fn handle_timeouts(&mut self) {
         if self.expected_responses.is_empty() {
             self.next_timeout_check = None;
@@ -389,55 +431,90 @@ where
         }
 
         let response_timeout_ms = self.response_timeout_ms();
+        let retry_backoff = self.config.retry_backoff_strategy();
+        let retry_jitter = self.config.retry_jitter_strategy();
+        let retry_random_fn = self.config.retry_random_fn();
         let expected_responses = &mut self.expected_responses;
         let mut i = 0;
         let mut new_next_check = u64::MAX;
 
         while i < expected_responses.len() {
             let expected_response = &mut expected_responses[i];
-            let elapsed = current_millis
-                .saturating_sub(expected_response.sent_timestamp);
-
-            if elapsed > response_timeout_ms {
-                // Request timed out
-                if expected_response.retries_left > 0 {
-                    // Retry the request
-                    expected_response.retries_left -= 1;
-                    expected_response.sent_timestamp = current_millis;
-                    // Re-send the original ADU
+            // First, process already-scheduled retries.
+            if let Some(retry_at) = expected_response.next_retry_timestamp {
+                if current_millis >= retry_at {
                     if let Err(_e) = self.transport.send(&expected_response.original_adu) {
-                        // If re-sending fails, treat as a failed request
+                        // Deliberately O(1): response identity is carried in the payload,
+                        // not by queue position, so preserving insertion order is unnecessary.
                         let response = expected_responses.swap_remove(i);
                         self.app.request_failed(
                             response.txn_id,
                             UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
                             MbusError::SendFailed,
                         );
-                        continue; // Move to the next item in the (now shorter) vec
+                        continue;
                     }
+
+                    expected_response.retries_left = expected_response.retries_left.saturating_sub(1);
+                    expected_response.retry_attempt_index =
+                        expected_response.retry_attempt_index.saturating_add(1);
+                    expected_response.sent_timestamp = current_millis;
+                    expected_response.next_retry_timestamp = None;
 
                     let expires_at = current_millis.saturating_add(response_timeout_ms);
                     if expires_at < new_next_check {
                         new_next_check = expires_at;
                     }
-                } else {
-                    // No retries left, report timeout to application
-                    let response = expected_responses.swap_remove(i); // Remove the timed-out request
+                    i += 1;
+                    continue;
+                }
+
+                if retry_at < new_next_check {
+                    new_next_check = retry_at;
+                }
+                i += 1;
+                continue;
+            }
+
+            // Otherwise, the request is waiting for a response to a previous send.
+            let expires_at = expected_response
+                .sent_timestamp
+                .saturating_add(response_timeout_ms);
+
+            if current_millis > expires_at {
+                if expected_response.retries_left == 0 {
+                    // Deliberately O(1): timeout handling keys off txn/unit id and
+                    // does not rely on stable ordering inside expected_responses.
+                    let response = expected_responses.swap_remove(i);
                     self.app.request_failed(
                         response.txn_id,
                         UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
                         MbusError::NoRetriesLeft,
                     );
-                    continue; // Move to the next item in the (now shorter) vec
+                    continue;
                 }
-            } else {
-                // Not yet timed out, recalculate the next check time
-                let expires_at = expected_response
-                    .sent_timestamp
-                    .saturating_add(response_timeout_ms);
-                if expires_at < new_next_check {
-                    new_next_check = expires_at;
+
+                let next_attempt = expected_response.retry_attempt_index.saturating_add(1);
+                let base_delay_ms = retry_backoff.delay_ms_for_retry(next_attempt);
+                let retry_delay_ms = retry_jitter.apply(base_delay_ms, retry_random_fn) as u64;
+                let retry_at = current_millis.saturating_add(retry_delay_ms);
+                expected_response.next_retry_timestamp = Some(retry_at);
+
+                // If delay is zero (Immediate strategy), process the newly scheduled retry
+                // in this same poll cycle without waiting for another call to `poll`.
+                if retry_delay_ms == 0 {
+                    continue;
                 }
+
+                if retry_at < new_next_check {
+                    new_next_check = retry_at;
+                }
+                i += 1;
+                continue;
+            }
+
+            if expires_at < new_next_check {
+                new_next_check = expires_at;
             }
             i += 1;
         }
@@ -464,6 +541,8 @@ where
                 original_adu: frame.clone(),
                 sent_timestamp: self.app.current_millis(),
                 retries_left: self.retry_attempts(),
+                retry_attempt_index: 0,
+                next_retry_timestamp: None,
                 handler,
                 operation_meta,
             })
@@ -503,6 +582,80 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         })
     }
 
+    /// Returns an immutable reference to the application callback handler.
+    ///
+    /// This allows observers/tests to inspect application-owned state while keeping
+    /// the handler instance stable for in-flight requests.
+    pub fn app(&self) -> &APP {
+        &self.app
+    }
+
+    /// Returns whether the underlying transport currently considers itself connected.
+    pub fn is_connected(&self) -> bool {
+        self.transport.is_connected()
+    }
+
+    /// Re-establishes the underlying transport connection using the existing configuration.
+    ///
+    /// Behavior:
+    /// - Drops all currently pending in-flight requests and reports them as
+    ///   `MbusError::ConnectionLost`.
+    /// - Clears any partially received frame bytes.
+    /// - Calls `transport.disconnect()` (best-effort) followed by `transport.connect(&self.config)`.
+    ///
+    /// This method does not automatically re-send dropped requests. The application can requeue
+    /// requests explicitly after reconnection succeeds.
+    pub fn reconnect(&mut self) -> Result<(), MbusError>
+    where
+        TRANSPORT::Error: Into<MbusError>,
+    {
+        self.fail_all_pending_requests(MbusError::ConnectionLost);
+        self.rxed_frame.clear();
+        self.next_timeout_check = None;
+
+        let _ = self.transport.disconnect();
+        self.transport.connect(&self.config).map_err(|e| e.into())
+    }
+
+    /// Creates a serial client with a compile-time enforced queue size of exactly 1.
+    ///
+    /// This constructor exists to make the serial half-duplex constraint fail at compile time
+    /// instead of runtime. Any attempt to call this function with `N != 1` fails trait-bound
+    /// resolution during compilation.
+    ///
+    /// Use this constructor when building serial RTU/ASCII clients and prefer
+    /// [`SerialClientServices`] as the type alias for readability.
+    pub fn new_serial(
+        mut transport: TRANSPORT,
+        app: APP,
+        config: ModbusSerialConfig,
+    ) -> Result<Self, MbusError>
+    where
+        [(); N]: SerialQueueSizeOne,
+    {
+        let transport_type = transport.transport_type();
+        if !matches!(
+            transport_type,
+            TransportType::StdSerial(_) | TransportType::CustomSerial(_)
+        ) {
+            return Err(MbusError::InvalidTransport);
+        }
+
+        let config = ModbusConfig::Serial(config);
+        transport
+            .connect(&config)
+            .map_err(|_e| MbusError::ConnectionFailed)?;
+
+        Ok(Self {
+            app,
+            transport,
+            rxed_frame: Vec::new(),
+            config,
+            expected_responses: Vec::new(),
+            next_timeout_check: None,
+        })
+    }
+
     /// Returns the configured response timeout in milliseconds.
     fn response_timeout_ms(&self) -> u64 {
         match &self.config {
@@ -520,7 +673,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     }
 
     /// Ingests received Modbus frames from the transport layer.
-    pub fn ingest_frame(&mut self) -> Result<usize, MbusError> {
+    fn ingest_frame(&mut self) -> Result<usize, MbusError> {
         let frame = self.rxed_frame.as_slice();
         let transport_type = self.transport.transport_type();
 
@@ -598,15 +751,28 @@ mod tests {
     use mbus_core::errors::MbusError;
     use mbus_core::function_codes::public::DiagnosticSubFunction;
     use mbus_core::transport::TransportType;
-    use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
+    use mbus_core::transport::{
+        BackoffStrategy, BaudRate, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+        ModbusTcpConfig, Parity, SerialMode,
+    };
+    use core::str::FromStr;
 
     const MOCK_DEQUE_CAPACITY: usize = 10; // Define a capacity for the mock deques
+
+    fn rand_zero() -> u32 {
+        0
+    }
+
+    fn rand_upper_percent_20() -> u32 {
+        40
+    }
 
     // --- Mock Transport Implementation ---
     #[derive(Debug, Default)]
     struct MockTransport {
         pub sent_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
         pub recv_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>, // Changed to heapless::Deque
+        pub recv_error: RefCell<Option<MbusError>>,
         pub connect_should_fail: bool,
         pub send_should_fail: bool,
         pub is_connected_flag: RefCell<bool>,
@@ -645,6 +811,9 @@ mod tests {
         }
 
         fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+            if let Some(err) = self.recv_error.borrow_mut().take() {
+                return Err(err);
+            }
             self.recv_frames
                 .borrow_mut()
                 .pop_front()
@@ -953,7 +1122,7 @@ mod tests {
 
     impl FifoQueueResponse for MockApp {
         fn read_fifo_queue_response(
-            &mut self,
+            &self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             fifo_queue: &FifoQueue,
@@ -1075,6 +1244,71 @@ mod tests {
         assert_eq!(client_services.unwrap_err(), MbusError::ConnectionFailed);
     }
 
+    #[test]
+    fn test_client_services_new_serial_success() {
+        let transport = MockTransport {
+            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
+            ..Default::default()
+        };
+        let app = MockApp::default();
+        let serial_config = ModbusSerialConfig {
+            port_path: heapless::String::<64>::from_str("/dev/ttyUSB0").unwrap(),
+            mode: SerialMode::Rtu,
+            baud_rate: BaudRate::Baud19200,
+            data_bits: mbus_core::transport::DataBits::Eight,
+            stop_bits: 1,
+            parity: Parity::Even,
+            response_timeout_ms: 1000,
+            retry_attempts: 1,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        };
+
+        let client_services =
+            ClientServices::<MockTransport, MockApp, 1>::new_serial(transport, app, serial_config);
+        assert!(client_services.is_ok());
+    }
+
+    #[test]
+    fn test_reconnect_success_flushes_pending_requests() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let unit_id = UnitIdOrSlaveAddr::new(1).unwrap();
+        client_services.read_single_coil(10, unit_id, 0).unwrap();
+        assert_eq!(client_services.expected_responses.len(), 1);
+
+        let reconnect_result = client_services.reconnect();
+        assert!(reconnect_result.is_ok());
+        assert!(client_services.is_connected());
+        assert!(client_services.expected_responses.is_empty());
+
+        let failed_requests = client_services.app().failed_requests.borrow();
+        assert_eq!(failed_requests.len(), 1);
+        assert_eq!(failed_requests[0].0, 10);
+        assert_eq!(failed_requests[0].2, MbusError::ConnectionLost);
+    }
+
+    #[test]
+    fn test_reconnect_failure_propagates_connect_error() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        client_services.transport.connect_should_fail = true;
+        let reconnect_result = client_services.reconnect();
+
+        assert!(reconnect_result.is_err());
+        assert_eq!(reconnect_result.unwrap_err(), MbusError::ConnectionFailed);
+        assert!(!client_services.is_connected());
+    }
+
     /// Test case: `read_multiple_coils` sends a valid ADU over the transport.
     #[test]
     fn test_read_multiple_coils_sends_valid_adu() {
@@ -1167,7 +1401,7 @@ mod tests {
             .unwrap();
         client_services.poll();
 
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert!(received_responses.is_empty());
     }
 
@@ -1191,7 +1425,7 @@ mod tests {
             .unwrap();
         client_services.poll();
 
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert!(received_responses.is_empty());
     }
 
@@ -1215,7 +1449,7 @@ mod tests {
             .unwrap();
         client_services.poll();
 
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert!(received_responses.is_empty());
     }
 
@@ -1251,7 +1485,7 @@ mod tests {
             .unwrap();
         client_services.poll();
 
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert!(received_responses.is_empty());
         // The expected response should still be removed even if PDU parsing fails.
         assert!(client_services.expected_responses.is_empty());
@@ -1310,7 +1544,7 @@ mod tests {
         client_services.poll();
 
         // 3. Assert that the MockApp's read_single_coil_response callback was invoked with correct data
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
 
         let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
@@ -1678,7 +1912,7 @@ mod tests {
         // Advance time to ensure any potential timeouts are processed (though not expected here)
 
         // 3. Assert that the MockApp's callback was invoked with correct data
-        let received_responses = client_services.app.received_coil_responses.borrow();
+        let received_responses = client_services.app().received_coil_responses.borrow();
         assert_eq!(received_responses.len(), 1);
 
         let (rcv_txn_id, rcv_unit_id, rcv_coils) = &received_responses[0];
@@ -1718,7 +1952,7 @@ mod tests {
             .unwrap();
 
         // Advance time past timeout for the first time
-        *client_services.app.current_time.borrow_mut() = 150;
+        *client_services.app().current_time.borrow_mut() = 150;
         // Simulate time passing beyond timeout, but with retries left
         client_services.poll(); // First timeout, should retry
 
@@ -1728,7 +1962,7 @@ mod tests {
         assert_eq!(client_services.expected_responses[0].retries_left, 0); // One retry used
 
         // Advance time past timeout for the second time
-        *client_services.app.current_time.borrow_mut() = 300;
+        *client_services.app().current_time.borrow_mut() = 300;
         // Simulate more time passing, exhausting retries
         client_services.poll(); // Second timeout, should fail
 
@@ -1767,7 +2001,7 @@ mod tests {
         assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
 
         // 2. Advance time past the timeout threshold for both requests
-        *client_services.app.current_time.borrow_mut() = 150;
+        *client_services.app().current_time.borrow_mut() = 150;
 
         // 3. Poll the client. Both requests should be evaluated, found timed out, and retried.
         client_services.poll();
@@ -1781,7 +2015,7 @@ mod tests {
         assert_eq!(client_services.transport.sent_frames.borrow().len(), 4);
 
         // 4. Advance time again past the retry timeout threshold
-        *client_services.app.current_time.borrow_mut() = 300;
+        *client_services.app().current_time.borrow_mut() = 300;
 
         // 5. Poll the client. Both requests should exhaust their retries and be dropped.
         client_services.poll();
@@ -1790,7 +2024,7 @@ mod tests {
         assert!(client_services.expected_responses.is_empty());
 
         // Verify the application was notified of BOTH failures
-        let failed_requests = client_services.app.failed_requests.borrow();
+        let failed_requests = client_services.app().failed_requests.borrow();
         assert_eq!(failed_requests.len(), 2);
 
         // Ensure both specific transaction IDs were reported as having no retries left
@@ -1802,6 +2036,237 @@ mod tests {
             .any(|(txn, _, err)| *txn == 2 && *err == MbusError::NoRetriesLeft);
         assert!(has_txn_1, "Transaction 1 should have failed");
         assert!(has_txn_2, "Transaction 2 should have failed");
+    }
+
+    #[test]
+    fn test_poll_connection_loss_flushes_pending_requests() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        let unit_id = UnitIdOrSlaveAddr::new(1).unwrap();
+        client_services.read_single_coil(1, unit_id, 0).unwrap();
+        client_services.read_single_coil(2, unit_id, 1).unwrap();
+        assert_eq!(client_services.expected_responses.len(), 2);
+
+        *client_services.transport.is_connected_flag.borrow_mut() = false;
+        *client_services.transport.recv_error.borrow_mut() = Some(MbusError::ConnectionClosed);
+
+        client_services.poll();
+
+        assert!(client_services.expected_responses.is_empty());
+        assert_eq!(client_services.next_timeout_check, None);
+
+        let failed_requests = client_services.app().failed_requests.borrow();
+        assert_eq!(failed_requests.len(), 2);
+        assert!(
+            failed_requests
+                .iter()
+                .all(|(txn, _, err)| (*txn == 1 || *txn == 2) && *err == MbusError::ConnectionLost)
+        );
+    }
+
+    #[test]
+    fn test_fixed_backoff_schedules_and_does_not_retry_early() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config.response_timeout_ms = 100;
+        tcp_config.retry_attempts = 1;
+        tcp_config.retry_backoff_strategy = BackoffStrategy::Fixed { delay_ms: 50 };
+        let config = ModbusConfig::Tcp(tcp_config);
+
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        client_services
+            .read_single_coil(1, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 1);
+
+        *client_services.app().current_time.borrow_mut() = 101;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 1);
+        assert_eq!(
+            client_services.expected_responses[0].next_retry_timestamp,
+            Some(151)
+        );
+
+        *client_services.app().current_time.borrow_mut() = 150;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 1);
+
+        *client_services.app().current_time.borrow_mut() = 151;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
+    }
+
+    #[test]
+    fn test_exponential_backoff_growth() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config.response_timeout_ms = 100;
+        tcp_config.retry_attempts = 2;
+        tcp_config.retry_backoff_strategy = BackoffStrategy::Exponential {
+            base_delay_ms: 50,
+            max_delay_ms: 500,
+        };
+        let config = ModbusConfig::Tcp(tcp_config);
+
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+
+        client_services
+            .read_single_coil(7, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+
+        *client_services.app().current_time.borrow_mut() = 101;
+        client_services.poll();
+        assert_eq!(
+            client_services.expected_responses[0].next_retry_timestamp,
+            Some(151)
+        );
+
+        *client_services.app().current_time.borrow_mut() = 151;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
+
+        *client_services.app().current_time.borrow_mut() = 252;
+        client_services.poll();
+        assert_eq!(
+            client_services.expected_responses[0].next_retry_timestamp,
+            Some(352)
+        );
+
+        *client_services.app().current_time.borrow_mut() = 352;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 3);
+    }
+
+    #[test]
+    fn test_jitter_bounds_with_random_source_lower_bound() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config.response_timeout_ms = 100;
+        tcp_config.retry_attempts = 1;
+        tcp_config.retry_backoff_strategy = BackoffStrategy::Fixed { delay_ms: 100 };
+        tcp_config.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
+        tcp_config.retry_random_fn = Some(rand_zero);
+        let config = ModbusConfig::Tcp(tcp_config);
+
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services
+            .read_single_coil(10, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+
+        *client_services.app().current_time.borrow_mut() = 101;
+        client_services.poll();
+        assert_eq!(
+            client_services.expected_responses[0].next_retry_timestamp,
+            Some(181)
+        );
+    }
+
+    #[test]
+    fn test_jitter_bounds_with_random_source_upper_bound() {
+        let transport3 = MockTransport::default();
+        let app3 = MockApp::default();
+        let mut tcp_config3 = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config3.response_timeout_ms = 100;
+        tcp_config3.retry_attempts = 1;
+        tcp_config3.retry_backoff_strategy = BackoffStrategy::Fixed { delay_ms: 100 };
+        tcp_config3.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
+        tcp_config3.retry_random_fn = Some(rand_upper_percent_20);
+        let config3 = ModbusConfig::Tcp(tcp_config3);
+
+        let mut client_services3 =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport3, app3, config3).unwrap();
+        client_services3
+            .read_single_coil(12, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+
+        *client_services3.app.current_time.borrow_mut() = 101;
+        client_services3.poll();
+        assert_eq!(
+            client_services3.expected_responses[0].next_retry_timestamp,
+            Some(221)
+        );
+    }
+
+    #[test]
+    fn test_jitter_falls_back_without_random_source() {
+        let transport2 = MockTransport::default();
+        let app2 = MockApp::default();
+        let mut tcp_config2 = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config2.response_timeout_ms = 100;
+        tcp_config2.retry_attempts = 1;
+        tcp_config2.retry_backoff_strategy = BackoffStrategy::Fixed { delay_ms: 100 };
+        tcp_config2.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
+        tcp_config2.retry_random_fn = None;
+        let config2 = ModbusConfig::Tcp(tcp_config2);
+
+        let mut client_services2 =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport2, app2, config2).unwrap();
+        client_services2
+            .read_single_coil(11, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+
+        *client_services2.app.current_time.borrow_mut() = 101;
+        client_services2.poll();
+        assert_eq!(
+            client_services2.expected_responses[0].next_retry_timestamp,
+            Some(201)
+        );
+    }
+
+    #[test]
+    fn test_serial_retry_scheduling_uses_backoff() {
+        let transport = MockTransport {
+            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
+            ..Default::default()
+        };
+        let app = MockApp::default();
+
+        let serial_config = ModbusSerialConfig {
+            port_path: heapless::String::<64>::from_str("/dev/ttyUSB0").unwrap(),
+            mode: SerialMode::Rtu,
+            baud_rate: BaudRate::Baud9600,
+            data_bits: mbus_core::transport::DataBits::Eight,
+            stop_bits: 1,
+            parity: Parity::None,
+            response_timeout_ms: 100,
+            retry_attempts: 1,
+            retry_backoff_strategy: BackoffStrategy::Fixed { delay_ms: 25 },
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        };
+
+        let mut client_services = ClientServices::<MockTransport, MockApp, 1>::new(
+            transport,
+            app,
+            ModbusConfig::Serial(serial_config),
+        )
+        .unwrap();
+
+        client_services
+            .read_single_coil(1, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
+            .unwrap();
+
+        *client_services.app().current_time.borrow_mut() = 101;
+        client_services.poll();
+        assert_eq!(
+            client_services.expected_responses[0].next_retry_timestamp,
+            Some(126)
+        );
+
+        *client_services.app().current_time.borrow_mut() = 126;
+        client_services.poll();
+        assert_eq!(client_services.transport.sent_frames.borrow().len(), 2);
     }
 
     /// Test case: `read_multiple_coils` returns `MbusError::TooManyRequests` when the queue is full.
@@ -2194,9 +2659,9 @@ mod tests {
                 .is_empty()
         );
         // Verify that the failure was reported to the app
-        assert_eq!(client_services.app.failed_requests.borrow().len(), 1);
+        assert_eq!(client_services.app().failed_requests.borrow().len(), 1);
         let (failed_txn, failed_unit, failed_err) =
-            &client_services.app.failed_requests.borrow()[0];
+            &client_services.app().failed_requests.borrow()[0];
         assert_eq!(*failed_txn, txn_id);
         assert_eq!(*failed_unit, unit_id);
         assert_eq!(*failed_err, MbusError::ModbusException(0x02));
@@ -2972,7 +3437,7 @@ mod tests {
         );
 
         // Verify failure callback WAS called with UnexpectedResponse
-        let failed = client_services.app.failed_requests.borrow();
+        let failed = client_services.app().failed_requests.borrow();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].2, MbusError::InvalidDeviceIdentification);
     }

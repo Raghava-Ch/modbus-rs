@@ -8,6 +8,9 @@
 //!   (TCP, Serial, or Mock) from the high-level protocol logic.
 //! - **[`ModbusConfig`]**: A comprehensive configuration enum for setting up
 //!   TCP/IP or Serial (RTU/ASCII) parameters.
+//! - **[`BackoffStrategy`]**: Poll-driven retry scheduling strategy used after timeouts.
+//! - **[`JitterStrategy`]**: Optional jitter added on top of retry backoff delays.
+//! - **[`RetryRandomFn`]**: Application-supplied random callback used only when jitter is enabled.
 //! - **[`UnitIdOrSlaveAddr`]**: A type-safe wrapper ensuring that Modbus addresses
 //!   stay within the valid range (1-247) and handling broadcast (0) explicitly.
 //!
@@ -16,6 +19,8 @@
 //!   to ensure the library can run on bare-metal embedded systems.
 //! - **Non-blocking I/O**: The `Transport::recv` interface is designed to be polled,
 //!   allowing the client to remain responsive without requiring an OS-level thread.
+//! - **Scheduled retries**: Retry backoff/jitter values are consumed by higher layers
+//!   to schedule retransmissions using timestamps, never by sleeping.
 //! - **Extensibility**: Users can implement the `Transport` trait to support
 //!   custom hardware (e.g., specialized UART drivers or proprietary TCP stacks).
 //!
@@ -31,6 +36,141 @@ use heapless::{String, Vec};
 
 /// The default TCP port for Modbus communication.
 const MODBUS_TCP_DEFAULT_PORT: u16 = 502;
+
+/// Application-provided callback used to generate randomness for retry jitter.
+///
+/// The callback returns a raw `u32` value that is consumed by jitter logic.
+/// The distribution does not need to be cryptographically secure. A simple
+/// pseudo-random source from the target platform is sufficient.
+pub type RetryRandomFn = fn() -> u32;
+
+/// Retry delay strategy used after a request times out.
+///
+/// The delay is computed per retry attempt in a poll-driven manner. No internal
+/// sleeping or blocking waits are performed by the library.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackoffStrategy {
+    /// Retry immediately after timeout detection.
+    Immediate,
+    /// Retry using a constant delay in milliseconds.
+    Fixed {
+        /// Delay applied before each retry.
+        delay_ms: u32,
+    },
+    /// Retry with an exponential sequence: `base_delay_ms * 2^(attempt-1)`.
+    Exponential {
+        /// Base delay for the first retry attempt.
+        base_delay_ms: u32,
+        /// Upper bound used to clamp growth.
+        max_delay_ms: u32,
+    },
+    /// Retry with a linear sequence: `initial_delay_ms + (attempt-1) * increment_ms`.
+    Linear {
+        /// Delay for the first retry attempt.
+        initial_delay_ms: u32,
+        /// Increment added on every subsequent retry.
+        increment_ms: u32,
+        /// Upper bound used to clamp growth.
+        max_delay_ms: u32,
+    },
+}
+
+impl Default for BackoffStrategy {
+    fn default() -> Self {
+        Self::Immediate
+    }
+}
+
+impl BackoffStrategy {
+    /// Computes the base retry delay in milliseconds for a 1-based retry attempt index.
+    ///
+    /// `retry_attempt` is expected to start at `1` for the first retry after the
+    /// initial request timeout.
+    pub fn delay_ms_for_retry(&self, retry_attempt: u8) -> u32 {
+        let attempt = retry_attempt.max(1);
+        match self {
+            BackoffStrategy::Immediate => 0,
+            BackoffStrategy::Fixed { delay_ms } => *delay_ms,
+            BackoffStrategy::Exponential {
+                base_delay_ms,
+                max_delay_ms,
+            } => {
+                let shift = (attempt.saturating_sub(1)).min(31);
+                let factor = 1u32 << shift;
+                base_delay_ms.saturating_mul(factor).min(*max_delay_ms)
+            }
+            BackoffStrategy::Linear {
+                initial_delay_ms,
+                increment_ms,
+                max_delay_ms,
+            } => {
+                let growth = increment_ms.saturating_mul((attempt.saturating_sub(1)) as u32);
+                initial_delay_ms.saturating_add(growth).min(*max_delay_ms)
+            }
+        }
+    }
+}
+
+/// Jitter strategy applied on top of computed backoff delay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JitterStrategy {
+    /// Do not apply jitter.
+    #[default]
+    None,
+    /// Apply symmetric percentage jitter around the base delay.
+    ///
+    /// For example, with `percent = 20` and base `100ms`, the final delay is
+    /// in the range `[80ms, 120ms]`.
+    Percentage {
+        /// Maximum percentage variation from the base delay.
+        percent: u8,
+    },
+    /// Apply symmetric bounded jitter in milliseconds around the base delay.
+    ///
+    /// For example, with `max_jitter_ms = 15` and base `100ms`, the final delay is
+    /// in the range `[85ms, 115ms]`.
+    BoundedMs {
+        /// Maximum absolute jitter in milliseconds.
+        max_jitter_ms: u32,
+    },
+}
+
+impl JitterStrategy {
+    /// Applies jitter to `base_delay_ms` using an application-provided random callback.
+    ///
+    /// If jitter is disabled or no callback is provided, this method returns `base_delay_ms`.
+    pub fn apply(self, base_delay_ms: u32, random_fn: Option<RetryRandomFn>) -> u32 {
+        let delta = match self {
+            JitterStrategy::None => return base_delay_ms,
+            JitterStrategy::Percentage { percent } => {
+                if percent == 0 || base_delay_ms == 0 {
+                    return base_delay_ms;
+                }
+                base_delay_ms.saturating_mul((percent.min(100)) as u32) / 100
+            }
+            JitterStrategy::BoundedMs { max_jitter_ms } => {
+                if max_jitter_ms == 0 {
+                    return base_delay_ms;
+                }
+                max_jitter_ms
+            }
+        };
+
+        let random = match random_fn {
+            Some(cb) => cb(),
+            None => return base_delay_ms,
+        };
+
+        let span = delta.saturating_mul(2).saturating_add(1);
+        if span == 0 {
+            return base_delay_ms;
+        }
+
+        let offset = (random % span) as i64 - delta as i64;
+        let jittered = base_delay_ms as i64 + offset;
+        jittered.max(0) as u32
+    }
+}
 
 /// Top-level configuration for Modbus communication, supporting different transport layers.
 #[derive(Debug)]
@@ -50,10 +190,34 @@ impl ModbusConfig {
             ModbusConfig::Serial(config) => config.retry_attempts,
         }
     }
+
+    /// Returns the configured retry backoff strategy.
+    pub fn retry_backoff_strategy(&self) -> BackoffStrategy {
+        match self {
+            ModbusConfig::Tcp(config) => config.retry_backoff_strategy,
+            ModbusConfig::Serial(config) => config.retry_backoff_strategy,
+        }
+    }
+
+    /// Returns the configured retry jitter strategy.
+    pub fn retry_jitter_strategy(&self) -> JitterStrategy {
+        match self {
+            ModbusConfig::Tcp(config) => config.retry_jitter_strategy,
+            ModbusConfig::Serial(config) => config.retry_jitter_strategy,
+        }
+    }
+
+    /// Returns the optional application-provided random callback for jitter.
+    pub fn retry_random_fn(&self) -> Option<RetryRandomFn> {
+        match self {
+            ModbusConfig::Tcp(config) => config.retry_random_fn,
+            ModbusConfig::Serial(config) => config.retry_random_fn,
+        }
+    }
 }
 
 /// Parity bit configuration for serial communication.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Parity {
     /// No parity bit is used.
     None,
@@ -62,6 +226,20 @@ pub enum Parity {
     Even,
     /// Odd parity: the number of 1-bits in the data plus parity bit is odd.
     Odd,
+}
+
+/// Number of data bits per serial character.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DataBits {
+    /// 5 data bits.
+    Five,
+    /// 6 data bits.
+    Six,
+    /// 7 data bits.
+    Seven,
+    /// 8 data bits.
+    #[default]
+    Eight,
 }
 
 /// Configuration parameters for establishing a Modbus Serial connection.
@@ -75,7 +253,7 @@ pub enum SerialMode {
 }
 
 /// Baud rate configuration for serial communication.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum BaudRate {
     /// Standard baud rate of 9600 bits per second.
     Baud9600,
@@ -95,8 +273,8 @@ pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64> {
     pub mode: SerialMode,
     /// Communication speed in bits per second (e.g., 9600, 115200).
     pub baud_rate: BaudRate,
-    /// Number of data bits per character (typically 8 for RTU, 7 for ASCII).
-    pub data_bits: u8,
+    /// Number of data bits per character (typically `DataBits::Eight` for RTU, `DataBits::Seven` for ASCII).
+    pub data_bits: DataBits,
     /// Number of stop bits (This will be recalculated before calling the transport layer).
     pub stop_bits: u8,
     /// The parity checking mode.
@@ -105,9 +283,15 @@ pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64> {
     pub response_timeout_ms: u32,
     /// Number of retries for failed operations.
     pub retry_attempts: u8,
+    /// Backoff strategy used when scheduling retries.
+    pub retry_backoff_strategy: BackoffStrategy,
+    /// Optional jitter strategy applied on top of retry backoff delay.
+    pub retry_jitter_strategy: JitterStrategy,
+    /// Optional application-provided random callback used by jitter.
+    pub retry_random_fn: Option<RetryRandomFn>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Configuration parameters for establishing a Modbus TCP connection.
 pub struct ModbusTcpConfig {
     /// The hostname or IP address of the Modbus TCP server to connect to.
@@ -122,11 +306,12 @@ pub struct ModbusTcpConfig {
     pub response_timeout_ms: u32,
     /// Number of retry attempts for failed operations
     pub retry_attempts: u8,
-    /// Interval for sending keep-alive messages in milliseconds
-    /// This value is only applicable for `StdTcp` transport type
-    /// The default `mbus-tcp` crate does not support this feature. It is intended for custom `Transport` trait implementations
-    /// where keep-alive functionality might be desired.
-    pub keep_alive_interval_ms: u32,
+    /// Backoff strategy used when scheduling retries.
+    pub retry_backoff_strategy: BackoffStrategy,
+    /// Optional jitter strategy applied on top of retry backoff delay.
+    pub retry_jitter_strategy: JitterStrategy,
+    /// Optional application-provided random callback used by jitter.
+    pub retry_random_fn: Option<RetryRandomFn>,
 }
 
 /// The transport module defines the `Transport` trait and related types for managing Modbus TCP communication.
@@ -137,16 +322,9 @@ impl ModbusTcpConfig {
     /// * `port` - The TCP port number on which the Modbus server is listening.
     /// # Returns
     /// A new `ModbusTcpConfig` instance with the provided host and port.
-    pub fn default(host: &str) -> Result<Self, MbusError> {
-        let host_string = String::from_str(host).map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
-        Ok(Self {
-            host: host_string,
-            port: MODBUS_TCP_DEFAULT_PORT,
-            connection_timeout_ms: 5000,
-            response_timeout_ms: 5000,
-            retry_attempts: 3,
-            keep_alive_interval_ms: 30000,
-        })
+    pub fn with_default_port(host: &str) -> Result<Self, MbusError> {
+        let host_string: String<64> = String::from_str(host).map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
+        Self::new(&host_string, MODBUS_TCP_DEFAULT_PORT)
     }
 
     /// Creates a new `ModbusTcpConfig` instance with the specified host and port.
@@ -163,7 +341,9 @@ impl ModbusTcpConfig {
             connection_timeout_ms: 5000,
             response_timeout_ms: 5000,
             retry_attempts: 3,
-            keep_alive_interval_ms: 30000,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
         })
     }
 }
@@ -331,13 +511,31 @@ impl Default for UnitIdOrSlaveAddr {
 
 /// A trait for types that can be created from a `u8` Unit ID or Slave Address.
 pub trait UidSaddrFrom {
-    /// Creates a new instance from a `u8` Unit ID or Slave Address.
+    /// Creates an instance from a raw stored `u8` Unit ID / Slave Address.
+    ///
+    /// This is intended for internal reconstruction paths where the value was
+    /// originally produced from a validated `UnitIdOrSlaveAddr` and later stored
+    /// as a raw `u8` (for example, queue bookkeeping fields).
+    ///
+    /// Do not use this for external or untrusted input parsing. For that use case,
+    /// use `UnitIdOrSlaveAddr::new(...)` or `TryFrom<u8>` so invalid values are
+    /// surfaced as errors.
     fn from_u8(uid_saddr: u8) -> Self;
 }
 
 /// Implementation of `UidSaddrFrom` for `UnitIdOrSlaveAddr`.
 impl UidSaddrFrom for UnitIdOrSlaveAddr {
-    /// Creates a new instance from a `u8` Unit ID or Slave Address.
+    /// Creates an instance from an internal raw `u8` Unit ID / Slave Address.
+    ///
+    /// This helper is used in internal flows that reconstruct an address from
+    /// previously validated values serialized to `u8` for storage.
+    ///
+    /// If an invalid raw value is encountered (which should not occur in normal
+    /// operation), this returns the `Default` sentinel instead of panicking.
+    /// This makes corruption visible to upper layers without crashing.
+    ///
+    /// For external input validation, prefer `UnitIdOrSlaveAddr::new(...)` or
+    /// `TryFrom<u8>`.
     ///
     /// # Arguments
     /// * `value` - The `u8` value representing the Unit ID or Slave Address.

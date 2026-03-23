@@ -49,8 +49,16 @@ Defined features:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `serial-ascii`
 
 These features gate model modules and related types.
+
+`serial-ascii` also controls ADU buffer sizing in `mbus-core`:
+
+- enabled: `MAX_ADU_FRAME_LEN = 513`
+- disabled: `MAX_ADU_FRAME_LEN = 260`
+
+This optimization reduces stack usage for builds that do not include ASCII transport.
 
 ## Common Usage Patterns
 
@@ -148,3 +156,35 @@ If a type or trait is missing at compile time:
 ```bash
 cargo check --no-default-features --features client,tcp,coils
 ```
+
+## Retry Backoff and Jitter
+
+Retry timing is configured per transport config (`ModbusTcpConfig` and `ModbusSerialConfig`):
+
+- `retry_backoff_strategy`
+- `retry_jitter_strategy`
+- `retry_random_fn`
+
+Defaults preserve previous behavior:
+
+- `retry_backoff_strategy = BackoffStrategy::Immediate`
+- `retry_jitter_strategy = JitterStrategy::None`
+- `retry_random_fn = None`
+
+Important operational model:
+
+- Retries are scheduled and executed from `poll()`.
+- No internal sleeping/blocking is used.
+- Jitter uses only the app-provided callback and is skipped when no callback is provided.
+
+## Reconnect and Serial Constructor APIs
+
+`modbus-client` now provides additional operational APIs:
+
+- `ClientServices::is_connected()`
+- `ClientServices::reconnect()`
+- `ClientServices::new_serial(...)`
+- `SerialClientServices<TRANSPORT, APP>` alias
+
+These are runtime behavior APIs (not Cargo features), but they are relevant when
+designing feature-reduced builds and deployment behavior.

@@ -20,9 +20,39 @@ pub const MAX_PDU_DATA_LEN: usize = 252;
 /// Modbus Protocol Identifier (PID)
 pub const MODBUS_PROTOCOL_ID: u16 = 0x0000;
 
-/// Maximum length of an ADU (MBAP header + PDU)
-/// Maximum length of an ADU (ASCII mode requires 513 bytes)
-pub const MAX_ADU_FRAME_LEN: usize = 513;
+/// Maximum length of a Modbus TCP/RTU ADU in bytes.
+pub const MAX_ADU_FRAME_LEN_TCP_RTU: usize = 260;
+
+/// Maximum length of a Modbus ASCII ADU in bytes.
+pub const MAX_ADU_FRAME_LEN_ASCII: usize = 513;
+
+/// Maximum ADU frame length used by internal buffers.
+///
+/// - When `serial-ascii` feature is enabled, this is `513` (ASCII upper bound).
+/// - Otherwise this is `260` (TCP/RTU upper bound), reducing stack usage.
+#[cfg(feature = "serial-ascii")]
+pub const MAX_ADU_FRAME_LEN: usize = MAX_ADU_FRAME_LEN_ASCII;
+
+/// Maximum ADU frame length used by internal buffers.
+#[cfg(not(feature = "serial-ascii"))]
+pub const MAX_ADU_FRAME_LEN: usize = MAX_ADU_FRAME_LEN_TCP_RTU;
+
+#[cfg(test)]
+mod frame_len_tests {
+    use super::*;
+
+    #[test]
+    #[cfg(feature = "serial-ascii")]
+    fn test_max_adu_frame_len_ascii_enabled() {
+        assert_eq!(MAX_ADU_FRAME_LEN, 513);
+    }
+
+    #[test]
+    #[cfg(not(feature = "serial-ascii"))]
+    fn test_max_adu_frame_len_ascii_disabled() {
+        assert_eq!(MAX_ADU_FRAME_LEN, 260);
+    }
+}
 
 /// Size of the Modbus Application Protocol (MBAP) Header in bytes.
 pub const MBAP_HEADER_SIZE: usize = 7;

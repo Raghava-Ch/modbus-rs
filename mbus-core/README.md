@@ -41,6 +41,7 @@ client and transport crates.
 
 Available feature flags:
 
+- `serial-ascii`
 - `coils`
 - `registers`
 - `discrete-inputs`
@@ -51,6 +52,14 @@ Available feature flags:
 Default behavior:
 
 - `default` enables all features above.
+
+`serial-ascii` affects ADU buffer sizing:
+
+- enabled: `MAX_ADU_FRAME_LEN = 513` (ASCII upper bound)
+- disabled: `MAX_ADU_FRAME_LEN = 260` (TCP/RTU upper bound)
+
+This reduces stack usage in non-ASCII builds while preserving full ASCII compatibility
+when explicitly enabled.
 
 Example with selective features:
 

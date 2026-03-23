@@ -119,7 +119,7 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_read_single = client.app.received_coil_responses.borrow();
+        let received_read_single = client.app().received_coil_responses.borrow();
         assert_eq!(received_read_single.len(), 1);
         let (_, _, coils) = &received_read_single[0];
         println!(
@@ -148,7 +148,7 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_write_single = client.app.received_write_single_coil_responses.borrow();
+        let received_write_single = client.app().received_write_single_coil_responses.borrow();
         assert_eq!(received_write_single.len(), 1);
         let (_, _, addr, val) = &received_write_single[0];
         println!("Client: Wrote single coil at address {}: {}", addr, val);
@@ -167,7 +167,7 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_read_back = client.app.received_coil_responses.borrow();
+        let received_read_back = client.app().received_coil_responses.borrow();
         assert_eq!(received_read_back.len(), 2); // One for initial read, one for read back
         let (_, _, coils_read_back) = &received_read_back[1];
         println!(
@@ -200,7 +200,7 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_read_multi = client.app.received_coil_responses.borrow();
+        let received_read_multi = client.app().received_coil_responses.borrow();
         assert_eq!(received_read_multi.len(), 3); // Initial read, read back, multi read
         let (_, _, coils_multi) = &received_read_multi[2];
         println!(
@@ -251,7 +251,7 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_write_multi = client.app.received_write_multiple_coils_responses.borrow();
+        let received_write_multi = client.app().received_write_multiple_coils_responses.borrow();
         assert_eq!(received_write_multi.len(), 1);
         let (_, _, addr_multi, qty_multi) = &received_write_multi[0];
         println!(
@@ -277,7 +277,7 @@ fn main() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
-    let received_read_back_multi = client.app.received_coil_responses.borrow();
+    let received_read_back_multi = client.app().received_coil_responses.borrow();
     assert_eq!(received_read_back_multi.len(), 4);
     let (_, _, coils_read_back_multi) = &received_read_back_multi[3];
     println!(
