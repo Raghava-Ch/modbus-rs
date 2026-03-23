@@ -6,15 +6,24 @@
 //!
 //! Each trait corresponds to a functional group of Modbus services (Coils, Registers, etc.).
 
-use crate::services::{
-    coil::Coils, diagnostic::DeviceIdentificationResponse, discrete_input::DiscreteInputs,
-    fifo_queue::FifoQueue, file_record::SubRequestParams, register::Registers,
-};
 use mbus_core::{
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType},
     transport::UnitIdOrSlaveAddr,
 };
+
+#[cfg(feature = "coils")]
+use crate::services::coil::Coils;
+#[cfg(feature = "diagnostics")]
+use crate::services::diagnostic::DeviceIdentificationResponse;
+#[cfg(feature = "discrete-inputs")]
+use crate::services::discrete_input::DiscreteInputs;
+#[cfg(feature = "fifo")]
+use crate::services::fifo_queue::FifoQueue;
+#[cfg(feature = "file-record")]
+use crate::services::file_record::SubRequestParams;
+#[cfg(feature = "registers")]
+use crate::services::register::Registers;
 
 /// Trait for receiving notifications about failed Modbus requests.
 ///
@@ -42,6 +51,7 @@ pub trait RequestErrorNotifier {
 ///
 /// Implementors of this trait to deliver the responses to the application layer,
 /// allowing application developers to process the coil data and update their application state accordingly.
+#[cfg(feature = "coils")]
 pub trait CoilResponse {
     /// Handles a Read Coils response by invoking the appropriate application callback with the coil states.
     ///
@@ -115,6 +125,7 @@ pub trait CoilResponse {
 }
 
 /// Trait defining the expected response handling for FIFO Queue Modbus operations.
+#[cfg(feature = "fifo")]
 pub trait FifoQueueResponse {
     /// Handles a Read FIFO Queue response.
     ///
@@ -135,6 +146,7 @@ pub trait FifoQueueResponse {
 }
 
 /// Trait defining the expected response handling for File Record Modbus operations.
+#[cfg(feature = "file-record")]
 pub trait FileRecordResponse {
     /// Handles a Read File Record response.
     ///
@@ -172,6 +184,7 @@ pub trait FileRecordResponse {
 /// Implementors of this trait can process the data received from a Modbus server
 /// and update their application state accordingly. Each method corresponds to a
 /// specific Modbus register operation response.
+#[cfg(feature = "registers")]
 pub trait RegisterResponse {
     /// Handles a response for a `Read Input Registers` (FC 0x04) request.
     ///
@@ -337,6 +350,7 @@ pub trait RegisterResponse {
 ///
 /// Implementors of this trait can process the data received from a Modbus server
 /// and update their application state accordingly.
+#[cfg(feature = "discrete-inputs")]
 pub trait DiscreteInputResponse {
     /// Handles a response for a `Read Discrete Inputs` (FC 0x02) request.
     ///
@@ -376,6 +390,7 @@ pub trait DiscreteInputResponse {
 }
 
 /// Trait for handling Diagnostics responses.
+#[cfg(feature = "diagnostics")]
 pub trait DiagnosticsResponse {
     /// Called when a Read Device Identification response is received.
     ///

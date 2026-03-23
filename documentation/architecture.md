@@ -11,6 +11,12 @@ The `modbus-rs` ecosystem is composed of several crates, each with a distinct re
 -   **`mbus-tcp`**: (Implied, based on `ModbusTcpConfig` in `mbus-core`) Likely provides a standard TCP transport implementation.
 -   **`mbus-serial`**: (Implied, based on `ModbusSerialConfig` in `mbus-core`) Likely provides standard Serial (RTU/ASCII) transport implementations.
 
+At the top-level `modbus-rs` crate, serial transport exposure is split into two user-facing
+features:
+
+-   **`serial-rtu`**: Enables serial transport for RTU-oriented builds.
+-   **`serial-ascii`**: Enables serial transport for ASCII-oriented builds.
+
 ## Modbus TCP Client State Machine
 
 The client activity flow for Modbus TCP is defined by a deterministic state machine, adhering to "MODBUS Messaging on TCP/IP Implementation Guide V1.0b" Figure 11: *MODBUS Client Activity Diagram*. This state machine describes the lifecycle of a single transaction in a sequential (non-concurrent) Modbus TCP client.

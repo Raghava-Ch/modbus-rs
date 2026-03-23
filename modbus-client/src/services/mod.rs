@@ -16,14 +16,21 @@
 //! - Generic over `TRANSPORT` and `APP` traits for maximum flexibility in different environments.
 //! - Fixed-capacity response tracking using `heapless` for `no_std` compatibility.
 
+#[cfg(feature = "coils")]
 pub mod coil;
+#[cfg(feature = "diagnostics")]
 pub mod diagnostic;
+#[cfg(feature = "discrete-inputs")]
 pub mod discrete_input;
+#[cfg(feature = "fifo")]
 pub mod fifo_queue;
+#[cfg(feature = "file-record")]
 pub mod file_record;
+#[cfg(feature = "registers")]
 pub mod register;
 
 use crate::app::RequestErrorNotifier;
+#[cfg(feature = "diagnostics")]
 use diagnostic::ReadDeviceIdCode;
 use heapless::Vec;
 use mbus_core::data_unit::common::{ModbusMessage, SlaveAddress, derive_length_from_bytes};
@@ -58,6 +65,7 @@ pub(crate) struct Mask {
     or_mask: u16,
 }
 /// Internal tracking payload for a Diagnostic/Encapsulated operation.
+#[cfg(feature = "diagnostics")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Diag {
     device_id_code: ReadDeviceIdCode,
@@ -71,6 +79,7 @@ pub(crate) enum OperationMeta {
     Single(Single),
     Multiple(Multiple),
     Masking(Mask),
+    #[cfg(feature = "diagnostics")]
     Diag(Diag),
 }
 
@@ -126,6 +135,7 @@ impl OperationMeta {
 
     fn device_id_code(&self) -> ReadDeviceIdCode {
         match self {
+            #[cfg(feature = "diagnostics")]
             OperationMeta::Diag(d) => d.device_id_code,
             _ => ReadDeviceIdCode::default(),
         }
@@ -134,6 +144,7 @@ impl OperationMeta {
     #[allow(dead_code)]
     fn encap_type(&self) -> EncapsulatedInterfaceType {
         match self {
+            #[cfg(feature = "diagnostics")]
             OperationMeta::Diag(d) => d.encap_type,
             _ => EncapsulatedInterfaceType::default(),
         }

@@ -22,15 +22,15 @@ heapless = { workspace = true }
 default = [
     "coils",
     "registers",
-    "discrete_inputs",
-    "fifo_queues",
-    "file_records",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
     "diagnostics"
 ]
 
-coils = []      # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
-registers = []  # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
-discrete_inputs = [] # Enables Modbus Discrete Input (FC 0x02) services
-fifo_queues = []     # Enables Modbus FIFO Queue (FC 0x18) services
-file_records = []    # Enables Modbus File Record (FC 0x14, 0x15) services
-diagnostics = []     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
+coils = ["mbus-core/coils"]      # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
+registers = ["mbus-core/registers"]  # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
+discrete-inputs = ["mbus-core/discrete-inputs"] # Enables Modbus Discrete Input (FC 0x02) services
+fifo = ["mbus-core/fifo"]     # Enables Modbus FIFO Queue (FC 0x18) services
+file-record = ["mbus-core/file-record"]    # Enables Modbus File Record (FC 0x14, 0x15) services
+diagnostics = ["mbus-core/diagnostics"]     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
