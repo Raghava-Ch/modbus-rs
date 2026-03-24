@@ -1,16 +1,16 @@
-# modbus-client
+# mbus-client
 
-`modbus-client` is a helper crate in the `modbus-rs` workspace.
+`mbus-client` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
 It provides the client-side Modbus request/response engine, built on top of shared
 protocol and transport abstractions from `mbus-core`.
 
 If you want a single top-level entry point, use `modbus-rs`.
-If you want direct access to client orchestration and callbacks, use `modbus-client`.
+If you want direct access to client orchestration and callbacks, use `mbus-client`.
 
 ## Helper Crate Role
 
-`modbus-client` is responsible for client workflow, not transport implementation:
+`mbus-client` is responsible for client workflow, not transport implementation:
 
 - Builds Modbus requests and tracks outstanding transactions.
 - Polls transport for responses and dispatches parsed callbacks.
@@ -129,12 +129,12 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-modbus-client = { version = "0.1.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.2.0", default-features = false, features = ["coils"] }
 ```
 
 ## Logging
 
-`modbus-client` can emit low-priority internal diagnostics through the `log` facade when the
+`mbus-client` can emit low-priority internal diagnostics through the `log` facade when the
 `logging` feature is enabled.
 
 These logs are intentionally limited to `debug` and `trace` so applications can filter them
@@ -151,7 +151,7 @@ Examples of logged events:
 Typical filtering example:
 
 ```bash
-RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
 ## Usage Pattern
@@ -254,13 +254,13 @@ From workspace root:
 
 ```bash
 # default services
-cargo check -p modbus-client
+cargo check -p mbus-client
 
 # only coils service
-cargo check -p modbus-client --no-default-features --features coils
+cargo check -p mbus-client --no-default-features --features coils
 
 # registers + discrete inputs only
-cargo check -p modbus-client --no-default-features --features registers,discrete-inputs
+cargo check -p mbus-client --no-default-features --features registers,discrete-inputs
 ```
 
 ## Notes

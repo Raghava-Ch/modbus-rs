@@ -1,12 +1,12 @@
 [package]
 name = "mbus-serial"
-version.workspace = true
+version = "0.2.0"
 edition.workspace = true
 authors.workspace = true
-license-file = "LICENSE"
+license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme.workspace = true
+readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
 description.workspace = true

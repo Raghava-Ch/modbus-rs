@@ -1,6 +1,6 @@
 use anyhow::Result;
 use modbus_rs::{
-    ClientServices, DiagnosticSubFunction, DiagnosticsResponse, DeviceIdentificationResponse,
+    ClientServices, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
     EncapsulatedInterfaceType, MbusError, ModbusConfig, ModbusTcpConfig, ObjectId,
     ReadDeviceIdCode, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
@@ -91,7 +91,13 @@ impl DiagnosticsResponse for ClientApp {
         _status: u8,
     ) {
     }
-    fn report_server_id_response(&mut self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
+    fn report_server_id_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _data: &[u8],
+    ) {
+    }
 }
 
 // Implement other required traits with minimal/empty logic for this example
@@ -154,28 +160,36 @@ fn main() -> Result<()> {
     // 1. Read Basic Device Identification (Stream Access)
     // Retrieves mandatory objects: VendorName, ProductCode, MajorMinorRevision
     println!("\n[1] Sending Read Device Identification (Basic)...");
-    client.diagnostic().read_device_identification(1, unit_id, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
+    client
+        .diagnostic()
+        .read_device_identification(1, unit_id, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 2. Read Regular Device Identification (Stream Access)
     // Retrieves optional objects: VendorUrl, ProductName, ModelName, UserApplicationName
     println!("\n[2] Sending Read Device Identification (Regular)...");
-    client.diagnostic().read_device_identification(2, unit_id, ReadDeviceIdCode::Regular, ObjectId::from(0x00))
+    client
+        .diagnostic()
+        .read_device_identification(2, unit_id, ReadDeviceIdCode::Regular, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 3. Read Extended Device Identification (Stream Access)
     // Retrieves extended/private objects (0x80 - 0xFF)
     println!("\n[3] Sending Read Device Identification (Extended)...");
-    client.diagnostic().read_device_identification(3, unit_id, ReadDeviceIdCode::Extended, ObjectId::from(0x80))
+    client
+        .diagnostic()
+        .read_device_identification(3, unit_id, ReadDeviceIdCode::Extended, ObjectId::from(0x80))
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 4. Read Specific Object (Individual Access)
     // Retrieves a single specific object, e.g., VendorName (0x00)
     println!("\n[4] Sending Read Device Identification (Specific - VendorName)...");
-    client.diagnostic().read_device_identification(4, unit_id, ReadDeviceIdCode::Specific, ObjectId::from(0x00))
+    client
+        .diagnostic()
+        .read_device_identification(4, unit_id, ReadDeviceIdCode::Specific, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 

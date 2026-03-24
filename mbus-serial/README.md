@@ -17,7 +17,7 @@ If you need direct access to serial transport internals, use `mbus-serial` direc
 - Supports both `SerialMode::Rtu` and `SerialMode::Ascii`.
 
 This crate does not implement high-level request/response orchestration by itself.
-That logic lives in `modbus-client`.
+That logic lives in `mbus-client`.
 
 ## What Is Included
 
@@ -115,7 +115,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-serial = { version = "0.1.0", features = ["logging"] }
+mbus-serial = { version = "0.2.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -127,11 +127,11 @@ env_logger = "0.11"
 
 ## Typical Integration Pattern
 
-In most applications, `mbus-serial` is used together with `modbus-client`:
+In most applications, `mbus-serial` is used together with `mbus-client`:
 
 1. Build `ModbusConfig::Serial(...)`.
 2. Instantiate `StdSerialTransport`.
-3. Pass transport into `ClientServices` from `modbus-client`.
+3. Pass transport into `ClientServices` from `mbus-client`.
 4. Use client services for function-code operations.
 
 ## License

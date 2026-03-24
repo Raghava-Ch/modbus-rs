@@ -327,7 +327,10 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 
-    let received_responses = client.app().received_write_multiple_coils_responses.borrow();
+    let received_responses = client
+        .app()
+        .received_write_multiple_coils_responses
+        .borrow();
     assert_eq!(received_responses.len(), 1);
     let (rcv_txn_id, rcv_unit_id, rcv_address, rcv_quantity) = &received_responses[0];
 
@@ -834,7 +837,13 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
     // Poll to process both responses
     for _ in 0..50 {
         client.poll();
-        if client.app().received_read_device_id_responses.borrow().len() == 2 {
+        if client
+            .app()
+            .received_read_device_id_responses
+            .borrow()
+            .len()
+            == 2
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));

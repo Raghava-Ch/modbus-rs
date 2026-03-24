@@ -101,13 +101,17 @@ fn main() -> Result<()> {
 
     // 1. Read Single Discrete Input
     println!("\n[1] Sending Read Single Discrete Input (Addr: 0)...");
-    client.discrete_inputs().read_single_discrete_input(1, unit_id, 0)
+    client
+        .discrete_inputs()
+        .read_single_discrete_input(1, unit_id, 0)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 2. Read Multiple Discrete Inputs
     println!("\n[2] Sending Read Discrete Inputs (Addr: 0, Qty: 10)...");
-    client.discrete_inputs().read_discrete_inputs(2, unit_id, 0, 10)
+    client
+        .discrete_inputs()
+        .read_discrete_inputs(2, unit_id, 0, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 

@@ -230,7 +230,8 @@ where
 
         if ctx.operation_meta.is_single() {
             let value = register_rsp.values().first().cloned().unwrap_or(0);
-            self.app.read_single_holding_register_response( // Notify the application of the single register value
+            self.app.read_single_holding_register_response(
+                // Notify the application of the single register value
                 transaction_id,
                 unit_id_or_slave_addr,
                 from_address,

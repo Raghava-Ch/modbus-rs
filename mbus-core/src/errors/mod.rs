@@ -12,7 +12,6 @@
 
 use core::fmt;
 
-
 /// Represents a Modbus error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MbusError {
@@ -239,10 +238,9 @@ impl fmt::Display for MbusError {
                 f,
                 "Invalid broadcast address: The provided broadcast address (0) is invalid. Must use UnitIdOrSlaveAddr::new_broadcast_address() instead."
             ),
-            MbusError::BroadcastNotAllowed => write!(
-                f,
-                "Broadcast not allowed: Broadcast not allowed"
-            ),
+            MbusError::BroadcastNotAllowed => {
+                write!(f, "Broadcast not allowed: Broadcast not allowed")
+            }
             MbusError::InvalidOffset => write!(f, "Invalid offset: The provided offset is invalid"),
         }
     }

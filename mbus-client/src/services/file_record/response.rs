@@ -43,7 +43,7 @@ use mbus_core::{
 /// This struct provides stateless methods to validate function codes (0x14, 0x15), verify byte counts,
 /// and extract sub-request data from raw byte buffers. It handles the complex, variable-length
 /// structure of file record responses which can contain multiple data blocks in a single frame.
- pub(super) struct ResponseParser;
+pub(super) struct ResponseParser;
 
 impl ResponseParser {
     /// Parses a Read File Record (FC 0x14) response PDU.
@@ -94,7 +94,8 @@ impl ResponseParser {
 
             // Extract data bytes: skip len byte (1) + ref type byte (1)
             let raw_data = &data[i + 2..i + 2 + data_len]; // raw_data is the actual register data
-            if !raw_data.len().is_multiple_of(2) { // The length of register data must be a multiple of 2
+            if !raw_data.len().is_multiple_of(2) {
+                // The length of register data must be a multiple of 2
                 return Err(MbusError::ParseError);
             }
 

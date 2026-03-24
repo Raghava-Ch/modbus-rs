@@ -6,7 +6,7 @@ fn main() -> Result<()> {
     // Example run:
     // RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
     // Filter only internal client state-machine events:
-    // RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+    // RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let mut transport = StdTcpTransport::new();

@@ -105,7 +105,9 @@ fn main() -> Result<()> {
     println!("\n--- Testing Read Single Coil ---");
     let read_single_address = 1;
     let txn_id_read_single = 100;
-    client.coils().read_single_coil(txn_id_read_single, unit_id, read_single_address)
+    client
+        .coils()
+        .read_single_coil(txn_id_read_single, unit_id, read_single_address)
         .map_err(|e| anyhow::anyhow!("Failed to send read single coil: {:?}", e))?;
 
     // In a real-world scenario, you would call poll() in a loop.
@@ -130,7 +132,9 @@ fn main() -> Result<()> {
     let write_single_address = 0;
     let write_single_value = true;
     let txn_id_write_single = 101; // This line is fine
-    client.coils().write_single_coil(
+    client
+        .coils()
+        .write_single_coil(
             txn_id_write_single,
             unit_id,
             write_single_address,
@@ -153,7 +157,9 @@ fn main() -> Result<()> {
     }
     // Verify write by reading back
     println!("\n--- Verifying Write Single Coil by Reading Back ---");
-    client.coils().read_single_coil(txn_id_read_single + 1, unit_id, write_single_address)
+    client
+        .coils()
+        .read_single_coil(txn_id_read_single + 1, unit_id, write_single_address)
         .map_err(|e| anyhow::anyhow!("Failed to send verification read: {:?}", e))?;
 
     for _ in 0..5 {
@@ -180,7 +186,9 @@ fn main() -> Result<()> {
     let read_multi_address = 10;
     let read_multi_quantity = 3;
     let txn_id_read_multi = 102; // This line is fine
-    client.coils().read_multiple_coils(
+    client
+        .coils()
+        .read_multiple_coils(
             txn_id_read_multi,
             unit_id,
             read_multi_address,
@@ -230,7 +238,9 @@ fn main() -> Result<()> {
         .unwrap();
 
     let txn_id_write_multi = 103; // This line is fine
-    client.coils().write_multiple_coils(
+    client
+        .coils()
+        .write_multiple_coils(
             txn_id_write_multi,
             unit_id,
             write_multi_address,
@@ -244,7 +254,10 @@ fn main() -> Result<()> {
     }
 
     {
-        let received_write_multi = client.app().received_write_multiple_coils_responses.borrow();
+        let received_write_multi = client
+            .app()
+            .received_write_multiple_coils_responses
+            .borrow();
         assert_eq!(received_write_multi.len(), 1);
         let (_, _, addr_multi, qty_multi) = &received_write_multi[0];
         println!(
@@ -256,7 +269,9 @@ fn main() -> Result<()> {
     }
     // Verify write by reading back
     println!("\n--- Verifying Write Multiple Coils by Reading Back ---");
-    client.coils().read_multiple_coils(
+    client
+        .coils()
+        .read_multiple_coils(
             txn_id_read_multi + 1,
             unit_id,
             write_multi_address,
@@ -295,16 +310,15 @@ fn main() -> Result<()> {
 
     println!("\n--- Batch API Demo with with_coils(...) ---");
     // Demonstrates batching multiple coil requests in a single scoped mutable borrow.
-    client
-        .with_coils(|coils| {
-            coils
-                .write_single_coil(104, unit_id, 12, false)
-                .map_err(|e| anyhow::anyhow!("Batch write_single_coil failed: {:?}", e))?;
-            coils
-                .read_single_coil(105, unit_id, 12)
-                .map_err(|e| anyhow::anyhow!("Batch read_single_coil failed: {:?}", e))?;
-            Ok::<(), anyhow::Error>(())
-        })?;
+    client.with_coils(|coils| {
+        coils
+            .write_single_coil(104, unit_id, 12, false)
+            .map_err(|e| anyhow::anyhow!("Batch write_single_coil failed: {:?}", e))?;
+        coils
+            .read_single_coil(105, unit_id, 12)
+            .map_err(|e| anyhow::anyhow!("Batch read_single_coil failed: {:?}", e))?;
+        Ok::<(), anyhow::Error>(())
+    })?;
 
     for _ in 0..5 {
         client.poll();

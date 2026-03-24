@@ -138,7 +138,9 @@ fn main() -> Result<()> {
 
     // 1. Write Single Coil
     println!("\n[1] Sending Write Single Coil (Addr: 0, Value: ON)...");
-    client.coils().write_single_coil(1, target_unit_id, 0, true)
+    client
+        .coils()
+        .write_single_coil(1, target_unit_id, 0, true)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -147,7 +149,9 @@ fn main() -> Result<()> {
 
     // 2. Read Coils
     println!("\n[2] Sending Read Coils (Addr: 0, Qty: 5)...");
-    client.coils().read_multiple_coils(2, target_unit_id, 0, 5)
+    client
+        .coils()
+        .read_multiple_coils(2, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -162,7 +166,9 @@ fn main() -> Result<()> {
     multi_coils.set_value(11, false).unwrap();
     multi_coils.set_value(12, true).unwrap();
 
-    client.coils().write_multiple_coils(3, target_unit_id, 10, &multi_coils)
+    client
+        .coils()
+        .write_multiple_coils(3, target_unit_id, 10, &multi_coils)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

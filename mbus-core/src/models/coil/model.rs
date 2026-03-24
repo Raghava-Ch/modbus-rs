@@ -37,21 +37,21 @@ pub const MAX_COIL_BYTES: usize = MAX_COILS_PER_PDU.div_ceil(8); // 250 bytes fo
 /// assert_eq!(coils.value(100).unwrap(), true);
 /// assert_eq!(coils.values()[..1], [0b0000_0001]);
 /// assert_eq!(coils.values()[..1], [0b0000_0001]);
-/// 
+///
 /// // Set coil at address 102 (offset 2) to ON
 /// // Internal values: `values[0]` becomes `0b0000_0101`
 /// coils.set_value(102, true).unwrap();
 /// assert_eq!(coils.value(102).unwrap(), true);
 /// assert_eq!(coils.values()[..1], [0b0000_0101]);
 /// assert_eq!(coils.values()[..1], [0b0000_0101]);
-/// 
+///
 /// // Set coil at address 101 (offset 1) to ON
 /// // Internal values: `values[0]` becomes `0b0000_0111`
 /// coils.set_value(101, true).unwrap();
 /// assert_eq!(coils.value(101).unwrap(), true);
 /// assert_eq!(coils.values()[..1], [0b0000_0111]);
 /// assert_eq!(coils.values()[..1], [0b0000_0111]);
-/// 
+///
 /// // Set coil at address 100 back to OFF
 /// // Internal values: `values[0]` becomes `0b0000_0110`
 /// coils.set_value(100, false).unwrap();

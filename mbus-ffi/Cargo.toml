@@ -1,6 +1,6 @@
 [package]
-name = "mbus-tcp"
-version = "0.2.0"
+name = "modbus-ffi"
+version = "0.0.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -12,11 +12,3 @@ categories.workspace = true
 description.workspace = true
 
 [dependencies]
-mbus-core = { workspace = true }
-
-heapless = { workspace = true }
-log = { workspace = true, optional = true }
-
-[features]
-default = []
-logging = ["dep:log"]

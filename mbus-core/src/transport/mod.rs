@@ -323,7 +323,8 @@ impl ModbusTcpConfig {
     /// # Returns
     /// A new `ModbusTcpConfig` instance with the provided host and port.
     pub fn with_default_port(host: &str) -> Result<Self, MbusError> {
-        let host_string: String<64> = String::from_str(host).map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
+        let host_string: String<64> =
+            String::from_str(host).map_err(|_| MbusError::BufferTooSmall)?; // Return error if host string is too long
         Self::new(&host_string, MODBUS_TCP_DEFAULT_PORT)
     }
 
@@ -407,7 +408,10 @@ impl TransportType {
 
     /// Returns `true` if the transport type is serial (RTU or ASCII).
     pub fn is_serial_type(&self) -> bool {
-        matches!(self, TransportType::StdSerial(_) | TransportType::CustomSerial(_))
+        matches!(
+            self,
+            TransportType::StdSerial(_) | TransportType::CustomSerial(_)
+        )
     }
 }
 

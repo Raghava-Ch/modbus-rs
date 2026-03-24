@@ -1,8 +1,8 @@
 use anyhow::Result;
 use modbus_rs::{
     BackoffStrategy, BaudRate, ClientServices, DataBits, DiscreteInputResponse, DiscreteInputs,
-    JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
-    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier,
+    SerialMode, StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -114,7 +114,9 @@ fn main() -> Result<()> {
 
     // 1. Read Discrete Inputs
     println!("\n[1] Sending Read Discrete Inputs (Addr: 0, Qty: 10)...");
-    client.discrete_inputs().read_discrete_inputs(1, target_unit_id, 0, 10)
+    client
+        .discrete_inputs()
+        .read_discrete_inputs(1, target_unit_id, 0, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

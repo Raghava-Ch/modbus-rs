@@ -11,12 +11,11 @@
 )]
 
 use modbus_rs::{
-    ClientServices, CoilResponse, Coils, DiagnosticSubFunction, DiagnosticsResponse,
-    DeviceIdentificationResponse, DiscreteInputResponse, DiscreteInputs,
-    EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse, FileRecordResponse, MbusError,
-    MAX_ADU_FRAME_LEN, ModbusConfig, ModbusTcpConfig, ObjectId, ReadDeviceIdCode,
-    RegisterResponse, Registers, RequestErrorNotifier, SubRequest, SubRequestParams, TimeKeeper,
-    Transport, TransportType, UnitIdOrSlaveAddr,
+    ClientServices, CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction,
+    DiagnosticsResponse, DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType,
+    FifoQueue, FifoQueueResponse, FileRecordResponse, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig,
+    ModbusTcpConfig, ObjectId, ReadDeviceIdCode, RegisterResponse, Registers, RequestErrorNotifier,
+    SubRequest, SubRequestParams, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
 
 /// Minimal transport used only to demonstrate facade-style API access.
@@ -84,26 +83,77 @@ impl CoilResponse for App {
 
 #[cfg(feature = "registers")]
 impl RegisterResponse for App {
-    fn read_multiple_holding_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
-    fn read_single_holding_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
-    fn read_multiple_input_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
-    fn read_single_input_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn read_multiple_holding_registers_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: &Registers,
+    ) {
+    }
+    fn read_single_holding_register_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: u16,
+    ) {
+    }
+    fn read_multiple_input_registers_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: &Registers,
+    ) {
+    }
+    fn read_single_input_register_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: u16,
+    ) {
+    }
     fn read_single_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn write_single_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn write_multiple_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
-    fn read_write_multiple_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
+    fn read_write_multiple_registers_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: &Registers,
+    ) {
+    }
     fn mask_write_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr) {}
 }
 
 #[cfg(feature = "discrete-inputs")]
 impl DiscreteInputResponse for App {
-    fn read_multiple_discrete_inputs_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &DiscreteInputs) {}
-    fn read_single_discrete_input_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+    fn read_multiple_discrete_inputs_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: &DiscreteInputs,
+    ) {
+    }
+    fn read_single_discrete_input_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: bool,
+    ) {
+    }
 }
 
 #[cfg(feature = "diagnostics")]
 impl DiagnosticsResponse for App {
-    fn read_device_identification_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &DeviceIdentificationResponse) {}
+    fn read_device_identification_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: &DeviceIdentificationResponse,
+    ) {
+    }
     fn encapsulated_interface_transport_response(
         &mut self,
         _: u16,
@@ -113,9 +163,25 @@ impl DiagnosticsResponse for App {
     ) {
     }
     fn read_exception_status_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
-    fn diagnostics_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: DiagnosticSubFunction, _: &[u16]) {}
+    fn diagnostics_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: DiagnosticSubFunction,
+        _: &[u16],
+    ) {
+    }
     fn get_comm_event_counter_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16, _: u16, _: &[u8]) {}
+    fn get_comm_event_log_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: u16,
+        _: u16,
+        _: &[u8],
+    ) {
+    }
     fn report_server_id_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
 }
 
@@ -164,7 +230,9 @@ fn main() -> Result<(), MbusError> {
 
     #[cfg(feature = "registers")]
     {
-        client.registers().read_single_holding_register(10, unit, 0)?;
+        client
+            .registers()
+            .read_single_holding_register(10, unit, 0)?;
         client.with_registers(|registers| {
             registers.write_single_register(11, unit, 0, 1234)?;
             registers.read_input_registers(12, unit, 0, 2)?;
@@ -175,7 +243,9 @@ fn main() -> Result<(), MbusError> {
 
     #[cfg(feature = "discrete-inputs")]
     {
-        client.discrete_inputs().read_single_discrete_input(20, unit, 0)?;
+        client
+            .discrete_inputs()
+            .read_single_discrete_input(20, unit, 0)?;
         client.with_discrete_inputs(|inputs| {
             inputs.read_discrete_inputs(21, unit, 0, 4)?;
             Ok::<(), MbusError>(())
@@ -185,9 +255,12 @@ fn main() -> Result<(), MbusError> {
 
     #[cfg(feature = "diagnostics")]
     {
-        client
-            .diagnostic()
-            .read_device_identification(30, unit, ReadDeviceIdCode::Basic, ObjectId::from(0x00))?;
+        client.diagnostic().read_device_identification(
+            30,
+            unit,
+            ReadDeviceIdCode::Basic,
+            ObjectId::from(0x00),
+        )?;
         client.with_diagnostic(|diag| {
             diag.encapsulated_interface_transport(
                 31,
@@ -214,7 +287,9 @@ fn main() -> Result<(), MbusError> {
     {
         let mut sub_request = SubRequest::new();
         sub_request.add_read_sub_request(1, 0, 1)?;
-        client.file_records().read_file_record(50, unit, &sub_request)?;
+        client
+            .file_records()
+            .read_file_record(50, unit, &sub_request)?;
         client.with_file_records(|files| {
             files.read_file_record(51, unit, &sub_request)?;
             Ok::<(), MbusError>(())

@@ -444,7 +444,8 @@ where
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
-        self.client.read_exception_status(txn_id, unit_id_slave_addr)
+        self.client
+            .read_exception_status(txn_id, unit_id_slave_addr)
     }
 
     /// Forwards to `ClientServices::diagnostics`.
@@ -467,7 +468,8 @@ where
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
-        self.client.get_comm_event_counter(txn_id, unit_id_slave_addr)
+        self.client
+            .get_comm_event_counter(txn_id, unit_id_slave_addr)
     }
 
     /// Forwards to `ClientServices::get_comm_event_log`.
@@ -1063,7 +1065,8 @@ where
                         continue;
                     }
 
-                    expected_response.retries_left = expected_response.retries_left.saturating_sub(1);
+                    expected_response.retries_left =
+                        expected_response.retries_left.saturating_sub(1);
                     expected_response.retry_attempt_index =
                         expected_response.retry_attempt_index.saturating_add(1);
                     expected_response.sent_timestamp = current_millis;
@@ -1203,7 +1206,11 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             .connect(&config)
             .map_err(|_e| MbusError::ConnectionFailed)?;
 
-        client_log_debug!("client created with transport_type={:?}, queue_capacity={}", transport_type, N);
+        client_log_debug!(
+            "client created with transport_type={:?}, queue_capacity={}",
+            transport_type,
+            N
+        );
 
         Ok(Self {
             app,
@@ -1404,6 +1411,7 @@ mod tests {
     use crate::services::file_record::SubRequestParams;
     use crate::services::register::Registers;
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
+    use core::str::FromStr;
     use heapless::Deque;
     use heapless::Vec;
     use mbus_core::errors::MbusError;
@@ -1413,7 +1421,6 @@ mod tests {
         BackoffStrategy, BaudRate, JitterStrategy, ModbusConfig, ModbusSerialConfig,
         ModbusTcpConfig, Parity, SerialMode,
     };
-    use core::str::FromStr;
 
     const MOCK_DEQUE_CAPACITY: usize = 10; // Define a capacity for the mock deques
 
@@ -1849,7 +1856,14 @@ mod tests {
         ) {
         }
 
-        fn get_comm_event_counter_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+        fn get_comm_event_counter_response(
+            &mut self,
+            _: u16,
+            _: UnitIdOrSlaveAddr,
+            _: u16,
+            _: u16,
+        ) {
+        }
 
         fn get_comm_event_log_response(
             &mut self,
