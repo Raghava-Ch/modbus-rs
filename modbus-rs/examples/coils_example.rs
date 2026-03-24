@@ -18,14 +18,14 @@ struct ClientMockApp {
 }
 
 impl CoilResponse for ClientMockApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
+    fn read_coils_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone()))
             .unwrap();
     }
     fn read_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -43,7 +43,7 @@ impl CoilResponse for ClientMockApp {
             .unwrap();
     }
     fn write_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -55,7 +55,7 @@ impl CoilResponse for ClientMockApp {
             .unwrap();
     }
     fn write_multiple_coils_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -69,7 +69,7 @@ impl CoilResponse for ClientMockApp {
 }
 
 impl RequestErrorNotifier for ClientMockApp {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Client: Request failed - txn_id: {}, unit_id: {}, error: {}",
             txn_id,

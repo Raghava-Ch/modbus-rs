@@ -9,7 +9,7 @@ homepage = "https://github.com/Raghava-Ch/modbus-rs"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+description = "Complete Modbus Master and Slave(In future release) embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
 
 [dependencies]
 mbus-core = { workspace = true }
@@ -19,6 +19,9 @@ modbus-client = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 anyhow = "1.0.102"
+
+[dev-dependencies]
+env_logger = "0.11"
 
 [build-dependencies]
 
@@ -49,3 +52,4 @@ discrete-inputs = ["mbus-core/discrete-inputs"]
 fifo = ["mbus-core/fifo"]
 file-record = ["mbus-core/file-record"]
 diagnostics = ["mbus-core/diagnostics"]
+logging = ["mbus-tcp?/logging", "mbus-serial?/logging", "modbus-client?/logging"]

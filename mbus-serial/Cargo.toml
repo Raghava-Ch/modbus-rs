@@ -16,3 +16,8 @@ mbus-core ={ workspace = true }
 
 heapless ={ workspace = true }
 serialport = { version = "4.2.2", default-features = true }
+log = { workspace = true, optional = true }
+
+[features]
+default = []
+logging = ["dep:log"]

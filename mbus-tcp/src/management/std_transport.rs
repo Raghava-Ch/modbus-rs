@@ -6,6 +6,48 @@ use heapless::Vec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{ModbusConfig, Transport, TransportError, TransportType};
 
+#[cfg(feature = "logging")]
+macro_rules! transport_log_error {
+    ($($arg:tt)*) => {
+        log::error!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! transport_log_error {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
+#[cfg(feature = "logging")]
+macro_rules! transport_log_warn {
+    ($($arg:tt)*) => {
+        log::warn!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! transport_log_warn {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
+#[cfg(feature = "logging")]
+macro_rules! transport_log_debug {
+    ($($arg:tt)*) => {
+        log::debug!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! transport_log_debug {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
 /// A concrete implementation of `ModbusTcpTransport` using `std::net::TcpStream`.
 ///
 /// This struct manages a standard TCP connection for Modbus TCP communication.
@@ -70,17 +112,17 @@ impl Transport for StdTcpTransport {
         let mut addrs_iter = (config.host.as_str(), config.port)
             .to_socket_addrs()
             .map_err(|e| {
-                eprintln!("DNS resolution failed: {:?}", e);
+                transport_log_error!("DNS resolution failed: {:?}", e);
                 TransportError::ConnectionFailed
             })?;
 
         // Take only the first address, as per the requirement for a single connection.
         let addr = addrs_iter.next().ok_or_else(|| {
-            eprintln!("No valid address found for host:port combination.");
+            transport_log_error!("No valid address found for host:port combination.");
             TransportError::ConnectionFailed
         })?;
 
-        eprintln!("Trying address: {:?}", addr);
+        transport_log_debug!("Trying address: {:?}", addr);
 
         match TcpStream::connect_timeout(&addr, connection_timeout) {
             Ok(stream) => {
@@ -88,19 +130,19 @@ impl Transport for StdTcpTransport {
                 // Errors are logged but not propagated to avoid disrupting the connection flow.
                 stream
                     .set_read_timeout(Some(response_timeout))
-                    .unwrap_or_else(|e| eprintln!("Failed to set read timeout: {:?}", e));
+                    .unwrap_or_else(|e| transport_log_warn!("Failed to set read timeout: {:?}", e));
                 stream
                     .set_write_timeout(Some(response_timeout))
-                    .unwrap_or_else(|e| eprintln!("Failed to set write timeout: {:?}", e));
+                    .unwrap_or_else(|e| transport_log_warn!("Failed to set write timeout: {:?}", e));
                 stream
                     .set_nodelay(true)
-                    .unwrap_or_else(|e| eprintln!("Failed to set no-delay: {:?}", e));
+                    .unwrap_or_else(|e| transport_log_warn!("Failed to set no-delay: {:?}", e));
 
                 self.stream = Some(stream); // Store the connected stream
                 Ok(()) // Connection successful
             }
             Err(e) => {
-                eprintln!("Connect failed: {:?}", e);
+                transport_log_error!("Connect failed: {:?}", e);
                 Err(TransportError::ConnectionFailed) // Connection failed for this single address
             }
         }

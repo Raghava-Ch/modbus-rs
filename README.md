@@ -67,6 +67,7 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | `fifo` | FIFO queue services |
 | `file-record` | File record read/write services |
 | `diagnostics` | Diagnostic and device identification services |
+| `logging` | Enables `log` facade instrumentation in `mbus-tcp` and `mbus-serial` |
 
 Default: all flags are enabled.
 
@@ -207,6 +208,38 @@ When `retry_random_fn` is `None`, jitter is skipped and the base delay is used a
 
 See [documentation/feature_flags.md](documentation/feature_flags.md) or the [tcp_backoff_jitter_example](modbus-rs/examples/tcp_backoff_jitter_example.rs) and [serial_rtu_backoff_jitter_example](modbus-rs/examples/serial_rtu_backoff_jitter_example.rs) for full runnable examples.
 
+## Logging
+
+The workspace now uses the `log` facade for transport diagnostics instead of writing directly to stderr.
+
+- Logging is optional and enabled with the `logging` feature.
+- The crate remains `no_std` compatible because `log` is used as a facade and does not require a logger backend at compile time.
+- Your application selects and initializes a logger implementation (for example `env_logger` on std targets).
+- Transport diagnostics use `debug`/`warn`/`error`.
+- Internal `modbus-client` state-machine diagnostics use low-priority `debug`/`trace` events so they remain filterable.
+
+Enable logging with TCP only:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.1.0", default-features = false, features = [
+    "tcp",
+    "logging"
+] }
+```
+
+Run the logging example:
+
+```bash
+RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+```
+
+Filter only client internals at low priority:
+
+```bash
+RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+```
+
 ## Examples
 
 All examples live in [`modbus-rs/examples/`](modbus-rs/examples/) and are run from the workspace root.
@@ -220,6 +253,7 @@ cargo run -p modbus-rs --example discrete_inputs_example -- 192.168.1.10 502 1
 cargo run -p modbus-rs --example device_id_example -- 192.168.1.10 502 1
 cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
 cargo run -p modbus-rs --example tcp_backoff_jitter_example -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
 ```
 
 ### Serial RTU

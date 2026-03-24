@@ -16,7 +16,7 @@ struct ClientApp;
 
 impl DiagnosticsResponse for ClientApp {
     fn read_device_identification_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         response: &DeviceIdentificationResponse,
@@ -45,7 +45,7 @@ impl DiagnosticsResponse for ClientApp {
     }
 
     fn encapsulated_interface_transport_response(
-        &self,
+        &mut self,
         _: u16,
         _: UnitIdOrSlaveAddr,
         _: EncapsulatedInterfaceType,
@@ -53,16 +53,16 @@ impl DiagnosticsResponse for ClientApp {
     ) {
     }
     fn diagnostics_response(
-        &self,
+        &mut self,
         _: u16,
         _: UnitIdOrSlaveAddr,
         _: DiagnosticSubFunction,
         _: &[u16],
     ) {
     }
-    fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn get_comm_event_counter_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn get_comm_event_log_response(
-        &self,
+        &mut self,
         _: u16,
         _: UnitIdOrSlaveAddr,
         _: u16,
@@ -71,12 +71,12 @@ impl DiagnosticsResponse for ClientApp {
         _: &[u8],
     ) {
     }
-    fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
-    fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
+    fn read_exception_status_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
+    fn report_server_id_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
 }
 
 impl RequestErrorNotifier for ClientApp {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
             txn_id,
