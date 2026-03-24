@@ -1,5 +1,5 @@
 [package]
-name = "modbus-ffi"
+name = "mbus-ffi"
 version = "0.0.1"
 edition.workspace = true
 authors.workspace = true
