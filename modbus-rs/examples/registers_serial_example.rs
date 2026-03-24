@@ -1,8 +1,8 @@
 use anyhow::Result;
 use modbus_rs::{
-    BackoffStrategy, BaudRate, ClientServices, DataBits, JitterStrategy, MbusError,
-    ModbusConfig, ModbusSerialConfig, Parity, RegisterResponse, Registers,
-    RequestErrorNotifier, SerialMode, StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, ClientServices, DataBits, JitterStrategy, MbusError, ModbusConfig,
+    ModbusSerialConfig, Parity, RegisterResponse, Registers, RequestErrorNotifier, SerialMode,
+    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -167,7 +167,9 @@ fn main() -> Result<()> {
 
     // 1. Write Single Register
     println!("\n[1] Sending Write Single Register (Addr: 10, Val: 1234)...");
-    client.registers().write_single_register(1, target_unit_id, 10, 1234)
+    client
+        .registers()
+        .write_single_register(1, target_unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -176,7 +178,9 @@ fn main() -> Result<()> {
 
     // 2. Read Holding Registers
     println!("\n[2] Sending Read Holding Registers (Addr: 10, Qty: 5)...");
-    client.registers().read_holding_registers(2, target_unit_id, 10, 5)
+    client
+        .registers()
+        .read_holding_registers(2, target_unit_id, 10, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -185,7 +189,9 @@ fn main() -> Result<()> {
 
     // 3. Read Input Registers
     println!("\n[3] Sending Read Input Registers (Addr: 0, Qty: 5)...");
-    client.registers().read_input_registers(3, target_unit_id, 0, 5)
+    client
+        .registers()
+        .read_input_registers(3, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

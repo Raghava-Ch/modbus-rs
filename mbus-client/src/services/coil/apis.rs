@@ -57,7 +57,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address, // Starting address of the read operation
+                address,  // Starting address of the read operation
                 quantity, // Number of coils to read
             }),
             Self::handle_read_coils_response,
@@ -115,7 +115,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address, // Address of the single coil
+                address,  // Address of the single coil
                 value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_coils_response,
@@ -175,7 +175,7 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Single(Single {
-                    address, // Address of the coil
+                    address,             // Address of the coil
                     value: value as u16, // Value written (0x0000 or 0xFF00)
                 }),
                 Self::handle_write_single_coil_response,
@@ -236,7 +236,7 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Multiple(Multiple {
-                    address, // Starting address of the coils
+                    address,                     // Starting address of the coils
                     quantity: values.quantity(), // Number of coils written
                 }),
                 Self::handle_write_multiple_coils_response,

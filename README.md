@@ -21,7 +21,7 @@ The workspace is split into focused crates:
 | Crate | Role |
 |---|---|
 | [`mbus-core`](mbus-core/) | Shared protocol types, transport trait, config, errors, data models |
-| [`modbus-client`](modbus-client/) | Client state machine, request/response orchestration, all function-code services |
+| [`mbus-client`](mbus-client/) | Client state machine, request/response orchestration, all function-code services |
 | [`mbus-tcp`](mbus-tcp/) | Concrete TCP transport (`StdTcpTransport`) using `std::net::TcpStream` |
 | [`mbus-serial`](mbus-serial/) | Concrete serial transport (`StdSerialTransport`) using the `serialport` crate |
 | [`modbus-rs`](modbus-rs/) | Top-level convenience crate — re-exports everything behind feature flags |
@@ -42,7 +42,7 @@ Minimal TCP client with coil support only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
     "client",
     "tcp",
     "coils"
@@ -57,7 +57,7 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 
 | Flag | Enables |
 |---|---|
-| `client` | `modbus-client` — request/response services |
+| `client` | `mbus-client` — request/response services |
 | `tcp` | `mbus-tcp` — standard Modbus TCP transport |
 | `serial-rtu` | `mbus-serial` for RTU framing |
 | `serial-ascii` | `mbus-serial` for ASCII framing |
@@ -216,13 +216,13 @@ The workspace now uses the `log` facade for transport diagnostics instead of wri
 - The crate remains `no_std` compatible because `log` is used as a facade and does not require a logger backend at compile time.
 - Your application selects and initializes a logger implementation (for example `env_logger` on std targets).
 - Transport diagnostics use `debug`/`warn`/`error`.
-- Internal `modbus-client` state-machine diagnostics use low-priority `debug`/`trace` events so they remain filterable.
+- Internal `mbus-client` state-machine diagnostics use low-priority `debug`/`trace` events so they remain filterable.
 
 Enable logging with TCP only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
     "tcp",
     "logging"
 ] }
@@ -237,7 +237,7 @@ RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-fea
 Filter only client internals at low priority:
 
 ```bash
-RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
 ## Examples
@@ -279,7 +279,7 @@ The client follows the Modbus TCP Client Activity Diagram from the Modbus TCP/IP
 ```
 ┌──────────────┐      ┌─────────────────────┐       ┌──────────────────┐
 │  Your App    │─────▶│  ClientServices     │──────▶│  Transport trait │
-│              │      │  (modbus-client)    │       │  (mbus-tcp /     │
+│              │      │  (mbus-client)      │       │  (mbus-tcp /     │
 │  poll() loop │◀─────│  request queue,     │       │   mbus-serial)   │
 │  callbacks   │      │  retry scheduler,   │       └──────────────────┘
 │  TimeKeeper  │      │  timeout tracking   │
@@ -314,7 +314,7 @@ cargo check --workspace
 cargo test --workspace
 
 # Run only client unit tests
-cargo test -p modbus-client
+cargo test -p mbus-client
 
 # Run integration tests
 cargo test -p integration_tests

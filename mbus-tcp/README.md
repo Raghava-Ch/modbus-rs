@@ -1,6 +1,6 @@
 # mbus-tcp
 
-`mbus-tcp`  is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs)..
+`mbus-tcp` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
 It provides a standard Modbus TCP transport implementation that plugs into the
 shared transport abstractions from `mbus-core`.
@@ -17,7 +17,7 @@ If you need direct transport-level control, use `mbus-tcp` directly.
 - Maps I/O failures into `TransportError`.
 
 This crate does not implement request orchestration or function-code services.
-That logic is provided by `modbus-client`.
+That logic is provided by `mbus-client`.
 
 ## What Is Included
 
@@ -81,7 +81,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-tcp = { version = "0.1.0", features = ["logging"] }
+mbus-tcp = { version = "0.2.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -93,11 +93,11 @@ env_logger = "0.11"
 
 ## Typical Integration Pattern
 
-In most applications, `mbus-tcp` is used together with `modbus-client`:
+In most applications, `mbus-tcp` is used together with `mbus-client`:
 
 1. Build `ModbusConfig::Tcp(...)`.
 2. Instantiate `StdTcpTransport`.
-3. Pass transport into `ClientServices` from `modbus-client`.
+3. Pass transport into `ClientServices` from `mbus-client`.
 4. Use client services to issue function-code operations.
 
 ## License

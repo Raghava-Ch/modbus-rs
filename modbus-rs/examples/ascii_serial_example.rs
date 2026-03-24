@@ -144,7 +144,9 @@ fn main() -> Result<()> {
 
     // 1. Read Coils
     println!("\n[1] Sending Read Coils (Addr: 0, Qty: 5)...");
-    client.coils().read_multiple_coils(1, target_unit_id, 0, 5)
+    client
+        .coils()
+        .read_multiple_coils(1, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
 
     for _ in 0..5 {

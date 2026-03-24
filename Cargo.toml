@@ -5,28 +5,31 @@ members = [
     "mbus-tcp",
     "modbus-rs",
     "integration_tests",
-    "modbus-client",
+    "mbus-client",
+    "mbus-async",
+    "mbus-ffi",
+    "mbus-server",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
-license-file = "LICENSE"
+license = "GPL-3.0-only"
 repository = "https://github.com/Raghava-Ch/modbus-rs"
 homepage = "https://github.com/Raghava-Ch"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Complete Modbus Master and Slave(In future release) embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+description = "Modbus client stack for embedded and std environments with TCP, RTU, and ASCII transport support"
 
 [workspace.dependencies]
 # Shared dependencies across workspace
-mbus-core = { path = "./mbus-core" }
-mbus-serial = { path = "./mbus-serial" }
-mbus-tcp = { path = "./mbus-tcp" }
-modbus-client = { path = "./modbus-client" }
+mbus-core = { version = "0.2.0", path = "./mbus-core" }
+mbus-serial = { version = "0.2.0", path = "./mbus-serial" }
+mbus-tcp = { version = "0.2.0", path = "./mbus-tcp" }
+mbus-client = { version = "0.2.0", path = "./mbus-client" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }

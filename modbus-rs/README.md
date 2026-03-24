@@ -14,7 +14,7 @@ binary size.
 It brings together:
 
 - `mbus-core` for shared protocol types and transport abstractions
-- `modbus-client` for client-side request/response orchestration
+- `mbus-client` for client-side request/response orchestration
 - `mbus-tcp` for standard TCP transport
 - `mbus-serial` for standard Serial RTU/ASCII transport
 
@@ -28,14 +28,14 @@ Depending on enabled features, this crate re-exports:
 - all public items from `mbus-core`
 - all public items from `mbus-tcp`
 - all public items from `mbus-serial`
-- the `modbus_client` crate
+- the `mbus_client` crate
 - `heapless`
 
 ## Feature Flags
 
 Top-level features:
 
-- `client`: enables `modbus-client`
+- `client`: enables `mbus-client`
 - `serial-rtu`: enables `mbus-serial` for RTU transport use cases
 - `serial-ascii`: enables `mbus-serial` for ASCII transport use cases
 - `tcp`: enables `mbus-tcp`
@@ -55,7 +55,7 @@ Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -71,7 +71,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.2.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -88,7 +88,7 @@ modbus-rs = "0.1.0"
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
@@ -197,7 +197,7 @@ cargo run -p modbus-rs --example ascii_serial_example --no-default-features --fe
 
 - `modbus-rs`: top-level convenience crate
 - `mbus-core`: shared protocol and transport abstractions
-- `modbus-client`: client state machine and service modules
+- `mbus-client`: client state machine and service modules
 - `mbus-tcp`: standard TCP transport helper crate
 - `mbus-serial`: standard serial transport helper crate
 

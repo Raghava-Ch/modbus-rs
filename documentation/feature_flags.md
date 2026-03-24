@@ -14,7 +14,7 @@ Feature flags help you:
 The `modbus-rs` crate is the main entry point and re-exports sub-crates.
 
 Defined features:
-- `client`: Enables `modbus-client`.
+- `client`: Enables `mbus-client`.
 - `serial-rtu`: Enables `mbus-serial` for RTU usage.
 - `serial-ascii`: Enables `mbus-serial` for ASCII usage.
 - `tcp`: Enables `mbus-tcp`.
@@ -29,7 +29,7 @@ Defined features:
 Default behavior:
 - `default` currently enables: `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features above.
 
-## Client Crate (`modbus-client`)
+## Client Crate (`mbus-client`)
 
 Defined features:
 - `coils`
@@ -74,7 +74,7 @@ modbus-rs = "0.1.0"
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -85,7 +85,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers",
@@ -97,7 +97,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "diagnostics"
@@ -108,7 +108,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "tcp",
   "diagnostics"
@@ -119,7 +119,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "tcp",
   "logging"
 ] }
@@ -155,7 +155,7 @@ Logging coverage:
 
 - `mbus-tcp`: transport connection and socket diagnostics
 - `mbus-serial`: serial transport diagnostics
-- `modbus-client`: low-priority internal state-machine events (`debug`/`trace`), such as frame resync, retry scheduling, timeout handling, and connection-loss flushing
+- `mbus-client`: low-priority internal state-machine events (`debug`/`trace`), such as frame resync, retry scheduling, timeout handling, and connection-loss flushing
 
 Typical std setup:
 
@@ -177,7 +177,7 @@ RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-fea
 Filter only internal client state-machine logs:
 
 ```bash
-RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
 ## Notes About Feature Names
@@ -227,7 +227,7 @@ Important operational model:
 
 ## Reconnect and Serial Constructor APIs
 
-`modbus-client` now provides additional operational APIs:
+`mbus-client` now provides additional operational APIs:
 
 - `ClientServices::is_connected()`
 - `ClientServices::reconnect()`

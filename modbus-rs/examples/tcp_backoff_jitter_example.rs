@@ -1,8 +1,7 @@
 use anyhow::Result;
 use modbus_rs::{
-    BackoffStrategy, ClientServices, CoilResponse, Coils, JitterStrategy, MbusError,
-    ModbusConfig, ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper,
-    UnitIdOrSlaveAddr,
+    BackoffStrategy, ClientServices, CoilResponse, Coils, JitterStrategy, MbusError, ModbusConfig,
+    ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -87,8 +86,7 @@ fn main() -> Result<()> {
     tcp_config.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
     tcp_config.retry_random_fn = Some(app_random_u32);
 
-    let mut client =
-        ClientServices::<_, _, 8>::new(transport, app, ModbusConfig::Tcp(tcp_config))?;
+    let mut client = ClientServices::<_, _, 8>::new(transport, app, ModbusConfig::Tcp(tcp_config))?;
 
     let unit = UnitIdOrSlaveAddr::new(unit_id)?;
     client.coils().read_multiple_coils(1, unit, 0, 8)?;

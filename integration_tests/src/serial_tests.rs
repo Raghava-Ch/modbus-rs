@@ -1,10 +1,10 @@
 use anyhow::Result;
 use heapless::Vec as HVec;
 use modbus_rs::{
-    BackoffStrategy, BaudRate, ClientServices, ConformityLevel, DataBits,
-    DiagnosticSubFunction, JitterStrategy, MbusError, MAX_ADU_FRAME_LEN, ModbusConfig,
-    ModbusSerialConfig, ObjectId, Parity, ReadDeviceIdCode, SerialMode, Transport,
-    TransportError, TransportType, UnitIdOrSlaveAddr, crc16,
+    crc16, BackoffStrategy, BaudRate, ClientServices, ConformityLevel, DataBits,
+    DiagnosticSubFunction, JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, ObjectId,
+    Parity, ReadDeviceIdCode, SerialMode, Transport, TransportError, TransportType,
+    UnitIdOrSlaveAddr, MAX_ADU_FRAME_LEN,
 };
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 

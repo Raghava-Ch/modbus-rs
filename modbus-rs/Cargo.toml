@@ -1,21 +1,21 @@
 [package]
 name = "modbus-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
-license-file = "LICENSE"
+license.workspace = true
 repository = "https://github.com/Raghava-Ch/modbus-rs"
 homepage = "https://github.com/Raghava-Ch/modbus-rs"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Complete Modbus Master and Slave(In future release) embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+description = "High-level Modbus client facade for embedded and std environments with TCP, RTU, and ASCII support"
 
 [dependencies]
 mbus-core = { workspace = true }
 mbus-serial = { workspace = true, optional = true }
 mbus-tcp = { workspace = true, optional = true }
-modbus-client = { workspace = true, optional = true }
+mbus-client = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 anyhow = "1.0.102"
@@ -42,7 +42,7 @@ default = [
     "file-record",
     "diagnostics",
 ]
-client = ["modbus-client"]
+client = ["mbus-client"]
 serial-rtu = ["mbus-serial"]
 serial-ascii = ["mbus-serial", "mbus-core/serial-ascii"]
 tcp = ["mbus-tcp"]
@@ -52,4 +52,4 @@ discrete-inputs = ["mbus-core/discrete-inputs"]
 fifo = ["mbus-core/fifo"]
 file-record = ["mbus-core/file-record"]
 diagnostics = ["mbus-core/diagnostics"]
-logging = ["mbus-tcp?/logging", "mbus-serial?/logging", "modbus-client?/logging"]
+logging = ["mbus-tcp?/logging", "mbus-serial?/logging", "mbus-client?/logging"]

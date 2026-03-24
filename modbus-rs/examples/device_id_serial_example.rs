@@ -1,7 +1,7 @@
 use anyhow::Result;
 use modbus_rs::{
-    BackoffStrategy, BaudRate, ClientServices, DataBits, DiagnosticSubFunction,
-    DiagnosticsResponse, DeviceIdentificationResponse, EncapsulatedInterfaceType, JitterStrategy,
+    BackoffStrategy, BaudRate, ClientServices, DataBits, DeviceIdentificationResponse,
+    DiagnosticSubFunction, DiagnosticsResponse, EncapsulatedInterfaceType, JitterStrategy,
     MbusError, ModbusConfig, ModbusSerialConfig, ObjectId, Parity, ReadDeviceIdCode,
     RequestErrorNotifier, SerialMode, StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
@@ -135,7 +135,9 @@ fn main() -> Result<()> {
 
     // 1. Read Basic Device Identification
     println!("\n[1] Sending Read Device Identification (Basic)...");
-    client.diagnostic().read_device_identification(
+    client
+        .diagnostic()
+        .read_device_identification(
             1,
             target_unit_id,
             ReadDeviceIdCode::Basic,

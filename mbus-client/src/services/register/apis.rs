@@ -55,7 +55,7 @@ where
             &frame,
             OperationMeta::Multiple(Multiple {
                 address: from_address, // Starting address of the read operation
-                quantity, // Number of registers to read
+                quantity,              // Number of registers to read
             }),
             Self::handle_read_holding_registers_response,
         )?;
@@ -117,7 +117,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address, // Address of the single register
+                address,  // Address of the single register
                 value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_holding_registers_response,
@@ -177,7 +177,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address, // Starting address of the read operation
+                address,  // Starting address of the read operation
                 quantity, // Number of registers to read
             }),
             Self::handle_read_input_registers_response,
@@ -234,7 +234,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address, // Address of the single register
+                address,  // Address of the single register
                 value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_input_registers_response,
@@ -427,7 +427,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address: read_address, // Starting address of the read operation
+                address: read_address,   // Starting address of the read operation
                 quantity: read_quantity, // Number of registers to read
             }),
             Self::handle_read_write_multiple_registers_response,
@@ -491,9 +491,9 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Masking(Mask {
-                    address, // Address of the register to mask
+                    address,  // Address of the register to mask
                     and_mask, // AND mask used in the request
-                    or_mask, // OR mask used in the request
+                    or_mask,  // OR mask used in the request
                 }),
                 Self::handle_mask_write_register_response,
             )?;

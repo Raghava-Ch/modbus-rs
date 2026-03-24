@@ -147,11 +147,7 @@ impl DiscreteInputs {
     ///
     /// # Errors
     /// Returns `MbusError::InvalidQuantity` if `bits_length` does not match `self.quantity`.
-    pub fn with_values(
-        mut self,
-        values: &[u8],
-        bits_length: u16,
-    ) -> Result<Self, MbusError> {
+    pub fn with_values(mut self, values: &[u8], bits_length: u16) -> Result<Self, MbusError> {
         if bits_length > self.quantity {
             return Err(MbusError::InvalidQuantity);
         }

@@ -1,6 +1,6 @@
-//! # modbus-client
+//! # mbus-client
 //!
-//! `modbus-client` is a high-level, `no_std` compatible Modbus client implementation.
+//! `mbus-client` is a high-level, `no_std` compatible Modbus client implementation.
 //! It provides a structured way to interact with Modbus servers (slaves) over various
 //! transport layers like TCP, RTU, or ASCII.
 //!
@@ -30,9 +30,9 @@
 //! use mbus_core::errors::MbusError;
 //!
 //! # use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-//! # use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-//! # use modbus_client::services::coil::Coils;
-//! # use modbus_client::services::ClientServices;
+//! # use mbus_client::app::{CoilResponse, RequestErrorNotifier};
+//! # use mbus_client::services::coil::Coils;
+//! # use mbus_client::services::ClientServices;
 //! # use heapless::Vec;
 //! #
 //! # struct YourTransport;
@@ -52,16 +52,16 @@
 //! struct MyDevice;
 //! #[cfg(feature = "coils")]
 //! impl CoilResponse for MyDevice {
-//!     fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
+//!     fn read_coils_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
 //!         // Handle the data here
 //!     }
 //!     // Implement other CoilResponse methods or use default empty implementations if not needed
-//!     fn read_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-//!     fn write_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-//!     fn write_multiple_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+//!     fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+//!     fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+//!     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 //! }
 //! # impl RequestErrorNotifier for MyDevice {
-//! #     fn request_failed(&self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
+//! #     fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 //! # }
 //! # impl TimeKeeper for MyDevice {
 //! #     fn current_millis(&self) -> u64 { 0 }

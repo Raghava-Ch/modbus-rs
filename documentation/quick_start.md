@@ -27,7 +27,7 @@ This enables:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -38,7 +38,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers"
@@ -49,7 +49,7 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.1.0", default-features = false, features = [
+modbus-rs = { version = "0.2.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "coils"
@@ -250,6 +250,6 @@ Use `modbus-rs` if you want a single dependency.
 
 Use helper crates directly when you need lower-level control:
 - `mbus-core` for shared protocol types and transport abstractions
-- `modbus-client` for direct client orchestration access
+- `mbus-client` for direct client orchestration access
 - `mbus-tcp` for direct TCP transport usage
 - `mbus-serial` for direct RTU/ASCII transport usage

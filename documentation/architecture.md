@@ -7,7 +7,7 @@ This document provides a high-level overview of the `modbus-rs` library's archit
 The `modbus-rs` ecosystem is composed of several crates, each with a distinct responsibility:
 
 -   **`mbus-core`**: Provides fundamental Modbus data structures, error types, and the `Transport` trait for abstracting communication layers.
--   **`modbus-client`**: Implements the Modbus client state machine and services for handling various Modbus function codes.
+-   **`mbus-client`**: Implements the Modbus client state machine and services for handling various Modbus function codes.
 -   **`mbus-tcp`**: Provides the standard TCP transport implementation (`StdTcpTransport`).
 -   **`mbus-serial`**: Provides standard Serial transport implementations (`StdSerialTransport`) for RTU/ASCII modes.
 
@@ -103,9 +103,9 @@ The transport layer provides abstractions for transmitting Modbus Application Da
 
 Errors are categorized into `TransportError`, which can be seamlessly converted into the top-level `MbusError` used throughout the crate.
 
-## Client Services (`modbus-client/src/lib.rs`)
+## Client Services (`mbus-client/src/lib.rs`)
 
-The `modbus-client` crate provides the `ClientServices` struct, which acts as the central coordinator for Modbus transactions.
+The `mbus-client` crate provides the `ClientServices` struct, which acts as the central coordinator for Modbus transactions.
 
 ### Responsibilities
 

@@ -51,7 +51,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Multiple(Multiple {
-                address, // Starting address of the read operation
+                address,  // Starting address of the read operation
                 quantity, // Number of discrete inputs to read
             }),
             Self::handle_read_discrete_inputs_response,
@@ -104,7 +104,7 @@ where
             unit_id_slave_addr,
             &frame,
             OperationMeta::Single(Single {
-                address, // Address of the single discrete input
+                address,  // Address of the single discrete input
                 value: 0, // Value is not relevant for read requests
             }),
             Self::handle_read_discrete_inputs_response,

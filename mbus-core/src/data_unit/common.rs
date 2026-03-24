@@ -573,7 +573,7 @@ impl Pdu {
         Self {
             function_code,
             error_code: None, // Default to None for normal responses; can be set for exceptions
-            data,       // Ensure the heapless::Vec is moved here
+            data,             // Ensure the heapless::Vec is moved here
             data_len,
         }
     }

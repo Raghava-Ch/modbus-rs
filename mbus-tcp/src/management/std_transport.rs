@@ -133,7 +133,9 @@ impl Transport for StdTcpTransport {
                     .unwrap_or_else(|e| transport_log_warn!("Failed to set read timeout: {:?}", e));
                 stream
                     .set_write_timeout(Some(response_timeout))
-                    .unwrap_or_else(|e| transport_log_warn!("Failed to set write timeout: {:?}", e));
+                    .unwrap_or_else(|e| {
+                        transport_log_warn!("Failed to set write timeout: {:?}", e)
+                    });
                 stream
                     .set_nodelay(true)
                     .unwrap_or_else(|e| transport_log_warn!("Failed to set no-delay: {:?}", e));

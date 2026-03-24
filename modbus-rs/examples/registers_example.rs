@@ -212,14 +212,18 @@ fn main() -> Result<()> {
     // 1. Write Single Register
     // Writes value 1234 to register at address 10
     println!("\n[1] Sending Write Single Register (Addr: 10, Val: 1234)...");
-    client.registers().write_single_register(1, unit_id, 10, 1234)
+    client
+        .registers()
+        .write_single_register(1, unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll(); // Process response
 
     // 2. Read Single Holding Register
     // Reads back the value from register at address 10
     println!("\n[2] Sending Read Single Holding Register (Addr: 10)...");
-    client.registers().read_single_holding_register(2, unit_id, 10)
+    client
+        .registers()
+        .read_single_holding_register(2, unit_id, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
@@ -227,21 +231,27 @@ fn main() -> Result<()> {
     // Writes values [10, 20, 30, 40, 50] starting at address 20
     println!("\n[3] Sending Write Multiple Registers (Addr: 20, Qty: 5)...");
     let values = [10, 20, 30, 40, 50];
-    client.registers().write_multiple_registers(3, unit_id, 20, 5, &values)
+    client
+        .registers()
+        .write_multiple_registers(3, unit_id, 20, 5, &values)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 4. Read Holding Registers
     // Reads 5 registers starting at address 20
     println!("\n[4] Sending Read Holding Registers (Addr: 20, Qty: 5)...");
-    client.registers().read_holding_registers(4, unit_id, 20, 5)
+    client
+        .registers()
+        .read_holding_registers(4, unit_id, 20, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 5. Read Input Registers
     // Reads 5 input registers starting at address 0
     println!("\n[5] Sending Read Input Registers (Addr: 0, Qty: 5)...");
-    client.registers().read_input_registers(5, unit_id, 0, 5)
+    client
+        .registers()
+        .read_input_registers(5, unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
@@ -249,7 +259,9 @@ fn main() -> Result<()> {
     // Reads 2 registers at 20, and writes [99, 88] to address 30
     println!("\n[6] Sending Read/Write Multiple Registers (Read: 20/2, Write: 30/2)...");
     let write_vals = [99, 88];
-    client.registers().read_write_multiple_registers(6, unit_id, 20, 2, 30, &write_vals)
+    client
+        .registers()
+        .read_write_multiple_registers(6, unit_id, 20, 2, 30, &write_vals)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 

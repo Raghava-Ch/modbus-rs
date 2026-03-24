@@ -1,9 +1,8 @@
 use modbus_rs::{
-    CoilResponse, Coils, DiagnosticSubFunction, DiagnosticsResponse,
-    DeviceIdentificationResponse, DiscreteInputResponse, DiscreteInputs,
-    EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse, FileRecordResponse, MbusError,
-    RegisterResponse, Registers, RequestErrorNotifier, SubRequestParams, TimeKeeper,
-    UnitIdOrSlaveAddr, MAX_DISCRETE_INPUT_BYTES,
+    CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
+    DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse,
+    FileRecordResponse, MbusError, RegisterResponse, Registers, RequestErrorNotifier,
+    SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr, MAX_DISCRETE_INPUT_BYTES,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,8 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec; // Import standard Vec for the type alias
 
 /// Type alias for the complex tuple representing a received encapsulated interface transport response.
-type ReceivedEncapsulatedInterfaceTransportResponse = (u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>);
-
+type ReceivedEncapsulatedInterfaceTransportResponse =
+    (u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>);
 
 #[allow(dead_code)]
 #[derive(Default)]
@@ -24,7 +23,8 @@ pub struct MockApp {
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
     pub received_read_device_id_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DeviceIdentificationResponse)>>,
-    pub received_encapsulated_interface_transport_responses: RefCell<Vec<ReceivedEncapsulatedInterfaceTransportResponse>>,
+    pub received_encapsulated_interface_transport_responses:
+        RefCell<Vec<ReceivedEncapsulatedInterfaceTransportResponse>>,
     pub failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError)>>,
 }
 
@@ -298,5 +298,11 @@ impl DiagnosticsResponse for MockApp {
     ) {
     }
 
-    fn report_server_id_response(&mut self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
+    fn report_server_id_response(
+        &mut self,
+        _txn_id: u16,
+        _unit_id: UnitIdOrSlaveAddr,
+        _data: &[u8],
+    ) {
+    }
 }

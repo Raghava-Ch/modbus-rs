@@ -80,7 +80,12 @@ pub trait RequestErrorNotifier {
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID (TCP) or slave address (Serial).
     /// - `error`: The specific [`MbusError`] variant describing the failure (see above).
-    fn request_failed(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, error: MbusError);
+    fn request_failed(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+    );
 }
 
 /// Trait defining the expected response handling for coil-related Modbus operations.
@@ -229,7 +234,7 @@ pub trait FileRecordResponse {
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
     /// - `data`: A slice containing the sub-request responses. Note that `file_number` and `record_number`
-    /// 
+    ///
     /// are not returned by the server in the response PDU and will be set to 0 in the parameters.
     fn read_file_record_response(
         &mut self,
