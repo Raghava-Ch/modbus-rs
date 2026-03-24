@@ -80,7 +80,7 @@ pub trait RequestErrorNotifier {
     /// - `txn_id`: Transaction ID of the original request.
     /// - `unit_id_slave_addr`: The target Modbus unit ID (TCP) or slave address (Serial).
     /// - `error`: The specific [`MbusError`] variant describing the failure (see above).
-    fn request_failed(&self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, error: MbusError);
+    fn request_failed(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, error: MbusError);
 }
 
 /// Trait defining the expected response handling for coil-related Modbus operations.
@@ -112,7 +112,7 @@ pub trait CoilResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `coils`: A wrapper containing the bit-packed boolean statuses of the requested coils.
     fn read_coils_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         coils: &Coils,
@@ -130,7 +130,7 @@ pub trait CoilResponse {
     /// - `address`: The exact address of the single coil that was read.
     /// - `value`: The boolean state of the coil (`true` = ON, `false` = OFF).
     fn read_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
@@ -149,7 +149,7 @@ pub trait CoilResponse {
     /// - `address`: The address of the coil that was successfully written.
     /// - `value`: The boolean state applied to the coil (`true` = ON, `false` = OFF).
     fn write_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
@@ -168,7 +168,7 @@ pub trait CoilResponse {
     /// - `address`: The starting address where the bulk write began.
     /// - `quantity`: The total number of consecutive coils updated.
     fn write_multiple_coils_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
@@ -186,9 +186,6 @@ pub trait CoilResponse {
 /// - Quantity in the payload may vary between calls depending on device state.
 ///
 /// ## Implementation Guidance
-/// - This trait uses `&self`.
-/// - If your application needs to mutate state in the callback, use interior mutability
-///   (for example `RefCell`, `Cell`, or a mutex abstraction) and keep the callback
 ///   non-blocking because it runs in the `poll()` execution path.
 #[cfg(feature = "fifo")]
 pub trait FifoQueueResponse {
@@ -203,7 +200,7 @@ pub trait FifoQueueResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `fifo_queue`: A `FifoQueue` struct containing the values pulled from the queue.
     fn read_fifo_queue_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         fifo_queue: &FifoQueue,
@@ -513,7 +510,7 @@ pub trait DiagnosticsResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `response`: Extracted device identification strings.
     fn read_device_identification_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         response: &DeviceIdentificationResponse,
@@ -531,7 +528,7 @@ pub trait DiagnosticsResponse {
     /// - `mei_type`: The MEI type returned in the response.
     /// - `data`: The data payload returned in the response.
     fn encapsulated_interface_transport_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         mei_type: EncapsulatedInterfaceType,
@@ -549,7 +546,7 @@ pub trait DiagnosticsResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `status`: The 8-bit exception status code returned by the server.
     fn read_exception_status_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         status: u8,
@@ -567,7 +564,7 @@ pub trait DiagnosticsResponse {
     /// - `sub_function`: The sub-function code confirming the diagnostic test.
     /// - `data`: Data payload returned by the diagnostic test (e.g., echoed loopback data).
     fn diagnostics_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         sub_function: DiagnosticSubFunction,
@@ -586,7 +583,7 @@ pub trait DiagnosticsResponse {
     /// - `status`: The status word indicating if the device is busy.
     /// - `event_count`: The number of successful messages processed by the device.
     fn get_comm_event_counter_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         status: u16,
@@ -607,7 +604,7 @@ pub trait DiagnosticsResponse {
     /// - `message_count`: Quantity of messages processed since the last restart.
     /// - `events`: Raw byte array containing the device's internal event log.
     fn get_comm_event_log_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         status: u16,
@@ -627,7 +624,7 @@ pub trait DiagnosticsResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `data`: Raw identity/status data provided by the manufacturer.
     fn report_server_id_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         data: &[u8],

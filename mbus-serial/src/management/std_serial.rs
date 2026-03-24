@@ -9,6 +9,34 @@ use mbus_core::transport::{
 };
 use serialport::{ClearBuffer, DataBits as SerialPortDataBits, FlowControl, SerialPort, StopBits};
 
+#[cfg(feature = "logging")]
+macro_rules! serial_log_error {
+    ($($arg:tt)*) => {
+        log::error!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! serial_log_error {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
+#[cfg(feature = "logging")]
+macro_rules! serial_log_warn {
+    ($($arg:tt)*) => {
+        log::warn!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! serial_log_warn {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
 /// A concrete implementation of `Transport` for Serial communication using `serialport` crate.
 /// Supports both RTU and ASCII modes.
 #[derive(Debug)]
@@ -115,13 +143,13 @@ impl Transport for StdSerialTransport {
         match builder.open() {
             Ok(port) => {
                 if let Err(e) = port.clear(ClearBuffer::All) {
-                    eprintln!("Warning: Failed to clear serial buffers on connect: {}", e);
+                    serial_log_warn!("Failed to clear serial buffers on connect: {}", e);
                 }
                 self.port = Some(port);
                 Ok(())
             }
             Err(e) => {
-                eprintln!(
+                serial_log_error!(
                     "Failed to open serial port '{}': {}",
                     serial_config.port_path.as_str(),
                     e
@@ -131,21 +159,21 @@ impl Transport for StdSerialTransport {
                 {
                     let error_string = e.to_string().to_lowercase();
                     if error_string.contains("access is denied") {
-                        eprintln!(
+                        serial_log_error!(
                             "Hint: 'Access is denied' on Windows usually means the port is already in use by another application."
                         );
                     }
                     if error_string.contains("the system cannot find the file specified") {
-                        eprintln!(
+                        serial_log_error!(
                             "Hint: 'The system cannot find the file specified' on Windows means the port does not exist. Check available ports."
                         );
                     }
                 }
                 if e.to_string().contains("Not a typewriter") {
-                    eprintln!(
+                    serial_log_error!(
                         "Hint: This error often occurs on macOS when using a pseudo-terminal (pty) created by tools like socat."
                     );
-                    eprintln!(
+                    serial_log_error!(
                         "PTYs may not support setting serial parameters like baud rate. Consider using a physical serial port or a different virtual setup."
                     );
                 }
@@ -178,12 +206,12 @@ impl Transport for StdSerialTransport {
         // transaction. This prevents stale data from being misinterpreted as a response
         // to the new request.
         if let Err(e) = port.clear(ClearBuffer::All) {
-            eprintln!("Warning: Failed to clear serial buffers before send: {}", e);
+            serial_log_warn!("Failed to clear serial buffers before send: {}", e);
             // This is often not a fatal error, so we log it and continue.
         }
 
         port.write_all(adu).map_err(|e| {
-            eprintln!("Serial write_all failed: {}", e);
+            serial_log_error!("Serial write_all failed: {}", e);
             Self::map_io_error(e)
         })?;
 
@@ -197,7 +225,7 @@ impl Transport for StdSerialTransport {
                     // Ignoring this specific error is a workaround for buggy drivers.
                     return Ok(());
                 }
-                eprintln!("Serial flush failed: {}", e);
+                serial_log_error!("Serial flush failed: {}", e);
                 Err(Self::map_io_error(e))
             }
         }
@@ -216,7 +244,7 @@ impl Transport for StdSerialTransport {
 
         // Check how many bytes are available in the RX buffer to ensure non-blocking behavior.
         let bytes_to_read = port.bytes_to_read().map_err(|e| {
-            eprintln!("Failed to check available bytes: {}", e);
+            serial_log_error!("Failed to check available bytes: {}", e);
             TransportError::IoError
         })?;
 

@@ -29,13 +29,13 @@ pub struct MockApp {
 }
 
 impl CoilResponse for MockApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
+    fn read_coils_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         self.received_coil_responses
             .borrow_mut()
             .push((txn_id, unit_id, coils.clone()));
     }
     fn read_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -49,7 +49,7 @@ impl CoilResponse for MockApp {
     }
 
     fn write_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -61,7 +61,7 @@ impl CoilResponse for MockApp {
     }
 
     fn write_multiple_coils_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -112,7 +112,7 @@ impl DiscreteInputResponse for MockApp {
 }
 
 impl RequestErrorNotifier for MockApp {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         self.failed_requests
             .borrow_mut()
             .push((txn_id, unit_id, error));
@@ -203,7 +203,7 @@ impl RegisterResponse for MockApp {
 
 impl FifoQueueResponse for MockApp {
     fn read_fifo_queue_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _fifo_queue: &FifoQueue,
@@ -237,7 +237,7 @@ impl FileRecordResponse for MockApp {
 
 impl DiagnosticsResponse for MockApp {
     fn read_device_identification_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         response: &DeviceIdentificationResponse,
@@ -250,7 +250,7 @@ impl DiagnosticsResponse for MockApp {
     }
 
     fn encapsulated_interface_transport_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         mei_type: EncapsulatedInterfaceType,
@@ -262,7 +262,7 @@ impl DiagnosticsResponse for MockApp {
     }
 
     fn read_exception_status_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u8,
@@ -270,7 +270,7 @@ impl DiagnosticsResponse for MockApp {
     }
 
     fn diagnostics_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _sub_function: DiagnosticSubFunction,
@@ -279,7 +279,7 @@ impl DiagnosticsResponse for MockApp {
     }
 
     fn get_comm_event_counter_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u16,
@@ -288,7 +288,7 @@ impl DiagnosticsResponse for MockApp {
     }
 
     fn get_comm_event_log_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u16,
@@ -298,5 +298,5 @@ impl DiagnosticsResponse for MockApp {
     ) {
     }
 
-    fn report_server_id_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
+    fn report_server_id_response(&mut self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
 }

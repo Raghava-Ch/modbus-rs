@@ -24,6 +24,7 @@ Defined features:
 - `fifo`: Enables FIFO queue model/service support.
 - `file-record`: Enables file record model/service support.
 - `diagnostics`: Enables diagnostics and device identification support.
+- `logging`: Enables `log` facade diagnostics in `mbus-tcp` and `mbus-serial`.
 
 Default behavior:
 - `default` currently enables: `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features above.
@@ -114,6 +115,16 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 ] }
 ```
 
+### 6) TCP build with logging enabled
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.1.0", default-features = false, features = [
+  "tcp",
+  "logging"
+] }
+```
+
 ## CLI Build Examples
 
 From the workspace root:
@@ -130,6 +141,43 @@ cargo check --no-default-features --features client,serial-rtu,registers,discret
 
 # Build only client + ASCII serial + diagnostics
 cargo check --no-default-features --features client,serial-ascii,diagnostics
+
+# Build only TCP transport + logging
+cargo check --no-default-features --features tcp,logging
+```
+
+## Logging Setup
+
+`logging` only enables instrumentation points via the `log` facade. Your application
+must initialize a logger backend to see output.
+
+Logging coverage:
+
+- `mbus-tcp`: transport connection and socket diagnostics
+- `mbus-serial`: serial transport diagnostics
+- `modbus-client`: low-priority internal state-machine events (`debug`/`trace`), such as frame resync, retry scheduling, timeout handling, and connection-loss flushing
+
+Typical std setup:
+
+```toml
+[dependencies]
+env_logger = "0.11"
+```
+
+```rust
+env_logger::init();
+```
+
+Then run with a log level (example):
+
+```bash
+RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+```
+
+Filter only internal client state-machine logs:
+
+```bash
+RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
 ## Notes About Feature Names

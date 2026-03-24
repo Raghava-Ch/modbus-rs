@@ -45,6 +45,7 @@ Top-level features:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `logging`: enables `log` facade diagnostics in `mbus-tcp` and `mbus-serial`
 
 Default behavior:
 
@@ -62,6 +63,17 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 ```
 
 For more feature combinations, see [documentation/feature_flags.md](../documentation/feature_flags.md).
+
+### Logging Setup
+
+The `logging` feature enables instrumentation points through the `log` facade.
+To see output, initialize a logger backend in your application (for example `env_logger`).
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.1.0", default-features = false, features = ["tcp", "logging"] }
+env_logger = "0.11"
+```
 
 ## Quick Start
 
@@ -152,6 +164,7 @@ fn main() -> Result<(), MbusError> {
 - [device_id_example.rs](examples/device_id_example.rs)
 - [feature_facades_showcase.rs](examples/feature_facades_showcase.rs)
 - [tcp_backoff_jitter_example.rs](examples/tcp_backoff_jitter_example.rs)
+- [logging_example.rs](examples/logging_example.rs)
 
 ### Serial RTU examples
 
@@ -171,6 +184,7 @@ Run examples from the workspace root:
 # TCP
 cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
 cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
 
 # Serial RTU
 cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils

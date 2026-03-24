@@ -42,6 +42,34 @@ use mbus_core::{
     transport::{ModbusConfig, ModbusSerialConfig, TimeKeeper, Transport, TransportType},
 };
 
+#[cfg(feature = "logging")]
+macro_rules! client_log_debug {
+    ($($arg:tt)*) => {
+        log::debug!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! client_log_debug {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
+#[cfg(feature = "logging")]
+macro_rules! client_log_trace {
+    ($($arg:tt)*) => {
+        log::trace!($($arg)*)
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+macro_rules! client_log_trace {
+    ($($arg:tt)*) => {{
+        let _ = core::format_args!($($arg)*);
+    }};
+}
+
 type ResponseHandler<T, A, const N: usize> =
     fn(&mut ClientServices<T, A, N>, &ExpectedResponse<T, A, N>, &ModbusMessage);
 
@@ -770,12 +798,32 @@ where
             // Deliberately use O(1) removal. Request matching uses txn/unit id,
             // so stable queue order is not required for correctness.
             Some(i) => self.expected_responses.swap_remove(i),
-            None => return,
+            None => {
+                client_log_debug!(
+                    "dropping unmatched response: txn_id={}, unit_id_or_slave_addr={}",
+                    txn_id,
+                    unit_id_or_slave_addr.get()
+                );
+                return;
+            }
         };
+
+        client_log_trace!(
+            "dispatching response: txn_id={}, unit_id_or_slave_addr={}, queue_len_after_pop={}",
+            txn_id,
+            unit_id_or_slave_addr.get(),
+            self.expected_responses.len()
+        );
 
         // If the Modbus server replied with an exception, notify the application layer
         // immediately instead of attempting to parse it as a successful response.
         if let Some(exception_code) = message.pdu().error_code() {
+            client_log_debug!(
+                "modbus exception response: txn_id={}, unit_id_or_slave_addr={}, code=0x{:02X}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                exception_code
+            );
             self.app.request_failed(
                 txn_id,
                 unit_id_or_slave_addr,
@@ -844,8 +892,13 @@ where
         // 1. Attempt to receive a frame
         match self.transport.recv() {
             Ok(frame) => {
+                client_log_trace!("received {} transport bytes", frame.len());
                 if self.rxed_frame.extend_from_slice(frame.as_slice()).is_err() {
                     // Buffer overflowed without forming a valid frame. Must be noise.
+                    client_log_debug!(
+                        "received frame buffer overflow while appending {} bytes; clearing receive buffer",
+                        frame.len()
+                    );
                     self.rxed_frame.clear();
                 }
 
@@ -853,6 +906,11 @@ where
                 while !self.rxed_frame.is_empty() {
                     match self.ingest_frame() {
                         Ok(consumed) => {
+                            client_log_trace!(
+                                "ingested complete frame consuming {} bytes from rx buffer len {}",
+                                consumed,
+                                self.rxed_frame.len()
+                            );
                             let len = self.rxed_frame.len();
                             if consumed < len {
                                 // Shift array to the left to drain processed bytes.
@@ -864,10 +922,19 @@ where
                         }
                         Err(MbusError::BufferTooSmall) => {
                             // Reached an incomplete frame, break and wait for more bytes
+                            client_log_trace!(
+                                "incomplete frame in rx buffer; waiting for more bytes (buffer_len={})",
+                                self.rxed_frame.len()
+                            );
                             break;
                         }
-                        Err(_) => {
+                        Err(err) => {
                             // Garbage or parsing error, drop the first byte and try again to resync the stream
+                            client_log_debug!(
+                                "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
+                                err,
+                                self.rxed_frame.len()
+                            );
                             let len = self.rxed_frame.len();
                             if len > 1 {
                                 self.rxed_frame.copy_within(1.., 0);
@@ -890,9 +957,16 @@ where
                 ) || !self.transport.is_connected();
 
                 if is_connection_loss {
+                    client_log_debug!(
+                        "connection loss detected during poll: error={:?}, pending_requests={}",
+                        recv_error,
+                        self.expected_responses.len()
+                    );
                     self.fail_all_pending_requests(MbusError::ConnectionLost);
                     let _ = self.transport.disconnect();
                     self.rxed_frame.clear();
+                } else {
+                    client_log_trace!("non-fatal recv status during poll: {:?}", recv_error);
                 }
             }
         }
@@ -902,6 +976,12 @@ where
     }
 
     fn fail_all_pending_requests(&mut self, error: MbusError) {
+        let pending_count = self.expected_responses.len();
+        client_log_debug!(
+            "failing {} pending request(s) with error {:?}",
+            pending_count,
+            error
+        );
         while let Some(response) = self.expected_responses.pop() {
             self.app.request_failed(
                 response.txn_id,
@@ -938,6 +1018,11 @@ where
         if let Some(check_at) = self.next_timeout_check
             && current_millis < check_at
         {
+            client_log_trace!(
+                "skipping timeout scan until {}, current_millis={}",
+                check_at,
+                current_millis
+            );
             return;
         }
 
@@ -954,10 +1039,22 @@ where
             // First, process already-scheduled retries.
             if let Some(retry_at) = expected_response.next_retry_timestamp {
                 if current_millis >= retry_at {
+                    client_log_debug!(
+                        "retry due now: txn_id={}, unit_id_or_slave_addr={}, retry_attempt_index={}, retries_left={}",
+                        expected_response.txn_id,
+                        expected_response.unit_id_or_slave_addr,
+                        expected_response.retry_attempt_index.saturating_add(1),
+                        expected_response.retries_left
+                    );
                     if let Err(_e) = self.transport.send(&expected_response.original_adu) {
                         // Deliberately O(1): response identity is carried in the payload,
                         // not by queue position, so preserving insertion order is unnecessary.
                         let response = expected_responses.swap_remove(i);
+                        client_log_debug!(
+                            "retry send failed: txn_id={}, unit_id_or_slave_addr={}; dropping request",
+                            response.txn_id,
+                            response.unit_id_or_slave_addr
+                        );
                         self.app.request_failed(
                             response.txn_id,
                             UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
@@ -997,6 +1094,11 @@ where
                     // Deliberately O(1): timeout handling keys off txn/unit id and
                     // does not rely on stable ordering inside expected_responses.
                     let response = expected_responses.swap_remove(i);
+                    client_log_debug!(
+                        "request exhausted retries: txn_id={}, unit_id_or_slave_addr={}",
+                        response.txn_id,
+                        response.unit_id_or_slave_addr
+                    );
                     self.app.request_failed(
                         response.txn_id,
                         UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
@@ -1010,10 +1112,22 @@ where
                 let retry_delay_ms = retry_jitter.apply(base_delay_ms, retry_random_fn) as u64;
                 let retry_at = current_millis.saturating_add(retry_delay_ms);
                 expected_response.next_retry_timestamp = Some(retry_at);
+                client_log_debug!(
+                    "scheduling retry: txn_id={}, unit_id_or_slave_addr={}, next_attempt={}, delay_ms={}, retry_at={}",
+                    expected_response.txn_id,
+                    expected_response.unit_id_or_slave_addr,
+                    next_attempt,
+                    retry_delay_ms,
+                    retry_at
+                );
 
                 // If delay is zero (Immediate strategy), process the newly scheduled retry
                 // in this same poll cycle without waiting for another call to `poll`.
                 if retry_delay_ms == 0 {
+                    client_log_trace!(
+                        "retry delay is zero; retry will be processed in the same poll cycle for txn_id={}",
+                        expected_response.txn_id
+                    );
                     continue;
                 }
 
@@ -1045,6 +1159,12 @@ where
         operation_meta: OperationMeta,
         handler: ResponseHandler<TRANSPORT, APP, N>,
     ) -> Result<(), MbusError> {
+        client_log_trace!(
+            "queueing expected response: txn_id={}, unit_id_or_slave_addr={}, queue_len_before={}",
+            txn_id,
+            unit_id_slave_addr.get(),
+            self.expected_responses.len()
+        );
         self.expected_responses
             .push(ExpectedResponse {
                 txn_id,
@@ -1083,6 +1203,8 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             .connect(&config)
             .map_err(|_e| MbusError::ConnectionFailed)?;
 
+        client_log_debug!("client created with transport_type={:?}, queue_capacity={}", transport_type, N);
+
         Ok(Self {
             app,
             transport,
@@ -1120,6 +1242,10 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     where
         TRANSPORT::Error: Into<MbusError>,
     {
+        client_log_debug!(
+            "reconnect requested; pending_requests={}",
+            self.expected_responses.len()
+        );
         self.fail_all_pending_requests(MbusError::ConnectionLost);
         self.rxed_frame.clear();
         self.next_timeout_check = None;
@@ -1157,6 +1283,8 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             .connect(&config)
             .map_err(|_e| MbusError::ConnectionFailed)?;
 
+        client_log_debug!("serial client created with queue_capacity={}", N);
+
         Ok(Self {
             app,
             transport,
@@ -1188,12 +1316,25 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         let frame = self.rxed_frame.as_slice();
         let transport_type = self.transport.transport_type();
 
+        client_log_trace!(
+            "attempting frame ingest: transport_type={:?}, buffer_len={}",
+            transport_type,
+            frame.len()
+        );
+
         let expected_length = match derive_length_from_bytes(frame, transport_type) {
             Some(len) => len,
             None => return Err(MbusError::BufferTooSmall),
         };
 
+        client_log_trace!("derived expected frame length={}", expected_length);
+
         if expected_length > MAX_ADU_FRAME_LEN {
+            client_log_debug!(
+                "derived frame length {} exceeds MAX_ADU_FRAME_LEN {}",
+                expected_length,
+                MAX_ADU_FRAME_LEN
+            );
             return Err(MbusError::BasicParseError);
         }
 
@@ -1204,6 +1345,11 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         let message = match common::decompile_adu_frame(&frame[..expected_length], transport_type) {
             Ok(value) => value,
             Err(err) => {
+                client_log_debug!(
+                    "decompile_adu_frame failed for {} bytes: {:?}",
+                    expected_length,
+                    err
+                );
                 return Err(err); // Malformed frame or parsing error, frame is dropped.
             }
         };
@@ -1231,6 +1377,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         };
 
         self.dispatch_response(&message);
+        client_log_trace!("frame dispatch complete for {} bytes", expected_length);
 
         Ok(expected_length)
     }
@@ -1383,7 +1530,7 @@ mod tests {
 
     impl CoilResponse for MockApp {
         fn read_coils_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             coils: &Coils,
@@ -1395,7 +1542,7 @@ mod tests {
         }
 
         fn read_single_coil_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
@@ -1415,7 +1562,7 @@ mod tests {
         }
 
         fn write_single_coil_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
@@ -1428,7 +1575,7 @@ mod tests {
         }
 
         fn write_multiple_coils_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
@@ -1481,7 +1628,7 @@ mod tests {
 
     impl RequestErrorNotifier for MockApp {
         fn request_failed(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             error: MbusError,
@@ -1633,7 +1780,7 @@ mod tests {
 
     impl FifoQueueResponse for MockApp {
         fn read_fifo_queue_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             fifo_queue: &FifoQueue,
@@ -1673,7 +1820,7 @@ mod tests {
 
     impl DiagnosticsResponse for MockApp {
         fn read_device_identification_response(
-            &self,
+            &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             response: &DeviceIdentificationResponse,
@@ -1685,7 +1832,7 @@ mod tests {
         }
 
         fn encapsulated_interface_transport_response(
-            &self,
+            &mut self,
             _: u16,
             _: UnitIdOrSlaveAddr,
             _: EncapsulatedInterfaceType,
@@ -1694,7 +1841,7 @@ mod tests {
         }
 
         fn diagnostics_response(
-            &self,
+            &mut self,
             _: u16,
             _: UnitIdOrSlaveAddr,
             _: DiagnosticSubFunction,
@@ -1702,10 +1849,10 @@ mod tests {
         ) {
         }
 
-        fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+        fn get_comm_event_counter_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 
         fn get_comm_event_log_response(
-            &self,
+            &mut self,
             _: u16,
             _: UnitIdOrSlaveAddr,
             _: u16,
@@ -1715,9 +1862,9 @@ mod tests {
         ) {
         }
 
-        fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
+        fn read_exception_status_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
 
-        fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
+        fn report_server_id_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
     }
 
     impl TimeKeeper for MockApp {
@@ -4033,7 +4180,7 @@ mod tests {
         let address = 0x0000;
         let quantity = 8;
         let res = client_services.read_multiple_coils(txn_id, unit_id, address, quantity);
-        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+        assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     }
 
     /// Test case: Broadcast write single coil on TCP is not allowed
@@ -4048,7 +4195,7 @@ mod tests {
         let txn_id = 0x0002;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
         let res = client_services.write_single_coil(txn_id, unit_id, 0x0000, true);
-        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+        assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     }
 
     /// Test case: Broadcast write multiple coils on TCP is not allowed
@@ -4067,7 +4214,7 @@ mod tests {
         values.set_value(0x0001, false).unwrap();
 
         let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, &values);
-        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+        assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     }
 
     /// Test case: Broadcast read discrete inputs is not allowed
@@ -4082,7 +4229,7 @@ mod tests {
         let txn_id = 0x0006;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
         let res = client_services.read_discrete_inputs(txn_id, unit_id, 0x0000, 2);
-        assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+        assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     }
 
     /// Test case: `poll` clears the internal receive buffer if it overflows with garbage bytes.

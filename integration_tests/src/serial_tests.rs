@@ -270,7 +270,7 @@ fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
 
     let res = client.read_multiple_coils(7, unit_id, 10, 3);
     assert!(res.is_err());
-    assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
 
     // Verify nothing was sent over the wire
     assert!(sent_data.borrow().is_empty());
@@ -728,7 +728,7 @@ fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
     let res = client.read_multiple_coils(24, unit_id, 10, 3);
     assert!(res.is_err());
-    assert_eq!(res.unwrap_err(), MbusError::BoradcastNotAllowed);
+    assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     assert!(sent_data.borrow().is_empty());
 
     Ok(())

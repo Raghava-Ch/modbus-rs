@@ -19,7 +19,7 @@ homepage = "https://github.com/Raghava-Ch"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Complete Modbus Master and Slave embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
+description = "Complete Modbus Master and Slave(In future release) embedded first implementation in Rust, Compliant with modbus application protocol specification V1.1b3"
 
 [workspace.dependencies]
 # Shared dependencies across workspace
@@ -30,6 +30,7 @@ modbus-client = { path = "./modbus-client" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
+log = { version = "0.4.29", default-features = false }
 
 # Macro dependencies
 proc-macro2 = { version = "1.0" }

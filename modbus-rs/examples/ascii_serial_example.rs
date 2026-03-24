@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 struct ClientApp;
 
 impl CoilResponse for ClientApp {
-    fn read_coils_response(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
+    fn read_coils_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, coils: &Coils) {
         let quantity = coils.quantity();
         println!(
             "Response [Txn: {}, Unit: {}]: Read Coils (Addr: {}, Qty: {}):",
@@ -32,7 +32,7 @@ impl CoilResponse for ClientApp {
         }
     }
     fn read_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -47,7 +47,7 @@ impl CoilResponse for ClientApp {
         );
     }
     fn write_single_coil_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -62,7 +62,7 @@ impl CoilResponse for ClientApp {
         );
     }
     fn write_multiple_coils_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
@@ -79,7 +79,7 @@ impl CoilResponse for ClientApp {
 }
 
 impl RequestErrorNotifier for ClientApp {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
             txn_id,

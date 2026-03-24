@@ -35,7 +35,7 @@ where
         object_id: ObjectId,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = diagnostic::service::ServiceBuilder::read_device_identification(
@@ -92,7 +92,7 @@ where
         // If this is a broadcast and serial transport, we do not expect a response. Do not queue it.
         if unit_id_slave_addr.is_broadcast() {
             if self.transport.transport_type().is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed);
+                return Err(MbusError::BroadcastNotAllowed);
             }
         } else {
             self.add_an_expectation(
@@ -134,7 +134,7 @@ where
     ) -> Result<(), MbusError> {
         // FC 07 does not support broadcast addresses as it requires a specific device response.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::BroadcastNotAllowed);
         }
         // Delegate PDU and ADU construction to the ServiceBuilder.
         let frame = diagnostic::service::ServiceBuilder::read_exception_status(
@@ -202,7 +202,7 @@ where
         if unit_id_slave_addr.is_broadcast()
             && !ALLOWED_BROADCAST_SUB_FUNCTIONS.contains(&sub_function)
         {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::diagnostics(
             unit_id_slave_addr.get(),
@@ -247,7 +247,7 @@ where
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_counter(
             unit_id_slave_addr.get(),
@@ -284,7 +284,7 @@ where
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_log(
             unit_id_slave_addr.get(),
@@ -321,7 +321,7 @@ where
         unit_id_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::BroadcastNotAllowed);
         }
 
         let frame = diagnostic::service::ServiceBuilder::report_server_id(

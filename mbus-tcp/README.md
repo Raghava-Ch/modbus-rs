@@ -70,6 +70,21 @@ fn connect_tcp() -> Result<(), MbusError> {
 - `connection_timeout_ms` and `response_timeout_ms` from `ModbusTcpConfig` are
 	applied to the underlying stream.
 
+## Logging
+
+`mbus-tcp` supports optional logging via the `log` facade.
+
+- Enable feature: `logging`
+- This only emits through the facade; your application provides a logger backend.
+
+Example dependency setup:
+
+```toml
+[dependencies]
+mbus-tcp = { version = "0.1.0", features = ["logging"] }
+env_logger = "0.11"
+```
+
 ## Receive Behavior
 
 - `recv()` returns bytes currently available from the socket.

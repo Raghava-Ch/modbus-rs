@@ -104,6 +104,21 @@ fn list_ports() {
 - `stop_bits` must be `1` or `2`.
 - `response_timeout_ms` controls serial read timeout behavior.
 
+## Logging
+
+`mbus-serial` supports optional logging via the `log` facade.
+
+- Enable feature: `logging`
+- This only emits through the facade; your application provides a logger backend.
+
+Example dependency setup:
+
+```toml
+[dependencies]
+mbus-serial = { version = "0.1.0", features = ["logging"] }
+env_logger = "0.11"
+```
+
 ## Platform Notes
 
 - Uses the `serialport` crate under the hood.
