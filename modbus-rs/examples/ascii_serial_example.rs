@@ -1,11 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, CoilResponse, Coils, DataBits, JitterStrategy,
+    MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
+    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, coil::Coils};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -127,12 +125,15 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 7,
+        data_bits: DataBits::Seven,
         stop_bits: 1,
         parity: Parity::Even,
         response_timeout_ms: 2000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -143,8 +144,7 @@ fn main() -> Result<()> {
 
     // 1. Read Coils
     println!("\n[1] Sending Read Coils (Addr: 0, Qty: 5)...");
-    client
-        .read_multiple_coils(1, target_unit_id, 0, 5)
+    client.coils().read_multiple_coils(1, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
 
     for _ in 0..5 {

@@ -29,6 +29,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_holding_registers(
         &mut self,
         txn_id: u16,
@@ -86,6 +87,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_holding_register(
         &mut self,
         txn_id: u16,
@@ -150,6 +152,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_input_registers(
         &mut self,
         txn_id: u16,
@@ -207,6 +210,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from a broadcast address.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_input_register(
         &mut self,
         txn_id: u16,
@@ -266,6 +270,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_single_register(
         &mut self,
         txn_id: u16,
@@ -328,6 +333,7 @@ where
     ///
     /// # Errors
     /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_multiple_registers(
         &mut self,
         txn_id: u16,
@@ -389,6 +395,7 @@ where
     /// # Returns
     /// `Ok(())` if the request was successfully sent, or an `MbusError` if there was an error
     /// constructing the request (e.g., invalid quantity) or sending it over the transport.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_write_multiple_registers(
         &mut self,
         txn_id: u16,
@@ -456,6 +463,7 @@ where
     /// `Ok(())` if the request was successfully sent and queued for a response,
     /// or an `MbusError` if there was an error during request construction,
     /// sending over the transport, or if the `expected_responses` queue is full.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn mask_write_register(
         &mut self,
         txn_id: u16,

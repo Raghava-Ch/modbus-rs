@@ -188,8 +188,9 @@ mod tests {
             Vec::from_slice(&data).unwrap(),
             4,
         );
-        let resp_data =
+        let (mei_type, resp_data) =
             ResponseParser::parse_encapsulated_interface_transport_response(&pdu).unwrap();
+        assert_eq!(mei_type, EncapsulatedInterfaceType::CanopenGeneralReference);
         assert_eq!(resp_data.as_slice(), &[0x01, 0x02, 0x03]);
     }
 }

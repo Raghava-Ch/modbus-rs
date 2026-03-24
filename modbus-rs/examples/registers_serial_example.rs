@@ -1,11 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, DataBits, JitterStrategy, MbusError,
+    ModbusConfig, ModbusSerialConfig, Parity, RegisterResponse, Registers,
+    RequestErrorNotifier, SerialMode, StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{RegisterResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, register::Registers};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -150,12 +148,15 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: 8,
+        data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
 
@@ -166,8 +167,7 @@ fn main() -> Result<()> {
 
     // 1. Write Single Register
     println!("\n[1] Sending Write Single Register (Addr: 10, Val: 1234)...");
-    client
-        .write_single_register(1, target_unit_id, 10, 1234)
+    client.registers().write_single_register(1, target_unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -176,8 +176,7 @@ fn main() -> Result<()> {
 
     // 2. Read Holding Registers
     println!("\n[2] Sending Read Holding Registers (Addr: 10, Qty: 5)...");
-    client
-        .read_holding_registers(2, target_unit_id, 10, 5)
+    client.registers().read_holding_registers(2, target_unit_id, 10, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -186,8 +185,7 @@ fn main() -> Result<()> {
 
     // 3. Read Input Registers
     println!("\n[3] Sending Read Input Registers (Addr: 0, Qty: 5)...");
-    client
-        .read_input_registers(3, target_unit_id, 0, 5)
+    client.registers().read_input_registers(3, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

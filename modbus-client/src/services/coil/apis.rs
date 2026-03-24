@@ -28,6 +28,7 @@ where
     /// # Returns
     /// - `Ok(())`: If the request was successfully compiled, registered in the expectation queue, and sent.
     /// - `Err(MbusError)`: If validation fails (e.g., broadcast read), the PDU is invalid, or transport fails.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_multiple_coils(
         &mut self,
         txn_id: u16,
@@ -87,6 +88,7 @@ where
     /// - `Err(MbusError)`: If validation fails (e.g., broadcast read), the PDU is invalid, or transport fails.
     ///
     /// Note: This uses FC 0x01 with a quantity of 1.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_coil(
         &mut self,
         txn_id: u16,
@@ -140,6 +142,7 @@ where
     /// # Returns
     /// - `Ok(())`: If the request was successfully compiled, registered in the expectation queue, and sent.
     /// - `Err(MbusError)`: If validation fails (e.g., broadcast read), the PDU is invalid, or transport fails.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_single_coil(
         &mut self,
         txn_id: u16,
@@ -200,6 +203,7 @@ where
     /// # Returns
     /// - `Ok(())`: If the request was successfully compiled, registered in the expectation queue, and sent.
     /// - `Err(MbusError)`: If validation fails (e.g., broadcast read), the PDU is invalid, or transport fails.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_multiple_coils(
         &mut self,
         txn_id: u16,

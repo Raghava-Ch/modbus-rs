@@ -13,9 +13,9 @@ description = "Complete Modbus Master and Slave embedded first implementation in
 
 [dependencies]
 mbus-core = { workspace = true }
-mbus-serial = { workspace = true }
-mbus-tcp = { workspace = true }
-modbus-client = { workspace = true }
+mbus-serial = { workspace = true, optional = true }
+mbus-tcp = { workspace = true, optional = true }
+modbus-client = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 anyhow = "1.0.102"
@@ -28,13 +28,21 @@ anyhow = "1.0.102"
 # disable default features and enable only the services you need.
 # These features are re-exported from the `mbus-core` crate.
 default = [
-    "mbus-core/coils",
-    "mbus-core/registers",
-    "mbus-core/discrete-inputs",
-    "mbus-core/fifo",
-    "mbus-core/file-record",
-    "mbus-core/diagnostics",
+    "client",
+    "serial-rtu",
+    "serial-ascii",
+    "tcp",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
 ]
+client = ["modbus-client"]
+serial-rtu = ["mbus-serial"]
+serial-ascii = ["mbus-serial", "mbus-core/serial-ascii"]
+tcp = ["mbus-tcp"]
 coils = ["mbus-core/coils"]
 registers = ["mbus-core/registers"]
 discrete-inputs = ["mbus-core/discrete-inputs"]

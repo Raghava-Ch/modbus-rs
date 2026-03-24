@@ -1,22 +1,134 @@
-## Work in Progress
-This create is helper crate for [modbus-rs](https://crates.io/crates/modbus-rs)
-This repository is under active development.
+# mbus-serial
 
-## Licensing Model
+`mbus-serial` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
+
+It provides a standard serial transport implementation for Modbus RTU and Modbus ASCII,
+built on top of the shared transport abstractions in `mbus-core`.
+
+If you want an all-in-one entry point, use `modbus-rs`.
+If you need direct access to serial transport internals, use `mbus-serial` directly.
+
+## Helper Crate Role
+
+`mbus-serial` is intentionally focused on transport concerns:
+
+- Implements `Transport` from `mbus-core`.
+- Connects to real serial ports via the `serialport` crate.
+- Supports both `SerialMode::Rtu` and `SerialMode::Ascii`.
+
+This crate does not implement high-level request/response orchestration by itself.
+That logic lives in `modbus-client`.
+
+## What Is Included
+
+- `StdSerialTransport`: concrete serial implementation of `modbus_rs::Transport`.
+- Serial connection handling (open/close/check connection).
+- ADU send/receive support.
+- Error mapping from I/O errors to `TransportError`.
+- Utility function to enumerate serial ports.
+
+## Public API Surface
+
+The crate currently re-exports:
+
+- `StdSerialTransport`
+
+from:
+
+- `management::std_serial`
+
+## Usage
+
+### 1) Add dependencies
+
+```toml
+[dependencies]
+modbus-rs = "0.1.0"
+```
+
+### 2) Create serial config and transport
+
+```rust
+use modbus_rs::{
+	BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
+	ModbusSerialConfig, Parity, SerialMode,
+	StdSerialTransport, Transport,
+};
+
+fn connect_serial() -> Result<(), MbusError> {
+	let config = ModbusConfig::Serial(ModbusSerialConfig {
+		port_path: "/dev/ttyUSB0".try_into().map_err(|_| MbusError::BufferTooSmall)?,
+		mode: SerialMode::Rtu,
+		baud_rate: BaudRate::Baud19200,
+		data_bits: DataBits::Eight,
+		stop_bits: 1,
+		parity: Parity::Even,
+		response_timeout_ms: 1000,
+		retry_attempts: 3,
+		retry_backoff_strategy: BackoffStrategy::Immediate,
+		retry_jitter_strategy: JitterStrategy::None,
+		retry_random_fn: None,
+	});
+
+	let mut transport = StdSerialTransport::new(SerialMode::Rtu);
+	transport.connect(&config)?;
+
+	// send/recv calls are used by higher-level client code
+
+	transport.disconnect()?;
+	Ok(())
+}
+```
+
+### 3) List available serial ports
+
+```rust
+use modbus_rs::StdSerialTransport;
+
+fn list_ports() {
+	match StdSerialTransport::available_ports() {
+		Ok(ports) => {
+			for p in ports {
+				println!("{}", p.port_name);
+			}
+		}
+		Err(e) => eprintln!("failed to list ports: {}", e),
+	}
+}
+```
+
+## Configuration Notes
+
+- `StdSerialTransport::new(mode)` must match the mode in `ModbusSerialConfig`.
+  If they do not match, `connect` returns `TransportError::InvalidConfiguration`.
+- `stop_bits` must be `1` or `2`.
+- `response_timeout_ms` controls serial read timeout behavior.
+
+## Platform Notes
+
+- Uses the `serialport` crate under the hood.
+- Error behavior can vary by driver/OS.
+- Some pseudo-terminals (especially on macOS) may not support all serial parameter operations.
+
+## Typical Integration Pattern
+
+In most applications, `mbus-serial` is used together with `modbus-client`:
+
+1. Build `ModbusConfig::Serial(...)`.
+2. Instantiate `StdSerialTransport`.
+3. Pass transport into `ClientServices` from `modbus-client`.
+4. Use client services for function-code operations.
+
+## License
 
 Copyright (C) 2025 Raghava Challari
 
-modbus-rs is currently licensed under the GNU General Public License v3.0 (GPLv3) for evaluation purposes. This allows you to use, and modify the software under the terms of GPLv3 during the evaluation phase.
-
-For more details on GPLv3, refer to the [LICENSE](./LICENSE) file in the repository or visit the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
-
-### Disclaimer
-This is an independent Rust implementation of the ModBus specification and is not affiliated with the ModBus Consortium.
-
+This project is currently licensed under GNU GPL v3.0.
+See [LICENSE](./LICENSE) for details.
 
 ## Contact
 
-For any inquiries or support, please reach out to:
+For questions or support:
 
-**Name:** Raghava Ch  
-**Email:** [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com)
+- Name: Raghava Ch
+- Email: [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com)

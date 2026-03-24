@@ -35,6 +35,7 @@ where
     ///   and the frame was transmitted.
     /// - `Err(MbusError)`: If the address is a broadcast address (not allowed for FC 0x14),
     ///   if the PDU exceeds the maximum allowed size, or if transport fails.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_file_record(
         &mut self,
         txn_id: u16,
@@ -43,7 +44,7 @@ where
     ) -> Result<(), MbusError> {
         // Modbus protocol specification: Broadcast is not supported for Read File Record.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::broadcast_not_allowed());
         }
 
         // Construct the ADU frame (MBAP/Serial Header + PDU + CRC/LRC if applicable)
@@ -85,6 +86,7 @@ where
     /// # Returns
     /// - `Ok(())`: If the request was successfully built and transmitted.
     /// - `Err(MbusError)`: If broadcast is attempted, if the PDU is malformed, or transport fails.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_file_record(
         &mut self,
         txn_id: u16,
@@ -93,7 +95,7 @@ where
     ) -> Result<(), MbusError> {
         // Modbus protocol specification: Broadcast is not supported for Write File Record.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast for Write File Record
+            return Err(MbusError::broadcast_not_allowed()); // Modbus forbids broadcast for Write File Record
         }
 
         // Construct the ADU frame using the service builder.

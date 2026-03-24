@@ -30,6 +30,7 @@ where
     ///   and the frame was transmitted via the transport layer.
     /// - `Err(MbusError)`: If the address is a broadcast address, if the frame
     ///   construction fails, or if the transport layer fails to send.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_fifo_queue(
         &mut self,
         txn_id: u16,

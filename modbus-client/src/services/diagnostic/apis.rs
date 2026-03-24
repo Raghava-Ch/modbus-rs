@@ -26,6 +26,7 @@ where
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial/// - `read_device_id_code`: The type of access (01=Basic, 02=Regular, 03=Extended, 04=Specific).
     /// - `object_id`: The object ID to start reading from.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_device_identification(
         &mut self,
         txn_id: u16,
@@ -72,6 +73,7 @@ where
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial/// - `mei_type`: The MEI type (e.g., `CanopenGeneralReference`).
     /// - `data`: The data payload to be sent with the request.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn encapsulated_interface_transport(
         &mut self,
         txn_id: u16,
@@ -124,6 +126,7 @@ where
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_exception_status(
         &mut self,
         txn_id: u16,
@@ -182,6 +185,7 @@ where
     /// - `ClearOverrunCounterAndFlag`
     ///
     /// If a broadcast is sent, no response is expected and no expectation is queued.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn diagnostics(
         &mut self,
         txn_id: u16,
@@ -236,6 +240,7 @@ where
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn get_comm_event_counter(
         &mut self,
         txn_id: u16,
@@ -272,6 +277,7 @@ where
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn get_comm_event_log(
         &mut self,
         txn_id: u16,
@@ -308,6 +314,7 @@ where
     /// - `unit_id_slave_addr`: The target Modbus unit ID or slave address.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn report_server_id(
         &mut self,
         txn_id: u16,

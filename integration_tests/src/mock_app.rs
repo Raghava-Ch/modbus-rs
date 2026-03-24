@@ -1,17 +1,9 @@
-use mbus_core::{
-    errors::MbusError,
-    function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType},
-    transport::{TimeKeeper, UnitIdOrSlaveAddr},
-};
-use modbus_client::{
-    app::{
-        CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
-        FileRecordResponse, RegisterResponse, RequestErrorNotifier,
-    },
-    services::{
-        coil::Coils, diagnostic::DeviceIdentificationResponse, discrete_input::DiscreteInputs,
-        fifo_queue::FifoQueue, file_record::SubRequestParams, register::Registers,
-    },
+use modbus_rs::{
+    CoilResponse, Coils, DiagnosticSubFunction, DiagnosticsResponse,
+    DeviceIdentificationResponse, DiscreteInputResponse, DiscreteInputs,
+    EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse, FileRecordResponse, MbusError,
+    RegisterResponse, Registers, RequestErrorNotifier, SubRequestParams, TimeKeeper,
+    UnitIdOrSlaveAddr, MAX_DISCRETE_INPUT_BYTES,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -105,7 +97,7 @@ impl DiscreteInputResponse for MockApp {
     ) {
         // Create a DiscreteInputs container for a single bit.
         // The value is packed into the first byte of the heapless Vec.
-        let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
+        let mut values = [0u8; MAX_DISCRETE_INPUT_BYTES];
         values[0] = if value { 0x01 } else { 0x00 };
 
         let inputs = DiscreteInputs::new(address, 1)
@@ -211,7 +203,7 @@ impl RegisterResponse for MockApp {
 
 impl FifoQueueResponse for MockApp {
     fn read_fifo_queue_response(
-        &mut self,
+        &self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _fifo_queue: &FifoQueue,

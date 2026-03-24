@@ -250,7 +250,8 @@ impl ExtendedObjectId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum ReadDeviceIdCode {
-    /// An invalid or uninitialized value. In practical never should have reached here.
+    /// Sentinel default used before parsing a concrete code.
+    /// This value should not appear in a valid decoded request.
     #[default]
     Err,
     /// Request to get the basic device identification (stream access).
@@ -314,7 +315,8 @@ impl TryFrom<u8> for ConformityLevel {
 /// Represents any valid Modbus Device Identification Object ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObjectId {
-    /// Unintentional use, In practical never should have reached here.
+    /// Sentinel default used before parsing a concrete object identifier.
+    /// This value should not appear in a valid decoded response.
     #[default]
     Err,
     /// Basic Device Identification Object IDs (0x00 - 0x02).
@@ -348,7 +350,7 @@ impl fmt::Display for ObjectId {
             ObjectId::Regular(id) => write!(f, "Regular({})", id),
             ObjectId::Extended(id) => write!(f, "Extended({:#04X})", id.value()),
             ObjectId::Reserved(id) => write!(f, "Reserved({:#04X})", id),
-            ObjectId::Err => write!(f, "Err, In practical never should have reached here."),
+            ObjectId::Err => write!(f, "Err (sentinel default)"),
         }
     }
 }
@@ -360,7 +362,7 @@ impl From<ObjectId> for u8 {
             ObjectId::Regular(id) => id as u8,
             ObjectId::Extended(id) => id.value(),
             ObjectId::Reserved(id) => id,
-            ObjectId::Err => 0, // In practical never should have reached here.
+            ObjectId::Err => 0, // Sentinel default path.
         }
     }
 }

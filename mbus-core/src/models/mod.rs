@@ -14,9 +14,15 @@
 //! - **File Records**: Structured memory access (FC 0x14, 0x15).
 //! - **Diagnostic**: Device identification and MEI transport (FC 0x2B).
 
+#[cfg(feature = "coils")]
 pub mod coil;
+#[cfg(feature = "diagnostics")]
 pub mod diagnostic;
+#[cfg(feature = "discrete-inputs")]
 pub mod discrete_input;
+#[cfg(feature = "fifo")]
 pub mod fifo_queue;
+#[cfg(feature = "file-record")]
 pub mod file_record;
+#[cfg(feature = "registers")]
 pub mod register;
