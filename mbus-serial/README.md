@@ -21,7 +21,7 @@ That logic lives in `modbus-client`.
 
 ## What Is Included
 
-- `StdSerialTransport`: concrete serial implementation of `mbus_core::transport::Transport`.
+- `StdSerialTransport`: concrete serial implementation of `modbus_rs::Transport`.
 - Serial connection handling (open/close/check connection).
 - ADU send/receive support.
 - Error mapping from I/O errors to `TransportError`.
@@ -43,29 +43,31 @@ from:
 
 ```toml
 [dependencies]
-mbus-core = "0.1.0"
-mbus-serial = "0.1.0"
+modbus-rs = "0.1.0"
 ```
 
 ### 2) Create serial config and transport
 
 ```rust
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-	BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport,
+use modbus_rs::{
+	BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
+	ModbusSerialConfig, Parity, SerialMode,
+	StdSerialTransport, Transport,
 };
-use mbus_serial::StdSerialTransport;
 
 fn connect_serial() -> Result<(), MbusError> {
 	let config = ModbusConfig::Serial(ModbusSerialConfig {
 		port_path: "/dev/ttyUSB0".try_into().map_err(|_| MbusError::BufferTooSmall)?,
 		mode: SerialMode::Rtu,
 		baud_rate: BaudRate::Baud19200,
-		data_bits: mbus_core::transport::DataBits::Eight,
+		data_bits: DataBits::Eight,
 		stop_bits: 1,
 		parity: Parity::Even,
 		response_timeout_ms: 1000,
 		retry_attempts: 3,
+		retry_backoff_strategy: BackoffStrategy::Immediate,
+		retry_jitter_strategy: JitterStrategy::None,
+		retry_random_fn: None,
 	});
 
 	let mut transport = StdSerialTransport::new(SerialMode::Rtu);
@@ -81,7 +83,7 @@ fn connect_serial() -> Result<(), MbusError> {
 ### 3) List available serial ports
 
 ```rust
-use mbus_serial::StdSerialTransport;
+use modbus_rs::StdSerialTransport;
 
 fn list_ports() {
 	match StdSerialTransport::available_ports() {

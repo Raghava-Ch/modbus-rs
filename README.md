@@ -77,19 +77,14 @@ See [documentation/feature_flags.md](documentation/feature_flags.md) for valid c
 The following skeleton works with any transport. The `App` struct implements the response callbacks and provides the timestamp:
 
 ```rust
-use modbus_rs::errors::MbusError;
-use modbus_rs::transport::{
-    ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
+    RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
-use modbus_rs::modbus_client::app::RequestErrorNotifier;
-use modbus_rs::modbus_client::services::ClientServices;
-use modbus_rs::data_unit::common::MAX_ADU_FRAME_LEN;
 use modbus_rs::heapless::Vec;
 
 #[cfg(feature = "registers")]
-use modbus_rs::modbus_client::app::RegisterResponse;
-#[cfg(feature = "registers")]
-use modbus_rs::modbus_client::services::register::Registers;
+use modbus_rs::{RegisterResponse, Registers};
 
 struct MyTransport { /* ... */ }
 
@@ -129,7 +124,9 @@ fn main() -> Result<(), MbusError> {
     let mut client = ClientServices::<_, _, 4>::new(MyTransport, App, config)?;
 
     #[cfg(feature = "registers")]
-    client.read_holding_registers(1, UnitIdOrSlaveAddr::new(1)?, 0, 10)?;
+    client
+        .registers()
+        .read_holding_registers(1, UnitIdOrSlaveAddr::new(1)?, 0, 10)?;
 
     loop {
         client.poll();
@@ -143,7 +140,7 @@ fn main() -> Result<(), MbusError> {
 ### TCP
 
 ```rust
-use modbus_rs::transport::ModbusTcpConfig;
+use modbus_rs::ModbusTcpConfig;
 
 let config = ModbusTcpConfig::new("192.168.1.10", 502)?;
 // config.response_timeout_ms = 1500;
@@ -153,13 +150,13 @@ let config = ModbusTcpConfig::new("192.168.1.10", 502)?;
 ### Serial RTU
 
 ```rust
-use modbus_rs::transport::{BaudRate, ModbusSerialConfig, Parity, SerialMode};
+use modbus_rs::{BaudRate, DataBits, ModbusSerialConfig, Parity, SerialMode};
 
 let config = ModbusSerialConfig {
     port_path: "/dev/ttyUSB0".try_into()?,
     mode: SerialMode::Rtu,
     baud_rate: BaudRate::Baud19200,
-    data_bits: mbus_core::transport::DataBits::Eight,
+    data_bits: DataBits::Eight,
     stop_bits: 1,
     parity: Parity::Even,
     response_timeout_ms: 1000,
@@ -179,7 +176,7 @@ Use the same `ModbusSerialConfig` with `mode: SerialMode::Ascii` and pair it wit
 All transport configs support a configurable retry policy with no blocking or internal RNG:
 
 ```rust
-use modbus_rs::transport::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
+use modbus_rs::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
 
 let mut config = ModbusTcpConfig::new("192.168.1.10", 502)?;
 config.retry_attempts = 5;
@@ -221,6 +218,7 @@ cargo run -p modbus-rs --example coils_example -- 192.168.1.10 502 1
 cargo run -p modbus-rs --example registers_example -- 192.168.1.10 502 1
 cargo run -p modbus-rs --example discrete_inputs_example -- 192.168.1.10 502 1
 cargo run -p modbus-rs --example device_id_example -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
 cargo run -p modbus-rs --example tcp_backoff_jitter_example -- 192.168.1.10 502 1
 ```
 

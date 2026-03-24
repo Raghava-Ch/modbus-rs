@@ -1,9 +1,8 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, UnitIdOrSlaveAddr};
-use mbus_tcp::StdTcpTransport;
-use modbus_client::app::{DiscreteInputResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, discrete_input::DiscreteInputs};
+use modbus_rs::{
+    ClientServices, DiscreteInputResponse, DiscreteInputs, MbusError, ModbusConfig,
+    ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
+};
 use std::env;
 
 // --- Client Application Implementation ---
@@ -102,15 +101,13 @@ fn main() -> Result<()> {
 
     // 1. Read Single Discrete Input
     println!("\n[1] Sending Read Single Discrete Input (Addr: 0)...");
-    client
-        .read_single_discrete_input(1, unit_id, 0)
+    client.discrete_inputs().read_single_discrete_input(1, unit_id, 0)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 
     // 2. Read Multiple Discrete Inputs
     println!("\n[2] Sending Read Discrete Inputs (Addr: 0, Qty: 10)...");
-    client
-        .read_discrete_inputs(2, unit_id, 0, 10)
+    client.discrete_inputs().read_discrete_inputs(2, unit_id, 0, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
     client.poll();
 

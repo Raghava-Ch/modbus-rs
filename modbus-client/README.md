@@ -41,14 +41,14 @@ Transport implementations are provided by helper crates such as:
 Retries are poll-driven and timestamp-scheduled. The client never sleeps or blocks.
 
 - Timeout detection happens inside `ClientServices::poll()`.
-- Retries are scheduled using `BackoffStrategy` from `mbus-core::transport`.
+- Retries are scheduled using `BackoffStrategy` from `modbus-rs`.
 - Optional jitter is applied using `JitterStrategy`.
 - Randomness for jitter is application-provided via `retry_random_fn` on config.
 
 Example (TCP with exponential backoff + percentage jitter):
 
 ```rust
-use mbus_core::transport::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
+use modbus_rs::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
 
 fn app_random_u32() -> u32 {
   // Replace with your MCU/OS RNG source.
@@ -145,18 +145,12 @@ Typical flow:
 ## Minimal Example
 
 ```rust
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
+use modbus_rs::{
+  ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
+  RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
-
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-use modbus_client::app::RequestErrorNotifier;
 #[cfg(feature = "coils")]
-use modbus_client::app::CoilResponse;
-#[cfg(feature = "coils")]
-use modbus_client::services::coil::Coils;
-use modbus_client::services::ClientServices;
+use modbus_rs::{CoilResponse, Coils};
 
 use heapless::Vec;
 
@@ -197,12 +191,39 @@ fn main() -> Result<(), MbusError> {
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
 
     #[cfg(feature = "coils")]
-    client.read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
+    client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
+
+    #[cfg(feature = "coils")]
+    client.with_coils(|coils| {
+      coils.read_single_coil(2, UnitIdOrSlaveAddr::new(1)?, 0)?;
+      coils.write_single_coil(3, UnitIdOrSlaveAddr::new(1)?, 0, true)?;
+      Ok::<(), MbusError>(())
+    })?;
 
     client.poll();
     Ok(())
 }
 ```
+
+  ## Feature-Scoped Access Style
+
+  `ClientServices` now supports feature facades so request APIs can be grouped by domain:
+
+  - `client.coils()`
+  - `client.registers()`
+  - `client.discrete_inputs()`
+  - `client.diagnostic()`
+  - `client.fifo()`
+  - `client.file_records()`
+
+  For grouped request submission in a single scoped borrow, use batch helpers:
+
+  - `client.with_coils(...)`
+  - `client.with_registers(...)`
+  - `client.with_discrete_inputs(...)`
+  - `client.with_diagnostic(...)`
+  - `client.with_fifo(...)`
+  - `client.with_file_records(...)`
 
 ## Build Examples
 

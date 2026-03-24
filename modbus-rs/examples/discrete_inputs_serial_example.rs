@@ -1,11 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, DataBits, DiscreteInputResponse, DiscreteInputs,
+    JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
+    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{DiscreteInputResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, discrete_input::DiscreteInputs};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -97,14 +95,14 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -116,8 +114,7 @@ fn main() -> Result<()> {
 
     // 1. Read Discrete Inputs
     println!("\n[1] Sending Read Discrete Inputs (Addr: 0, Qty: 10)...");
-    client
-        .read_discrete_inputs(1, target_unit_id, 0, 10)
+    client.discrete_inputs().read_discrete_inputs(1, target_unit_id, 0, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

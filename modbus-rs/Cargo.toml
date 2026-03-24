@@ -32,12 +32,12 @@ default = [
     "serial-rtu",
     "serial-ascii",
     "tcp",
-    "mbus-core/coils",
-    "mbus-core/registers",
-    "mbus-core/discrete-inputs",
-    "mbus-core/fifo",
-    "mbus-core/file-record",
-    "mbus-core/diagnostics",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
 ]
 client = ["modbus-client"]
 serial-rtu = ["mbus-serial"]

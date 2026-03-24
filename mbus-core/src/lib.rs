@@ -13,12 +13,10 @@
 //!
 //! ## Module Structure
 //!
-//! - [`app`]: High-level application logic and coordination.
-//! - [`client`]: Modbus client (master) traits and service abstractions.
 //! - [`data_unit`]: Definitions for PDU (Protocol Data Unit) and ADU (Application Data Unit).
-//! - [`device_identification`]: Support for Modbus Device Identification (FC 0x2B / 0x0E).
 //! - [`errors`]: Centralized error handling for the Modbus stack.
 //! - [`function_codes`]: Definitions for public and user-defined Modbus function codes.
+//! - [`models`]: Modbus data models (feature-gated where applicable).
 //! - [`transport`]: Traits and configurations for physical/link layer communication.
 //!
 //! ## Usage

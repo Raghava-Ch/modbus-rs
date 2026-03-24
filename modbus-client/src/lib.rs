@@ -78,7 +78,7 @@
 //! // 4. Send a request (only available if the "coils" feature is enabled)
 //! #[cfg(feature = "coils")]
 //! {
-//!     client.read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
+//!     client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
 //! }
 //!
 //! // 5. Periodically poll to process incoming bytes and handle timeouts

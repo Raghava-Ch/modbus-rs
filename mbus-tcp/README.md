@@ -42,16 +42,13 @@ from:
 
 ```toml
 [dependencies]
-mbus-core = "0.1.0"
-mbus-tcp = "0.1.0"
+modbus-rs = "0.1.0"
 ```
 
 ### 2) Create TCP config and connect transport
 
 ```rust
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, Transport};
-use mbus_tcp::StdTcpTransport;
+use modbus_rs::{MbusError, ModbusConfig, ModbusTcpConfig, StdTcpTransport, Transport};
 
 fn connect_tcp() -> Result<(), MbusError> {
 		let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);

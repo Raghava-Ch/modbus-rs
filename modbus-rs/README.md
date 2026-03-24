@@ -86,20 +86,15 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 ## Basic Usage Example
 
 ```rust,no_run
-use modbus_rs::errors::MbusError;
-use modbus_rs::transport::{
-	ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
+use modbus_rs::{
+	ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
+	RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
-use modbus_rs::modbus_client::app::RequestErrorNotifier;
-use modbus_rs::modbus_client::services::ClientServices;
 
-use modbus_rs::data_unit::common::MAX_ADU_FRAME_LEN;
 use modbus_rs::heapless::Vec;
 
 #[cfg(feature = "coils")]
-use modbus_rs::modbus_client::app::CoilResponse;
-#[cfg(feature = "coils")]
-use modbus_rs::modbus_client::services::coil::Coils;
+use modbus_rs::{CoilResponse, Coils};
 
 struct MockTransport;
 
@@ -140,7 +135,7 @@ fn main() -> Result<(), MbusError> {
 	let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
 
 	#[cfg(feature = "coils")]
-	client.read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
+	client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
 
 	client.poll();
 	Ok(())
@@ -155,6 +150,7 @@ fn main() -> Result<(), MbusError> {
 - [registers_example.rs](examples/registers_example.rs)
 - [discrete_inputs_example.rs](examples/discrete_inputs_example.rs)
 - [device_id_example.rs](examples/device_id_example.rs)
+- [feature_facades_showcase.rs](examples/feature_facades_showcase.rs)
 - [tcp_backoff_jitter_example.rs](examples/tcp_backoff_jitter_example.rs)
 
 ### Serial RTU examples
@@ -174,6 +170,7 @@ Run examples from the workspace root:
 ```bash
 # TCP
 cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
+cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
 
 # Serial RTU
 cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils

@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mbus-tcp = { path = "../mbus-tcp" }
-mbus-core = { path = "../mbus-core" }
-modbus-client = { path = "../modbus-client" }
+modbus-rs = { path = "../modbus-rs" }
 
 heapless = "0.8.0"
 anyhow = "1.0.86"

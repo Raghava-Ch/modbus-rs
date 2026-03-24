@@ -468,7 +468,7 @@ impl UnitIdOrSlaveAddr {
         }
 
         if 0 == address {
-            return Err(MbusError::InvalidSlaveAddress);
+            return Err(MbusError::InvalidBroadcastAddress);
         }
         Err(MbusError::InvalidSlaveAddress)
     }
@@ -626,9 +626,14 @@ pub trait Transport {
     ///   `response_timeout_ms`, it will automatically clear its internal buffers.
     ///
     /// # Returns
-    /// - `Ok(Vec<u8, MAX_ADU_FRAME_LEN>)`: A heapless vector containing the bytes read since the last call.
+    /// - `Ok(Vec<u8, MAX_ADU_FRAME_LEN>)`: A non-empty heapless vector containing bytes read since
+    ///   the last call.
     /// - `Err(Self::Error)`: Returns `TransportError::Timeout` if no data is currently available,
     ///   or other errors if the connection is lost or hardware fails.
+    ///
+    /// Contract note: when no data is available in non-blocking mode, implementations must
+    /// return `Err(TransportError::Timeout)` (or transport-specific equivalent) and should not
+    /// return `Ok` with an empty vector.
     fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error>;
 
     /// Checks if the transport considers itself currently active and connected.

@@ -44,7 +44,7 @@ where
     ) -> Result<(), MbusError> {
         // Modbus protocol specification: Broadcast is not supported for Read File Record.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed);
+            return Err(MbusError::broadcast_not_allowed());
         }
 
         // Construct the ADU frame (MBAP/Serial Header + PDU + CRC/LRC if applicable)
@@ -95,7 +95,7 @@ where
     ) -> Result<(), MbusError> {
         // Modbus protocol specification: Broadcast is not supported for Write File Record.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast for Write File Record
+            return Err(MbusError::broadcast_not_allowed()); // Modbus forbids broadcast for Write File Record
         }
 
         // Construct the ADU frame using the service builder.

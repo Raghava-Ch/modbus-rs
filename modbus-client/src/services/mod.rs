@@ -53,6 +53,517 @@ impl SerialQueueSizeOne for [(); 1] {}
 /// Convenience alias for serial clients where queue size is always one.
 pub type SerialClientServices<TRANSPORT, APP> = ClientServices<TRANSPORT, APP, 1>;
 
+/// Feature-scoped coils API facade.
+///
+/// This view keeps coil operations grouped under `client.coils()` while reusing the same
+/// underlying `ClientServices` state.
+#[cfg(feature = "coils")]
+pub struct CoilsApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "coils")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::CoilResponse,
+{
+    /// Returns a feature-scoped coils facade.
+    pub fn coils(&mut self) -> CoilsApi<'_, TRANSPORT, APP, N> {
+        CoilsApi { client: self }
+    }
+
+    /// Executes multiple coil requests in a single scoped borrow.
+    pub fn with_coils<R>(
+        &mut self,
+        f: impl FnOnce(&mut CoilsApi<'_, TRANSPORT, APP, N>) -> R,
+    ) -> R {
+        let mut api = self.coils();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "coils")]
+impl<TRANSPORT, APP, const N: usize> CoilsApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::CoilResponse,
+{
+    /// Forwards to `ClientServices::read_multiple_coils`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_multiple_coils(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_multiple_coils(txn_id, unit_id_slave_addr, address, quantity)
+    }
+
+    /// Forwards to `ClientServices::read_single_coil`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_single_coil(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_single_coil(txn_id, unit_id_slave_addr, address)
+    }
+
+    /// Forwards to `ClientServices::write_single_coil`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn write_single_coil(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) -> Result<(), MbusError> {
+        self.client
+            .write_single_coil(txn_id, unit_id_slave_addr, address, value)
+    }
+
+    /// Forwards to `ClientServices::write_multiple_coils`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn write_multiple_coils(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        values: &crate::services::coil::Coils,
+    ) -> Result<(), MbusError> {
+        self.client
+            .write_multiple_coils(txn_id, unit_id_slave_addr, address, values)
+    }
+}
+
+/// Feature-scoped discrete-inputs API facade.
+#[cfg(feature = "discrete-inputs")]
+pub struct DiscreteInputsApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "discrete-inputs")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::DiscreteInputResponse,
+{
+    /// Returns a feature-scoped discrete-inputs facade.
+    pub fn discrete_inputs(&mut self) -> DiscreteInputsApi<'_, TRANSPORT, APP, N> {
+        DiscreteInputsApi { client: self }
+    }
+
+    /// Executes multiple discrete-input requests in a single scoped borrow.
+    pub fn with_discrete_inputs<R>(
+        &mut self,
+        f: impl FnOnce(&mut DiscreteInputsApi<'_, TRANSPORT, APP, N>) -> R,
+    ) -> R {
+        let mut api = self.discrete_inputs();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "discrete-inputs")]
+impl<TRANSPORT, APP, const N: usize> DiscreteInputsApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::DiscreteInputResponse,
+{
+    /// Forwards to `ClientServices::read_discrete_inputs`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_discrete_inputs(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_discrete_inputs(txn_id, unit_id_slave_addr, address, quantity)
+    }
+
+    /// Forwards to `ClientServices::read_single_discrete_input`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_single_discrete_input(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_single_discrete_input(txn_id, unit_id_slave_addr, address)
+    }
+}
+
+/// Feature-scoped registers API facade.
+#[cfg(feature = "registers")]
+pub struct RegistersApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "registers")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::RegisterResponse,
+{
+    /// Returns a feature-scoped registers facade.
+    pub fn registers(&mut self) -> RegistersApi<'_, TRANSPORT, APP, N> {
+        RegistersApi { client: self }
+    }
+
+    /// Executes multiple register requests in a single scoped borrow.
+    pub fn with_registers<R>(
+        &mut self,
+        f: impl FnOnce(&mut RegistersApi<'_, TRANSPORT, APP, N>) -> R,
+    ) -> R {
+        let mut api = self.registers();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "registers")]
+impl<TRANSPORT, APP, const N: usize> RegistersApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::RegisterResponse,
+{
+    /// Forwards to `ClientServices::read_holding_registers`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_holding_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        from_address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_holding_registers(txn_id, unit_id_slave_addr, from_address, quantity)
+    }
+
+    /// Forwards to `ClientServices::read_single_holding_register`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_single_holding_register(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_single_holding_register(txn_id, unit_id_slave_addr, address)
+    }
+
+    /// Forwards to `ClientServices::read_input_registers`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_input_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_input_registers(txn_id, unit_id_slave_addr, address, quantity)
+    }
+
+    /// Forwards to `ClientServices::read_single_input_register`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_single_input_register(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_single_input_register(txn_id, unit_id_slave_addr, address)
+    }
+
+    /// Forwards to `ClientServices::write_single_register`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn write_single_register(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .write_single_register(txn_id, unit_id_slave_addr, address, value)
+    }
+
+    /// Forwards to `ClientServices::write_multiple_registers`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn write_multiple_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        values: &[u16],
+    ) -> Result<(), MbusError> {
+        self.client
+            .write_multiple_registers(txn_id, unit_id_slave_addr, address, quantity, values)
+    }
+
+    /// Forwards to `ClientServices::read_write_multiple_registers`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_write_multiple_registers(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_values: &[u16],
+    ) -> Result<(), MbusError> {
+        self.client.read_write_multiple_registers(
+            txn_id,
+            unit_id_slave_addr,
+            read_address,
+            read_quantity,
+            write_address,
+            write_values,
+        )
+    }
+
+    /// Forwards to `ClientServices::mask_write_register`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn mask_write_register(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .mask_write_register(txn_id, unit_id_slave_addr, address, and_mask, or_mask)
+    }
+}
+
+/// Feature-scoped diagnostics API facade.
+#[cfg(feature = "diagnostics")]
+pub struct DiagnosticApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "diagnostics")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::DiagnosticsResponse,
+{
+    /// Returns a feature-scoped diagnostics facade.
+    pub fn diagnostic(&mut self) -> DiagnosticApi<'_, TRANSPORT, APP, N> {
+        DiagnosticApi { client: self }
+    }
+
+    /// Executes multiple diagnostic requests in a single scoped borrow.
+    pub fn with_diagnostic<R>(
+        &mut self,
+        f: impl FnOnce(&mut DiagnosticApi<'_, TRANSPORT, APP, N>) -> R,
+    ) -> R {
+        let mut api = self.diagnostic();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "diagnostics")]
+impl<TRANSPORT, APP, const N: usize> DiagnosticApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::DiagnosticsResponse,
+{
+    /// Forwards to `ClientServices::read_device_identification`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_device_identification(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        read_device_id_code: crate::services::diagnostic::ReadDeviceIdCode,
+        object_id: crate::services::diagnostic::ObjectId,
+    ) -> Result<(), MbusError> {
+        self.client.read_device_identification(
+            txn_id,
+            unit_id_slave_addr,
+            read_device_id_code,
+            object_id,
+        )
+    }
+
+    /// Forwards to `ClientServices::encapsulated_interface_transport`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn encapsulated_interface_transport(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        mei_type: EncapsulatedInterfaceType,
+        data: &[u8],
+    ) -> Result<(), MbusError> {
+        self.client
+            .encapsulated_interface_transport(txn_id, unit_id_slave_addr, mei_type, data)
+    }
+
+    /// Forwards to `ClientServices::read_exception_status`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_exception_status(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        self.client.read_exception_status(txn_id, unit_id_slave_addr)
+    }
+
+    /// Forwards to `ClientServices::diagnostics`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn diagnostics(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        sub_function: mbus_core::function_codes::public::DiagnosticSubFunction,
+        data: &[u16],
+    ) -> Result<(), MbusError> {
+        self.client
+            .diagnostics(txn_id, unit_id_slave_addr, sub_function, data)
+    }
+
+    /// Forwards to `ClientServices::get_comm_event_counter`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn get_comm_event_counter(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        self.client.get_comm_event_counter(txn_id, unit_id_slave_addr)
+    }
+
+    /// Forwards to `ClientServices::get_comm_event_log`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn get_comm_event_log(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        self.client.get_comm_event_log(txn_id, unit_id_slave_addr)
+    }
+
+    /// Forwards to `ClientServices::report_server_id`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn report_server_id(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(), MbusError> {
+        self.client.report_server_id(txn_id, unit_id_slave_addr)
+    }
+}
+
+/// Feature-scoped FIFO API facade.
+#[cfg(feature = "fifo")]
+pub struct FifoApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "fifo")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::FifoQueueResponse,
+{
+    /// Returns a feature-scoped FIFO facade.
+    pub fn fifo(&mut self) -> FifoApi<'_, TRANSPORT, APP, N> {
+        FifoApi { client: self }
+    }
+
+    /// Executes multiple FIFO requests in a single scoped borrow.
+    pub fn with_fifo<R>(&mut self, f: impl FnOnce(&mut FifoApi<'_, TRANSPORT, APP, N>) -> R) -> R {
+        let mut api = self.fifo();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "fifo")]
+impl<TRANSPORT, APP, const N: usize> FifoApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::FifoQueueResponse,
+{
+    /// Forwards to `ClientServices::read_fifo_queue`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_fifo_queue(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_fifo_queue(txn_id, unit_id_slave_addr, address)
+    }
+}
+
+/// Feature-scoped file-record API facade.
+#[cfg(feature = "file-record")]
+pub struct FileRecordsApi<'a, TRANSPORT, APP, const N: usize> {
+    client: &'a mut ClientServices<TRANSPORT, APP, N>,
+}
+
+#[cfg(feature = "file-record")]
+impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::FileRecordResponse,
+{
+    /// Returns a feature-scoped file-record facade.
+    pub fn file_records(&mut self) -> FileRecordsApi<'_, TRANSPORT, APP, N> {
+        FileRecordsApi { client: self }
+    }
+
+    /// Executes multiple file-record requests in a single scoped borrow.
+    pub fn with_file_records<R>(
+        &mut self,
+        f: impl FnOnce(&mut FileRecordsApi<'_, TRANSPORT, APP, N>) -> R,
+    ) -> R {
+        let mut api = self.file_records();
+        f(&mut api)
+    }
+}
+
+#[cfg(feature = "file-record")]
+impl<TRANSPORT, APP, const N: usize> FileRecordsApi<'_, TRANSPORT, APP, N>
+where
+    TRANSPORT: Transport,
+    APP: ClientCommon + crate::app::FileRecordResponse,
+{
+    /// Forwards to `ClientServices::read_file_record`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn read_file_record(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        sub_request: &crate::services::file_record::SubRequest,
+    ) -> Result<(), MbusError> {
+        self.client
+            .read_file_record(txn_id, unit_id_slave_addr, sub_request)
+    }
+
+    /// Forwards to `ClientServices::write_file_record`.
+    #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
+    pub fn write_file_record(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        sub_request: &crate::services::file_record::SubRequest,
+    ) -> Result<(), MbusError> {
+        self.client
+            .write_file_record(txn_id, unit_id_slave_addr, sub_request)
+    }
+}
+
 /// Internal tracking payload for a Single-address operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Single {

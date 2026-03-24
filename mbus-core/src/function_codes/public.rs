@@ -345,7 +345,8 @@ impl TryFrom<u16> for DiagnosticSubFunction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum EncapsulatedInterfaceType {
-    /// Just a palceholder, Never should have come here in practical
+    /// Placeholder default value used before a concrete MEI type is parsed.
+    /// This value should not appear in a valid decoded protocol frame.
     #[default]
     Err,
     /// 0x0D — CANopen General Reference

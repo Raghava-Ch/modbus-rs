@@ -186,8 +186,10 @@ pub trait CoilResponse {
 /// - Quantity in the payload may vary between calls depending on device state.
 ///
 /// ## Implementation Guidance
-/// - This trait uses `&mut self`. Keep internal mutation minimal and avoid long blocking
-///   operations inside the callback because it runs in the `poll()` execution path.
+/// - This trait uses `&self`.
+/// - If your application needs to mutate state in the callback, use interior mutability
+///   (for example `RefCell`, `Cell`, or a mutex abstraction) and keep the callback
+///   non-blocking because it runs in the `poll()` execution path.
 #[cfg(feature = "fifo")]
 pub trait FifoQueueResponse {
     /// Handles a Read FIFO Queue response.

@@ -1,12 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BackoffStrategy, JitterStrategy, ModbusConfig, ModbusTcpConfig, TimeKeeper,
+use modbus_rs::{
+    BackoffStrategy, ClientServices, CoilResponse, Coils, JitterStrategy, MbusError,
+    ModbusConfig, ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper,
     UnitIdOrSlaveAddr,
 };
-use mbus_tcp::StdTcpTransport;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, coil::Coils};
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread::sleep;
@@ -94,7 +91,7 @@ fn main() -> Result<()> {
         ClientServices::<_, _, 8>::new(transport, app, ModbusConfig::Tcp(tcp_config))?;
 
     let unit = UnitIdOrSlaveAddr::new(unit_id)?;
-    client.read_multiple_coils(1, unit, 0, 8)?;
+    client.coils().read_multiple_coils(1, unit, 0, 8)?;
 
     // poll() drives receive + timeout + scheduled retry flow.
     for _ in 0..120 {

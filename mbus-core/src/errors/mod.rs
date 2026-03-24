@@ -95,11 +95,24 @@ pub enum MbusError {
     InvalidDeviceIdCode,
     /// Invalid MEI type
     InvalidMeiType,
-    /// Invalid slave address (0): The provided broadcast address (0) is invalid.
-    /// Must use UnitIdOrSlaveAddr::new_broadcast_address() instead.
+    /// Invalid broadcast address (0): Broadcast must be created explicitly.
+    /// Use `UnitIdOrSlaveAddr::new_broadcast_address()` to signal broadcast intent.
     InvalidBroadcastAddress,
-    /// Broadcast not allowed
+    /// Broadcast not allowed.
+    ///
+    /// Note: This variant name contains a historical typo and is kept for
+    /// compatibility with existing code.
     BoradcastNotAllowed,
+}
+
+impl MbusError {
+    /// Returns the canonical "broadcast not allowed" error.
+    ///
+    /// This helper exists to provide a correctly spelled API path while
+    /// preserving the legacy enum variant name for compatibility.
+    pub const fn broadcast_not_allowed() -> Self {
+        Self::BoradcastNotAllowed
+    }
 }
 
 impl fmt::Display for MbusError {

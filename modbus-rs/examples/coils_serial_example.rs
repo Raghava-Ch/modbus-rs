@@ -1,11 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, CoilResponse, Coils, DataBits, JitterStrategy,
+    MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
+    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, coil::Coils};
 use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
@@ -121,14 +119,14 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -140,8 +138,7 @@ fn main() -> Result<()> {
 
     // 1. Write Single Coil
     println!("\n[1] Sending Write Single Coil (Addr: 0, Value: ON)...");
-    client
-        .write_single_coil(1, target_unit_id, 0, true)
+    client.coils().write_single_coil(1, target_unit_id, 0, true)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -150,8 +147,7 @@ fn main() -> Result<()> {
 
     // 2. Read Coils
     println!("\n[2] Sending Read Coils (Addr: 0, Qty: 5)...");
-    client
-        .read_multiple_coils(2, target_unit_id, 0, 5)
+    client.coils().read_multiple_coils(2, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();
@@ -166,8 +162,7 @@ fn main() -> Result<()> {
     multi_coils.set_value(11, false).unwrap();
     multi_coils.set_value(12, true).unwrap();
 
-    client
-        .write_multiple_coils(3, target_unit_id, 10, &multi_coils)
+    client.coils().write_multiple_coils(3, target_unit_id, 10, &multi_coils)
         .map_err(|e| anyhow::anyhow!(e))?;
     for _ in 0..5 {
         client.poll();

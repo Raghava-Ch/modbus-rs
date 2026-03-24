@@ -1,12 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{
-    BackoffStrategy, BaudRate, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
-    SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, CoilResponse, Coils, DataBits, JitterStrategy,
+    MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
+    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{CoilResponse, RequestErrorNotifier};
-use modbus_client::services::{ClientServices, coil::Coils};
 use std::env;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -83,7 +80,7 @@ fn main() -> Result<()> {
             .map_err(|_| MbusError::BufferTooSmall)?,
         mode: SerialMode::Rtu,
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 500,
@@ -97,7 +94,7 @@ fn main() -> Result<()> {
         ClientServices::<_, _, 1>::new(transport, app, ModbusConfig::Serial(serial_config))?;
 
     let unit = UnitIdOrSlaveAddr::new(unit_id)?;
-    client.read_multiple_coils(1, unit, 0, 8)?;
+    client.coils().read_multiple_coils(1, unit, 0, 8)?;
 
     // poll() drives receive + timeout + scheduled retry flow.
     for _ in 0..120 {

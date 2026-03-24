@@ -61,20 +61,14 @@ modbus-rs = { version = "0.1.0", default-features = false, features = [
 This example uses the current `ClientServices::new(transport, app, config)` API.
 
 ```rust,no_run
-use modbus_rs::errors::MbusError;
-use modbus_rs::transport::{
-    ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
+use modbus_rs::{
+  ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
+  RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
-use modbus_rs::modbus_client::app::RequestErrorNotifier;
-use modbus_rs::modbus_client::services::ClientServices;
-
-use modbus_rs::data_unit::common::MAX_ADU_FRAME_LEN;
 use modbus_rs::heapless::Vec;
 
 #[cfg(feature = "coils")]
-use modbus_rs::modbus_client::app::CoilResponse;
-#[cfg(feature = "coils")]
-use modbus_rs::modbus_client::services::coil::Coils;
+use modbus_rs::{CoilResponse, Coils};
 
 struct MockTransport;
 
@@ -115,12 +109,33 @@ fn main() -> Result<(), MbusError> {
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
 
     #[cfg(feature = "coils")]
-    client.read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
+    client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
 
     client.poll();
     Ok(())
 }
 ```
+
+  ### Feature-Scoped Request Access
+
+  Request APIs can be accessed via feature facades:
+
+  - `client.coils()`
+  - `client.registers()`
+  - `client.discrete_inputs()`
+  - `client.diagnostic()`
+  - `client.fifo()`
+  - `client.file_records()`
+
+  Batch request submission with scoped borrows:
+
+  ```rust
+  client.with_coils(|coils| {
+    coils.read_single_coil(10, UnitIdOrSlaveAddr::new(1)?, 0)?;
+    coils.write_single_coil(11, UnitIdOrSlaveAddr::new(1)?, 0, true)?;
+    Ok::<(), MbusError>(())
+  })?;
+  ```
 
   ### Connection Recovery
 

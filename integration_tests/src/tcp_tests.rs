@@ -1,15 +1,8 @@
 use crate::mock_app::MockApp;
 use anyhow::Result;
-use mbus_core;
-use mbus_core::errors::MbusError;
-use mbus_core::function_codes::public::EncapsulatedInterfaceType;
-use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_core::transport::{ModbusConfig, ModbusTcpConfig};
-use mbus_tcp::StdTcpTransport;
-use modbus_client::services::{
-    coil::Coils,
-    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
-    ClientServices,
+use modbus_rs::{
+    ClientServices, Coils, ConformityLevel, EncapsulatedInterfaceType, MbusError, ModbusConfig,
+    ModbusTcpConfig, ObjectId, ReadDeviceIdCode, StdTcpTransport, UnitIdOrSlaveAddr,
 };
 use std::io::{Read, Write};
 use std::net::TcpListener;

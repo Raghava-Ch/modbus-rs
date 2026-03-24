@@ -207,10 +207,10 @@ impl Transport for StdSerialTransport {
     ///
     /// This implementation is non-blocking: it checks the serial port's input buffer
     /// and reads only the bytes currently available. If no bytes are available,
-    /// it returns an empty `Vec`.
+    /// it returns `TransportError::Timeout`.
     ///
     /// # Returns
-    /// `Ok(Vec<u8, 260>)` containing the received ADU, or an error otherwise.
+    /// `Ok(Vec<u8, MAX_ADU_FRAME_LEN>)` containing the received ADU, or an error otherwise.
     fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
         let port = self.port.as_mut().ok_or(TransportError::ConnectionClosed)?;
 
@@ -222,23 +222,29 @@ impl Transport for StdSerialTransport {
 
         let mut buffer = Vec::new();
 
-        if bytes_to_read > 0 {
-            // Limit the read to the capacity of our heapless::Vec (260 bytes for Modbus ADU).
-            let limit = std::cmp::min(bytes_to_read as usize, buffer.capacity());
+        if bytes_to_read == 0 {
+            return Err(TransportError::Timeout);
+        }
 
-            // Create a temporary slice to read into.
-            let mut temp_buf = [0u8; MAX_ADU_FRAME_LEN];
-            let read_count = port.read(&mut temp_buf[..limit]).map_err(|e| {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    return TransportError::IoError; // Or handle as empty if preferred
-                }
-                Self::map_io_error(e)
-            })?;
+        // Limit the read to the capacity of our heapless::Vec.
+        let limit = std::cmp::min(bytes_to_read as usize, buffer.capacity());
 
-            // Extend the heapless Vec with the bytes actually read.
-            if buffer.extend_from_slice(&temp_buf[..read_count]).is_err() {
-                return Err(TransportError::IoError); // Should not happen given the limit check.
+        // Create a temporary slice to read into.
+        let mut temp_buf = [0u8; MAX_ADU_FRAME_LEN];
+        let read_count = port.read(&mut temp_buf[..limit]).map_err(|e| {
+            if e.kind() == io::ErrorKind::WouldBlock {
+                return TransportError::Timeout;
             }
+            Self::map_io_error(e)
+        })?;
+
+        if read_count == 0 {
+            return Err(TransportError::Timeout);
+        }
+
+        // Extend the heapless Vec with the bytes actually read.
+        if buffer.extend_from_slice(&temp_buf[..read_count]).is_err() {
+            return Err(TransportError::IoError); // Should not happen given the limit check.
         }
 
         Ok(buffer)

@@ -1,17 +1,10 @@
 use anyhow::Result;
 use heapless::Vec as HVec;
-use mbus_core::{
-    data_unit::common::MAX_ADU_FRAME_LEN,
-    errors::MbusError,
-    function_codes::public::DiagnosticSubFunction,
-    transport::{
-        BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
-        TransportType, UnitIdOrSlaveAddr,
-    },
-};
-use modbus_client::services::{
-    diagnostic::{ConformityLevel, ObjectId, ReadDeviceIdCode},
-    ClientServices,
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, ConformityLevel, DataBits,
+    DiagnosticSubFunction, JitterStrategy, MbusError, MAX_ADU_FRAME_LEN, ModbusConfig,
+    ModbusSerialConfig, ObjectId, Parity, ReadDeviceIdCode, SerialMode, Transport,
+    TransportError, TransportType, UnitIdOrSlaveAddr, crc16,
 };
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
@@ -89,14 +82,14 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -159,14 +152,14 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -181,7 +174,7 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
     // 2. Verify Sent Frame (RTU)
     // ADU: [UnitID(0)] [FC(5)] [Addr(00 0A)] [Val(FF 00)] [CRC]
     let mut expected = vec![0x00, 0x05, 0x00, 0x0A, 0xFF, 0x00];
-    let crc = mbus_core::transport::checksum::crc16(&expected);
+    let crc = crc16(&expected);
     expected.extend_from_slice(&crc.to_le_bytes());
 
     {
@@ -208,14 +201,14 @@ fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -237,7 +230,7 @@ fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
         0x04, // Byte count
         0x12, 0x34, 0x56, 0x78, // Data
     ];
-    let crc = mbus_core::transport::checksum::crc16(&expected);
+    let crc = crc16(&expected);
     expected.extend_from_slice(&crc.to_le_bytes());
 
     {
@@ -259,14 +252,14 @@ fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -295,14 +288,14 @@ fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -334,14 +327,14 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -387,14 +380,14 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -456,14 +449,14 @@ fn test_serial_read_coils_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -525,14 +518,14 @@ fn test_serial_write_single_coil_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -575,14 +568,14 @@ fn test_serial_read_holding_registers_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -621,14 +614,14 @@ fn test_serial_read_device_id_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -679,14 +672,14 @@ fn test_serial_broadcast_write_single_coil_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -718,14 +711,14 @@ fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -753,14 +746,14 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         parity: Parity::None,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -820,14 +813,14 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str("/dev/mock").unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Seven,
+        data_bits: DataBits::Seven,
         parity: Parity::Even,
         stop_bits: 1,
         response_timeout_ms: 1000,
         mode: SerialMode::Ascii,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);

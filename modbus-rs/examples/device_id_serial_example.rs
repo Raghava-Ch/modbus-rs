@@ -1,14 +1,9 @@
 use anyhow::Result;
-use mbus_core::errors::MbusError;
-use mbus_core::function_codes::public::DiagnosticSubFunction;
-use mbus_core::transport::{
-    BaudRate, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TimeKeeper, UnitIdOrSlaveAddr,
-};
-use mbus_serial::StdSerialTransport;
-use modbus_client::app::{DiagnosticsResponse, RequestErrorNotifier};
-use modbus_client::services::{
-    ClientServices,
-    diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode},
+use modbus_rs::{
+    BackoffStrategy, BaudRate, ClientServices, DataBits, DiagnosticSubFunction,
+    DiagnosticsResponse, DeviceIdentificationResponse, EncapsulatedInterfaceType, JitterStrategy,
+    MbusError, ModbusConfig, ModbusSerialConfig, ObjectId, Parity, ReadDeviceIdCode,
+    RequestErrorNotifier, SerialMode, StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -53,7 +48,7 @@ impl DiagnosticsResponse for ClientApp {
         &self,
         _: u16,
         _: UnitIdOrSlaveAddr,
-        _: mbus_core::function_codes::public::EncapsulatedInterfaceType,
+        _: EncapsulatedInterfaceType,
         _: &[u8],
     ) {
     }
@@ -121,14 +116,14 @@ fn main() -> Result<()> {
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),
         baud_rate: BaudRate::Baud9600,
-        data_bits: mbus_core::transport::DataBits::Eight,
+        data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
         response_timeout_ms: 2000,
         mode: SerialMode::Rtu,
         retry_attempts: 3,
-        retry_backoff_strategy: mbus_core::transport::BackoffStrategy::Immediate,
-        retry_jitter_strategy: mbus_core::transport::JitterStrategy::None,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     };
     let config = ModbusConfig::Serial(serial_config);
@@ -140,8 +135,7 @@ fn main() -> Result<()> {
 
     // 1. Read Basic Device Identification
     println!("\n[1] Sending Read Device Identification (Basic)...");
-    client
-        .read_device_identification(
+    client.diagnostic().read_device_identification(
             1,
             target_unit_id,
             ReadDeviceIdCode::Basic,
