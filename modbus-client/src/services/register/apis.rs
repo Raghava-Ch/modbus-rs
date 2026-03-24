@@ -28,7 +28,7 @@ where
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_holding_registers(
         &mut self,
@@ -38,7 +38,7 @@ where
         quantity: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = register::service::ServiceBuilder::read_holding_registers(
@@ -86,7 +86,7 @@ where
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_holding_register(
         &mut self,
@@ -98,7 +98,7 @@ where
 
         // Modbus protocol specification: Broadcast is not supported for Read operations.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         // Construct the ADU frame using the register service builder with quantity = 1
@@ -151,7 +151,7 @@ where
     ///   and the frame was transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_input_registers(
         &mut self,
@@ -161,7 +161,7 @@ where
         quantity: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = register::service::ServiceBuilder::read_input_registers(
@@ -209,7 +209,7 @@ where
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from a broadcast address.
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to read from a broadcast address.
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_input_register(
         &mut self,
@@ -218,7 +218,7 @@ where
         address: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = register::service::ServiceBuilder::read_input_registers(
@@ -269,7 +269,7 @@ where
     /// the request is sent to all slaves, and no response is expected or queued.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to broadcast over TCP.
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_single_register(
         &mut self,
@@ -292,7 +292,7 @@ where
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+                return Err(MbusError::BroadcastNotAllowed); // Modbus TCP typically does not support broadcast
             }
         } else {
             self.add_an_expectation(
@@ -332,7 +332,7 @@ where
     /// Serial Modbus allows broadcast. No response is expected for broadcast requests.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to broadcast over TCP.
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to broadcast over TCP.
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_multiple_registers(
         &mut self,
@@ -357,7 +357,7 @@ where
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+                return Err(MbusError::BroadcastNotAllowed); // Modbus TCP typically does not support broadcast
             }
         } else {
             self.add_an_expectation(
@@ -406,7 +406,7 @@ where
         write_values: &[u16],
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // FC 23 explicitly forbids broadcast
+            return Err(MbusError::BroadcastNotAllowed); // FC 23 explicitly forbids broadcast
         }
 
         // 1. Construct the ADU frame using the register service
@@ -483,7 +483,7 @@ where
 
         if unit_id_slave_addr.is_broadcast() {
             if self.transport.transport_type().is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed);
+                return Err(MbusError::BroadcastNotAllowed);
             }
         } else {
             self.add_an_expectation(

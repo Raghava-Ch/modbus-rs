@@ -37,7 +37,7 @@ where
         quantity: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         // 1. Compile the ADU frame (PDU + Transport Header/Footer)
@@ -96,7 +96,7 @@ where
         address: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::read_coils_request (qty=1)
@@ -166,7 +166,7 @@ where
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+                return Err(MbusError::BroadcastNotAllowed); // Modbus TCP typically does not support broadcast
             }
         } else {
             // Only add expectation if not a broadcast; servers do not respond to broadcast writes
@@ -228,7 +228,7 @@ where
         // expect a response from the server(s).
         if unit_id_slave_addr.is_broadcast() {
             if transport_type.is_tcp_type() {
-                return Err(MbusError::BoradcastNotAllowed); // Modbus TCP typically does not support broadcast
+                return Err(MbusError::BroadcastNotAllowed); // Modbus TCP typically does not support broadcast
             }
         } else {
             self.add_an_expectation(

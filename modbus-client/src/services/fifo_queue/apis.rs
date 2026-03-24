@@ -39,7 +39,7 @@ where
     ) -> Result<(), MbusError> {
         // Modbus protocol specification: Broadcast is not supported for Read operations.
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = fifo_queue::service::ServiceBuilder::read_fifo_queue(

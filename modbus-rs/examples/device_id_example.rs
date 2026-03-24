@@ -16,7 +16,7 @@ struct ClientApp;
 // Implement DiagnosticsResponse to handle the Device ID response
 impl DiagnosticsResponse for ClientApp {
     fn read_device_identification_response(
-        &self,
+        &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         response: &DeviceIdentificationResponse,
@@ -51,7 +51,7 @@ impl DiagnosticsResponse for ClientApp {
     }
 
     fn encapsulated_interface_transport_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _mei_type: EncapsulatedInterfaceType,
@@ -59,7 +59,7 @@ impl DiagnosticsResponse for ClientApp {
     ) {
     }
     fn diagnostics_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _sub_function: DiagnosticSubFunction,
@@ -67,7 +67,7 @@ impl DiagnosticsResponse for ClientApp {
     ) {
     }
     fn get_comm_event_counter_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u16,
@@ -75,7 +75,7 @@ impl DiagnosticsResponse for ClientApp {
     ) {
     }
     fn get_comm_event_log_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u16,
@@ -85,19 +85,19 @@ impl DiagnosticsResponse for ClientApp {
     ) {
     }
     fn read_exception_status_response(
-        &self,
+        &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _status: u8,
     ) {
     }
-    fn report_server_id_response(&self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
+    fn report_server_id_response(&mut self, _txn_id: u16, _unit_id: UnitIdOrSlaveAddr, _data: &[u8]) {}
 }
 
 // Implement other required traits with minimal/empty logic for this example
 // as they are not used in this example.
 impl RequestErrorNotifier for ClientApp {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "Error [Txn: {}, Unit: {}]: Request failed: {:?}",
             txn_id,

@@ -55,7 +55,7 @@ impl Transport for MockTransport {
 struct App;
 
 impl RequestErrorNotifier for App {
-    fn request_failed(&self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
+    fn request_failed(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, error: MbusError) {
         println!(
             "request_failed: txn={} unit={} error={:?}",
             txn_id,
@@ -76,10 +76,10 @@ impl TimeKeeper for App {
 
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
-    fn read_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-    fn read_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_multiple_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
+    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+    fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
 #[cfg(feature = "registers")]
@@ -103,25 +103,25 @@ impl DiscreteInputResponse for App {
 
 #[cfg(feature = "diagnostics")]
 impl DiagnosticsResponse for App {
-    fn read_device_identification_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &DeviceIdentificationResponse) {}
+    fn read_device_identification_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &DeviceIdentificationResponse) {}
     fn encapsulated_interface_transport_response(
-        &self,
+        &mut self,
         _: u16,
         _: UnitIdOrSlaveAddr,
         _: EncapsulatedInterfaceType,
         _: &[u8],
     ) {
     }
-    fn read_exception_status_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
-    fn diagnostics_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: DiagnosticSubFunction, _: &[u16]) {}
-    fn get_comm_event_counter_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
-    fn get_comm_event_log_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16, _: u16, _: &[u8]) {}
-    fn report_server_id_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
+    fn read_exception_status_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
+    fn diagnostics_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: DiagnosticSubFunction, _: &[u16]) {}
+    fn get_comm_event_counter_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+    fn get_comm_event_log_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16, _: u16, _: &[u8]) {}
+    fn report_server_id_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
 }
 
 #[cfg(feature = "fifo")]
 impl FifoQueueResponse for App {
-    fn read_fifo_queue_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &FifoQueue) {}
+    fn read_fifo_queue_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &FifoQueue) {}
 }
 
 #[cfg(feature = "file-record")]

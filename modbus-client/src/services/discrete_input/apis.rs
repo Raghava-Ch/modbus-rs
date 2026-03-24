@@ -35,7 +35,7 @@ where
         quantity: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = discrete_input::service::ServiceBuilder::read_discrete_inputs(
@@ -79,7 +79,7 @@ where
     /// `Ok(())` if the request was successfully enqueued and transmitted.
     ///
     /// # Errors
-    /// Returns `Err(MbusError::BoradcastNotAllowed)` if attempting to read from address `0` (Broadcast).
+    /// Returns `Err(MbusError::BroadcastNotAllowed)` if attempting to read from address `0` (Broadcast).
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_discrete_input(
         &mut self,
@@ -88,7 +88,7 @@ where
         address: u16,
     ) -> Result<(), MbusError> {
         if unit_id_slave_addr.is_broadcast() {
-            return Err(MbusError::BoradcastNotAllowed); // Modbus forbids broadcast Read operations
+            return Err(MbusError::BroadcastNotAllowed); // Modbus forbids broadcast Read operations
         }
 
         let frame = discrete_input::service::ServiceBuilder::read_discrete_inputs(

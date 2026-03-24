@@ -102,7 +102,7 @@ pub enum MbusError {
     ///
     /// Note: This variant name contains a historical typo and is kept for
     /// compatibility with existing code.
-    BoradcastNotAllowed,
+    BroadcastNotAllowed,
 }
 
 impl MbusError {
@@ -111,7 +111,7 @@ impl MbusError {
     /// This helper exists to provide a correctly spelled API path while
     /// preserving the legacy enum variant name for compatibility.
     pub const fn broadcast_not_allowed() -> Self {
-        Self::BoradcastNotAllowed
+        Self::BroadcastNotAllowed
     }
 }
 
@@ -239,7 +239,7 @@ impl fmt::Display for MbusError {
                 f,
                 "Invalid broadcast address: The provided broadcast address (0) is invalid. Must use UnitIdOrSlaveAddr::new_broadcast_address() instead."
             ),
-            MbusError::BoradcastNotAllowed => write!(
+            MbusError::BroadcastNotAllowed => write!(
                 f,
                 "Broadcast not allowed: Broadcast not allowed"
             ),

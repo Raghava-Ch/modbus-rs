@@ -115,6 +115,7 @@ Available features:
 - `file-record`
 - `diagnostics`
 - `serial-ascii` (forwards to `mbus-core/serial-ascii` to enable ASCII-sized ADU buffers)
+- `logging` (enables low-priority internal state-machine diagnostics via the `log` facade)
 
 Default behavior:
 
@@ -129,6 +130,28 @@ Example (minimal feature set):
 ```toml
 [dependencies]
 modbus-client = { version = "0.1.0", default-features = false, features = ["coils"] }
+```
+
+## Logging
+
+`modbus-client` can emit low-priority internal diagnostics through the `log` facade when the
+`logging` feature is enabled.
+
+These logs are intentionally limited to `debug` and `trace` so applications can filter them
+without treating normal control-flow events as warnings or errors.
+
+Examples of logged events:
+
+- frame parse/resynchronization
+- response dispatch matching
+- timeout scans and retry scheduling
+- retry send failures
+- pending-request flush during connection loss or reconnect
+
+Typical filtering example:
+
+```bash
+RUST_LOG=modbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
 ## Usage Pattern
