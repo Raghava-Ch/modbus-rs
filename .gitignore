@@ -16,6 +16,7 @@ Cargo.lock
 
 /*.csv
 
+# Project specific
 .DS_Store
 temp
 **.temp.**
