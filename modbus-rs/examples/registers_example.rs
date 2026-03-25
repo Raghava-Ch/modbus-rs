@@ -216,7 +216,11 @@ fn main() -> Result<()> {
         .registers()
         .write_single_register(1, unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll(); // Process response
+    // Process response
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     // 2. Read Single Holding Register
     // Reads back the value from register at address 10
@@ -225,7 +229,10 @@ fn main() -> Result<()> {
         .registers()
         .read_single_holding_register(2, unit_id, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     // 3. Write Multiple Registers
     // Writes values [10, 20, 30, 40, 50] starting at address 20
@@ -235,7 +242,10 @@ fn main() -> Result<()> {
         .registers()
         .write_multiple_registers(3, unit_id, 20, 5, &values)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     // 4. Read Holding Registers
     // Reads 5 registers starting at address 20
@@ -244,7 +254,10 @@ fn main() -> Result<()> {
         .registers()
         .read_holding_registers(4, unit_id, 20, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     // 5. Read Input Registers
     // Reads 5 input registers starting at address 0
@@ -253,7 +266,10 @@ fn main() -> Result<()> {
         .registers()
         .read_input_registers(5, unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     // 6. Read/Write Multiple Registers
     // Reads 2 registers at 20, and writes [99, 88] to address 30
@@ -263,7 +279,10 @@ fn main() -> Result<()> {
         .registers()
         .read_write_multiple_registers(6, unit_id, 20, 2, 30, &write_vals)
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    for _ in 0..5 {
+        client.poll();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 
     println!("\n--- Example Completed ---");
     Ok(())

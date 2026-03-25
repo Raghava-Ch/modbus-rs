@@ -28,6 +28,8 @@ temp
 **.debug.json
 **.aiexclude
 .vscode
+.wasm-pack-cache
+mbus-ffi/pkg
 
 # CMake project ignores
 CMakeLists.txt.user
