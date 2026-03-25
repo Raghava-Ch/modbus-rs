@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mbus-ffi Minimal Full Smoke</title>
+  <style>
+    body {
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 780px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.4;
+      background-color: #555;
+      text-decoration-color: aqua;
+    }
+    .row { margin: 0.6rem 0; }
+    label { display: inline-block; min-width: 170px; background-color: #6a6a6a;}
+    input { width: 320px; max-width: 100%; padding: 0.35rem; background-color: #6a6a6a;}
+    button { margin-right: 0.5rem; padding: 0.45rem 0.8rem; background-color: #676262;}
+    pre {
+      border: 1px solid #020202;
+      border-radius: 6px;
+      background: #a37d7d;
+      padding: 0.8rem;
+      min-height: 180px;
+      white-space: pre-wrap;
+    }
+    .hint { color: #555; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <h1>mbus-ffi Minimal Full Smoke</h1>
+
+  <p class="hint">
+    Before opening this page, build the wasm package in <code>mbus-ffi</code>:
+    <br />
+    <code>wasm-pack build --target web --features wasm,full</code>
+  </p>
+
+  <p class="hint">
+    This page uses hard-coded addresses from <code>0</code> and intentionally keeps the UI minimal.
+    Unsupported functions may fail depending on the target device.
+  </p>
+
+  <div class="row">
+    <label for="ws">WebSocket URL</label>
+    <input id="ws" value="ws://127.0.0.1:8080" />
+  </div>
+  <div class="row">
+    <label for="unitId">Unit ID</label>
+    <input id="unitId" type="number" value="1" min="1" max="247" />
+  </div>
+  <div class="row">
+    <label for="timeout">Response Timeout (ms)</label>
+    <input id="timeout" type="number" value="3000" min="1" />
+  </div>
+  <div class="row">
+    <label for="retries">Retry Attempts</label>
+    <input id="retries" type="number" value="1" min="0" />
+  </div>
+  <div class="row">
+    <label for="tick">Tick Interval (ms)</label>
+    <input id="tick" type="number" value="20" min="1" />
+  </div>
+  <div class="row">
+    <label for="fc04Addr">Input Register Address</label>
+    <input id="fc04Addr" type="number" value="0" min="0" max="65535" />
+  </div>
+  <div class="row">
+    <label for="fc04Qty">Input Register Quantity</label>
+    <input id="fc04Qty" type="number" value="10" min="1" max="125" />
+  </div>
+
+  <div class="row">
+    <button id="btnConnect">Connect</button>
+    <button id="btnPing">Connection Status</button>
+    <button id="btnRawPing">Raw WS Test</button>
+    <button id="btnRunInputRegs">Run Input Register Checks</button>
+    <button id="btnRunAll">Run All Feature Checks</button>
+  </div>
+
+  <h3>Log</h3>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import init, { WasmModbusClient } from "../pkg/mbus_ffi.js";
+
+    const logEl = document.getElementById("log");
+    const log = (msg) => {
+      const ts = new Date().toISOString().slice(11, 23);
+      logEl.textContent += `[${ts}] ${msg}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    const formatValue = (value) => {
+      if (value == null) {
+        return String(value);
+      }
+      if (ArrayBuffer.isView(value)) {
+        return JSON.stringify(Array.from(value));
+      }
+      if (Array.isArray(value)) {
+        return JSON.stringify(value.map((entry) => {
+          if (entry && typeof entry === "object") {
+            const normalized = { ...entry };
+            if (normalized.data && ArrayBuffer.isView(normalized.data)) {
+              normalized.data = Array.from(normalized.data);
+            }
+            return normalized;
+          }
+          return entry;
+        }));
+      }
+      if (typeof value === "object") {
+        return JSON.stringify(value);
+      }
+      return String(value);
+    };
+
+    const requireClient = () => {
+      if (!client) {
+        log("Client not initialized. Click Connect first.");
+        return false;
+      }
+      return true;
+    };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const classifyError = (name, err) => {
+      const text = String(err);
+      if (text.includes("InvalidTransport")) {
+        return { level: "SKIP", detail: `${text} (serial-only function on TCP/WebSocket transport)` };
+      }
+      if (text.includes("ModbusException(1)")) {
+        return { level: "SKIP", detail: `${text} (device reports unsupported function)` };
+      }
+      return { level: "FAIL", detail: text };
+    };
+
+    const withBusyRetry = async (name, run, retries = 1) => {
+      try {
+        return await run();
+      } catch (err) {
+        const text = String(err);
+        if (retries > 0 && text.includes("ModbusException(6)")) {
+          log(`RETRY ${name}: ${text} -> waiting and retrying once`);
+          await sleep(900);
+          return withBusyRetry(name, run, retries - 1);
+        }
+        throw err;
+      }
+    };
+
+    let client = null;
+
+    await init();
+    log("WASM initialized.");
+
+    document.getElementById("btnConnect").addEventListener("click", () => {
+      try {
+        const ws = document.getElementById("ws").value.trim();
+        const unitId = Number(document.getElementById("unitId").value);
+        const timeout = Number(document.getElementById("timeout").value);
+        const retries = Number(document.getElementById("retries").value);
+        const tick = Number(document.getElementById("tick").value);
+
+        client = new WasmModbusClient(ws, unitId, timeout, retries, tick);
+        log(`Client created for ${ws}, unit=${unitId}.`);
+      } catch (err) {
+        log(`Connect setup error: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnPing").addEventListener("click", () => {
+      if (!client) {
+        log("Client not initialized. Click Connect first.");
+        return;
+      }
+      log(`is_connected = ${client.is_connected()}`);
+    });
+
+    // ── Raw WebSocket connectivity test (bypasses WASM entirely) ──────────
+    document.getElementById("btnRawPing").addEventListener("click", () => {
+      const url = document.getElementById("ws").value.trim();
+      log(`[RAW] Opening plain WebSocket to ${url} ...`);
+      const sock = new WebSocket(url);
+      sock.binaryType = "arraybuffer";
+      sock.onopen  = () => { log(`[RAW] onopen readyState=${sock.readyState}`); sock.close(); };
+      sock.onclose = (e) => { log(`[RAW] onclose code=${e.code} reason='${e.reason}'`); };
+      sock.onerror = ()  => { log(`[RAW] onerror — proxy not reachable or not running`); };
+    });
+
+    document.getElementById("btnRunInputRegs").addEventListener("click", async () => {
+      if (!requireClient()) {
+        return;
+      }
+
+      const addr = Number(document.getElementById("fc04Addr").value);
+      const qty = Number(document.getElementById("fc04Qty").value);
+
+      const steps = [
+        ["is_connected", async () => client.is_connected()],
+        ["read_input_registers", async () => withBusyRetry("read_input_registers", () => client.read_input_registers(addr, qty), 2)],
+        ["read_single_input_register", async () => withBusyRetry("read_single_input_register", () => client.read_single_input_register(addr), 2)],
+      ];
+
+      log(`Running isolated FC04 checks from address ${addr}, qty ${qty}...`);
+      await sleep(1200);
+      for (const [name, run] of steps) {
+        try {
+          const result = await run();
+          log(`OK   ${name}: ${formatValue(result)}`);
+        } catch (err) {
+          const classified = classifyError(name, err);
+          log(`${classified.level} ${name}: ${classified.detail}`);
+        }
+        await sleep(1200);
+      }
+      log("Isolated FC04 run complete.");
+    });
+
+    document.getElementById("btnRunAll").addEventListener("click", async () => {
+      if (!requireClient()) {
+        return;
+      }
+
+      const steps = [
+        ["is_connected", async () => client.is_connected()],
+        ["read_coils", async () => client.read_coils(0, 8)],
+        ["read_single_coil", async () => client.read_single_coil(0)],
+        ["write_single_coil", async () => client.write_single_coil(0, true)],
+        ["write_multiple_coils", async () => client.write_multiple_coils(0, 8, new Uint8Array([0x0F]))],
+        ["read_discrete_inputs", async () => client.read_discrete_inputs(0, 8)],
+        ["read_single_discrete_input", async () => client.read_single_discrete_input(0)],
+        ["read_holding_registers", async () => client.read_holding_registers(0, 2)],
+        ["read_single_holding_register", async () => client.read_single_holding_register(0)],
+        ["write_single_register", async () => client.write_single_register(0, 1)],
+        ["write_multiple_registers", async () => client.write_multiple_registers(0, 2, new Uint16Array([1, 2]))],
+        ["read_write_multiple_registers", async () => client.read_write_multiple_registers(0, 1, 0, 2, new Uint16Array([3, 4]))],
+        ["mask_write_register", async () => client.mask_write_register(0, 0xFFFF, 0x0001)],
+        ["read_input_registers", async () => withBusyRetry("read_input_registers", () => client.read_input_registers(0, 10))],
+        ["read_single_input_register", async () => withBusyRetry("read_single_input_register", () => client.read_single_input_register(0))],
+        ["read_fifo_queue", async () => client.read_fifo_queue(0)],
+        ["read_file_record", async () => client.read_file_record(1, 0, 1)],
+        ["write_file_record", async () => client.write_file_record(1, 0, new Uint16Array([1]))],
+        ["read_exception_status", async () => client.read_exception_status()],
+        ["diagnostics", async () => client.diagnostics(0, new Uint16Array([0]))],
+        ["get_comm_event_counter", async () => client.get_comm_event_counter()],
+        ["get_comm_event_log", async () => client.get_comm_event_log()],
+        ["report_server_id", async () => client.report_server_id()],
+        ["read_device_identification", async () => client.read_device_identification(1, 0)],
+      ];
+
+      log("Running minimal full smoke from address 0...");
+      for (const [name, run] of steps) {
+        try {
+          const result = await run();
+          log(`OK   ${name}: ${formatValue(result)}`);
+        } catch (err) {
+          const classified = classifyError(name, err);
+          log(`${classified.level} ${name}: ${classified.detail}`);
+        }
+        await sleep(700);
+      }
+      log("Smoke run complete.");
+    });
+  </script>
+</body>
+</html>

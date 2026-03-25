@@ -26,10 +26,11 @@ description = "Modbus client stack for embedded and std environments with TCP, R
 
 [workspace.dependencies]
 # Shared dependencies across workspace
-mbus-core = { version = "0.2.0", path = "./mbus-core" }
+mbus-core   = { version = "0.2.0", path = "./mbus-core" }
 mbus-serial = { version = "0.2.0", path = "./mbus-serial" }
-mbus-tcp = { version = "0.2.0", path = "./mbus-tcp" }
+mbus-tcp    = { version = "0.2.0", path = "./mbus-tcp" }
 mbus-client = { version = "0.2.0", path = "./mbus-client" }
+mbus-ffi    = { version = "0.0.1", path = "./mbus-ffi" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }

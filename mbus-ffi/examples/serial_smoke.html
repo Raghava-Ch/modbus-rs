@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mbus-ffi Web Serial Smoke</title>
+  <style>
+    body { font-family: ui-sans-serif, -apple-system, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; background: #444; color: #eee; }
+    .row { margin: 0.6rem 0; }
+    label { display: inline-block; min-width: 180px; }
+    input, select { width: 220px; padding: 0.3rem; background: #5a5a5a; color: #eee; border: 1px solid #888; }
+    button { margin-right: 0.5rem; padding: 0.45rem 0.8rem; background: #5a6a7a; color: #eee; border: 1px solid #aaa; }
+    pre { border: 1px solid #666; border-radius: 6px; background: #333; padding: 0.8rem; min-height: 160px; white-space: pre-wrap; }
+    .hint { color: #bbb; }
+  </style>
+</head>
+<body>
+  <h1>mbus-ffi Web Serial Smoke</h1>
+  <p class="hint">Requires Chromium-based browser + HTTPS/localhost + user gesture for port selection.</p>
+
+  <div class="row"><label for="unitId">Unit ID</label><input id="unitId" type="number" value="1" min="1" max="247" /></div>
+  <div class="row"><label for="mode">Mode</label><select id="mode"><option value="rtu">RTU</option><option value="ascii">ASCII</option></select></div>
+  <div class="row"><label for="baud">Baud Rate</label><input id="baud" type="number" value="9600" min="300" /></div>
+  <div class="row"><label for="dataBits">Data Bits</label><input id="dataBits" type="number" value="8" min="5" max="8" /></div>
+  <div class="row"><label for="stopBits">Stop Bits</label><input id="stopBits" type="number" value="1" min="1" max="2" /></div>
+  <div class="row"><label for="parity">Parity</label><select id="parity"><option value="none">none</option><option value="even" selected>even</option><option value="odd">odd</option></select></div>
+  <div class="row"><label for="timeout">Response Timeout (ms)</label><input id="timeout" type="number" value="3000" min="1" /></div>
+  <div class="row"><label for="retries">Retry Attempts</label><input id="retries" type="number" value="1" min="0" /></div>
+  <div class="row"><label for="tick">Tick Interval (ms)</label><input id="tick" type="number" value="20" min="1" /></div>
+
+  <div class="row">
+    <button id="btnRequestPort">Request Serial Port</button>
+    <button id="btnConnect">Create Serial Client</button>
+    <button id="btnStatus">Connection Status</button>
+    <button id="btnReadHR">Read Holding Regs @0 qty=2</button>
+  </div>
+
+  <h3>Log</h3>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import init, { request_serial_port, WasmSerialModbusClient } from "../pkg/mbus_ffi.js";
+
+    const logEl = document.getElementById("log");
+    const log = (msg) => {
+      const ts = new Date().toISOString().slice(11, 23);
+      logEl.textContent += `[${ts}] ${msg}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    const num = (id) => Number(document.getElementById(id).value);
+    const str = (id) => document.getElementById(id).value;
+
+    let portHandle = null;
+    let client = null;
+
+    await init();
+    log("WASM initialized.");
+
+    document.getElementById("btnRequestPort").addEventListener("click", async () => {
+      try {
+        portHandle = await request_serial_port();
+        log(`Serial port granted. valid=${portHandle.is_valid()}`);
+      } catch (err) {
+        log(`request_serial_port ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnConnect").addEventListener("click", () => {
+      if (!portHandle) {
+        log("No port selected. Click Request Serial Port first.");
+        return;
+      }
+      try {
+        client = new WasmSerialModbusClient(
+          portHandle,
+          num("unitId"),
+          str("mode"),
+          num("baud"),
+          num("dataBits"),
+          num("stopBits"),
+          str("parity"),
+          num("timeout"),
+          num("retries"),
+          num("tick"),
+        );
+        log("WasmSerialModbusClient created.");
+      } catch (err) {
+        log(`Create client ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnStatus").addEventListener("click", () => {
+      if (!client) {
+        log("Client not initialized.");
+        return;
+      }
+      log(`is_connected = ${client.is_connected()}`);
+    });
+
+    document.getElementById("btnReadHR").addEventListener("click", async () => {
+      if (!client) {
+        log("Client not initialized.");
+        return;
+      }
+      try {
+        const rsp = await client.read_holding_registers(0, 2);
+        log(`read_holding_registers OK: ${JSON.stringify(Array.from(rsp))}`);
+      } catch (err) {
+        log(`read_holding_registers ERROR: ${String(err)}`);
+      }
+    });
+  </script>
+</body>
+</html>
