@@ -783,12 +783,12 @@ where
     APP: ClientCommon,
 {
     fn dispatch_response(&mut self, message: &ModbusMessage) {
-        let txn_id = message.transaction_id();
+        let wire_txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
         let index = if self.transport.transport_type().is_tcp_type() {
             self.expected_responses.iter().position(|r| {
-                r.txn_id == txn_id && r.unit_id_or_slave_addr == unit_id_or_slave_addr.into()
+                r.txn_id == wire_txn_id && r.unit_id_or_slave_addr == unit_id_or_slave_addr.into()
             })
         } else {
             self.expected_responses
@@ -803,16 +803,18 @@ where
             None => {
                 client_log_debug!(
                     "dropping unmatched response: txn_id={}, unit_id_or_slave_addr={}",
-                    txn_id,
+                    wire_txn_id,
                     unit_id_or_slave_addr.get()
                 );
                 return;
             }
         };
 
+        let request_txn_id = expected.txn_id;
+
         client_log_trace!(
             "dispatching response: txn_id={}, unit_id_or_slave_addr={}, queue_len_after_pop={}",
-            txn_id,
+            request_txn_id,
             unit_id_or_slave_addr.get(),
             self.expected_responses.len()
         );
@@ -822,12 +824,12 @@ where
         if let Some(exception_code) = message.pdu().error_code() {
             client_log_debug!(
                 "modbus exception response: txn_id={}, unit_id_or_slave_addr={}, code=0x{:02X}",
-                txn_id,
+                request_txn_id,
                 unit_id_or_slave_addr.get(),
                 exception_code
             );
             self.app.request_failed(
-                txn_id,
+                request_txn_id,
                 unit_id_or_slave_addr,
                 MbusError::ModbusException(exception_code),
             );
@@ -1416,6 +1418,7 @@ mod tests {
     use heapless::Vec;
     use mbus_core::errors::MbusError;
     use mbus_core::function_codes::public::DiagnosticSubFunction;
+    use mbus_core::transport::checksum;
     use mbus_core::transport::TransportType;
     use mbus_core::transport::{
         BackoffStrategy, BaudRate, JitterStrategy, ModbusConfig, ModbusSerialConfig,
@@ -1430,6 +1433,46 @@ mod tests {
 
     fn rand_upper_percent_20() -> u32 {
         40
+    }
+
+    fn make_serial_config() -> ModbusSerialConfig {
+        ModbusSerialConfig {
+            port_path: heapless::String::<64>::from_str("/dev/ttyUSB0").unwrap(),
+            mode: SerialMode::Rtu,
+            baud_rate: BaudRate::Baud19200,
+            data_bits: mbus_core::transport::DataBits::Eight,
+            stop_bits: 1,
+            parity: Parity::Even,
+            response_timeout_ms: 100,
+            retry_attempts: 0,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        }
+    }
+
+    fn make_serial_client() -> ClientServices<MockTransport, MockApp, 1> {
+        let transport = MockTransport {
+            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
+            ..Default::default()
+        };
+        let app = MockApp::default();
+        ClientServices::<MockTransport, MockApp, 1>::new_serial(transport, app, make_serial_config())
+            .unwrap()
+    }
+
+    fn make_rtu_exception_adu(
+        unit_id: UnitIdOrSlaveAddr,
+        function_code: u8,
+        exception_code: u8,
+    ) -> Vec<u8, MAX_ADU_FRAME_LEN> {
+        let mut frame = Vec::new();
+        frame.push(unit_id.get()).unwrap();
+        frame.push(function_code | 0x80).unwrap();
+        frame.push(exception_code).unwrap();
+        let crc = checksum::crc16(frame.as_slice()).to_le_bytes();
+        frame.extend_from_slice(&crc).unwrap();
+        frame
     }
 
     // --- Mock Transport Implementation ---
@@ -3337,6 +3380,235 @@ mod tests {
         assert_eq!(*failed_txn, txn_id);
         assert_eq!(*failed_unit, unit_id);
         assert_eq!(*failed_err, MbusError::ModbusException(0x02));
+    }
+
+    #[test]
+    fn test_serial_exception_coil_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2001;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        let mut values = Coils::new(0x0000, 10).unwrap();
+        values.set_value(0x0000, true).unwrap();
+        values.set_value(0x0001, false).unwrap();
+        values.set_value(0x0002, true).unwrap();
+        values.set_value(0x0003, false).unwrap();
+        values.set_value(0x0004, true).unwrap();
+        values.set_value(0x0005, false).unwrap();
+        values.set_value(0x0006, true).unwrap();
+        values.set_value(0x0007, false).unwrap();
+        values.set_value(0x0008, true).unwrap();
+        values.set_value(0x0009, false).unwrap();
+
+        client_services
+            .write_multiple_coils(txn_id, unit_id, 0x0000, &values)
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x0F, 0x01);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
+        assert!(
+            client_services
+                .app
+                .received_write_multiple_coils_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    #[test]
+    fn test_serial_exception_register_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2002;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_holding_registers(txn_id, unit_id, 0x0000, 1)
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x03, 0x02);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x02));
+        assert!(
+            client_services
+                .app
+                .received_holding_register_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    #[test]
+    fn test_serial_exception_discrete_input_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2003;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_discrete_inputs(txn_id, unit_id, 0x0000, 8)
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x02, 0x02);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x02));
+        assert!(
+            client_services
+                .app
+                .received_discrete_input_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    #[test]
+    fn test_serial_exception_fifo_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2004;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_fifo_queue(txn_id, unit_id, 0x0001)
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x18, 0x01);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
+        assert!(
+            client_services
+                .app
+                .received_read_fifo_queue_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    #[test]
+    fn test_serial_exception_file_record_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2005;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        let mut sub_req = SubRequest::new();
+        sub_req.add_read_sub_request(4, 1, 2).unwrap();
+        client_services
+            .read_file_record(txn_id, unit_id, &sub_req)
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x14, 0x02);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x02));
+        assert!(
+            client_services
+                .app
+                .received_read_file_record_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
+    }
+
+    #[test]
+    fn test_serial_exception_diagnostic_response_fails_immediately_with_request_txn_id() {
+        let mut client_services = make_serial_client();
+
+        let txn_id = 0x2006;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_device_identification(
+                txn_id,
+                unit_id,
+                ReadDeviceIdCode::Basic,
+                ObjectId::from(0x00),
+            )
+            .unwrap();
+
+        let exception_adu = make_rtu_exception_adu(unit_id, 0x2B, 0x01);
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(exception_adu)
+            .unwrap();
+
+        client_services.poll();
+
+        let failed = client_services.app().failed_requests.borrow();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, txn_id);
+        assert_eq!(failed[0].1, unit_id);
+        assert_eq!(failed[0].2, MbusError::ModbusException(0x01));
+        assert!(
+            client_services
+                .app
+                .received_read_device_id_responses
+                .borrow()
+                .is_empty()
+        );
+        assert!(client_services.expected_responses.is_empty());
     }
 
     /// Test case: `read_single_holding_register` sends a valid ADU.

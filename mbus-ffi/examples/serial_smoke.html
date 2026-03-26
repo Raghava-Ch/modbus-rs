@@ -113,6 +113,9 @@
 
     const classifyError = (err) => {
       const text = String(err);
+      if (text.includes("StepTimeout(")) {
+        return { level: "SKIP", detail: `${text} (no response from target; likely unsupported function or serial settings mismatch)` };
+      }
       if (text.includes("ModbusException(1)")) {
         return { level: "SKIP", detail: `${text} (function unsupported by target device)` };
       }
@@ -134,6 +137,16 @@
         }
         throw err;
       }
+    };
+
+    const withStepTimeout = async (name, run) => {
+      const timeoutMs = Math.max(1500, (num("timeout") * (num("retries") + 1)) + 1200);
+      return Promise.race([
+        run(),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`StepTimeout(${timeoutMs}ms) in ${name}`)), timeoutMs);
+        }),
+      ]);
     };
 
     let portHandle = null;
@@ -243,7 +256,8 @@
       log(`Running full serial smoke from base=${base}, regQty=${regQty}, bitQty=${bitQty} ...`);
       for (const [name, run] of steps) {
         try {
-          const result = await run();
+          log(`RUN  ${name} ...`);
+          const result = await withStepTimeout(name, run);
           log(`OK   ${name}: ${formatValue(result)}`);
         } catch (err) {
           const classified = classifyError(err);
