@@ -2,6 +2,13 @@
 
 WASM/JS bindings for the modbus-rs stack.
 
+## Position In Workspace
+
+`mbus-ffi` is an implementation crate inside this workspace.
+
+For application code, the public Rust entry point is `modbus-rs`.
+WASM-facing types are re-exported there behind the `wasm` feature on `wasm32`.
+
 This crate exposes browser-friendly Modbus clients over:
 
 - WebSocket (Modbus TCP gateway): `WasmModbusClient`
@@ -28,7 +35,7 @@ These symbols are conditionally compiled behind `target_arch = "wasm32"` so nati
 
 `mbus-ffi` uses modular feature flags:
 
-- `wasm`: enables WASM bindings and browser transports (`mbus-tcp/wasm`, `mbus-serial/wasm`)
+- `wasm`: enables WASM bindings and browser transports (`mbus-network/wasm`, `mbus-serial/wasm`)
 - `coils`
 - `registers`
 - `discrete-inputs`
@@ -110,7 +117,7 @@ Both WASM clients expose the same service surface:
 
 Use the browser examples under `mbus-ffi/examples`:
 
-- `real_server_smoke.html` (WebSocket/TCP path)
+- `network_smoke.html` (WebSocket/TCP path)
 - `serial_smoke.html` (Web Serial path, full serial API smoke runner)
 
 Serve the examples over localhost after building `pkg`, for example:
@@ -122,12 +129,19 @@ python3 -m http.server 8089
 
 Then open:
 
-- `http://localhost:8089/examples/real_server_smoke.html`
+- `http://localhost:8089/examples/network_smoke.html`
 - `http://localhost:8089/examples/serial_smoke.html`
 
 ## Running WASM Tests
 
 The E2E WASM tests live in `mbus-ffi/tests/wasm_e2e.rs` and run in browser mode.
+
+Run the full browser feature test suite:
+
+```bash
+cd mbus-ffi;
+wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
+```
 
 Fast compile check:
 

@@ -30,6 +30,7 @@ temp
 .vscode
 .wasm-pack-cache
 mbus-ffi/pkg
+.cargo
 
 # CMake project ignores
 CMakeLists.txt.user

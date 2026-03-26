@@ -1,6 +1,6 @@
 [package]
 name = "mbus-client"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description.workspace = true
+description = "Modbus client stack for embedded and std environments with TCP, RTU, and ASCII transport support for modbus-rs project"
 
 [dependencies]
 mbus-core = { workspace = true }

@@ -8,7 +8,7 @@ The `modbus-rs` ecosystem is composed of several crates, each with a distinct re
 
 -   **`mbus-core`**: Provides fundamental Modbus data structures, error types, and the `Transport` trait for abstracting communication layers.
 -   **`mbus-client`**: Implements the Modbus client state machine and services for handling various Modbus function codes.
--   **`mbus-tcp`**: Provides the standard TCP transport implementation (`StdTcpTransport`).
+-   **`mbus-network`**: Provides the standard TCP transport implementation (`StdTcpTransport`).
 -   **`mbus-serial`**: Provides standard Serial transport implementations (`StdSerialTransport`) for RTU/ASCII modes.
 
 At the top-level `modbus-rs` crate, serial transport exposure is split into two user-facing

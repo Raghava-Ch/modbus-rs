@@ -1,6 +1,6 @@
 [package]
 name = "modbus-rs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license.workspace = true
@@ -14,7 +14,7 @@ description = "High-level Modbus client facade for embedded and std environments
 [dependencies]
 mbus-core   = { workspace = true }
 mbus-serial = { workspace = true, optional = true }
-mbus-tcp    = { workspace = true, optional = true }
+mbus-network    = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
 ## The FFI/WASM helper crate; activated by the `wasm` feature below.
 mbus-ffi    = { workspace = true, optional = true }
@@ -35,7 +35,6 @@ env_logger = "0.11"
 default = [
     "client",
     "serial-rtu",
-    "serial-ascii",
     "tcp",
     "coils",
     "registers",
@@ -47,14 +46,14 @@ default = [
 client = ["mbus-client"]
 serial-rtu = ["mbus-serial"]
 serial-ascii = ["mbus-serial", "mbus-core/serial-ascii"]
-tcp = ["mbus-tcp"]
+tcp = ["mbus-network"]
 coils = ["mbus-core/coils"]
 registers = ["mbus-core/registers"]
 discrete-inputs = ["mbus-core/discrete-inputs"]
 fifo = ["mbus-core/fifo"]
 file-record = ["mbus-core/file-record"]
 diagnostics = ["mbus-core/diagnostics"]
-logging = ["mbus-tcp?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
+logging = ["mbus-network?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
 ## Enables the browser-WebSocket WASM client (re-exported from mbus-ffi).
 ## Build target remains `mbus-ffi`; this feature makes the types accessible
 ## to downstream crates that depend on `modbus-rs`.

@@ -3,7 +3,7 @@
 `mbus-core` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
 It provides shared protocol types, transport abstractions, function-code definitions,
-and data models used by higher-level crates such as `mbus-client`, `mbus-tcp`, and
+and data models used by higher-level crates such as `mbus-client`, `mbus-network`, and
 `mbus-serial`.
 
 ## What This Crate Provides
@@ -20,7 +20,7 @@ and data models used by higher-level crates such as `mbus-client`, `mbus-tcp`, a
 `mbus-core` is intentionally low-level and reusable.
 
 - `mbus-client` builds request/response workflows on top of this crate.
-- `mbus-tcp` and `mbus-serial` implement concrete transport layers that satisfy
+- `mbus-network` and `mbus-serial` implement concrete transport layers that satisfy
 	interfaces defined here.
 - `modbus-rs` re-exports major crates for easier consumption.
 
@@ -65,7 +65,7 @@ Example with selective features:
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.2.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.3.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 ## no_std
