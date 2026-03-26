@@ -22,8 +22,9 @@ The workspace is split into focused crates:
 |---|---|
 | [`mbus-core`](mbus-core/) | Shared protocol types, transport trait, config, errors, data models |
 | [`mbus-client`](mbus-client/) | Client state machine, request/response orchestration, all function-code services |
-| [`mbus-tcp`](mbus-tcp/) | Concrete TCP transport (`StdTcpTransport`) using `std::net::TcpStream` |
+| [`mbus-network`](mbus-network/) | Concrete TCP transport (`StdTcpTransport`) using `std::net::TcpStream` |
 | [`mbus-serial`](mbus-serial/) | Concrete serial transport (`StdSerialTransport`) using the `serialport` crate |
+| [`mbus-ffi`](mbus-ffi/) | WASM/JS bindings for browser-based Modbus over WebSocket and Web Serial |
 | [`modbus-rs`](modbus-rs/) | Top-level convenience crate — re-exports everything behind feature flags |
 | [`integration_tests`](integration_tests/) | Integration test suite across all transports |
 
@@ -35,14 +36,14 @@ Add the full default setup (TCP + Serial RTU + Serial ASCII + all function codes
 
 ```toml
 [dependencies]
-modbus-rs = "0.1.0"
+modbus-rs = "0.3.0"
 ```
 
 Minimal TCP client with coil support only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
     "client",
     "tcp",
     "coils"
@@ -58,7 +59,7 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | Flag | Enables |
 |---|---|
 | `client` | `mbus-client` — request/response services |
-| `tcp` | `mbus-tcp` — standard Modbus TCP transport |
+| `tcp` | `mbus-network` — standard Modbus TCP transport |
 | `serial-rtu` | `mbus-serial` for RTU framing |
 | `serial-ascii` | `mbus-serial` for ASCII framing |
 | `coils` | Read/write coil services |
@@ -67,7 +68,8 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | `fifo` | FIFO queue services |
 | `file-record` | File record read/write services |
 | `diagnostics` | Diagnostic and device identification services |
-| `logging` | Enables `log` facade instrumentation in `mbus-tcp` and `mbus-serial` |
+| `wasm` | Enables browser-facing types (`WasmModbusClient`, `WasmSerialModbusClient`) |
+| `logging` | Enables `log` facade instrumentation in `mbus-network` and `mbus-serial` |
 
 Default: all flags are enabled.
 
@@ -222,7 +224,7 @@ Enable logging with TCP only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
     "tcp",
     "logging"
 ] }
@@ -279,7 +281,7 @@ The client follows the Modbus TCP Client Activity Diagram from the Modbus TCP/IP
 ```
 ┌──────────────┐      ┌─────────────────────┐       ┌──────────────────┐
 │  Your App    │─────▶│  ClientServices     │──────▶│  Transport trait │
-│              │      │  (mbus-client)      │       │  (mbus-tcp /     │
+│              │      │  (mbus-client)      │       │  (mbus-network /     │
 │  poll() loop │◀─────│  request queue,     │       │   mbus-serial)   │
 │  callbacks   │      │  retry scheduler,   │       └──────────────────┘
 │  TimeKeeper  │      │  timeout tracking   │

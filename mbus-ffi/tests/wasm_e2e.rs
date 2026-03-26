@@ -697,156 +697,68 @@ async fn e2e_write_file_record_resolves_true() {
 // ── TCP diagnostics tests ─────────────────────────────────────────────────────
 
 #[wasm_bindgen_test(async)]
-async fn e2e_read_exception_status_resolves_number() {
+async fn e2e_read_exception_status_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-exception-status";
     let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
+    // FC 0x07 is serial-line only; TCP path should reject immediately.
     let promise = client.read_exception_status();
-
-    let sent = get_sent_frame(url, 0).to_vec();
-    assert_eq!(sent[7], 0x07, "FC should be Read Exception Status (0x07)");
-
-    // Response: 1 status byte = 0x3F
-    let rsp = [
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x03,
-        0x01, 0x07, 0x3F,
-    ];
-    emit_fake_ws(url, &rsp);
-
-    let value = JsFuture::from(promise).await.expect("read_exception_status should resolve");
-    assert_eq!(value.as_f64().expect("should be a number") as u8, 0x3F);
+    let result = JsFuture::from(promise).await;
+    assert!(result.is_err(), "read_exception_status over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_diagnostics_resolves_object() {
+async fn e2e_diagnostics_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-diagnostics";
     let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
-    // sub_function=0 (ReturnQueryData), data=[0x0000]
+    // FC 0x08 is serial-line only; TCP path should reject immediately.
     let promise = client.diagnostics(0, &[0x0000]);
-
-    let sent = get_sent_frame(url, 0).to_vec();
-    assert_eq!(sent[7], 0x08, "FC should be Diagnostics (0x08)");
-
-    // Response echoes sub_function=0, data=[0x0000]
-    let rsp = [
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x06,
-        0x01, 0x08,
-        0x00, 0x00, // sub_function = 0
-        0x00, 0x00, // data[0] = 0x0000
-    ];
-    emit_fake_ws(url, &rsp);
-
-    let value = JsFuture::from(promise).await.expect("diagnostics should resolve");
-    let sf = Reflect::get(&value, &JsValue::from_str("subFunction"))
-        .expect("subFunction field missing").as_f64().unwrap_or(-1.0);
-    let data_field = Reflect::get(&value, &JsValue::from_str("data"))
-        .expect("data field missing");
-    let data_arr = data_field.dyn_into::<Uint16Array>().expect("data should be Uint16Array");
-    assert_eq!(sf as u16, 0x0000);
-    assert_eq!(data_arr.length(), 1);
-    assert_eq!(data_arr.get_index(0), 0x0000);
+    let result = JsFuture::from(promise).await;
+    assert!(result.is_err(), "diagnostics over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_get_comm_event_counter_resolves_object() {
+async fn e2e_get_comm_event_counter_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-comm-event-ctr";
     let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
+    // FC 0x0B is serial-line only; TCP path should reject immediately.
     let promise = client.get_comm_event_counter();
-
-    let sent = get_sent_frame(url, 0).to_vec();
-    assert_eq!(sent[7], 0x0B, "FC should be Get Comm Event Counter (0x0B)");
-
-    // Response: status=0xFFFF, event_count=10
-    let rsp = [
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x06,
-        0x01, 0x0B,
-        0xFF, 0xFF, // status
-        0x00, 0x0A, // event_count = 10
-    ];
-    emit_fake_ws(url, &rsp);
-
-    let value = JsFuture::from(promise).await.expect("get_comm_event_counter should resolve");
-    let status = Reflect::get(&value, &JsValue::from_str("status"))
-        .expect("status field missing").as_f64().unwrap_or(-1.0);
-    let count = Reflect::get(&value, &JsValue::from_str("eventCount"))
-        .expect("eventCount field missing").as_f64().unwrap_or(-1.0);
-    assert_eq!(status as u16, 0xFFFF);
-    assert_eq!(count as u16, 10);
+    let result = JsFuture::from(promise).await;
+    assert!(result.is_err(), "get_comm_event_counter over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_get_comm_event_log_resolves_object() {
+async fn e2e_get_comm_event_log_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-comm-event-log";
     let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
+    // FC 0x0C is serial-line only; TCP path should reject immediately.
     let promise = client.get_comm_event_log();
-
-    let sent = get_sent_frame(url, 0).to_vec();
-    assert_eq!(sent[7], 0x0C, "FC should be Get Comm Event Log (0x0C)");
-
-    // Response: byte_count=6, status=1, event_count=2, message_count=3, no events
-    let rsp = [
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x09,
-        0x01, 0x0C,
-        0x06,       // byte_count = 6 (status:2 + event_cnt:2 + msg_cnt:2)
-        0x00, 0x01, // status = 1
-        0x00, 0x02, // event_count = 2
-        0x00, 0x03, // message_count = 3
-    ];
-    emit_fake_ws(url, &rsp);
-
-    let value = JsFuture::from(promise).await.expect("get_comm_event_log should resolve");
-    let status = Reflect::get(&value, &JsValue::from_str("status"))
-        .expect("status field missing").as_f64().unwrap_or(-1.0);
-    let ec = Reflect::get(&value, &JsValue::from_str("eventCount"))
-        .expect("eventCount field missing").as_f64().unwrap_or(-1.0);
-    let mc = Reflect::get(&value, &JsValue::from_str("messageCount"))
-        .expect("messageCount field missing").as_f64().unwrap_or(-1.0);
-    let events_field = Reflect::get(&value, &JsValue::from_str("events"))
-        .expect("events field missing");
-    let events = events_field.dyn_into::<Uint8Array>().expect("events should be Uint8Array");
-    assert_eq!(status as u16, 1);
-    assert_eq!(ec as u16, 2);
-    assert_eq!(mc as u16, 3);
-    assert_eq!(events.length(), 0, "no events in this response");
+    let result = JsFuture::from(promise).await;
+    assert!(result.is_err(), "get_comm_event_log over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_report_server_id_resolves_uint8array() {
+async fn e2e_report_server_id_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-report-server-id";
     let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
+    // FC 0x11 is serial-line only; TCP path should reject immediately.
     let promise = client.report_server_id();
-
-    let sent = get_sent_frame(url, 0).to_vec();
-    assert_eq!(sent[7], 0x11, "FC should be Report Server ID (0x11)");
-
-    // Response: byte_count=2, data=[0xAB, 0xFF]
-    let rsp = [
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
-        0x01, 0x11,
-        0x02,       // byte_count
-        0xAB, 0xFF, // server id data
-    ];
-    emit_fake_ws(url, &rsp);
-
-    let value = JsFuture::from(promise).await.expect("report_server_id should resolve");
-    let arr = value.dyn_into::<Uint8Array>().expect("should be Uint8Array");
-    assert_eq!(arr.length(), 2);
-    assert_eq!(arr.get_index(0), 0xAB);
-    assert_eq!(arr.get_index(1), 0xFF);
+    let result = JsFuture::from(promise).await;
+    assert!(result.is_err(), "report_server_id over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
@@ -926,11 +838,31 @@ async fn e2e_read_device_identification_invalid_code_rejects() {
 
 // ── Serial client construction / error tests ──────────────────────────────────
 
-/// Returns a minimal fake JS object that satisfies WasmSerialPortHandle::is_valid().
-/// It does not implement the real Web Serial API.
+/// Returns a fake JS SerialPort-like object suitable for wasm browser tests.
 fn make_fake_serial_port() -> JsValue {
-    js_sys::eval("({})")
-        .expect("eval of fake port object failed")
+    js_sys::eval(
+        r#"(() => {
+            const reader = {
+                read: () => Promise.resolve({ done: true, value: new Uint8Array(0) }),
+                releaseLock: () => {}
+            };
+            const writer = {
+                write: (_data) => Promise.resolve(undefined),
+                releaseLock: () => {}
+            };
+            return {
+                open: function(_opts) { return Promise.resolve(undefined); },
+                close: function() { return Promise.resolve(undefined); },
+                readable: {
+                    getReader: () => reader
+                },
+                writable: {
+                    getWriter: () => writer
+                }
+            };
+        })()"#,
+    )
+    .expect("eval of fake serial port object failed")
 }
 
 #[wasm_bindgen_test]
@@ -991,13 +923,14 @@ fn e2e_serial_client_new_invalid_data_bits_rejects() {
 }
 
 #[wasm_bindgen_test]
-fn e2e_serial_client_is_connected_false_initially() {
+fn e2e_serial_client_is_connected_true_while_opening_or_connected() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
     let client = WasmSerialModbusClient::new(
         &handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5,
-    ).expect("construction should succeed");
-    // Port is attached but the async open() has not been called yet
-    assert!(!client.is_connected(), "serial client should not be connected before port is opened");
+    )
+    .expect("construction should succeed");
+    // `is_connected` returns true for both opening and connected states.
+    assert!(client.is_connected(), "serial client should report connected/opening after construction");
 }
 
 #[wasm_bindgen_test(async)]
@@ -1005,9 +938,10 @@ async fn e2e_serial_client_diagnostics_invalid_sub_function_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
     let mut client = WasmSerialModbusClient::new(
         &handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5,
-    ).expect("construction should succeed");
+    )
+    .expect("construction should succeed");
 
-    // 0xFFFF is a reserved/invalid sub_function — reject_immediate path
+    // 0xFFFF is a reserved/invalid sub_function — reject_immediate path.
     let promise = client.diagnostics(0xFFFF, &[]);
     let result = JsFuture::from(promise).await;
     assert!(result.is_err(), "invalid sub_function should reject immediately");
@@ -1018,9 +952,10 @@ async fn e2e_serial_client_read_device_id_invalid_code_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
     let mut client = WasmSerialModbusClient::new(
         &handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5,
-    ).expect("construction should succeed");
+    )
+    .expect("construction should succeed");
 
-    // 0x00 is invalid (valid ReadDeviceIdCode: 1–4)
+    // 0x00 is invalid (valid ReadDeviceIdCode: 1–4).
     let promise = client.read_device_identification(0x00, 0);
     let result = JsFuture::from(promise).await;
     assert!(result.is_err(), "invalid read_device_id_code should reject immediately");

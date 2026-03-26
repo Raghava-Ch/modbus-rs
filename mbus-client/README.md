@@ -18,7 +18,7 @@ If you want direct access to client orchestration and callbacks, use `mbus-clien
 - Exposes feature-gated service modules by function group.
 
 Transport implementations are provided by helper crates such as:
-- `mbus-tcp`
+- `mbus-network`
 - `mbus-serial`
 
 ## What Is Included
@@ -129,7 +129,7 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-mbus-client = { version = "0.2.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.3.0", default-features = false, features = ["coils"] }
 ```
 
 ## Logging
@@ -159,7 +159,7 @@ RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no
 Typical flow:
 
 1. Implement required callback traits in your app type.
-2. Provide a `Transport` implementation (custom, `mbus-tcp`, or `mbus-serial`).
+2. Provide a `Transport` implementation (custom, `mbus-network`, or `mbus-serial`).
 3. Build a `ModbusConfig`.
 4. Construct `ClientServices`.
 5. Issue requests.

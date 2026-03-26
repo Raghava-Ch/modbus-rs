@@ -1,6 +1,6 @@
 [package]
 name = "mbus-ffi"
-version = "0.0.1"
+version = "0.3.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -9,15 +9,15 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description.workspace = true
+description = "Provides WASM and FFI functionalities for modbus-rs project"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
 default        = []
-## Enables all WASM bindings for browser transports (`mbus-tcp` + `mbus-serial`).
-wasm           = ["dep:wasm-bindgen", "dep:js-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "mbus-tcp/wasm", "mbus-serial/wasm"]
+## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
+wasm           = ["dep:wasm-bindgen", "dep:js-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "mbus-network/wasm", "mbus-serial/wasm"]
 coils          = ["mbus-client/coils"]
 registers      = ["mbus-client/registers"]
 discrete-inputs= ["mbus-client/discrete-inputs"]
@@ -30,14 +30,14 @@ full           = ["coils", "registers", "discrete-inputs", "fifo", "file-record"
 [dependencies]
 mbus-core   = { workspace = true }
 mbus-client = { workspace = true }
-## mbus-tcp is needed for WasmWsTransport (re-exported when `wasm` feature is on)
-mbus-tcp    = { workspace = true }
+## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)
+mbus-network    = { workspace = true }
 ## mbus-serial provides WasmSerialTransport for browser Web Serial integration.
 mbus-serial = { workspace = true }
 heapless    = { workspace = true }
 
 # WASM-only dependencies — not pulled in for native builds.
-# Note: web-sys is pulled in transitively through mbus-tcp/wasm.
+# Note: web-sys is pulled in transitively through mbus-network/wasm.
 wasm-bindgen         = { version = "0.2", optional = true }
 js-sys               = { version = "0.3", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }

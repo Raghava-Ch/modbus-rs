@@ -9,26 +9,11 @@ pub use mbus_core::transport::{
     ModbusTcpConfig, Parity, SerialMode, TimeKeeper, Transport, TransportError, TransportType,
     UnitIdOrSlaveAddr,
 };
-/// Browser WebSocket transport — lives in `mbus-tcp`, re-exported here for convenience.
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub use mbus_tcp::WasmWsTransport;
 
-/// WASM `#[wasm_bindgen]` client façade — lives in `mbus-ffi`, re-exported here
-/// so downstream crates only need to depend on `modbus-rs`.
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub use mbus_ffi::WasmModbusClient;
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub use mbus_ffi::{WasmSerialModbusClient, WasmSerialPortHandle, request_serial_port};
-
-/// Browser Web Serial transport — lives in `mbus-serial`, re-exported here for
-/// downstream users that want a serial transport on wasm32 targets.
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
-pub use mbus_serial::WasmSerialTransport;
-
-#[cfg(all(not(target_arch = "wasm32"), any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(any(feature = "serial-rtu", feature = "serial-ascii")))]
 pub use mbus_serial::StdSerialTransport;
-#[cfg(all(not(target_arch = "wasm32"), feature = "tcp"))]
-pub use mbus_tcp::StdTcpTransport;
+#[cfg(all(feature = "tcp"))]
+pub use mbus_network::StdTcpTransport;
 
 #[cfg(feature = "client")]
 pub use mbus_client::app::*;

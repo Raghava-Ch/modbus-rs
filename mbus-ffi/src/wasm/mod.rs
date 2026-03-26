@@ -8,8 +8,8 @@
 //!                          using `spawn_local` + `gloo_timers`.
 
 mod app;
-mod client;
+mod net_client;
 mod serial_client;
 
-pub use client::WasmModbusClient;
+pub use net_client::WasmModbusClient;
 pub use serial_client::{WasmSerialModbusClient, WasmSerialPortHandle, request_serial_port};

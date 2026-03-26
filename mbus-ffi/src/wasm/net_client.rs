@@ -34,7 +34,7 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
 use super::app::{PendingHandle, PendingMap, WasmAppRouter};
-use mbus_tcp::WasmWsTransport;
+use mbus_network::WasmWsTransport;
 
 // Pipeline depth: up to 10 concurrent in-flight TCP requests.
 const PIPELINE: usize = 10;
@@ -413,6 +413,7 @@ impl WasmModbusClient {
     /// Perform an atomic read-then-write on holding registers.
     ///
     /// Reads `read_quantity` registers from `read_address`, then writes `values` to `write_address`.
+    /// `write_quantity` is ignored — the quantity written is derived from `values.length`.
     /// Returns a `Promise` resolving with a `Uint16Array` (the values read) or rejects on error.
     pub fn read_write_multiple_registers(
         &mut self,

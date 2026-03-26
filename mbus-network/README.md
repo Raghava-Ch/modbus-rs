@@ -1,16 +1,16 @@
-# mbus-tcp
+# mbus-network
 
-`mbus-tcp` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
+`mbus-network` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
 It provides a standard Modbus TCP transport implementation that plugs into the
 shared transport abstractions from `mbus-core`.
 
 If you want a single top-level API, use `modbus-rs`.
-If you need direct transport-level control, use `mbus-tcp` directly.
+If you need direct transport-level control, use `mbus-network` directly.
 
 ## Helper Crate Role
 
-`mbus-tcp` is transport-focused and intentionally small:
+`mbus-network` is transport-focused and intentionally small:
 
 - Implements `Transport` from `mbus-core` using `std::net::TcpStream`.
 - Handles connection setup, send, receive, and disconnect for Modbus TCP.
@@ -42,7 +42,7 @@ from:
 
 ```toml
 [dependencies]
-modbus-rs = "0.1.0"
+modbus-rs = "0.3.0"
 ```
 
 ### 2) Create TCP config and connect transport
@@ -72,7 +72,7 @@ fn connect_tcp() -> Result<(), MbusError> {
 
 ## Logging
 
-`mbus-tcp` supports optional logging via the `log` facade.
+`mbus-network` supports optional logging via the `log` facade.
 
 - Enable feature: `logging`
 - This only emits through the facade; your application provides a logger backend.
@@ -81,7 +81,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-tcp = { version = "0.2.0", features = ["logging"] }
+mbus-network = { version = "0.3.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -93,7 +93,7 @@ env_logger = "0.11"
 
 ## Typical Integration Pattern
 
-In most applications, `mbus-tcp` is used together with `mbus-client`:
+In most applications, `mbus-network` is used together with `mbus-client`:
 
 1. Build `ModbusConfig::Tcp(...)`.
 2. Instantiate `StdTcpTransport`.

@@ -192,10 +192,13 @@ impl WasmSerialModbusClient {
         })
     }
 
+    /// Returns `true` when the serial port is open and the transport considers itself connected.
     pub fn is_connected(&self) -> bool {
         self.inner.borrow().is_connected()
     }
 
+    /// Drop all pending in-flight requests and attempt to reopen the serial port.
+    /// Outstanding Promises for dropped requests will be rejected with `"ConnectionLost"`.
     pub fn reconnect(&mut self) -> bool {
         for (_, handle) in self.pending.borrow_mut().drain() {
             let _ = handle
@@ -205,6 +208,9 @@ impl WasmSerialModbusClient {
         self.inner.borrow_mut().reconnect().is_ok()
     }
 
+    /// Read `quantity` coils starting at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `Uint8Array` (bit-packed coil bytes) or rejects on error.
     pub fn read_coils(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -225,6 +231,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read `quantity` holding registers starting at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `Uint16Array` (register values) or rejects on error.
     pub fn read_holding_registers(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -245,6 +254,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read `quantity` input registers starting at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `Uint16Array` or rejects on error.
     pub fn read_input_registers(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -265,6 +277,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Write `value` to a single holding register at `address`.
+    ///
+    /// Returns a `Promise` resolving with `{ address, value }` or rejects on error.
     pub fn write_single_register(&mut self, address: u16, value: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -285,6 +300,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Write a single coil at `address` to `value` (true = ON, false = OFF).
+    ///
+    /// Returns a `Promise` resolving with `{ address, value }` or rejects on error.
     pub fn write_single_coil(&mut self, address: u16, value: bool) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -305,6 +323,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Write `values` to multiple consecutive holding registers starting at `address`.
+    ///
+    /// Returns a `Promise` resolving with `{ address, quantity }` or rejects on error.
     pub fn write_multiple_registers(
         &mut self,
         address: u16,
@@ -330,6 +351,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read `quantity` discrete inputs starting at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `Uint8Array` (bit-packed) or rejects on error.
     pub fn read_discrete_inputs(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -353,6 +377,9 @@ impl WasmSerialModbusClient {
 
 #[wasm_bindgen]
 impl WasmSerialModbusClient {
+    /// Read a single coil at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `boolean` or rejects on error.
     pub fn read_single_coil(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -373,6 +400,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Write multiple coils starting at `address`.
+    ///
+    /// `packed_bytes` is a bit-packed `Uint8Array` (LSB of byte 0 = coil at `address`).
+    /// Returns a `Promise` resolving with `{ address, quantity }` or rejects on error.
     pub fn write_multiple_coils(
         &mut self,
         address: u16,
@@ -403,6 +434,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read a single holding register at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `number` or rejects on error.
     pub fn read_single_holding_register(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -423,6 +457,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read a single input register at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `number` or rejects on error.
     pub fn read_single_input_register(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -443,6 +480,11 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Perform an atomic read-then-write on holding registers.
+    ///
+    /// Reads `read_quantity` registers from `read_address`, then writes `values` to `write_address`.
+    /// `write_quantity` is ignored — the quantity written is derived from `values.length`.
+    /// Returns a `Promise` resolving with a `Uint16Array` (the values read) or rejects on error.
     pub fn read_write_multiple_registers(
         &mut self,
         read_address: u16,
@@ -473,6 +515,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Apply an AND/OR mask to a holding register at `address` (FC 22).
+    ///
+    /// Result register = (current & and_mask) | (or_mask & !and_mask).
+    /// Returns a `Promise` resolving with `true` or rejects on error.
     pub fn mask_write_register(&mut self, address: u16, and_mask: u16, or_mask: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -493,6 +539,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read a single discrete input at `address`.
+    ///
+    /// Returns a `Promise` resolving with a `boolean` or rejects on error.
     pub fn read_single_discrete_input(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -513,6 +562,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read the FIFO queue pointed to by `address` (FC 24).
+    ///
+    /// Returns a `Promise` resolving with a `Uint16Array` or rejects on error.
     pub fn read_fifo_queue(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -533,6 +585,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read a file record (FC 20).
+    ///
+    /// Returns a `Promise` resolving with `Array<{ fileNumber, recordNumber, data: Uint16Array }>`
+    /// or rejects on error.
     pub fn read_file_record(
         &mut self,
         file_number: u16,
@@ -562,6 +618,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Write a file record (FC 21).
+    ///
+    /// `values` is a `Uint16Array` of register values to write.
+    /// Returns a `Promise` resolving with `true` or rejects on error.
     pub fn write_file_record(
         &mut self,
         file_number: u16,
@@ -601,6 +661,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read the exception status (FC 7).
+    ///
+    /// Returns a `Promise` resolving with a status `number` or rejects on error.
     pub fn read_exception_status(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -621,6 +684,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Send a Diagnostics request (FC 8).
+    ///
+    /// `sub_function` is one of the `DiagnosticSubFunction` u16 codes.
+    /// Returns a `Promise` resolving with `{ subFunction, data: Uint16Array }` or rejects on error.
     pub fn diagnostics(&mut self, sub_function: u16, data: &[u16]) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -644,6 +711,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read the communication event counter (FC 11).
+    ///
+    /// Returns a `Promise` resolving with `{ status, eventCount }` or rejects on error.
     pub fn get_comm_event_counter(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -664,6 +734,10 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read the communication event log (FC 12).
+    ///
+    /// Returns a `Promise` resolving with `{ status, eventCount, messageCount, events: Uint8Array }`
+    /// or rejects on error.
     pub fn get_comm_event_log(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -684,6 +758,9 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Report Server ID (FC 17).
+    ///
+    /// Returns a `Promise` resolving with a `Uint8Array` (raw server ID data) or rejects on error.
     pub fn report_server_id(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -704,6 +781,12 @@ impl WasmSerialModbusClient {
         promise
     }
 
+    /// Read Device Identification (FC 43 / MEI 0x0E).
+    ///
+    /// `read_device_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
+    /// `object_id`: 0x00=VendorName, 0x01=ProductCode, 0x02=Revision, etc.
+    /// Returns a `Promise` resolving with `{ readDeviceIdCode, conformityLevel, moreFollows, objects }`
+    /// or rejects on error.
     pub fn read_device_identification(
         &mut self,
         read_device_id_code: u8,
