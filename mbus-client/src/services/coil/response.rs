@@ -305,7 +305,7 @@ where
     ) {
         let function_code = message.pdu().function_code();
         let pdu = message.pdu();
-        let txn_id = message.transaction_id();
+        let txn_id = ctx.txn_id;
         let unit_id = message.unit_id_or_slave_addr();
         let address = ctx.operation_meta.address();
         let quantity = ctx.operation_meta.quantity();
