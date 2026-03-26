@@ -51,6 +51,17 @@ impl WasmSerialPortHandle {
     }
 }
 
+impl WasmSerialPortHandle {
+    /// Construct a handle wrapping any JS value.
+    ///
+    /// This is only intended for test code where calling `request_serial_port()` is
+    /// not possible (no user gesture). In production JS, use `request_serial_port()`.
+    #[doc(hidden)]
+    pub fn new_for_testing(port: JsValue) -> Self {
+        WasmSerialPortHandle { port }
+    }
+}
+
 /// Requests a browser serial port from `navigator.serial.requestPort()`.
 ///
 /// Must be invoked from a user-gesture context (e.g. click handler).
