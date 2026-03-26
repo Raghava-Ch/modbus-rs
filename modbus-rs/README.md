@@ -15,18 +15,28 @@ It brings together:
 
 - `mbus-core` for shared protocol types and transport abstractions
 - `mbus-client` for client-side request/response orchestration
-- `mbus-tcp` for standard TCP transport
+- `mbus-network` for standard TCP transport
 - `mbus-serial` for standard Serial RTU/ASCII transport
 
 If you want a single dependency for most applications, use `modbus-rs`.
 If you need lower-level control, you can depend on the helper crates directly.
+
+## Public Entry Point Policy
+
+For consumers, `modbus-rs` is the intended public API surface.
+
+- Use `modbus-rs` in application `Cargo.toml`.
+- Access all request/response service features through `modbus-rs` re-exports.
+- Access WASM-facing client types through `modbus-rs` re-exports on `wasm32` with the `wasm` feature enabled.
+
+Helper crates (`mbus-core`, `mbus-client`, `mbus-network`, `mbus-serial`, `mbus-ffi`) remain workspace building blocks.
 
 ## What Is Included
 
 Depending on enabled features, this crate re-exports:
 
 - all public items from `mbus-core`
-- all public items from `mbus-tcp`
+- all public items from `mbus-network`
 - all public items from `mbus-serial`
 - the `mbus_client` crate
 - `heapless`
@@ -38,14 +48,15 @@ Top-level features:
 - `client`: enables `mbus-client`
 - `serial-rtu`: enables `mbus-serial` for RTU transport use cases
 - `serial-ascii`: enables `mbus-serial` for ASCII transport use cases
-- `tcp`: enables `mbus-tcp`
+- `tcp`: enables `mbus-network`
 - `coils`
 - `registers`
 - `discrete-inputs`
 - `fifo`
 - `file-record`
 - `diagnostics`
-- `logging`: enables `log` facade diagnostics in `mbus-tcp` and `mbus-serial`
+- `logging`: enables `log` facade diagnostics in `mbus-network` and `mbus-serial`
+- `wasm`: enables browser WASM re-exports (`WasmModbusClient`, `WasmSerialModbusClient`, `request_serial_port`) through `modbus-rs`
 
 Default behavior:
 
@@ -55,7 +66,7 @@ Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -71,7 +82,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.3.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -81,18 +92,50 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.1.0"
+modbus-rs = "0.3.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
 ] }
+```
+
+### WASM browser client setup via modbus-rs re-exports
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.3.0", default-features = false, features = [
+	"wasm",
+	"client",
+	"coils",
+	"registers",
+	"discrete-inputs",
+	"fifo",
+	"file-record",
+	"diagnostics"
+] }
+```
+
+Then import WASM API types from `modbus_rs`:
+
+```rust
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+use modbus_rs::{WasmModbusClient, WasmSerialModbusClient, request_serial_port};
+```
+
+For browser smoke pages in this workspace, build and serve the `mbus-ffi` package path (implementation package used by the HTML examples):
+
+```bash
+cd /path/to/modbus-rs
+wasm-pack build ./mbus-ffi --target web --features wasm,full
+cd mbus-ffi
+python3 -m http.server 8089
 ```
 
 ## Basic Usage Example
@@ -198,8 +241,27 @@ cargo run -p modbus-rs --example ascii_serial_example --no-default-features --fe
 - `modbus-rs`: top-level convenience crate
 - `mbus-core`: shared protocol and transport abstractions
 - `mbus-client`: client state machine and service modules
-- `mbus-tcp`: standard TCP transport helper crate
+- `mbus-network`: standard TCP transport helper crate
 - `mbus-serial`: standard serial transport helper crate
+
+## Browser Smoke Examples
+
+Browser examples currently live under `mbus-ffi/examples` and are intended for quick WASM smoke validation.
+
+- `network_smoke.html`
+- `serial_smoke.html`
+
+After building `mbus-ffi/pkg`, open:
+
+- `http://localhost:8089/examples/network_smoke.html`
+- `http://localhost:8089/examples/serial_smoke.html`
+
+Run WASM browser feature tests:
+
+```bash
+cd mbus-ffi;
+wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
+```
 
 ## Documentation
 

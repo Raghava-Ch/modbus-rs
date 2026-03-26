@@ -9,6 +9,6 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description.workspace = true
+description = "Provides modbus server(not ready yet) functionality for modbus-rs project"
 
 [dependencies]

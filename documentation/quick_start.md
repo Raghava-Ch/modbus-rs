@@ -13,7 +13,7 @@ For detailed feature combinations, see [feature_flags.md](feature_flags.md).
 
 ```toml
 [dependencies]
-modbus-rs = "0.1.0"
+modbus-rs = "0.3.0"
 ```
 
 This enables:
@@ -27,7 +27,7 @@ This enables:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -38,7 +38,7 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers"
@@ -49,11 +49,54 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "coils"
 ] }
+```
+
+### WASM browser setup via modbus-rs
+
+Use `modbus-rs` as your dependency and consume WASM APIs from `modbus_rs` re-exports.
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.3.0", default-features = false, features = [
+  "wasm",
+  "client",
+  "coils",
+  "registers",
+  "discrete-inputs",
+  "fifo",
+  "file-record",
+  "diagnostics"
+] }
+```
+
+```rust
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+use modbus_rs::{WasmModbusClient, WasmSerialModbusClient, request_serial_port};
+```
+
+For the workspace browser smoke pages, build the implementation package used by the HTML pages:
+
+```bash
+cd /path/to/modbus-rs/mbus-ffi
+wasm-pack build --target web --features wasm,full
+python3 -m http.server 8089
+```
+
+Open:
+
+- `http://localhost:8089/examples/network_smoke.html`
+- `http://localhost:8089/examples/serial_smoke.html`
+
+Run WASM browser feature tests:
+
+```bash
+cd /path/to/modbus-rs/mbus-ffi;
+wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
 ```
 
 ## 2. Basic Usage Example (TCP)
@@ -150,7 +193,7 @@ fn main() -> Result<(), MbusError> {
 
   ### Serial Compile-Time Queue Safety
 
-  For serial RTU/ASCII clients, only one request may be in flight.
+  For serial RTU/ASCII clients, only one request will be in flight.
 
   - `ClientServices::new(...)` enforces this at runtime.
   - `ClientServices::new_serial(...)` enforces this at compile time.
@@ -251,5 +294,5 @@ Use `modbus-rs` if you want a single dependency.
 Use helper crates directly when you need lower-level control:
 - `mbus-core` for shared protocol types and transport abstractions
 - `mbus-client` for direct client orchestration access
-- `mbus-tcp` for direct TCP transport usage
+- `mbus-network` for direct TCP transport usage
 - `mbus-serial` for direct RTU/ASCII transport usage

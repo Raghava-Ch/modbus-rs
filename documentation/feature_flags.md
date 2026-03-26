@@ -17,14 +17,14 @@ Defined features:
 - `client`: Enables `mbus-client`.
 - `serial-rtu`: Enables `mbus-serial` for RTU usage.
 - `serial-ascii`: Enables `mbus-serial` for ASCII usage.
-- `tcp`: Enables `mbus-tcp`.
+- `tcp`: Enables `mbus-network`.
 - `coils`: Enables coil model/service support.
 - `registers`: Enables register model/service support.
 - `discrete-inputs`: Enables discrete input model/service support.
 - `fifo`: Enables FIFO queue model/service support.
 - `file-record`: Enables file record model/service support.
 - `diagnostics`: Enables diagnostics and device identification support.
-- `logging`: Enables `log` facade diagnostics in `mbus-tcp` and `mbus-serial`.
+- `logging`: Enables `log` facade diagnostics in `mbus-network` and `mbus-serial`.
 
 Default behavior:
 - `default` currently enables: `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features above.
@@ -67,14 +67,14 @@ This optimization reduces stack usage for builds that do not include ASCII trans
 
 ```toml
 [dependencies]
-modbus-rs = "0.1.0"
+modbus-rs = "0.3.0"
 ```
 
 ### 2) Minimal client with only coils over TCP
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -85,7 +85,7 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers",
@@ -97,7 +97,7 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "diagnostics"
@@ -108,7 +108,7 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "client",
   "tcp",
   "diagnostics"
@@ -119,7 +119,7 @@ modbus-rs = { version = "0.2.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.2.0", default-features = false, features = [
+modbus-rs = { version = "0.3.0", default-features = false, features = [
   "tcp",
   "logging"
 ] }
@@ -153,7 +153,7 @@ must initialize a logger backend to see output.
 
 Logging coverage:
 
-- `mbus-tcp`: transport connection and socket diagnostics
+- `mbus-network`: transport connection and socket diagnostics
 - `mbus-serial`: serial transport diagnostics
 - `mbus-client`: low-priority internal state-machine events (`debug`/`trace`), such as frame resync, retry scheduling, timeout handling, and connection-loss flushing
 
