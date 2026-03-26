@@ -15,9 +15,16 @@ description.workspace = true
 mbus-core ={ workspace = true }
 
 heapless ={ workspace = true }
-serialport = { version = "4.2.2", default-features = true }
 log = { workspace = true, optional = true }
+gloo-timers = { version = "0.3", features = ["futures"], optional = true }
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serialport = { version = "4.2.2", default-features = true }
 
 [features]
 default = []
 logging = ["dep:log"]
+wasm = ["dep:gloo-timers", "dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]

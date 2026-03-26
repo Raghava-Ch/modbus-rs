@@ -12,10 +12,12 @@ categories = ["embedded", "no-std"]
 description = "High-level Modbus client facade for embedded and std environments with TCP, RTU, and ASCII support"
 
 [dependencies]
-mbus-core = { workspace = true }
+mbus-core   = { workspace = true }
 mbus-serial = { workspace = true, optional = true }
-mbus-tcp = { workspace = true, optional = true }
+mbus-tcp    = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
+## The FFI/WASM helper crate; activated by the `wasm` feature below.
+mbus-ffi    = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 anyhow = "1.0.102"
@@ -53,3 +55,7 @@ fifo = ["mbus-core/fifo"]
 file-record = ["mbus-core/file-record"]
 diagnostics = ["mbus-core/diagnostics"]
 logging = ["mbus-tcp?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
+## Enables the browser-WebSocket WASM client (re-exported from mbus-ffi).
+## Build target remains `mbus-ffi`; this feature makes the types accessible
+## to downstream crates that depend on `modbus-rs`.
+wasm    = ["mbus-ffi/wasm", "mbus-ffi/full", "mbus-serial/wasm"]

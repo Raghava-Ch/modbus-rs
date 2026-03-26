@@ -11,4 +11,43 @@ keywords.workspace = true
 categories.workspace = true
 description.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default        = []
+## Enables all WASM bindings for browser transports (`mbus-tcp` + `mbus-serial`).
+wasm           = ["dep:wasm-bindgen", "dep:js-sys", "dep:wasm-bindgen-futures", "dep:gloo-timers", "mbus-tcp/wasm", "mbus-serial/wasm"]
+coils          = ["mbus-client/coils"]
+registers      = ["mbus-client/registers"]
+discrete-inputs= ["mbus-client/discrete-inputs"]
+fifo           = ["mbus-client/fifo"]
+file-record    = ["mbus-client/file-record"]
+diagnostics    = ["mbus-client/diagnostics"]
+## Convenience alias — enables every Modbus feature at once
+full           = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"]
+
 [dependencies]
+mbus-core   = { workspace = true }
+mbus-client = { workspace = true }
+## mbus-tcp is needed for WasmWsTransport (re-exported when `wasm` feature is on)
+mbus-tcp    = { workspace = true }
+## mbus-serial provides WasmSerialTransport for browser Web Serial integration.
+mbus-serial = { workspace = true }
+heapless    = { workspace = true }
+
+# WASM-only dependencies — not pulled in for native builds.
+# Note: web-sys is pulled in transitively through mbus-tcp/wasm.
+wasm-bindgen         = { version = "0.2", optional = true }
+js-sys               = { version = "0.3", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+gloo-timers          = { version = "0.3", features = ["futures"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# No native-only deps needed; this section exists as an explicit marker.
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window"] }

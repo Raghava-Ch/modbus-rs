@@ -9,6 +9,6 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description.workspace = true
+description = "Async support for the modbus-rs stack, providing asynchronous traits and drivers for non-blocking Modbus communication."
 
 [dependencies]
