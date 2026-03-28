@@ -10,10 +10,10 @@ pub use mbus_core::transport::{
     UnitIdOrSlaveAddr,
 };
 
-#[cfg(all(any(feature = "serial-rtu", feature = "serial-ascii")))]
-pub use mbus_serial::StdSerialTransport;
 #[cfg(all(feature = "tcp"))]
 pub use mbus_network::StdTcpTransport;
+#[cfg(all(any(feature = "serial-rtu", feature = "serial-ascii")))]
+pub use mbus_serial::StdSerialTransport;
 
 #[cfg(feature = "client")]
 pub use mbus_client::app::*;
@@ -40,3 +40,6 @@ pub use mbus_client::services::file_record::{
 };
 #[cfg(all(feature = "client", feature = "registers"))]
 pub use mbus_client::services::register::{MAX_REGISTERS_PER_PDU, Registers};
+
+#[cfg(feature = "async")]
+pub use mbus_async;

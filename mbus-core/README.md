@@ -65,7 +65,7 @@ Example with selective features:
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.3.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.4.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 ## no_std

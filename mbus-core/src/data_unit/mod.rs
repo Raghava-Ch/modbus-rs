@@ -6,8 +6,6 @@
 //! It is organized into two primary sub-modules:
 //! - [`common`]: Contains the transport-agnostic [`Pdu`] and the generic [`ModbusMessage`]
 //!   structures used across TCP, RTU, and ASCII variants.
-//! - [`tcp`]: Specifically handles the Modbus TCP implementation, including the
-//!   MBAP (Modbus Application Protocol) header and TCP-specific ADU serialization.
 //!
 //! The data unit logic is designed to be `no_std` compatible, leveraging `heapless`
 //! for deterministic memory management, which is critical for embedded systems

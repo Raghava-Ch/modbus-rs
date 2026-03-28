@@ -7,8 +7,7 @@ use heapless::Vec;
 use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::{
-    BaudRate, DataBits, ModbusConfig, Parity, SerialMode, Transport, TransportError,
-    TransportType,
+    BaudRate, DataBits, ModbusConfig, Parity, SerialMode, Transport, TransportError, TransportType,
 };
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
@@ -91,7 +90,8 @@ impl WasmSerialTransport {
     }
 
     fn promise_from(value: JsValue) -> Result<Promise, TransportError> {
-        value.dyn_into::<Promise>()
+        value
+            .dyn_into::<Promise>()
             .map_err(|_| TransportError::Unexpected)
     }
 
@@ -264,19 +264,16 @@ impl WasmSerialTransport {
                 };
 
                 let data = Uint8Array::from(frame.as_slice());
-                let write_result = match WasmSerialTransport::call_method1(
-                    &writer,
-                    "write",
-                    &data.into(),
-                )
-                .and_then(WasmSerialTransport::promise_from)
-                {
-                    Ok(promise) => JsFuture::from(promise).await,
-                    Err(_) => {
-                        shared.borrow_mut().connected = false;
-                        break;
-                    }
-                };
+                let write_result =
+                    match WasmSerialTransport::call_method1(&writer, "write", &data.into())
+                        .and_then(WasmSerialTransport::promise_from)
+                    {
+                        Ok(promise) => JsFuture::from(promise).await,
+                        Err(_) => {
+                            shared.borrow_mut().connected = false;
+                            break;
+                        }
+                    };
 
                 if write_result.is_err() {
                     shared.borrow_mut().connected = false;
@@ -305,10 +302,7 @@ impl Transport for WasmSerialTransport {
             return Err(TransportError::InvalidConfiguration);
         }
 
-        let port = self
-            .port
-            .clone()
-            .ok_or(TransportError::ConnectionFailed)?;
+        let port = self.port.clone().ok_or(TransportError::ConnectionFailed)?;
 
         {
             let mut state = self.shared.borrow_mut();

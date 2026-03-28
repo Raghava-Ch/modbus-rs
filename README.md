@@ -36,14 +36,14 @@ Add the full default setup (TCP + Serial RTU + Serial ASCII + all function codes
 
 ```toml
 [dependencies]
-modbus-rs = "0.3.0"
+modbus-rs = "0.4.0"
 ```
 
 Minimal TCP client with coil support only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
     "client",
     "tcp",
     "coils"
@@ -68,10 +68,12 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | `fifo` | FIFO queue services |
 | `file-record` | File record read/write services |
 | `diagnostics` | Diagnostic and device identification services |
-| `wasm` | Enables browser-facing types (`WasmModbusClient`, `WasmSerialModbusClient`) |
 | `logging` | Enables `log` facade instrumentation in `mbus-network` and `mbus-serial` |
 
 Default: all flags are enabled.
+
+Note: WASM/browser APIs are provided by `mbus-ffi` directly. `modbus-rs` does not expose a
+top-level `wasm` feature and does not re-export WASM types.
 
 See [documentation/feature_flags.md](documentation/feature_flags.md) for valid combinations and build examples.
 
@@ -224,7 +226,7 @@ Enable logging with TCP only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
     "tcp",
     "logging"
 ] }

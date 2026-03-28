@@ -1418,8 +1418,8 @@ mod tests {
     use heapless::Vec;
     use mbus_core::errors::MbusError;
     use mbus_core::function_codes::public::DiagnosticSubFunction;
-    use mbus_core::transport::checksum;
     use mbus_core::transport::TransportType;
+    use mbus_core::transport::checksum;
     use mbus_core::transport::{
         BackoffStrategy, BaudRate, JitterStrategy, ModbusConfig, ModbusSerialConfig,
         ModbusTcpConfig, Parity, SerialMode,
@@ -1457,8 +1457,12 @@ mod tests {
             ..Default::default()
         };
         let app = MockApp::default();
-        ClientServices::<MockTransport, MockApp, 1>::new_serial(transport, app, make_serial_config())
-            .unwrap()
+        ClientServices::<MockTransport, MockApp, 1>::new_serial(
+            transport,
+            app,
+            make_serial_config(),
+        )
+        .unwrap()
     }
 
     fn make_rtu_exception_adu(
