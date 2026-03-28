@@ -6,8 +6,9 @@ WASM/JS bindings for the modbus-rs stack.
 
 `mbus-ffi` is an implementation crate inside this workspace.
 
-For application code, the public Rust entry point is `modbus-rs`.
-WASM-facing types are re-exported there behind the `wasm` feature on `wasm32`.
+For browser/WASM application code, import and use `mbus-ffi` directly.
+`modbus-rs` does not provide a top-level `wasm` feature and does not re-export
+`mbus-ffi` WASM-facing types.
 
 This crate exposes browser-friendly Modbus clients over:
 

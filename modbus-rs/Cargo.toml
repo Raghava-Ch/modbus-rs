@@ -1,6 +1,6 @@
 [package]
 name = "modbus-rs"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license.workspace = true
@@ -16,12 +16,14 @@ mbus-core   = { workspace = true }
 mbus-serial = { workspace = true, optional = true }
 mbus-network    = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
+mbus-async = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 anyhow = "1.0.102"
 
 [dev-dependencies]
 env_logger = "0.11"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
 
@@ -42,13 +44,22 @@ default = [
     "diagnostics",
 ]
 client = ["mbus-client"]
-serial-rtu = ["mbus-serial"]
-serial-ascii = ["mbus-serial", "mbus-core/serial-ascii"]
-tcp = ["mbus-network"]
-coils = ["mbus-core/coils"]
-registers = ["mbus-core/registers"]
-discrete-inputs = ["mbus-core/discrete-inputs"]
-fifo = ["mbus-core/fifo"]
-file-record = ["mbus-core/file-record"]
-diagnostics = ["mbus-core/diagnostics"]
+serial-rtu = ["mbus-serial", "mbus-async?/serial-rtu"]
+serial-ascii = ["mbus-serial", "mbus-core/serial-ascii", "mbus-async?/serial-ascii"]
+tcp = ["mbus-network", "mbus-async?/tcp"]
+coils = ["mbus-core/coils", "mbus-async?/coils"]
+registers = ["mbus-core/registers", "mbus-async?/registers"]
+discrete-inputs = ["mbus-core/discrete-inputs", "mbus-async?/discrete-inputs"]
+fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
+file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
+diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
 logging = ["mbus-network?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
+async = ["dep:mbus-async"]
+
+[[example]]
+name = "async_tcp_example"
+required-features = ["async"]
+
+[[example]]
+name = "async_serial_rtu_example"
+required-features = ["async", "serial-rtu"]

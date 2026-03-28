@@ -66,7 +66,7 @@ Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -82,7 +82,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.4.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -92,14 +92,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.3.0"
+modbus-rs = "0.4.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
@@ -110,7 +110,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
 	"wasm",
 	"client",
 	"coils",
