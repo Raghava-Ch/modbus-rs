@@ -13,7 +13,7 @@ For detailed feature combinations, see [feature_flags.md](feature_flags.md).
 
 ```toml
 [dependencies]
-modbus-rs = "0.3.0"
+modbus-rs = "0.4.0"
 ```
 
 This enables:
@@ -27,7 +27,7 @@ This enables:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -38,7 +38,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers"
@@ -49,48 +49,30 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "coils"
 ] }
 ```
 
-### WASM browser setup via modbus-rs
+### WASM browser setup (independent `mbus-ffi` crate)
 
-Use `modbus-rs` as your dependency and consume WASM APIs from `modbus_rs` re-exports.
+WASM support is provided by `mbus-ffi` directly.
+`modbus-rs` does not provide a top-level `wasm` feature or WASM type re-exports.
 
-```toml
-[dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
-  "wasm",
-  "client",
-  "coils",
-  "registers",
-  "discrete-inputs",
-  "fifo",
-  "file-record",
-  "diagnostics"
-] }
-```
-
-```rust
-#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
-use modbus_rs::{WasmModbusClient, WasmSerialModbusClient, request_serial_port};
-```
-
-For the workspace browser smoke pages, build the implementation package used by the HTML pages:
+For the workspace browser smoke pages, build the `mbus-ffi` package used by the HTML pages:
 
 ```bash
 cd /path/to/modbus-rs/mbus-ffi
 wasm-pack build --target web --features wasm,full
-python3 -m http.server 8089
+python3 -m http.server 8089 --directory ./examples/
 ```
 
 Open:
 
-- `http://localhost:8089/examples/network_smoke.html`
-- `http://localhost:8089/examples/serial_smoke.html`
+- `http://localhost:8089/network_smoke.html`
+- `http://localhost:8089/serial_smoke.html`
 
 Run WASM browser feature tests:
 
@@ -221,26 +203,170 @@ The workspace contains real examples in `modbus-rs/examples/`.
 
 - [ascii_serial_example.rs](../modbus-rs/examples/ascii_serial_example.rs)
 
-## 4. Running Examples
+### Async TCP examples
+
+- [async_tcp_example.rs](../modbus-rs/examples/async_tcp_example.rs)
+
+### Async Serial RTU examples
+
+- [async_serial_rtu_example.rs](../modbus-rs/examples/async_serial_rtu_example.rs)
+
+## 4. Async Usage (Tokio)
+
+The `async` feature enables `mbus-async`, which provides `AsyncTcpClient` and
+`AsyncSerialClient` with full `.await` support. No changes to application code structure
+are required beyond adding `async`/`.await`.
+
+`AsyncTcpClient` uses a compile-time pipeline depth const generic:
+
+- default (`N = 9`): `AsyncTcpClient::connect(...)`
+- custom: `AsyncTcpClient::<N>::connect_with_pipeline(...)`
+
+Example with a custom compile-time pipeline depth:
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+let client = AsyncTcpClient::<16>::connect_with_pipeline("192.168.1.10", 502)?;
+```
+
+Add the dependency:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", features = ["async"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+### Async TCP example
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+use modbus_rs::Coils;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let client = AsyncTcpClient::connect("192.168.1.10", 502)?;
+
+    // Read
+    let coils = client.read_multiple_coils(1, 0, 8).await?;
+    for addr in coils.from_address()..coils.from_address() + coils.quantity() {
+        println!("coil[{}] = {}", addr, coils.value(addr)?);
+    }
+
+    let regs = client.read_holding_registers(1, 0, 4).await?;
+    for addr in regs.from_address()..regs.from_address() + regs.quantity() {
+        println!("reg[{}] = {}", addr, regs.value(addr)?);
+    }
+
+    // Write
+    let (addr, val) = client.write_single_coil(1, 0, true).await?;
+    println!("Wrote coil[{}] = {}", addr, val);
+
+    let (start, qty) = client.write_multiple_registers(1, 0, &[100, 200, 300, 400]).await?;
+    println!("Wrote {} registers starting at {}", qty, start);
+
+    // Combined read/write
+    let rw = client.read_write_multiple_registers(1, 0, 4, 10, &[1, 2]).await?;
+    println!("Read {} registers starting at {}", rw.quantity(), rw.from_address());
+
+    // Mask write register
+    client.mask_write_register(1, 0, 0xFF00, 0x0055).await?;
+
+    Ok(())
+}
+```
+
+### Async serial RTU example
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncSerialClient;
+use modbus_rs::{
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
+};
+use std::str::FromStr;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = ModbusSerialConfig {
+        port_path: heapless::String::<64>::from_str("/dev/ttyUSB0").unwrap(),
+        baud_rate: BaudRate::Baud9600,
+        data_bits: DataBits::Eight,
+        stop_bits: 1,
+        parity: Parity::None,
+        response_timeout_ms: 2000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
+    };
+
+    let client = AsyncSerialClient::connect_rtu(config)?;
+
+    let coils = client.read_multiple_coils(1, 0, 8).await?;
+    for addr in coils.from_address()..coils.from_address() + coils.quantity() {
+        println!("coil[{}] = {}", addr, coils.value(addr)?);
+    }
+
+    Ok(())
+}
+```
+
+### Async optional poll interval
+
+Both TCP and serial constructors have a `_with_poll_interval` variant that lets you tune
+how often the worker thread checks for responses. The default is 20ms.
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+use std::time::Duration;
+
+let client = AsyncTcpClient::connect_with_poll_interval("192.168.1.10", 502, Duration::from_millis(5))?;
+```
+
+A lower value reduces latency at the cost of more CPU. A higher value is fine if response
+times are expected to be hundreds of milliseconds.
+
+## 5. Running Examples
 
 Run examples from the workspace root.
 
-### TCP example
+### TCP sync example
 
 ```bash
 cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
 ```
 
-### Serial RTU example
+### Serial RTU sync example
 
 ```bash
 cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils
 ```
 
-### Serial ASCII example
+### Serial ASCII sync example
 
 ```bash
 cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils
+```
+
+### Async TCP example
+
+```bash
+cargo run -p modbus-rs --example async_tcp_example --features async
+# With explicit host/port/unit:
+cargo run -p modbus-rs --example async_tcp_example --features async -- 192.168.1.10 502 1
+```
+
+### Async serial RTU example
+
+```bash
+cargo run -p modbus-rs --example async_serial_rtu_example \
+  --no-default-features --features async,serial-rtu,coils,registers
+# With explicit port/unit:
+cargo run -p modbus-rs --example async_serial_rtu_example \
+  --no-default-features --features async,serial-rtu,coils,registers \
+  -- /dev/ttyUSB0 1
 ```
 
 You can also use the default feature set if you want everything enabled:
@@ -249,7 +375,7 @@ You can also use the default feature set if you want everything enabled:
 cargo run -p modbus-rs --example coils_example
 ```
 
-## 5. Transport Setup Notes
+## 6. Transport Setup Notes
 
 ### TCP
 

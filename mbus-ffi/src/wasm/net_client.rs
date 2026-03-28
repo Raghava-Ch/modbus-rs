@@ -23,15 +23,17 @@ use std::time::Duration;
 use gloo_timers::future::sleep;
 use js_sys::{Function, Promise};
 use mbus_client::services::ClientServices;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{BackoffStrategy, JitterStrategy, ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use mbus_client::services::coil::Coils;
 use mbus_client::services::file_record::SubRequest;
 use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
+use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
+use mbus_core::transport::{
+    BackoffStrategy, JitterStrategy, ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr,
+};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 use super::app::{PendingHandle, PendingMap, WasmAppRouter};
 use mbus_network::WasmWsTransport;
@@ -76,17 +78,17 @@ impl WasmModbusClient {
         let app = WasmAppRouter::new(pending.clone());
         let transport = WasmWsTransport::new(ws_url);
 
-            let config = ModbusConfig::Tcp(ModbusTcpConfig {
-                host: heapless::String::try_from("wasm")
-                    .map_err(|_| JsValue::from_str("host string overflow"))?,
-                port: 0,
-                connection_timeout_ms: 5000,
-                response_timeout_ms,
-                retry_attempts,
-                retry_backoff_strategy: BackoffStrategy::Immediate,
-                retry_jitter_strategy: JitterStrategy::None,
-                retry_random_fn: None,
-            });
+        let config = ModbusConfig::Tcp(ModbusTcpConfig {
+            host: heapless::String::try_from("wasm")
+                .map_err(|_| JsValue::from_str("host string overflow"))?,
+            port: 0,
+            connection_timeout_ms: 5000,
+            response_timeout_ms,
+            retry_attempts,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        });
 
         let inner_client = ClientServices::new(transport, app, config)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
@@ -130,7 +132,9 @@ impl WasmModbusClient {
     pub fn reconnect(&mut self) -> bool {
         // Reject all pending promises before the internal queue is cleared.
         for (_, handle) in self.pending.borrow_mut().drain() {
-            let _ = handle.reject.call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
+            let _ = handle
+                .reject
+                .call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
         }
         self.inner.borrow_mut().reconnect().is_ok()
     }
@@ -144,10 +148,14 @@ impl WasmModbusClient {
     pub fn read_coils(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .coils()
             .read_multiple_coils(txn_id, unit_addr, address, quantity);
 
@@ -163,10 +171,14 @@ impl WasmModbusClient {
     pub fn write_single_coil(&mut self, address: u16, value: bool) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .coils()
             .write_single_coil(txn_id, unit_addr, address, value);
 
@@ -185,10 +197,14 @@ impl WasmModbusClient {
     pub fn read_holding_registers(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .read_holding_registers(txn_id, unit_addr, address, quantity);
 
@@ -204,10 +220,14 @@ impl WasmModbusClient {
     pub fn read_input_registers(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .read_input_registers(txn_id, unit_addr, address, quantity);
 
@@ -223,10 +243,14 @@ impl WasmModbusClient {
     pub fn write_single_register(&mut self, address: u16, value: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .write_single_register(txn_id, unit_addr, address, value);
 
@@ -247,10 +271,14 @@ impl WasmModbusClient {
     ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .write_multiple_registers(txn_id, unit_addr, address, quantity, values);
 
@@ -269,10 +297,14 @@ impl WasmModbusClient {
     pub fn read_discrete_inputs(&mut self, address: u16, quantity: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .discrete_inputs()
             .read_discrete_inputs(txn_id, unit_addr, address, quantity);
 
@@ -297,10 +329,9 @@ impl WasmModbusClient {
     /// Used when request queuing fails before the frame is even sent.
     fn reject_immediate(&self, txn_id: u16, error: MbusError) {
         if let Some(handle) = self.pending.borrow_mut().remove(&txn_id) {
-            let _ = handle.reject.call1(
-                &JsValue::NULL,
-                &JsValue::from_str(&format!("{:?}", error)),
-            );
+            let _ = handle
+                .reject
+                .call1(&JsValue::NULL, &JsValue::from_str(&format!("{:?}", error)));
         }
     }
 }
@@ -327,12 +358,10 @@ fn make_promise() -> (Promise, Function, Function) {
     let reject = reject_holder.borrow_mut().take().unwrap();
 
     (promise, resolve, reject)
-
 }
 
 #[wasm_bindgen]
 impl WasmModbusClient {
-
     // ── Additional coil operations ────────────────────────────────────────────
 
     /// Read a single coil at `address`.
@@ -341,14 +370,20 @@ impl WasmModbusClient {
     pub fn read_single_coil(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .coils()
             .read_single_coil(txn_id, unit_addr, address);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -356,21 +391,32 @@ impl WasmModbusClient {
     ///
     /// `packed_bytes` is a bit-packed `Uint8Array` (LSB of byte 0 = coil at `address`).
     /// Returns a `Promise` that resolves with `{ address, quantity }` or rejects on error.
-    pub fn write_multiple_coils(&mut self, address: u16, quantity: u16, packed_bytes: &[u8]) -> Promise {
+    pub fn write_multiple_coils(
+        &mut self,
+        address: u16,
+        quantity: u16,
+        packed_bytes: &[u8],
+    ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let coils_result = Coils::new(address, quantity)
-            .and_then(|c| c.with_values(packed_bytes, quantity));
+        let coils_result =
+            Coils::new(address, quantity).and_then(|c| c.with_values(packed_bytes, quantity));
         let result = match coils_result {
-            Ok(coils) => self.inner.borrow_mut()
+            Ok(coils) => self
+                .inner
+                .borrow_mut()
                 .coils()
                 .write_multiple_coils(txn_id, unit_addr, address, &coils),
             Err(e) => Err(e),
         };
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -382,14 +428,20 @@ impl WasmModbusClient {
     pub fn read_single_holding_register(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .read_single_holding_register(txn_id, unit_addr, address);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -399,14 +451,20 @@ impl WasmModbusClient {
     pub fn read_single_input_register(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .read_single_input_register(txn_id, unit_addr, address);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -425,14 +483,27 @@ impl WasmModbusClient {
     ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
-            .read_write_multiple_registers(txn_id, unit_addr, read_address, read_quantity, write_address, values);
+            .read_write_multiple_registers(
+                txn_id,
+                unit_addr,
+                read_address,
+                read_quantity,
+                write_address,
+                values,
+            );
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -443,14 +514,20 @@ impl WasmModbusClient {
     pub fn mask_write_register(&mut self, address: u16, and_mask: u16, or_mask: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .registers()
             .mask_write_register(txn_id, unit_addr, address, and_mask, or_mask);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -462,14 +539,20 @@ impl WasmModbusClient {
     pub fn read_single_discrete_input(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .discrete_inputs()
             .read_single_discrete_input(txn_id, unit_addr, address);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -481,14 +564,20 @@ impl WasmModbusClient {
     pub fn read_fifo_queue(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .fifo()
             .read_fifo_queue(txn_id, unit_addr, address);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -506,19 +595,24 @@ impl WasmModbusClient {
     ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
         let mut sub_req = SubRequest::new();
         let result = sub_req
             .add_read_sub_request(file_number, record_number, record_length)
             .and_then(|_| {
-                self.inner.borrow_mut()
+                self.inner
+                    .borrow_mut()
                     .file_records()
                     .read_file_record(txn_id, unit_addr, &sub_req)
             });
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -534,7 +628,9 @@ impl WasmModbusClient {
     ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
         let record_length = values.len() as u16;
@@ -552,12 +648,15 @@ impl WasmModbusClient {
         let result = sub_req
             .add_write_sub_request(file_number, record_number, record_length, hv)
             .and_then(|_| {
-                self.inner.borrow_mut()
+                self.inner
+                    .borrow_mut()
                     .file_records()
                     .write_file_record(txn_id, unit_addr, &sub_req)
             });
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -569,14 +668,20 @@ impl WasmModbusClient {
     pub fn read_exception_status(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .diagnostic()
             .read_exception_status(txn_id, unit_addr);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -587,18 +692,23 @@ impl WasmModbusClient {
     pub fn diagnostics(&mut self, sub_function: u16, data: &[u16]) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
         let result = DiagnosticSubFunction::try_from(sub_function)
             .map_err(|_| MbusError::ReservedSubFunction(sub_function))
             .and_then(|sf| {
-                self.inner.borrow_mut()
+                self.inner
+                    .borrow_mut()
                     .diagnostic()
                     .diagnostics(txn_id, unit_addr, sf, data)
             });
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -608,14 +718,20 @@ impl WasmModbusClient {
     pub fn get_comm_event_counter(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .diagnostic()
             .get_comm_event_counter(txn_id, unit_addr);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -626,14 +742,20 @@ impl WasmModbusClient {
     pub fn get_comm_event_log(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .diagnostic()
             .get_comm_event_log(txn_id, unit_addr);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -643,14 +765,20 @@ impl WasmModbusClient {
     pub fn report_server_id(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut()
+        let result = self
+            .inner
+            .borrow_mut()
             .diagnostic()
             .report_server_id(txn_id, unit_addr);
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 
@@ -660,21 +788,30 @@ impl WasmModbusClient {
     /// `object_id`: 0x00=VendorName, 0x01=ProductCode, 0x02=Revision, 0x03=VendorURL, etc.
     /// Returns a `Promise` resolving with `{ readDeviceIdCode, conformityLevel, moreFollows, objects }`
     /// or rejects on error.
-    pub fn read_device_identification(&mut self, read_device_id_code: u8, object_id: u8) -> Promise {
+    pub fn read_device_identification(
+        &mut self,
+        read_device_id_code: u8,
+        object_id: u8,
+    ) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
-        self.pending.borrow_mut().insert(txn_id, PendingHandle { resolve, reject });
+        self.pending
+            .borrow_mut()
+            .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
         let result = ReadDeviceIdCode::try_from(read_device_id_code)
             .map_err(|_| MbusError::InvalidDeviceIdCode)
             .and_then(|code| {
-                self.inner.borrow_mut()
+                self.inner
+                    .borrow_mut()
                     .diagnostic()
                     .read_device_identification(txn_id, unit_addr, code, ObjectId::from(object_id))
             });
 
-        if let Err(e) = result { self.reject_immediate(txn_id, e); }
+        if let Err(e) = result {
+            self.reject_immediate(txn_id, e);
+        }
         promise
     }
 }

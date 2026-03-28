@@ -20,8 +20,8 @@ use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-    Parity, SerialMode, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, UnitIdOrSlaveAddr,
 };
 use mbus_serial::WasmSerialTransport;
 use wasm_bindgen::prelude::*;
@@ -417,8 +417,8 @@ impl WasmSerialModbusClient {
             .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let coils_result = Coils::new(address, quantity)
-            .and_then(|c| c.with_values(packed_bytes, quantity));
+        let coils_result =
+            Coils::new(address, quantity).and_then(|c| c.with_values(packed_bytes, quantity));
         let result = match coils_result {
             Ok(coils) => self
                 .inner
@@ -500,14 +500,18 @@ impl WasmSerialModbusClient {
             .insert(txn_id, PendingHandle { resolve, reject });
 
         let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self.inner.borrow_mut().registers().read_write_multiple_registers(
-            txn_id,
-            unit_addr,
-            read_address,
-            read_quantity,
-            write_address,
-            values,
-        );
+        let result = self
+            .inner
+            .borrow_mut()
+            .registers()
+            .read_write_multiple_registers(
+                txn_id,
+                unit_addr,
+                read_address,
+                read_quantity,
+                write_address,
+                values,
+            );
 
         if let Err(e) = result {
             self.reject_immediate(txn_id, e);
@@ -802,12 +806,10 @@ impl WasmSerialModbusClient {
         let result = ReadDeviceIdCode::try_from(read_device_id_code)
             .map_err(|_| MbusError::InvalidDeviceIdCode)
             .and_then(|code| {
-                self.inner.borrow_mut().diagnostic().read_device_identification(
-                    txn_id,
-                    unit_addr,
-                    code,
-                    ObjectId::from(object_id),
-                )
+                self.inner
+                    .borrow_mut()
+                    .diagnostic()
+                    .read_device_identification(txn_id, unit_addr, code, ObjectId::from(object_id))
             });
 
         if let Err(e) = result {
@@ -826,10 +828,9 @@ impl WasmSerialModbusClient {
 
     fn reject_immediate(&self, txn_id: u16, error: MbusError) {
         if let Some(handle) = self.pending.borrow_mut().remove(&txn_id) {
-            let _ = handle.reject.call1(
-                &JsValue::NULL,
-                &JsValue::from_str(&format!("{:?}", error)),
-            );
+            let _ = handle
+                .reject
+                .call1(&JsValue::NULL, &JsValue::from_str(&format!("{:?}", error)));
         }
     }
 }

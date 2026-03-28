@@ -18,6 +18,7 @@ Defined features:
 - `serial-rtu`: Enables `mbus-serial` for RTU usage.
 - `serial-ascii`: Enables `mbus-serial` for ASCII usage.
 - `tcp`: Enables `mbus-network`.
+- `async`: Enables `mbus-async` — the Tokio-based async facade (see below).
 - `coils`: Enables coil model/service support.
 - `registers`: Enables register model/service support.
 - `discrete-inputs`: Enables discrete input model/service support.
@@ -28,6 +29,65 @@ Defined features:
 
 Default behavior:
 - `default` currently enables: `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features above.
+- The `async` feature is **not enabled by default** — add it explicitly when you need `.await` APIs.
+
+## Async Crate (`mbus-async`)
+
+The `mbus-async` crate exposes [`AsyncTcpClient`] and [`AsyncSerialClient`] behind a Tokio
+`.await` API. It is enabled through the top-level `async` feature.
+
+Defined features:
+
+| Feature | Enables |
+|---|---|
+| `tcp` | `AsyncTcpClient` — async TCP Modbus client |
+| `serial-rtu` | RTU constructors on `AsyncSerialClient` |
+| `serial-ascii` | ASCII constructors on `AsyncSerialClient` |
+| `coils` | Coil service async methods |
+| `registers` | Register service async methods |
+| `discrete-inputs` | Discrete input async methods |
+| `fifo` | FIFO queue async method |
+| `file-record` | File record read/write async methods |
+| `diagnostics` | Device identification, diagnostics, event log, report-server-id async methods |
+
+Default features in `mbus-async`: `tcp`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`.
+
+When you enable the `async` feature on `modbus-rs`, all of those function-group features are
+forwarded from `modbus-rs` into `mbus-async` automatically — you do not need separate flag wiring.
+
+### Async feature combinations
+
+**Minimal async TCP client (coils only):**
+```toml
+modbus-rs = { version = "0.4", default-features = false, features = [
+  "async", "tcp", "coils"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+**Async TCP + all services (explicit):**
+```toml
+modbus-rs = { version = "0.4", default-features = false, features = [
+  "async", "tcp", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+**Async serial RTU (registers only):**
+```toml
+modbus-rs = { version = "0.4", default-features = false, features = [
+  "async", "serial-rtu", "registers"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+**Async serial ASCII with diagnostics:**
+```toml
+modbus-rs = { version = "0.4", default-features = false, features = [
+  "async", "serial-ascii", "diagnostics"
+] }
+tokio = { version = "1", features = ["full"] }
+```
 
 ## Client Crate (`mbus-client`)
 
@@ -67,14 +127,14 @@ This optimization reduces stack usage for builds that do not include ASCII trans
 
 ```toml
 [dependencies]
-modbus-rs = "0.3.0"
+modbus-rs = "0.4.0"
 ```
 
 ### 2) Minimal client with only coils over TCP
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -85,7 +145,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers",
@@ -97,7 +157,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "diagnostics"
@@ -108,7 +168,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "client",
   "tcp",
   "diagnostics"
@@ -119,7 +179,7 @@ modbus-rs = { version = "0.3.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.3.0", default-features = false, features = [
+modbus-rs = { version = "0.4.0", default-features = false, features = [
   "tcp",
   "logging"
 ] }
@@ -144,6 +204,18 @@ cargo check --no-default-features --features client,serial-ascii,diagnostics
 
 # Build only TCP transport + logging
 cargo check --no-default-features --features tcp,logging
+
+# Async TCP with all service features
+cargo check --no-default-features --features async,tcp,coils,registers,discrete-inputs,fifo,file-record,diagnostics
+
+# Async serial RTU
+cargo check --no-default-features --features async,serial-rtu,coils,registers
+
+# Run async TCP example
+cargo run --package modbus-rs --example async_tcp_example --features async
+
+# Run async serial RTU example
+cargo run --package modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
 ```
 
 ## Logging Setup

@@ -63,36 +63,32 @@ impl Transport for WasmWsTransport {
         ws.set_binary_type(BinaryType::Arraybuffer);
 
         let shared_msg = self.shared.clone();
-        let on_message = Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(
-            move |evt: MessageEvent| {
+        let on_message =
+            Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |evt: MessageEvent| {
                 if let Ok(buf) = evt.data().dyn_into::<js_sys::ArrayBuffer>() {
                     let array = js_sys::Uint8Array::new(&buf);
                     let bytes = array.to_vec();
                     shared_msg.borrow_mut().rx_buf.extend(bytes);
                 }
-            },
-        ));
+            }));
         ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
 
         let shared_open = self.shared.clone();
-        let on_open =
-            Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_evt| {
-                shared_open.borrow_mut().connected = true;
-            }));
+        let on_open = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_evt| {
+            shared_open.borrow_mut().connected = true;
+        }));
         ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
 
         let shared_close = self.shared.clone();
-        let on_close =
-            Closure::<dyn FnMut(web_sys::CloseEvent)>::wrap(Box::new(move |_evt| {
-                shared_close.borrow_mut().connected = false;
-            }));
+        let on_close = Closure::<dyn FnMut(web_sys::CloseEvent)>::wrap(Box::new(move |_evt| {
+            shared_close.borrow_mut().connected = false;
+        }));
         ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
 
         let shared_err = self.shared.clone();
-        let on_error =
-            Closure::<dyn FnMut(ErrorEvent)>::wrap(Box::new(move |_evt| {
-                shared_err.borrow_mut().connected = false;
-            }));
+        let on_error = Closure::<dyn FnMut(ErrorEvent)>::wrap(Box::new(move |_evt| {
+            shared_err.borrow_mut().connected = false;
+        }));
         ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
 
         self._on_message = Some(on_message);
@@ -113,7 +109,8 @@ impl Transport for WasmWsTransport {
 
     fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
         let ws = self.ws.as_ref().ok_or(TransportError::ConnectionFailed)?;
-        ws.send_with_u8_array(adu).map_err(|_| TransportError::IoError)
+        ws.send_with_u8_array(adu)
+            .map_err(|_| TransportError::IoError)
     }
 
     fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
