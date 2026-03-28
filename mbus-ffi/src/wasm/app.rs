@@ -13,19 +13,19 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, Uint16Array};
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{TimeKeeper, UnitIdOrSlaveAddr};
 use mbus_client::app::{
-    CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FileRecordResponse,
-    FifoQueueResponse, RegisterResponse, RequestErrorNotifier,
+    CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
+    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
 };
 use mbus_client::services::coil::Coils;
 use mbus_client::services::diagnostic::DeviceIdentificationResponse;
 use mbus_client::services::discrete_input::DiscreteInputs;
-use mbus_client::services::file_record::SubRequestParams;
 use mbus_client::services::fifo_queue::FifoQueue;
+use mbus_client::services::file_record::SubRequestParams;
 use mbus_client::services::register::Registers;
+use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
+use mbus_core::transport::{TimeKeeper, UnitIdOrSlaveAddr};
 use wasm_bindgen::JsValue;
 
 // ── Pending-request bookkeeping ───────────────────────────────────────────────
@@ -118,8 +118,16 @@ impl CoilResponse for WasmAppRouter {
         value: bool,
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("address"), &JsValue::from_f64(address as f64));
-        let _ = Reflect::set(&obj, &JsValue::from_str("value"), &JsValue::from_bool(value));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("address"),
+            &JsValue::from_f64(address as f64),
+        );
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("value"),
+            &JsValue::from_bool(value),
+        );
         self.resolve(txn_id, obj.into());
     }
 
@@ -131,8 +139,16 @@ impl CoilResponse for WasmAppRouter {
         quantity: u16,
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("address"), &JsValue::from_f64(address as f64));
-        let _ = Reflect::set(&obj, &JsValue::from_str("quantity"), &JsValue::from_f64(quantity as f64));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("address"),
+            &JsValue::from_f64(address as f64),
+        );
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("quantity"),
+            &JsValue::from_f64(quantity as f64),
+        );
         self.resolve(txn_id, obj.into());
     }
 }
@@ -188,8 +204,16 @@ impl RegisterResponse for WasmAppRouter {
         value: u16,
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("address"), &JsValue::from_f64(address as f64));
-        let _ = Reflect::set(&obj, &JsValue::from_str("value"), &JsValue::from_f64(value as f64));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("address"),
+            &JsValue::from_f64(address as f64),
+        );
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("value"),
+            &JsValue::from_f64(value as f64),
+        );
         self.resolve(txn_id, obj.into());
     }
 
@@ -201,8 +225,16 @@ impl RegisterResponse for WasmAppRouter {
         quantity: u16,
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("address"), &JsValue::from_f64(starting_address as f64));
-        let _ = Reflect::set(&obj, &JsValue::from_str("quantity"), &JsValue::from_f64(quantity as f64));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("address"),
+            &JsValue::from_f64(starting_address as f64),
+        );
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("quantity"),
+            &JsValue::from_f64(quantity as f64),
+        );
         self.resolve(txn_id, obj.into());
     }
 
@@ -310,11 +342,7 @@ impl FileRecordResponse for WasmAppRouter {
     }
 
     /// Resolves with `true`.
-    fn write_file_record_response(
-        &mut self,
-        txn_id: u16,
-        _unit_id_slave_addr: UnitIdOrSlaveAddr,
-    ) {
+    fn write_file_record_response(&mut self, txn_id: u16, _unit_id_slave_addr: UnitIdOrSlaveAddr) {
         self.resolve(txn_id, JsValue::TRUE);
     }
 }
@@ -359,7 +387,11 @@ impl DiagnosticsResponse for WasmAppRouter {
                 let value_str = core::str::from_utf8(&o.value)
                     .map(|s| s.to_owned())
                     .unwrap_or_else(|_| {
-                        o.value.iter().map(|b| format!("{:02X}", b)).collect::<std::vec::Vec<_>>().join(" ")
+                        o.value
+                            .iter()
+                            .map(|b| format!("{:02X}", b))
+                            .collect::<std::vec::Vec<_>>()
+                            .join(" ")
                     });
                 let _ = Reflect::set(
                     &entry,
@@ -387,7 +419,11 @@ impl DiagnosticsResponse for WasmAppRouter {
             &JsValue::from_str("meiType"),
             &JsValue::from_f64(u8::from(mei_type) as f64),
         );
-        let _ = Reflect::set(&obj, &JsValue::from_str("data"), &Uint8Array::from(data).into());
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("data"),
+            &Uint8Array::from(data).into(),
+        );
         self.resolve(txn_id, obj.into());
     }
 
@@ -415,7 +451,11 @@ impl DiagnosticsResponse for WasmAppRouter {
             &JsValue::from_str("subFunction"),
             &JsValue::from_f64(u16::from(sub_function) as f64),
         );
-        let _ = Reflect::set(&obj, &JsValue::from_str("data"), &Uint16Array::from(data).into());
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("data"),
+            &Uint16Array::from(data).into(),
+        );
         self.resolve(txn_id, obj.into());
     }
 
@@ -428,7 +468,11 @@ impl DiagnosticsResponse for WasmAppRouter {
         event_count: u16,
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("status"), &JsValue::from_f64(status as f64));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("status"),
+            &JsValue::from_f64(status as f64),
+        );
         let _ = Reflect::set(
             &obj,
             &JsValue::from_str("eventCount"),
@@ -448,7 +492,11 @@ impl DiagnosticsResponse for WasmAppRouter {
         events: &[u8],
     ) {
         let obj = Object::new();
-        let _ = Reflect::set(&obj, &JsValue::from_str("status"), &JsValue::from_f64(status as f64));
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("status"),
+            &JsValue::from_f64(status as f64),
+        );
         let _ = Reflect::set(
             &obj,
             &JsValue::from_str("eventCount"),
@@ -459,7 +507,11 @@ impl DiagnosticsResponse for WasmAppRouter {
             &JsValue::from_str("messageCount"),
             &JsValue::from_f64(message_count as f64),
         );
-        let _ = Reflect::set(&obj, &JsValue::from_str("events"), &Uint8Array::from(events).into());
+        let _ = Reflect::set(
+            &obj,
+            &JsValue::from_str("events"),
+            &Uint8Array::from(events).into(),
+        );
         self.resolve(txn_id, obj.into());
     }
 
