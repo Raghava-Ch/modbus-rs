@@ -1,64 +1,101 @@
 # mbus-ffi
 
-WASM/JS bindings for the modbus-rs stack.
+WASM/JS and Native C/C++ FFI bindings for the `modbus-rs` stack.
 
 ## Position In Workspace
 
-`mbus-ffi` is an implementation crate inside this workspace.
+`mbus-ffi` is an implementation wrapper crate inside this workspace. It encapsulates the core state machines of the `modbus-rs` stack, mapping them natively across two distinct abstraction boundaries:
+1. **Web Run-times (WASM)** via Javascript Promises.
+2. **Native Run-times (C/C++)** via opaque pointers, static client ID pools, and dependency-injected function callbacks.
 
-For browser/WASM application code, import and use `mbus-ffi` directly.
-`modbus-rs` does not provide a top-level `wasm` feature and does not re-export
-`mbus-ffi` WASM-facing types.
+---
 
-This crate exposes browser-friendly Modbus clients over:
+## Native C/C++ Bindings (FFI)
 
-- WebSocket (Modbus TCP gateway): `WasmModbusClient`
-- Web Serial (RTU/ASCII): `request_serial_port`, `WasmSerialPortHandle`, `WasmSerialModbusClient`
+The native FFI is designed specifically for **Strict `no_std`** and embedded use cases:
+- **Zero Heap Allocations**: The FFI path absolutely avoids `alloc` (No `Box`, `Vec`, or dynamic dispatch).
+- **Static Client Pool**: All Modbus clients allocated for native FFI exist in a thread-safe static pool using an ID-based system (`MbusClientId`), preventing raw pointers from leaking across boundaries to easily integrate with memory-unsafe languages.
+- **Zero OS dependencies**: TCP/Serial abstractions are stripped out native compilation. The host application performs all network sockets, timer integrations, and byte transmissions by sending them upward into the Modbus stack via `MbusTransportCallbacks`.
+- **`panic=abort`**: Automatically detects `no_std` execution properties gracefully through `build.rs`.
 
-All APIs are Promise-based and are designed for browser runtimes (`wasm32`).
+### Pool Configuration
+Pool sizing is determined strictly at compile time. By default, the system provisions exactly `1` slot.
+To increase maximum clients, inject the environment variable safely:
+```bash
+MBUS_MAX_CLIENTS=10 cargo build -p mbus-ffi --features c,full
+```
 
-## Status
+### Build & Link
+`mbus-ffi` supports compiling directly to shared (`.so`/`.dylib`) and static (`.a`) libraries:
+```bash
+cargo build --release -p mbus-ffi --features c,full
+```
 
-Implemented and usable for browser integration and smoke testing.
+*Note: Even in strict `no_std` environments, standard LLVM targets like `target/debug` on mac/linux will naturally map underlying memory routines (`memcpy`, `memmove`) strictly via system libc. When targeting explicit embedded system triples like `thumbv7em-none-eabihf`, compiler built-ins will resolve them.*
 
-## What This Crate Exports
+### Automatic `mbus_ffi.h` Header Generation
+We utilize `cbindgen` to define memory-perfect opaque wrappers for external model parsing:
+```bash
+cbindgen --config mbus-ffi/cbindgen.toml --crate mbus-ffi --output mbus-ffi/include/mbus_ffi.h
+```
 
-When compiled for `wasm32`, `mbus-ffi` exports:
+### C API Quick Start (Transport Polling)
 
-- `WasmModbusClient` (WebSocket transport)
-- `request_serial_port()`
-- `WasmSerialPortHandle`
-- `WasmSerialModbusClient` (Web Serial transport)
+Instead of passing system sockets, you attach your exact runtime logic using POSIX or embedded UART controls directly via `MbusTransportCallbacks`:
 
-These symbols are conditionally compiled behind `target_arch = "wasm32"` so native builds are unaffected.
+```c
+#include "mbus_ffi.h"
 
-## Feature Flags
+// 1. Setup specific connection rules
+struct MbusTcpConfig config = {0};
+config.host = "192.168.1.10";
+config.port = 502;
+// ... (timeouts/retries)
 
-`mbus-ffi` uses modular feature flags:
+// 2. Setup your OS networking functions
+struct MbusTransportCallbacks transport = {0};
+transport.userdata = &my_posix_socket_context;
+transport.on_connect = my_os_connect;
+transport.on_send = my_os_send;
+transport.on_recv = my_os_recv;
+// ... 
 
-- `wasm`: enables WASM bindings and browser transports (`mbus-network/wasm`, `mbus-serial/wasm`)
-- `coils`
-- `registers`
-- `discrete-inputs`
-- `fifo`
-- `file-record`
-- `diagnostics`
-- `full`: enables all Modbus service features above
+// 3. Setup Response callbacks
+struct MbusCallbacks app_callbacks = {0};
+app_callbacks.on_read_coils = my_app_read_coils;
+// ...
 
-Typical web builds use `--features wasm,full`.
+MbusClientId client_id = mbus_tcp_client_new(&config, &transport, &app_callbacks);
 
-## Build WASM Package
+// Request the connection internally
+mbus_tcp_connect(client_id);
+mbus_tcp_read_coils(client_id, 42 /* txn_id */, 1 /* unit_id */, 0 /* address */, 10 /* quantity */);
 
-From `mbus-ffi`:
+// Must be continuously ticked within your device's task loop
+while(1) {
+    mbus_tcp_poll(client_id);
+}
+```
 
+*For a full operational POSIX socket example, view the `mbus-ffi/examples/c_smoke_cmake/main.c` build schema!*
+
+---
+
+## WASM Browser Bindings
+
+`mbus-ffi` securely exports internal modbus logic to JavaScript via `wasm-pack`, exposing:
+- `WasmModbusClient` (WebSocket transport mapper)
+- `WasmSerialModbusClient` + `request_serial_port()` (Web Serial hardware mapper)
+
+All APIs are Promise-based and are designed specifically for browser runtimes (`wasm32`). Building native targets does not interact with Javascript wrappers.
+
+### Build WASM Package
 ```bash
 wasm-pack build --target web --features wasm,full
 ```
-
 Generated JS/WASM package is written to `mbus-ffi/pkg`.
 
-## Quick Start (WebSocket)
-
+### Quick Start (WebSocket)
 ```javascript
 import init, { WasmModbusClient } from "./pkg/mbus_ffi.js";
 
@@ -76,102 +113,45 @@ const regs = await client.read_holding_registers(0, 2);
 console.log(Array.from(regs));
 ```
 
-## Quick Start (Web Serial)
-
+### Quick Start (Web Serial)
 ```javascript
 import init, { request_serial_port, WasmSerialModbusClient } from "./pkg/mbus_ffi.js";
 
 await init();
 
-// Must be called from a user gesture (e.g. button click)
+// Must be called from a user gesture (e.g. button double click)
 const portHandle = await request_serial_port();
 
 const client = new WasmSerialModbusClient(
 	portHandle,
 	1,      // unit_id
-	"rtu", // mode: "rtu" | "ascii"
+	"rtu",  // mode: "rtu" | "ascii"
 	9600,   // baud_rate
-	8,      // data_bits
-	1,      // stop_bits
-	"even",// parity: "none" | "even" | "odd"
-	3000,   // response_timeout_ms
-	1,      // retry_attempts
-	20      // tick_interval_ms
+	... 
 );
-
 const ok = await client.read_single_coil(0);
-console.log(ok);
 ```
 
-## Supported Modbus Operations
-
-Both WASM clients expose the same service surface:
-
-- Coils: read single/multiple, write single/multiple
-- Registers: read holding/input, write single/multiple, mask write, read-write multiple
-- Discrete inputs: read single/multiple
-- FIFO queue: read
-- File record: read/write
-- Diagnostics: exception status, diagnostics, comm event counter/log, report server id, read device identification
-
-## Example Smoke Pages
-
+### Example Web Pages
 Use the browser examples under `mbus-ffi/examples`:
-
 - `network_smoke.html` (WebSocket/TCP path)
 - `serial_smoke.html` (Web Serial path, full serial API smoke runner)
 
-Serve the examples over localhost after building `pkg`, for example:
-
+Serve the examples over localhost:
 ```bash
 cd mbus-ffi
 python3 -m http.server 8089
 ```
 
-Then open:
-
-- `http://localhost:8089/examples/network_smoke.html`
-- `http://localhost:8089/examples/serial_smoke.html`
-
-## Running WASM Tests
-
-The E2E WASM tests live in `mbus-ffi/tests/wasm_e2e.rs` and run in browser mode.
-
-Run the full browser feature test suite:
-
-```bash
-cd mbus-ffi;
-wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
-```
-
-Fast compile check:
-
-```bash
-cd mbus-ffi
-cargo check --target wasm32-unknown-unknown --features wasm,full --tests
-```
-
-Run browser tests (Chrome headless):
-
-```bash
-cd mbus-ffi
-wasm-pack test --chrome --headless --features wasm,full
-```
-
-## Browser Requirements (Serial)
-
-Web Serial requires:
-
-- Chromium-based browser
-- Secure context (HTTPS) or localhost
-- User gesture for `request_serial_port()`
-
-## Notes
-
-- Promise rejection errors are surfaced as stringified internal errors.
-- `WasmSerialModbusClient` uses serial-safe pipeline behavior internally.
-- Native (non-wasm32) consumers should use the core Rust crates directly.
+## Supported Modbus Operations
+Both FFI wrappers expose the same internal client services configured by feature flags:
+- `coils`: read single/multiple, write single/multiple
+- `registers`: read holding/input, write single/multiple, mask write, read-write multiple
+- `discrete-inputs`: read single/multiple
+- `fifo`: read
+- `file-record`: read/write
+- `diagnostics`: exception status, diagnostics, comm event counter/log, report server id, read device ID
+- `full`: Enables all Modbus service features.
 
 ## License
-
 Licensed under the repository root `LICENSE`.
