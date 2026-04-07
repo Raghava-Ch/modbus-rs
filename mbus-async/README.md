@@ -51,6 +51,7 @@ Serial remains request/reply oriented and defaults to `1` in-flight request.
 | `fifo` | ✓ | FIFO queue read methods |
 | `file-record` | ✓ | File record read/write methods |
 | `diagnostics` | ✓ | Device identification, diagnostics, event log, etc. |
+| `traffic` | | Dedicated-thread raw TX/RX frame callback API |
 
 ## TCP Quick Start
 
@@ -203,6 +204,52 @@ use modbus_rs::mbus_async::AsyncTcpClient;
 
 let client = AsyncTcpClient::<16>::new_with_pipeline("127.0.0.1", 502)?;
 client.connect().await?;
+```
+
+## Traffic Callback (optional `traffic` feature)
+
+Enable `traffic` when you need raw frame observability in async apps:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4", default-features = false, features = [
+    "async", "traffic", "tcp", "coils"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+        let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+
+        client.set_traffic_handler(|evt| {
+            if let Some(err) = evt.error {
+                println!(
+                    "[{:?}] txn={} unit={} error={:?} bytes={:02X?}",
+                    evt.direction,
+                    evt.txn_id,
+                    evt.unit_id_slave_addr.get(),
+                    err,
+                    evt.frame
+                );
+            } else {
+                println!(
+                    "[{:?}] txn={} unit={} bytes={:02X?}",
+                    evt.direction,
+                    evt.txn_id,
+                    evt.unit_id_slave_addr.get(),
+                    evt.frame
+                );
+            }
+        });
+
+        client.connect().await?;
+        let _ = client.read_multiple_coils(1, 0, 8).await?;
+        Ok(())
+}
 ```
 
 ## License

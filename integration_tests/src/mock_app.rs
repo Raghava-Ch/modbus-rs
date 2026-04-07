@@ -120,6 +120,9 @@ impl RequestErrorNotifier for MockApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl modbus_rs::TrafficNotifier for MockApp {}
+
 impl RegisterResponse for MockApp {
     fn read_multiple_holding_registers_response(
         &mut self,

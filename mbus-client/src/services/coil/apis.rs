@@ -64,9 +64,7 @@ where
         )?;
 
         // 3. Dispatch the raw bytes to the physical/network layer
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -121,9 +119,7 @@ where
             Self::handle_read_coils_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -182,9 +178,7 @@ where
             )?;
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -243,9 +237,7 @@ where
             )?;
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 }

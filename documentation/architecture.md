@@ -136,6 +136,16 @@ The `mbus-client` crate provides the `ClientServices` struct, which acts as the 
 
 The `ClientServices` orchestrates the interaction between the state machine, the transport layer, and the application-specific response handlers.
 
+### Traffic hook path (optional `traffic` feature)
+
+When `traffic` is enabled, `ClientServices` emits raw ADU traffic callbacks through
+`TrafficNotifier`:
+
+- TX hook fires on both send success and send failure (`SendFailed`) with attempted frame bytes.
+- RX hook fires on response success, protocol/timeout failures, and retry exhaustion with error details; frame snapshots are included when available.
+
+This path is fully optional and not required for normal application handlers.
+
 ## Async Layer (`mbus-async`)
 
 The `mbus-async` crate is an async facade that sits on top of `mbus-client`. It does not replace the synchronous protocol core; instead, it bridges the poll-driven state machine to Tokio's async executor via a dedicated worker thread and Tokio oneshot channels.
@@ -183,6 +193,11 @@ async caller C  ──┘                                        │
 ```
 
 Multiple concurrent `.await` calls each get an independent transaction id and oneshot channel. The appropriate caller is woken when the worker fires the matching oneshot.
+
+With the optional `traffic` feature, the async runtime forwards sync traffic
+notifications to a dedicated dispatcher thread, and applications register handlers via
+`AsyncClientCore::set_traffic_handler`.
+That callback does not run on the worker thread and should remain lightweight/non-blocking.
 
 TCP pipeline depth is compile-time configurable through `AsyncTcpClient<const N: usize = 9>`,
 which forwards `N` into `ClientServices<_, _, N>`. By default (`N = 9`), up to 9 requests can

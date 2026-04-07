@@ -30,6 +30,8 @@ pub mod file_record;
 pub mod register;
 
 use crate::app::RequestErrorNotifier;
+#[cfg(feature = "traffic")]
+use crate::app::TrafficNotifier;
 #[cfg(feature = "diagnostics")]
 use diagnostic::ReadDeviceIdCode;
 use heapless::Vec;
@@ -776,8 +778,18 @@ pub struct ClientServices<TRANSPORT, APP, const N: usize = 1> {
 /// 2. **Provide** monotonic time in milliseconds to manage timeouts and retries ([`TimeKeeper`]).
 ///
 /// This trait simplifies the generic bounds used throughout the `ClientServices` implementation.
+/// A marker trait that aggregates the necessary capabilities for a Modbus client application.
+#[cfg(feature = "traffic")]
+pub trait ClientCommon: RequestErrorNotifier + TimeKeeper + TrafficNotifier {}
+
+#[cfg(feature = "traffic")]
+impl<T> ClientCommon for T where T: RequestErrorNotifier + TimeKeeper + TrafficNotifier {}
+
+/// A marker trait that aggregates the necessary capabilities for a Modbus client application.
+#[cfg(not(feature = "traffic"))]
 pub trait ClientCommon: RequestErrorNotifier + TimeKeeper {}
 
+#[cfg(not(feature = "traffic"))]
 impl<T> ClientCommon for T where T: RequestErrorNotifier + TimeKeeper {}
 
 impl<T, APP, const N: usize> ClientServices<T, APP, N>
@@ -785,7 +797,7 @@ where
     T: Transport,
     APP: ClientCommon,
 {
-    fn dispatch_response(&mut self, message: &ModbusMessage) {
+    fn dispatch_response(&mut self, message: &ModbusMessage, raw_frame: &[u8]) {
         let wire_txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
@@ -815,6 +827,13 @@ where
 
         let request_txn_id = expected.txn_id;
 
+        #[cfg(feature = "traffic")]
+        self.app
+            .on_rx_frame(request_txn_id, unit_id_or_slave_addr, raw_frame);
+
+        #[cfg(not(feature = "traffic"))]
+        let _ = raw_frame;
+
         client_log_trace!(
             "dispatching response: txn_id={}, unit_id_or_slave_addr={}, queue_len_after_pop={}",
             request_txn_id,
@@ -830,6 +849,13 @@ where
                 request_txn_id,
                 unit_id_or_slave_addr.get(),
                 exception_code
+            );
+            #[cfg(feature = "traffic")]
+            self.app.on_rx_error(
+                request_txn_id,
+                unit_id_or_slave_addr,
+                MbusError::ModbusException(exception_code),
+                raw_frame,
             );
             self.app.request_failed(
                 request_txn_id,
@@ -870,7 +896,7 @@ impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
     TRANSPORT: Transport,
     TRANSPORT::Error: Into<MbusError>,
-    APP: RequestErrorNotifier + TimeKeeper,
+    APP: ClientCommon,
 {
     /// The main execution loop for the Modbus Client.
     ///
@@ -957,6 +983,19 @@ where
             self.rxed_frame.clear();
         } else {
             client_log_trace!("non-fatal recv status during poll: {:?}", recv_error);
+            #[cfg(feature = "traffic")]
+            {
+                // Timeout/parse-adjacent recv statuses are useful for simulator tooling while
+                // requests are in-flight. Use txn_id=0 when a specific request is unknown.
+                if !self.expected_responses.is_empty() {
+                    self.app.on_rx_error(
+                        0,
+                        UnitIdOrSlaveAddr::from_u8(0),
+                        recv_error,
+                        self.rxed_frame.as_slice(),
+                    );
+                }
+            }
         }
     }
 
@@ -982,6 +1021,14 @@ where
     }
 
     fn handle_parse_error(&mut self, err: MbusError) {
+        #[cfg(feature = "traffic")]
+        self.app.on_rx_error(
+            0,
+            UnitIdOrSlaveAddr::from_u8(self.rxed_frame.first().copied().unwrap_or(0)),
+            err,
+            self.rxed_frame.as_slice(),
+        );
+
         // Garbage or parsing error, drop the first byte and try again to resync the stream
         client_log_debug!(
             "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
@@ -1021,6 +1068,13 @@ where
                 "received frame buffer overflow while appending {} bytes; clearing receive buffer",
                 frame.len()
             );
+            #[cfg(feature = "traffic")]
+            self.app.on_rx_error(
+                0,
+                UnitIdOrSlaveAddr::from_u8(0),
+                MbusError::BufferTooSmall,
+                frame.as_slice(),
+            );
             self.rxed_frame.clear();
         }
     }
@@ -1033,6 +1087,13 @@ where
             error
         );
         while let Some(response) = self.expected_responses.pop() {
+            #[cfg(feature = "traffic")]
+            self.app.on_rx_error(
+                response.txn_id,
+                UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+                error,
+                &[],
+            );
             self.app.request_failed(
                 response.txn_id,
                 UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
@@ -1200,7 +1261,24 @@ where
                 UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
                 MbusError::SendFailed,
             );
+            #[cfg(feature = "traffic")]
+            self.app.on_tx_error(
+                response.txn_id,
+                UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+                MbusError::SendFailed,
+                adu.as_slice(),
+            );
             return LoopAction::Repeat;
+        }
+
+        #[cfg(feature = "traffic")]
+        {
+            let response = &self.expected_responses[i];
+            self.app.on_tx_frame(
+                response.txn_id,
+                UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+                adu.as_slice(),
+            );
         }
 
         update_retries(
@@ -1265,6 +1343,13 @@ where
             response.txn_id,
             UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
             MbusError::NoRetriesLeft,
+        );
+        #[cfg(feature = "traffic")]
+        self.app.on_rx_error(
+            response.txn_id,
+            UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+            MbusError::NoRetriesLeft,
+            &[],
         );
         LoopAction::Repeat
     }
@@ -1589,10 +1674,45 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
             }
         };
 
-        self.dispatch_response(&message);
+        let mut raw_frame = Vec::<u8, MAX_ADU_FRAME_LEN>::new();
+        raw_frame
+            .extend_from_slice(&frame[..expected_length])
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+
+        self.dispatch_response(&message, raw_frame.as_slice());
         client_log_trace!("frame dispatch complete for {} bytes", expected_length);
 
         Ok(expected_length)
+    }
+
+    pub(crate) fn dispatch_request_frame(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        frame: &heapless::Vec<u8, MAX_ADU_FRAME_LEN>,
+    ) -> Result<(), MbusError> {
+        if self.transport.send(frame).is_err() {
+            #[cfg(feature = "traffic")]
+            self.app.on_tx_error(
+                txn_id,
+                unit_id_slave_addr,
+                MbusError::SendFailed,
+                frame.as_slice(),
+            );
+            return Err(MbusError::SendFailed);
+        }
+
+        #[cfg(feature = "traffic")]
+        self.app
+            .on_tx_frame(txn_id, unit_id_slave_addr, frame.as_slice());
+
+        #[cfg(not(feature = "traffic"))]
+        {
+            let _ = txn_id;
+            let _ = unit_id_slave_addr;
+        }
+
+        Ok(())
     }
 }
 
@@ -1605,6 +1725,8 @@ mod tests {
     use crate::app::FifoQueueResponse;
     use crate::app::FileRecordResponse;
     use crate::app::RegisterResponse;
+    #[cfg(feature = "traffic")]
+    use crate::app::TrafficDirection;
     use crate::services::coil::Coils;
 
     use crate::services::diagnostic::ConformityLevel;
@@ -1784,6 +1906,11 @@ mod tests {
         pub received_read_device_id_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, DeviceIdentificationResponse), 10>>,
         pub failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError), 10>>,
+        #[cfg(feature = "traffic")]
+        pub traffic_events: RefCell<Vec<(TrafficDirection, u16, UnitIdOrSlaveAddr), 32>>,
+        #[cfg(feature = "traffic")]
+        pub traffic_error_events:
+            RefCell<Vec<(TrafficDirection, u16, UnitIdOrSlaveAddr, MbusError), 32>>,
 
         pub current_time: RefCell<u64>, // For simulating time in tests
     }
@@ -1896,6 +2023,59 @@ mod tests {
             self.failed_requests
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, error))
+                .unwrap();
+        }
+    }
+
+    #[cfg(feature = "traffic")]
+    impl crate::app::TrafficNotifier for MockApp {
+        fn on_tx_frame(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            _frame_bytes: &[u8],
+        ) {
+            self.traffic_events
+                .borrow_mut()
+                .push((TrafficDirection::Tx, txn_id, unit_id_slave_addr))
+                .unwrap();
+        }
+
+        fn on_rx_frame(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            _frame_bytes: &[u8],
+        ) {
+            self.traffic_events
+                .borrow_mut()
+                .push((TrafficDirection::Rx, txn_id, unit_id_slave_addr))
+                .unwrap();
+        }
+
+        fn on_tx_error(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            error: MbusError,
+            _frame_bytes: &[u8],
+        ) {
+            self.traffic_error_events
+                .borrow_mut()
+                .push((TrafficDirection::Tx, txn_id, unit_id_slave_addr, error))
+                .unwrap();
+        }
+
+        fn on_rx_error(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            error: MbusError,
+            _frame_bytes: &[u8],
+        ) {
+            self.traffic_error_events
+                .borrow_mut()
+                .push((TrafficDirection::Rx, txn_id, unit_id_slave_addr, error))
                 .unwrap();
         }
     }
@@ -2278,6 +2458,117 @@ mod tests {
             0x00, 0x08, // Quantity of Coils
         ];
         assert_eq!(sent_adu.as_slice(), &expected_adu);
+    }
+
+    #[cfg(feature = "traffic")]
+    #[test]
+    fn test_traffic_tx_event_emitted_on_submit() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
+
+        let txn_id = 0x0001;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_multiple_coils(txn_id, unit_id, 0x0000, 8)
+            .unwrap();
+
+        let events = client_services.app().traffic_events.borrow();
+        assert!(!events.is_empty());
+        assert_eq!(events[0].0, TrafficDirection::Tx);
+        assert_eq!(events[0].1, txn_id);
+        assert_eq!(events[0].2, unit_id);
+    }
+
+    #[cfg(feature = "traffic")]
+    #[test]
+    fn test_traffic_rx_event_emitted_on_dispatch() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
+
+        let txn_id = 0x0001;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_multiple_coils(txn_id, unit_id, 0x0000, 8)
+            .unwrap();
+
+        let response_adu = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0xB3];
+        client_services
+            .transport
+            .recv_frames
+            .borrow_mut()
+            .push_back(Vec::from_slice(&response_adu).unwrap())
+            .unwrap();
+
+        client_services.poll();
+
+        let events = client_services.app().traffic_events.borrow();
+        assert!(events.len() >= 2);
+        assert_eq!(events[0].0, TrafficDirection::Tx);
+        assert_eq!(events[1].0, TrafficDirection::Rx);
+        assert_eq!(events[1].1, txn_id);
+        assert_eq!(events[1].2, unit_id);
+    }
+
+    #[cfg(feature = "traffic")]
+    #[test]
+    fn test_traffic_tx_error_emitted_on_submit_send_failure() {
+        let mut transport = MockTransport::default();
+        transport.send_should_fail = true;
+        let app = MockApp::default();
+        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
+
+        let txn_id = 0x0066;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        let result = client_services.read_multiple_coils(txn_id, unit_id, 0x0000, 8);
+        assert_eq!(result.unwrap_err(), MbusError::SendFailed);
+
+        let events = client_services.app().traffic_error_events.borrow();
+        assert!(!events.is_empty());
+        assert_eq!(events[0].0, TrafficDirection::Tx);
+        assert_eq!(events[0].1, txn_id);
+        assert_eq!(events[0].2, unit_id);
+        assert_eq!(events[0].3, MbusError::SendFailed);
+    }
+
+    #[cfg(feature = "traffic")]
+    #[test]
+    fn test_traffic_rx_error_emitted_on_timeout_path() {
+        let transport = MockTransport::default();
+        let app = MockApp::default();
+        let mut tcp_config = ModbusTcpConfig::new("127.0.0.1", 502).unwrap();
+        tcp_config.response_timeout_ms = 100;
+        tcp_config.retry_attempts = 0;
+        let config = ModbusConfig::Tcp(tcp_config);
+        let mut client_services =
+            ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
+
+        let txn_id = 0x0007;
+        let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
+        client_services
+            .read_multiple_coils(txn_id, unit_id, 0x0000, 8)
+            .unwrap();
+
+        *client_services.app.current_time.borrow_mut() = 500;
+        client_services.poll();
+
+        let events = client_services.app().traffic_error_events.borrow();
+        assert!(!events.is_empty());
+        assert!(events.iter().any(|(direction, _, _, err)| {
+            *direction == TrafficDirection::Rx
+                && matches!(err, MbusError::Timeout | MbusError::NoRetriesLeft)
+        }));
     }
 
     /// Test case: `read_multiple_coils` returns an error for an invalid quantity.

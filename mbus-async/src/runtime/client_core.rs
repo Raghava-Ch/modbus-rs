@@ -37,11 +37,26 @@ use super::*;
 pub struct AsyncClientCore {
     sender: Sender<WorkerCommand>,
     next_txn_id: AtomicU16,
+    #[cfg(feature = "traffic")]
+    traffic_handler: TrafficHandlerStore,
 }
 
 impl AsyncClientCore {
     /// Creates a new core handle from the sending half of an already-spawned
     /// worker channel.  The transaction counter starts at 1.
+    #[cfg(feature = "traffic")]
+    pub(super) fn new(sender: Sender<WorkerCommand>, traffic_handler: TrafficHandlerStore) -> Self {
+        Self {
+            sender,
+            next_txn_id: AtomicU16::new(1),
+            #[cfg(feature = "traffic")]
+            traffic_handler,
+        }
+    }
+
+    /// Creates a new core handle from the sending half of an already-spawned
+    /// worker channel. The transaction counter starts at 1.
+    #[cfg(not(feature = "traffic"))]
     pub(super) fn new(sender: Sender<WorkerCommand>) -> Self {
         Self {
             sender,
@@ -89,6 +104,28 @@ impl AsyncClientCore {
         match response {
             WorkerResponse::Ack => Ok(()),
             _ => Err(AsyncError::UnexpectedResponseType),
+        }
+    }
+
+    #[cfg(feature = "traffic")]
+    /// Registers (or replaces) a dedicated traffic-dispatcher callback.
+    ///
+    /// The callback is invoked from a dedicated dispatcher thread and should
+    /// remain lightweight and non-blocking.
+    pub fn set_traffic_handler<F>(&self, handler: F)
+    where
+        F: FnMut(&TrafficEvent) + Send + 'static,
+    {
+        if let Ok(mut slot) = self.traffic_handler.lock() {
+            *slot = Some(Box::new(handler));
+        }
+    }
+
+    #[cfg(feature = "traffic")]
+    /// Removes any previously registered traffic callback.
+    pub fn clear_traffic_handler(&self) {
+        if let Ok(mut slot) = self.traffic_handler.lock() {
+            *slot = None;
         }
     }
 

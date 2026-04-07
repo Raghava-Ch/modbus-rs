@@ -26,8 +26,9 @@ discrete-inputs= ["mbus-client/discrete-inputs"]
 fifo           = ["mbus-client/fifo"]
 file-record    = ["mbus-client/file-record"]
 diagnostics    = ["mbus-client/diagnostics"]
+traffic        = ["mbus-client/traffic"]
 ## Convenience alias — enables every Modbus feature at once
-full           = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"]
+full           = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics", "traffic"]
 
 [dependencies]
 mbus-core   = { workspace = true }

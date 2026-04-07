@@ -60,9 +60,7 @@ where
             Self::handle_read_holding_registers_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -124,9 +122,7 @@ where
         )?;
 
         // Dispatch the compiled frame through the underlying transport.
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -183,9 +179,7 @@ where
             Self::handle_read_input_registers_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -240,9 +234,7 @@ where
             Self::handle_read_input_registers_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -304,9 +296,7 @@ where
             )?; // Expect a response for non-broadcast writes
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -369,9 +359,7 @@ where
             )?; // Expect a response for non-broadcast writes
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -434,9 +422,7 @@ where
         )?;
 
         // 3. Transmit the frame via the configured transport
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -499,9 +485,7 @@ where
             )?;
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 }

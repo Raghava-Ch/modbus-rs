@@ -1,6 +1,8 @@
 # modbus-rs
 
-A complete, `no_std`-compatible Modbus client implementation in Rust, designed for embedded and resource-constrained environments. Compliant with the Modbus Application Protocol Specification V1.1b3 and Modbus Messaging on TCP/IP Implementation Guide V1.0b.
+`modbus-rs` is a low-footprint, cross-platform Modbus client workspace built for both embedded and desktop/server systems.
+It runs on no_std and std targets (MCUs, RTOS, Windows, Linux, macOS), supports TCP/RTU/ASCII, provides sync and async APIs, and uses feature gating to keep binaries minimal.
+Advanced reliability features include configurable retry, backoff, and jitter, with optional native C and WASM bindings via `mbus-ffi`.
 
 ## Overview
 
@@ -60,9 +62,11 @@ See [documentation/quick_start.md](documentation/quick_start.md) for a complete 
 
 - [documentation/quick_start.md](documentation/quick_start.md) — usage and setup walkthrough
 - [documentation/feature_flags.md](documentation/feature_flags.md) — feature combinations and build examples
-- [CHANGELOG.md](CHANGELOG.md) — release-visible changes
+- [documentation/architecture.md](documentation/architecture.md) — architecture and runtime model
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and validation steps
 - [RELEASE.md](RELEASE.md) — release checklist
+- [mbus-ffi/README.md](mbus-ffi/README.md) — WASM and native C binding docs
+- [modbus-rs/README.md](modbus-rs/README.md) — top-level crate API guide
 
 ## Feature Flags
 
@@ -81,14 +85,16 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | `fifo` | FIFO queue services |
 | `file-record` | File record read/write services |
 | `diagnostics` | Diagnostic and device identification services |
+| `traffic` | Raw TX/RX frame traffic callbacks/hooks for sync and async clients |
 | `logging` | Enables `log` facade instrumentation in `mbus-network` and `mbus-serial` |
 
-Default: all flags are enabled.
+Default: `client`, `serial-rtu`, `tcp`, and all function-group flags are enabled.
+`serial-ascii`, `async`, `traffic`, and `logging` are opt-in.
 
 `async` is optional and should be enabled explicitly when using `.await` APIs.
 
-Note: WASM/browser APIs are provided by `mbus-ffi` directly. `modbus-rs` does not expose a
-top-level `wasm` feature and does not re-export WASM types.
+Note: WASM/browser APIs and native C bindings are provided by `mbus-ffi` directly.
+`modbus-rs` does not expose a top-level `wasm` feature and does not re-export WASM or C binding APIs.
 
 See [documentation/feature_flags.md](documentation/feature_flags.md) for valid combinations and build examples.
 
@@ -121,6 +127,25 @@ async fn main() -> anyhow::Result<()> {
 
 For serial async clients, use `AsyncSerialClient::new_rtu(...)` or `AsyncSerialClient::new_ascii(...)`,
 then call `client.connect().await?` before sending requests.
+
+### Traffic Observability
+
+Enable `traffic` to observe raw TX/RX ADU frames in both sync and async flows.
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", default-features = false, features = [
+    "client",
+    "tcp",
+    "coils",
+    "traffic"
+] }
+```
+
+Dedicated examples:
+
+- Sync: `modbus-rs/examples/traffic_sync_example.rs`
+- Async: `modbus-rs/examples/traffic_async_tcp_example.rs`
 
 ## Bindings (WASM and C)
 
@@ -316,6 +341,25 @@ RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no
 
 All examples live in [`modbus-rs/examples/`](modbus-rs/examples/) and are run from the workspace root.
 
+### Async (Rust)
+
+- [modbus-rs/examples/async_tcp_example.rs](modbus-rs/examples/async_tcp_example.rs)
+- [modbus-rs/examples/async_serial_rtu_example.rs](modbus-rs/examples/async_serial_rtu_example.rs)
+
+```bash
+# Async TCP
+cargo run -p modbus-rs --example async_tcp_example --features async
+
+# Async serial RTU
+cargo run -p modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
+
+# Sync traffic callback demo
+cargo run -p modbus-rs --example traffic_sync_example --features traffic
+
+# Async traffic callback demo
+cargo run -p modbus-rs --example traffic_async_tcp_example --features async,traffic
+```
+
 ### TCP
 
 ```bash
@@ -344,6 +388,29 @@ cargo run -p modbus-rs --example serial_rtu_backoff_jitter_example --no-default-
 cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils -- /dev/ttyUSB0 1
 ```
 
+### WASM Browser Smoke Examples (`mbus-ffi`)
+
+- [mbus-ffi/examples/network_smoke.html](mbus-ffi/examples/network_smoke.html)
+- [mbus-ffi/examples/serial_smoke.html](mbus-ffi/examples/serial_smoke.html)
+
+```bash
+cd mbus-ffi
+wasm-pack build --target web --features wasm,full
+python3 -m http.server 8089 --directory ./examples/
+```
+
+### Native C Binding Examples (`mbus-ffi`)
+
+- [mbus-ffi/examples/c_smoke_cmake/main.c](mbus-ffi/examples/c_smoke_cmake/main.c)
+- [mbus-ffi/tests/c_api/test_binding_layer.c](mbus-ffi/tests/c_api/test_binding_layer.c)
+
+```bash
+# Build and run native C smoke test path
+cargo run -p xtask -- build-c-smoke
+```
+
+
+
 ## Architecture
 
 The client follows the Modbus TCP Client Activity Diagram from the Modbus TCP/IP V1.0b specification and is extended with a poll-driven retry scheduler:
@@ -366,7 +433,7 @@ The client follows the Modbus TCP Client Activity Diagram from the Modbus TCP/IP
                       └─────────────────────┘
 ```
 
-Design principles:
+Core Design principles:
 
 - **No internal state machine threads** — all progress is driven by `client.poll()`
 - **No heap allocation** — queue depth `N` is a compile-time const generic on `ClientServices`
@@ -409,6 +476,7 @@ cargo test -p mbus-ffi
 - [documentation/quick_start.md](documentation/quick_start.md) — step-by-step setup guide
 - [documentation/architecture.md](documentation/architecture.md) — state machine and design overview
 - [documentation/feature_flags.md](documentation/feature_flags.md) — all feature flag combinations
+- [mbus-ffi/README.md](mbus-ffi/README.md) — WASM and native C bindings
 
 ## Licensing
 
