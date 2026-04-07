@@ -13,7 +13,7 @@ For detailed feature combinations, see [feature_flags.md](feature_flags.md).
 
 ```toml
 [dependencies]
-modbus-rs = "0.4.0"
+modbus-rs = "0.5.0"
 ```
 
 This enables:
@@ -28,7 +28,7 @@ This enables:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -39,7 +39,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers"
@@ -50,7 +50,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "coils"
@@ -239,7 +239,7 @@ Enable `traffic` when you want raw TX/RX frame callbacks for debugging tools:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "coils",
@@ -276,7 +276,7 @@ Add the dependency:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", features = ["async"] }
+modbus-rs = { version = "0.5.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 

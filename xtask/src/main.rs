@@ -1,3 +1,5 @@
+//! Workspace maintenance commands for header generation/verification and C smoke build checks.
+
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -210,6 +212,7 @@ fn print_help() {
     println!("  cargo run -p xtask -- check-feature-header");
     println!("  cargo run -p xtask -- build-c-smoke");
 }
+
 
 fn main() -> ExitCode {
     let root = repo_root();

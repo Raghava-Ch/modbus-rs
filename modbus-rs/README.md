@@ -96,7 +96,7 @@ Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -111,7 +111,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
 	"async",
 	"tcp",
 	"coils"
@@ -140,7 +140,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
 	"client",
 	"tcp",
 	"coils",
@@ -160,7 +160,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.5.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -170,14 +170,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.4.0"
+modbus-rs = "0.5.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
@@ -188,7 +188,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = ["client", "tcp", "coils"] }
+modbus-rs = { version = "0.5.0", default-features = false, features = ["client", "tcp", "coils"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:
@@ -314,11 +314,25 @@ Run examples from the workspace root:
 ```bash
 # TCP
 cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
+cargo run -p modbus-rs --example registers_example --no-default-features --features client,tcp,registers
+cargo run -p modbus-rs --example discrete_inputs_example --no-default-features --features client,tcp,discrete-inputs
+cargo run -p modbus-rs --example device_id_example --no-default-features --features client,tcp,diagnostics
 cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+cargo run -p modbus-rs --example tcp_backoff_jitter_example --no-default-features --features client,tcp,coils
 cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+cargo run -p modbus-rs --example traffic_sync_example --no-default-features --features client,tcp,coils,traffic
+
+# Async
+cargo run -p modbus-rs --example async_tcp_example --no-default-features --features async,tcp,coils,registers,discrete-inputs
+cargo run -p modbus-rs --example traffic_async_tcp_example --no-default-features --features async,tcp,coils,traffic
 
 # Serial RTU
 cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils
+cargo run -p modbus-rs --example registers_serial_example --no-default-features --features client,serial-rtu,registers
+cargo run -p modbus-rs --example discrete_inputs_serial_example --no-default-features --features client,serial-rtu,discrete-inputs
+cargo run -p modbus-rs --example device_id_serial_example --no-default-features --features client,serial-rtu,diagnostics
+cargo run -p modbus-rs --example serial_rtu_backoff_jitter_example --no-default-features --features client,serial-rtu,coils
+cargo run -p modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
 
 # Serial ASCII
 cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils

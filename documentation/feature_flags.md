@@ -135,14 +135,14 @@ This optimization reduces stack usage for builds that do not include ASCII trans
 
 ```toml
 [dependencies]
-modbus-rs = "0.4.0"
+modbus-rs = "0.5.0"
 ```
 
 ### 2) Minimal client with only coils over TCP
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -153,7 +153,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "serial-rtu",
   "registers",
@@ -165,7 +165,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "serial-ascii",
   "diagnostics"
@@ -176,7 +176,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "client",
   "tcp",
   "diagnostics"
@@ -187,7 +187,7 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
   "tcp",
   "logging"
 ] }

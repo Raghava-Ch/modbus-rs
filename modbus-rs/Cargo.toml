@@ -1,6 +1,6 @@
 [package]
 name = "modbus-rs"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license.workspace = true
@@ -19,9 +19,9 @@ mbus-client = { workspace = true, optional = true }
 mbus-async = { workspace = true, optional = true }
 
 heapless = { workspace = true }
-anyhow = "1.0.102"
 
 [dev-dependencies]
+anyhow = "1.0.102"
 env_logger = "0.11"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
