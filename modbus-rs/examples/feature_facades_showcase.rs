@@ -213,6 +213,7 @@ fn main() -> Result<(), MbusError> {
 
     let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);
     let mut client = ClientServices::<_, _, 16>::new(MockTransport, App, config)?;
+    client.connect()?;
     let unit = UnitIdOrSlaveAddr::new(1)?;
 
     println!("--- Feature Facades Showcase ---");

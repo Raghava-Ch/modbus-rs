@@ -2,9 +2,9 @@ use anyhow::Result;
 use heapless::Vec as HVec;
 use modbus_rs::mbus_async::{AsyncError, AsyncSerialClient};
 use modbus_rs::{
-    BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MbusError,
-    ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError,
-    TransportType, MAX_ADU_FRAME_LEN, crc16,
+    crc16, BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MbusError,
+    ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError, TransportType,
+    MAX_ADU_FRAME_LEN,
 };
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -115,7 +115,7 @@ fn ascii_config(path: &str) -> ModbusSerialConfig {
 
 #[test]
 fn test_async_serial_rtu_rejects_ascii_mode() -> Result<()> {
-    let err = match AsyncSerialClient::connect_rtu(ascii_config("/dev/null")) {
+    let err = match AsyncSerialClient::new_rtu(ascii_config("/dev/null")) {
         Ok(_) => panic!("expected InvalidConfiguration for RTU constructor with ASCII config"),
         Err(e) => e,
     };
@@ -125,7 +125,7 @@ fn test_async_serial_rtu_rejects_ascii_mode() -> Result<()> {
 
 #[test]
 fn test_async_serial_rtu_with_poll_interval_rejects_ascii_mode() -> Result<()> {
-    let err = match AsyncSerialClient::connect_rtu_with_poll_interval(
+    let err = match AsyncSerialClient::new_rtu_with_poll_interval(
         ascii_config("/dev/null"),
         Duration::from_millis(5),
     ) {
@@ -138,7 +138,7 @@ fn test_async_serial_rtu_with_poll_interval_rejects_ascii_mode() -> Result<()> {
 
 #[test]
 fn test_async_serial_ascii_rejects_rtu_mode() -> Result<()> {
-    let err = match AsyncSerialClient::connect_ascii(rtu_config("/dev/null")) {
+    let err = match AsyncSerialClient::new_ascii(rtu_config("/dev/null")) {
         Ok(_) => panic!("expected InvalidConfiguration for ASCII constructor with RTU config"),
         Err(e) => e,
     };
@@ -148,7 +148,7 @@ fn test_async_serial_ascii_rejects_rtu_mode() -> Result<()> {
 
 #[test]
 fn test_async_serial_ascii_with_poll_interval_rejects_rtu_mode() -> Result<()> {
-    let err = match AsyncSerialClient::connect_ascii_with_poll_interval(
+    let err = match AsyncSerialClient::new_ascii_with_poll_interval(
         rtu_config("/dev/null"),
         Duration::from_millis(5),
     ) {
@@ -159,14 +159,17 @@ fn test_async_serial_ascii_with_poll_interval_rejects_rtu_mode() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_async_serial_nonexistent_port() -> Result<()> {
-    // Test that connecting to a nonexistent serial port fails appropriately
+#[tokio::test]
+async fn test_async_serial_nonexistent_port() -> Result<()> {
+    // Construction is side-effect free; the explicit connect step should fail.
     let config = rtu_config("/dev/nonexistent_port_12345");
-    let result = AsyncSerialClient::connect_rtu(config);
+    let client = AsyncSerialClient::new_rtu(config)?;
+    let result = client.connect().await;
 
-    // Should fail - either InvalidConfiguration or other connection error
-    assert!(result.is_err(), "Expected error for nonexistent port");
+    assert!(
+        result.is_err(),
+        "Expected connect error for nonexistent port"
+    );
     Ok(())
 }
 
@@ -174,8 +177,7 @@ fn test_async_serial_nonexistent_port() -> Result<()> {
 fn test_async_serial_rtu_poll_interval_validation() -> Result<()> {
     // Test that zero poll interval is handled
     let config = rtu_config("/dev/null");
-    let result =
-        AsyncSerialClient::connect_rtu_with_poll_interval(config, Duration::from_millis(0));
+    let result = AsyncSerialClient::new_rtu_with_poll_interval(config, Duration::from_millis(0));
 
     // Should either accept it or reject with validation error
     // The key is that it doesn't panic
@@ -187,8 +189,7 @@ fn test_async_serial_rtu_poll_interval_validation() -> Result<()> {
 fn test_async_serial_ascii_poll_interval_validation() -> Result<()> {
     // Test that very large poll interval is handled
     let config = ascii_config("/dev/null");
-    let result =
-        AsyncSerialClient::connect_ascii_with_poll_interval(config, Duration::from_secs(60));
+    let result = AsyncSerialClient::new_ascii_with_poll_interval(config, Duration::from_secs(60));
 
     // Should either accept it or reject gracefully
     let _ = result;
@@ -199,7 +200,7 @@ fn test_async_serial_ascii_poll_interval_validation() -> Result<()> {
 fn test_async_serial_rtu_with_invalid_baud_rate() -> Result<()> {
     // Test configuration with valid structure but potentially invalid baud rate
     let config = rtu_config("/dev/null");
-    let result = AsyncSerialClient::connect_rtu(config);
+    let result = AsyncSerialClient::new_rtu(config);
 
     // Should handle gracefully without panicking
     let _ = result;
@@ -211,14 +212,14 @@ fn test_async_serial_multiple_constructor_variants() -> Result<()> {
     // Verify that all constructor variants exist and are callable
     // Without panicking, even if they fail
 
-    let r1 = AsyncSerialClient::connect_rtu(rtu_config("/dev/null"));
-    let r2 = AsyncSerialClient::connect_rtu_with_poll_interval(
+    let r1 = AsyncSerialClient::new_rtu(rtu_config("/dev/null"));
+    let r2 = AsyncSerialClient::new_rtu_with_poll_interval(
         rtu_config("/dev/null"),
         Duration::from_millis(10),
     );
 
-    let r3 = AsyncSerialClient::connect_ascii(ascii_config("/dev/null"));
-    let r4 = AsyncSerialClient::connect_ascii_with_poll_interval(
+    let r3 = AsyncSerialClient::new_ascii(ascii_config("/dev/null"));
+    let r4 = AsyncSerialClient::new_ascii_with_poll_interval(
         ascii_config("/dev/null"),
         Duration::from_millis(10),
     );
@@ -239,7 +240,9 @@ async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x01, 0x01, 0x05]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client = AsyncSerialClient::connect_with_transport(transport, config, Duration::from_millis(1))?;
+    let client =
+        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    client.connect().await?;
 
     let coils = client.read_multiple_coils(1, 0x000A, 3).await?;
 
@@ -251,7 +254,10 @@ async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
 
     let frames = sent.lock().expect("sent_frames lock poisoned");
     assert_eq!(frames.len(), 1);
-    assert_eq!(frames[0], append_rtu_crc(&[0x01, 0x01, 0x00, 0x0A, 0x00, 0x03]));
+    assert_eq!(
+        frames[0],
+        append_rtu_crc(&[0x01, 0x01, 0x00, 0x0A, 0x00, 0x03])
+    );
 
     Ok(())
 }
@@ -267,7 +273,9 @@ async fn test_async_serial_e2e_write_single_register_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x06, 0x00, 0x20, 0x12, 0x34]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client = AsyncSerialClient::connect_with_transport(transport, config, Duration::from_millis(1))?;
+    let client =
+        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    client.connect().await?;
 
     let (addr, value) = client.write_single_register(1, 0x0020, 0x1234).await?;
     assert_eq!(addr, 0x0020);
@@ -275,7 +283,10 @@ async fn test_async_serial_e2e_write_single_register_rtu() -> Result<()> {
 
     let frames = sent.lock().expect("sent_frames lock poisoned");
     assert_eq!(frames.len(), 1);
-    assert_eq!(frames[0], append_rtu_crc(&[0x01, 0x06, 0x00, 0x20, 0x12, 0x34]));
+    assert_eq!(
+        frames[0],
+        append_rtu_crc(&[0x01, 0x06, 0x00, 0x20, 0x12, 0x34])
+    );
 
     Ok(())
 }
@@ -293,7 +304,9 @@ async fn test_async_serial_e2e_serial_diagnostics_paths_rtu() -> Result<()> {
     }
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client = AsyncSerialClient::connect_with_transport(transport, config, Duration::from_millis(1))?;
+    let client =
+        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    client.connect().await?;
 
     let status = client.read_exception_status(1).await?;
     assert_eq!(status, 0xAB);
@@ -321,7 +334,9 @@ async fn test_async_serial_e2e_exception_propagation_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x81, 0x02]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client = AsyncSerialClient::connect_with_transport(transport, config, Duration::from_millis(1))?;
+    let client =
+        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    client.connect().await?;
 
     let result = client.read_multiple_coils(1, 0x0000, 1).await;
     assert!(matches!(

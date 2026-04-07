@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
         .unwrap_or(1);
 
     println!(
-        "Connecting to serial RTU port {} (unit {})",
+        "Preparing serial RTU client for port {} (unit {})",
         port_path, unit_id
     );
 
@@ -35,7 +35,8 @@ async fn main() -> Result<()> {
         retry_random_fn: None,
     };
 
-    let client = AsyncSerialClient::connect_rtu(serial_config)?;
+    let client = AsyncSerialClient::new_rtu(serial_config)?;
+    client.connect().await?;
 
     let coils = client.read_multiple_coils(unit_id, 0, 8).await?;
     println!(

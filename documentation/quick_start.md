@@ -81,6 +81,25 @@ cd /path/to/modbus-rs/mbus-ffi;
 wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
 ```
 
+### Native C binding setup (independent `mbus-ffi` crate)
+
+Build and validate native C bindings from the workspace root:
+
+```bash
+# Rust-side FFI tests
+cargo test -p mbus-ffi
+
+# Native C smoke flow (build + ctest)
+cargo run -p xtask -- build-c-smoke
+```
+
+For direct C API integration, start from:
+
+- Header: `mbus-ffi/include/mbus_ffi.h`
+- C API implementation: `mbus-ffi/src/c/`
+- Native C smoke example: `mbus-ffi/examples/c_smoke_cmake/`
+- Standalone C binding-layer test: `mbus-ffi/tests/c_api/test_binding_layer.c`
+
 ## 2. Basic Usage Example (TCP)
 
 This example uses the current `ClientServices::new(transport, app, config)` API.
@@ -132,6 +151,7 @@ fn main() -> Result<(), MbusError> {
     let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);
 
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
+    client.connect()?;
 
     #[cfg(feature = "coils")]
     client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
@@ -166,6 +186,7 @@ fn main() -> Result<(), MbusError> {
 
   `ClientServices` supports explicit reconnection:
 
+  - `client.connect()` opens the transport after construction.
   - `client.is_connected()` checks transport state.
   - `client.reconnect()` reconnects with existing config.
 
@@ -219,15 +240,16 @@ are required beyond adding `async`/`.await`.
 
 `AsyncTcpClient` uses a compile-time pipeline depth const generic:
 
-- default (`N = 9`): `AsyncTcpClient::connect(...)`
-- custom: `AsyncTcpClient::<N>::connect_with_pipeline(...)`
+- default (`N = 9`): `AsyncTcpClient::new(...)`
+- custom: `AsyncTcpClient::<N>::new_with_pipeline(...)`
 
 Example with a custom compile-time pipeline depth:
 
 ```rust,no_run
 use modbus_rs::mbus_async::AsyncTcpClient;
 
-let client = AsyncTcpClient::<16>::connect_with_pipeline("192.168.1.10", 502)?;
+let client = AsyncTcpClient::<16>::new_with_pipeline("192.168.1.10", 502)?;
+client.connect().await?;
 ```
 
 Add the dependency:
@@ -246,7 +268,8 @@ use modbus_rs::Coils;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client = AsyncTcpClient::connect("192.168.1.10", 502)?;
+  let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+  client.connect().await?;
 
     // Read
     let coils = client.read_multiple_coils(1, 0, 8).await?;
@@ -302,7 +325,8 @@ async fn main() -> anyhow::Result<()> {
         retry_random_fn: None,
     };
 
-    let client = AsyncSerialClient::connect_rtu(config)?;
+    let client = AsyncSerialClient::new_rtu(config)?;
+    client.connect().await?;
 
     let coils = client.read_multiple_coils(1, 0, 8).await?;
     for addr in coils.from_address()..coils.from_address() + coils.quantity() {
@@ -322,7 +346,8 @@ how often the worker thread checks for responses. The default is 20ms.
 use modbus_rs::mbus_async::AsyncTcpClient;
 use std::time::Duration;
 
-let client = AsyncTcpClient::connect_with_poll_interval("192.168.1.10", 502, Duration::from_millis(5))?;
+let client = AsyncTcpClient::new_with_poll_interval("192.168.1.10", 502, Duration::from_millis(5))?;
+client.connect().await?;
 ```
 
 A lower value reduces latency at the cost of more CPU. A higher value is fine if response
@@ -413,9 +438,14 @@ The ASCII example in this repository uses:
 
 Use `serial-ascii` when compiling top-level `modbus-rs` builds intended for ASCII mode.
 
-## 6. When to Use Helper Crates Directly
+## 7. Bindings and Helper Crates
 
-Use `modbus-rs` if you want a single dependency.
+Use `modbus-rs` if you want a single Rust dependency.
+
+Use `mbus-ffi` directly for:
+
+- Browser/WASM integrations
+- Native C/C++ integrations
 
 Use helper crates directly when you need lower-level control:
 - `mbus-core` for shared protocol types and transport abstractions

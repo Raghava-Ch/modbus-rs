@@ -6,6 +6,12 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
+async fn connected_tcp_client(port: u16) -> Result<AsyncTcpClient> {
+    let client = AsyncTcpClient::new("127.0.0.1", port)?;
+    client.connect().await?;
+    Ok(client)
+}
+
 #[tokio::test]
 async fn test_async_tcp_client_read_multiple_coils() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
@@ -45,7 +51,7 @@ async fn test_async_tcp_client_read_multiple_coils() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let coils = client.read_multiple_coils(1, 0, 8).await?;
 
     assert_eq!(coils.from_address(), 0);
@@ -86,7 +92,7 @@ async fn test_async_tcp_client_write_single_coil() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let (addr_echo, value_echo) = client.write_single_coil(1, 10, true).await?;
 
     assert_eq!(addr_echo, 10);
@@ -133,7 +139,7 @@ async fn test_async_tcp_client_write_multiple_registers() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let (start_addr, qty) = client
         .write_multiple_registers(1, 5, &[0x1122, 0x3344])
         .await?;
@@ -183,7 +189,7 @@ async fn test_async_tcp_client_read_discrete_inputs() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let di = client.read_discrete_inputs(1, 0, 8).await?;
 
     assert_eq!(di.from_address(), 0);
@@ -239,7 +245,7 @@ async fn test_async_tcp_client_write_multiple_coils() -> Result<()> {
     coils.set_value(5, true)?;
     coils.set_value(7, true)?;
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let (start_addr, qty) = client.write_multiple_coils(1, 0, &coils).await?;
 
     assert_eq!(start_addr, 0);
@@ -289,7 +295,7 @@ async fn test_async_tcp_client_read_holding_registers() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let registers = client.read_holding_registers(1, 0x0010, 2).await?;
 
     assert_eq!(registers.from_address(), 0x0010);
@@ -341,7 +347,7 @@ async fn test_async_tcp_client_read_input_registers() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let registers = client.read_input_registers(1, 0x0020, 2).await?;
 
     assert_eq!(registers.from_address(), 0x0020);
@@ -384,7 +390,7 @@ async fn test_async_tcp_client_write_single_register() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let (addr_echo, value_echo) = client.write_single_register(1, 0x0010, 42).await?;
 
     assert_eq!(addr_echo, 0x0010);
@@ -427,7 +433,7 @@ async fn test_async_tcp_client_mask_write_register() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     client
         .mask_write_register(1, 0x0010, 0xFF00, 0x0055)
         .await?;
@@ -481,7 +487,7 @@ async fn test_async_tcp_client_read_write_multiple_registers() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let regs = client
         .read_write_multiple_registers(1, 0x0030, 2, 0x0040, &[0xAAAA, 0x5555])
         .await?;
@@ -530,7 +536,7 @@ async fn test_async_tcp_client_read_fifo_queue() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let fifo = client.read_fifo_queue(1, 0x0010).await?;
     // Current service implementation builds the response model with ptr_address = 0.
     assert_eq!(fifo.ptr_address(), 0);
@@ -573,7 +579,7 @@ async fn test_async_tcp_client_read_file_record() -> Result<()> {
     let mut sub = SubRequest::new();
     sub.add_read_sub_request(4, 1, 2)?;
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let records = client.read_file_record(1, &sub).await?;
 
     assert_eq!(records.len(), 1);
@@ -609,7 +615,7 @@ async fn test_async_tcp_client_write_file_record() -> Result<()> {
     data.push(0x1234).unwrap();
     sub.add_write_sub_request(4, 1, 1, data)?;
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     client.write_file_record(1, &sub).await?;
 
     server_handle.join().expect("server thread panicked")?;
@@ -650,7 +656,7 @@ async fn test_async_tcp_client_read_device_identification() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let resp = client
         .read_device_identification(1, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
         .await?;
@@ -691,7 +697,7 @@ async fn test_async_tcp_client_encapsulated_interface_transport() -> Result<()> 
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let (mei, data) = client
         .encapsulated_interface_transport(
             1,
@@ -734,7 +740,7 @@ async fn test_async_tcp_client_read_single_coil() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let coils = client.read_multiple_coils(1, 5, 1).await?;
     assert_eq!(coils.quantity(), 1);
     assert_eq!(coils.value(5)?, true);
@@ -770,7 +776,7 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let inputs = client.read_discrete_inputs(1, 10, 1).await?;
     assert_eq!(inputs.quantity(), 1);
     assert_eq!(inputs.value(10)?, true);
@@ -803,7 +809,7 @@ async fn test_async_tcp_client_server_exception_response() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let result = client.write_multiple_registers(1, 100, &[1, 2, 3]).await;
 
     assert!(result.is_err(), "Expected exception error");
@@ -833,7 +839,7 @@ async fn test_async_tcp_client_server_closes_connection() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let result = client.read_multiple_coils(1, 0, 8).await;
 
     assert!(result.is_err(), "Expected connection error");
@@ -854,7 +860,7 @@ async fn test_async_tcp_client_server_timeout() -> Result<()> {
         Ok(())
     });
 
-    let client = AsyncTcpClient::connect("127.0.0.1", addr.port())?;
+    let client = connected_tcp_client(addr.port()).await?;
     let result = tokio::time::timeout(
         std::time::Duration::from_millis(500),
         client.read_multiple_coils(1, 0, 8),

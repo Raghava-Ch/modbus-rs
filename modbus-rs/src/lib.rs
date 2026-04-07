@@ -10,9 +10,9 @@ pub use mbus_core::transport::{
     UnitIdOrSlaveAddr,
 };
 
-#[cfg(all(feature = "tcp"))]
+#[cfg(feature = "tcp")]
 pub use mbus_network::StdTcpTransport;
-#[cfg(all(any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use mbus_serial::StdSerialTransport;
 
 #[cfg(feature = "client")]

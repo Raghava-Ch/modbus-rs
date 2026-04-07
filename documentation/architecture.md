@@ -8,14 +8,24 @@ The `modbus-rs` ecosystem is composed of several crates, each with a distinct re
 
 -   **`mbus-core`**: Provides fundamental Modbus data structures, error types, and the `Transport` trait for abstracting communication layers.
 -   **`mbus-client`**: Implements the Modbus client state machine and services for handling various Modbus function codes.
+-   **`mbus-async`**: Provides an async facade (`AsyncTcpClient`, `AsyncSerialClient`) over the poll-driven client core.
 -   **`mbus-network`**: Provides the standard TCP transport implementation (`StdTcpTransport`).
 -   **`mbus-serial`**: Provides standard Serial transport implementations (`StdSerialTransport`) for RTU/ASCII modes.
+-   **`mbus-ffi`**: Provides native C bindings and WASM/browser bindings.
+-   **`modbus-rs`**: Top-level convenience crate that re-exports workspace APIs behind feature flags.
+-   **`integration_tests`**: End-to-end validation across TCP, serial, and async flows.
+-   **`xtask`**: Workspace automation commands (header generation/checks and C smoke build/test).
 
 At the top-level `modbus-rs` crate, serial transport exposure is split into two user-facing
 features:
 
 -   **`serial-rtu`**: Enables serial transport for RTU-oriented builds.
 -   **`serial-ascii`**: Enables serial transport for ASCII-oriented builds.
+
+The top-level crate also exposes:
+
+-   **`async`**: Enables the `mbus-async` facade.
+-   Function-group flags (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) that propagate through the stack.
 
 ## Modbus TCP Client State Machine
 
@@ -116,6 +126,14 @@ The `mbus-client` crate provides the `ClientServices` struct, which acts as the 
 -   **Protocol Coverage**: Implements standard function codes for various Modbus operations.
 -   **`App` Traits**: Defines traits (e.g., `CoilResponse`, `RegisterResponse`) that users implement to receive asynchronous callbacks when a response is parsed.
 
+### Connection Lifecycle
+
+`ClientServices` construction is intentionally side-effect-free:
+
+- `ClientServices::new(...)` and `ClientServices::new_serial(...)` build the state machine and validate configuration.
+- Applications must call `client.connect()` explicitly before sending requests.
+- `client.reconnect()` remains available for recovery, and flushes pending requests with `ConnectionLost` before reconnecting.
+
 The `ClientServices` orchestrates the interaction between the state machine, the transport layer, and the application-specific response handlers.
 
 ## Async Layer (`mbus-async`)
@@ -129,6 +147,11 @@ The `mbus-async` crate is an async facade that sits on top of `mbus-client`. It 
 - Async callers communicate with the worker thread through a `std::sync::mpsc` channel of `WorkerCommand` values.
 - Each command carries a Tokio `oneshot::Sender`. When the response arrives, the worker resolves that sender. The caller's `.await` point wakes up.
 - Requests are tracked in a shared `PendingStore` (`HashMap<u16, oneshot::Sender>`), keyed by transaction id.
+
+Async client construction is also side-effect-free:
+
+- `AsyncTcpClient::new(...)` and `AsyncSerialClient::new_*` constructors only prepare the worker and transport config.
+- Applications must call `client.connect().await?` before issuing requests.
 
 ### Components
 
@@ -202,3 +225,32 @@ sequenceDiagram
 ### Pipeline depth and const generic `N`
 
 `run_worker` and `handle_command` are generic over the transport type and `const N: usize`, which is the pipeline size passed to `ClientServices<_, _, N>`. This allows the TCP path to use configurable pipeline depth (`N`, default 9 via `AsyncTcpClient`) and the serial path to use depth 1 while sharing the same worker implementation.
+
+## Bindings Layer (`mbus-ffi`)
+
+`mbus-ffi` adds two external integration surfaces on top of the Rust core:
+
+- **Native C API**: ID-based client pool with C ABI functions for TCP/serial lifecycle, request submission, polling, and typed callback delivery.
+- **WASM/browser API**: Web-facing clients for browser transport environments.
+
+### Native C binding architecture
+
+- C entry points are defined in `mbus-ffi/src/c/` and exported through `mbus-ffi/include/mbus_ffi.h`.
+- Native clients follow the same explicit lifecycle used by Rust clients:
+    - create (`mbus_tcp_client_new` / `mbus_serial_client_new`)
+    - connect (`mbus_tcp_connect` / `mbus_serial_connect`)
+    - request + poll
+    - disconnect/free
+- A pool-based ID model isolates FFI handles from Rust object ownership while preserving deterministic resource control.
+
+### WASM binding architecture
+
+- WASM bindings are implemented in `mbus-ffi/src/wasm/`.
+- Browser smoke validation pages live in `mbus-ffi/examples/`.
+- The generated browser package is emitted under `mbus-ffi/pkg/`.
+
+### FFI validation surfaces
+
+- Rust-side FFI tests: `cargo test -p mbus-ffi`
+- Native C binding-layer test source: `mbus-ffi/tests/c_api/test_binding_layer.c`
+- Native C smoke flow via workspace automation: `cargo run -p xtask -- build-c-smoke`

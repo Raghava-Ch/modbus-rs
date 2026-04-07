@@ -39,7 +39,10 @@ use mbus_core::transport::{UidSaddrFrom, UnitIdOrSlaveAddr};
 use mbus_core::{
     data_unit::common::{self, MAX_ADU_FRAME_LEN},
     errors::MbusError,
-    transport::{ModbusConfig, ModbusSerialConfig, TimeKeeper, Transport, TransportType},
+    transport::{
+        BackoffStrategy, JitterStrategy, ModbusConfig, ModbusSerialConfig, TimeKeeper, Transport,
+        TransportType,
+    },
 };
 
 #[cfg(feature = "logging")]
@@ -840,6 +843,29 @@ where
     }
 }
 
+/// Controls whether the `handle_timeouts` loop should advance its index or repeat it.
+///
+/// Returned by the inner helper methods (`try_process_scheduled_retry`,
+/// `try_handle_request_timeout`, etc.) so that the single-line `match` in the loop body
+/// is the sole source of `i += 1` / `continue` decisions.
+#[derive(Debug, PartialEq, Eq)]
+enum LoopAction {
+    /// The entry was retained at its current index; the caller should increment `i`.
+    Advance,
+    /// The entry at `i` was removed (or a zero-delay retry was just scheduled);
+    /// the caller must **not** increment `i` — the item now at `i` needs processing.
+    Repeat,
+    /// This arm did not apply to the current entry; fall through to the next check.
+    NotHandled,
+}
+
+#[derive(Copy, Clone)]
+struct RetryPolicy {
+    backoff: BackoffStrategy,
+    jitter: JitterStrategy,
+    random_fn: Option<fn() -> u32>,
+}
+
 impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
     TRANSPORT: Transport,
@@ -896,87 +922,107 @@ where
         // 1. Attempt to receive a frame
         match self.transport.recv() {
             Ok(frame) => {
-                client_log_trace!("received {} transport bytes", frame.len());
-                if self.rxed_frame.extend_from_slice(frame.as_slice()).is_err() {
-                    // Buffer overflowed without forming a valid frame. Must be noise.
-                    client_log_debug!(
-                        "received frame buffer overflow while appending {} bytes; clearing receive buffer",
-                        frame.len()
-                    );
-                    self.rxed_frame.clear();
-                }
+                self.append_to_rxed_frame(frame);
 
                 // Process as many pipelined/concatenated frames as exist in the buffer
-                while !self.rxed_frame.is_empty() {
-                    match self.ingest_frame() {
-                        Ok(consumed) => {
-                            client_log_trace!(
-                                "ingested complete frame consuming {} bytes from rx buffer len {}",
-                                consumed,
-                                self.rxed_frame.len()
-                            );
-                            let len = self.rxed_frame.len();
-                            if consumed < len {
-                                // Shift array to the left to drain processed bytes.
-                                self.rxed_frame.copy_within(consumed.., 0);
-                                self.rxed_frame.truncate(len - consumed);
-                            } else {
-                                self.rxed_frame.clear();
-                            }
-                        }
-                        Err(MbusError::BufferTooSmall) => {
-                            // Reached an incomplete frame, break and wait for more bytes
-                            client_log_trace!(
-                                "incomplete frame in rx buffer; waiting for more bytes (buffer_len={})",
-                                self.rxed_frame.len()
-                            );
-                            break;
-                        }
-                        Err(err) => {
-                            // Garbage or parsing error, drop the first byte and try again to resync the stream
-                            client_log_debug!(
-                                "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
-                                err,
-                                self.rxed_frame.len()
-                            );
-                            let len = self.rxed_frame.len();
-                            if len > 1 {
-                                self.rxed_frame.copy_within(1.., 0);
-                                self.rxed_frame.truncate(len - 1);
-                            } else {
-                                self.rxed_frame.clear();
-                            }
-                        }
-                    }
-                }
+                self.process_rxed_frame();
             }
             Err(err) => {
-                let recv_error: MbusError = err.into();
-                let is_connection_loss = matches!(
-                    recv_error,
-                    MbusError::ConnectionClosed
-                        | MbusError::ConnectionFailed
-                        | MbusError::ConnectionLost
-                        | MbusError::IoError
-                ) || !self.transport.is_connected();
-
-                if is_connection_loss {
-                    client_log_debug!(
-                        "connection loss detected during poll: error={:?}, pending_requests={}",
-                        recv_error,
-                        self.expected_responses.len()
-                    );
-                    self.fail_all_pending_requests(MbusError::ConnectionLost);
-                    let _ = self.transport.disconnect();
-                    self.rxed_frame.clear();
-                } else {
-                    client_log_trace!("non-fatal recv status during poll: {:?}", recv_error);
-                }
+                self.handle_recv_error(err);
             }
         }
 
         // 2. Check for timed-out requests and handle retries for all outstanding requests
         self.handle_timeouts();
+    }
+
+    fn handle_recv_error(&mut self, err: <TRANSPORT as Transport>::Error) {
+        let recv_error: MbusError = err.into();
+        let is_connection_loss = matches!(
+            recv_error,
+            MbusError::ConnectionClosed
+                | MbusError::ConnectionFailed
+                | MbusError::ConnectionLost
+                | MbusError::IoError
+        ) || !self.transport.is_connected();
+
+        if is_connection_loss {
+            client_log_debug!(
+                "connection loss detected during poll: error={:?}, pending_requests={}",
+                recv_error,
+                self.expected_responses.len()
+            );
+            self.fail_all_pending_requests(MbusError::ConnectionLost);
+            let _ = self.transport.disconnect();
+            self.rxed_frame.clear();
+        } else {
+            client_log_trace!("non-fatal recv status during poll: {:?}", recv_error);
+        }
+    }
+
+    fn process_rxed_frame(&mut self) {
+        while !self.rxed_frame.is_empty() {
+            match self.ingest_frame() {
+                Ok(consumed) => {
+                    self.drain_rxed_frame(consumed);
+                }
+                Err(MbusError::BufferTooSmall) => {
+                    // Reached an incomplete frame, break and wait for more bytes
+                    client_log_trace!(
+                        "incomplete frame in rx buffer; waiting for more bytes (buffer_len={})",
+                        self.rxed_frame.len()
+                    );
+                    break;
+                }
+                Err(err) => {
+                    self.handle_parse_error(err);
+                }
+            }
+        }
+    }
+
+    fn handle_parse_error(&mut self, err: MbusError) {
+        // Garbage or parsing error, drop the first byte and try again to resync the stream
+        client_log_debug!(
+            "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
+            err,
+            self.rxed_frame.len()
+        );
+        let len = self.rxed_frame.len();
+        if len > 1 {
+            self.rxed_frame.copy_within(1.., 0);
+            self.rxed_frame.truncate(len - 1);
+        } else {
+            self.rxed_frame.clear();
+        }
+    }
+
+    fn drain_rxed_frame(&mut self, consumed: usize) {
+        client_log_trace!(
+            "ingested complete frame consuming {} bytes from rx buffer len {}",
+            consumed,
+            self.rxed_frame.len()
+        );
+        let len = self.rxed_frame.len();
+        if consumed < len {
+            // Shift array to the left to drain processed bytes.
+            self.rxed_frame.copy_within(consumed.., 0);
+            self.rxed_frame.truncate(len - consumed);
+        } else {
+            self.rxed_frame.clear();
+        }
+    }
+
+    fn append_to_rxed_frame(&mut self, frame: Vec<u8, 513>) {
+        client_log_trace!("received {} transport bytes", frame.len());
+        if self.rxed_frame.extend_from_slice(frame.as_slice()).is_err() {
+            // Buffer overflowed without forming a valid frame. Must be noise.
+            client_log_debug!(
+                "received frame buffer overflow while appending {} bytes; clearing receive buffer",
+                frame.len()
+            );
+            self.rxed_frame.clear();
+        }
     }
 
     fn fail_all_pending_requests(&mut self, error: MbusError) {
@@ -1018,7 +1064,7 @@ where
 
         let current_millis = self.app.current_millis();
 
-        // Fast-path: Skip O(N) iteration if the earliest timeout has not yet been reached
+        // Fast-path: Skip O(N) iteration if the earliest timeout has not yet been reached.
         if let Some(check_at) = self.next_timeout_check
             && current_millis < check_at
         {
@@ -1031,129 +1077,241 @@ where
         }
 
         let response_timeout_ms = self.response_timeout_ms();
-        let retry_backoff = self.config.retry_backoff_strategy();
-        let retry_jitter = self.config.retry_jitter_strategy();
-        let retry_random_fn = self.config.retry_random_fn();
-        let expected_responses = &mut self.expected_responses;
+        let retry_policy = RetryPolicy {
+            backoff: self.config.retry_backoff_strategy(),
+            jitter: self.config.retry_jitter_strategy(),
+            random_fn: self.config.retry_random_fn(),
+        };
         let mut i = 0;
         let mut new_next_check = u64::MAX;
 
-        while i < expected_responses.len() {
-            let expected_response = &mut expected_responses[i];
-            // First, process already-scheduled retries.
-            if let Some(retry_at) = expected_response.next_retry_timestamp {
-                if current_millis >= retry_at {
-                    client_log_debug!(
-                        "retry due now: txn_id={}, unit_id_or_slave_addr={}, retry_attempt_index={}, retries_left={}",
-                        expected_response.txn_id,
-                        expected_response.unit_id_or_slave_addr,
-                        expected_response.retry_attempt_index.saturating_add(1),
-                        expected_response.retries_left
-                    );
-                    if let Err(_e) = self.transport.send(&expected_response.original_adu) {
-                        // Deliberately O(1): response identity is carried in the payload,
-                        // not by queue position, so preserving insertion order is unnecessary.
-                        let response = expected_responses.swap_remove(i);
-                        client_log_debug!(
-                            "retry send failed: txn_id={}, unit_id_or_slave_addr={}; dropping request",
-                            response.txn_id,
-                            response.unit_id_or_slave_addr
-                        );
-                        self.app.request_failed(
-                            response.txn_id,
-                            UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
-                            MbusError::SendFailed,
-                        );
-                        continue;
-                    }
-
-                    expected_response.retries_left =
-                        expected_response.retries_left.saturating_sub(1);
-                    expected_response.retry_attempt_index =
-                        expected_response.retry_attempt_index.saturating_add(1);
-                    expected_response.sent_timestamp = current_millis;
-                    expected_response.next_retry_timestamp = None;
-
-                    let expires_at = current_millis.saturating_add(response_timeout_ms);
-                    if expires_at < new_next_check {
-                        new_next_check = expires_at;
-                    }
+        while i < self.expected_responses.len() {
+            // Branch 1 – an already-scheduled retry timestamp exists.
+            match self.try_process_scheduled_retry(
+                i,
+                current_millis,
+                response_timeout_ms,
+                &mut new_next_check,
+            ) {
+                LoopAction::Advance => {
                     i += 1;
                     continue;
                 }
-
-                if retry_at < new_next_check {
-                    new_next_check = retry_at;
-                }
-                i += 1;
-                continue;
-            }
-
-            // Otherwise, the request is waiting for a response to a previous send.
-            let expires_at = expected_response
-                .sent_timestamp
-                .saturating_add(response_timeout_ms);
-
-            if current_millis > expires_at {
-                if expected_response.retries_left == 0 {
-                    // Deliberately O(1): timeout handling keys off txn/unit id and
-                    // does not rely on stable ordering inside expected_responses.
-                    let response = expected_responses.swap_remove(i);
-                    client_log_debug!(
-                        "request exhausted retries: txn_id={}, unit_id_or_slave_addr={}",
-                        response.txn_id,
-                        response.unit_id_or_slave_addr
-                    );
-                    self.app.request_failed(
-                        response.txn_id,
-                        UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
-                        MbusError::NoRetriesLeft,
-                    );
+                LoopAction::Repeat => {
                     continue;
                 }
+                LoopAction::NotHandled => {}
+            }
 
-                let next_attempt = expected_response.retry_attempt_index.saturating_add(1);
-                let base_delay_ms = retry_backoff.delay_ms_for_retry(next_attempt);
-                let retry_delay_ms = retry_jitter.apply(base_delay_ms, retry_random_fn) as u64;
-                let retry_at = current_millis.saturating_add(retry_delay_ms);
-                expected_response.next_retry_timestamp = Some(retry_at);
-                client_log_debug!(
-                    "scheduling retry: txn_id={}, unit_id_or_slave_addr={}, next_attempt={}, delay_ms={}, retry_at={}",
-                    expected_response.txn_id,
-                    expected_response.unit_id_or_slave_addr,
-                    next_attempt,
-                    retry_delay_ms,
-                    retry_at
-                );
-
-                // If delay is zero (Immediate strategy), process the newly scheduled retry
-                // in this same poll cycle without waiting for another call to `poll`.
-                if retry_delay_ms == 0 {
-                    client_log_trace!(
-                        "retry delay is zero; retry will be processed in the same poll cycle for txn_id={}",
-                        expected_response.txn_id
-                    );
+            // Branch 2 – request is waiting for a response; check for timeout.
+            match self.try_handle_request_timeout(
+                i,
+                current_millis,
+                response_timeout_ms,
+                retry_policy,
+                &mut new_next_check,
+            ) {
+                LoopAction::Advance => {
+                    i += 1;
                     continue;
                 }
-
-                if retry_at < new_next_check {
-                    new_next_check = retry_at;
+                LoopAction::Repeat => {
+                    continue;
                 }
-                i += 1;
-                continue;
+                LoopAction::NotHandled => {}
             }
 
-            if expires_at < new_next_check {
-                new_next_check = expires_at;
-            }
+            // Request is still alive and within timeout window.
             i += 1;
         }
 
-        if new_next_check != u64::MAX {
-            self.next_timeout_check = Some(new_next_check);
+        self.next_timeout_check = if new_next_check != u64::MAX {
+            Some(new_next_check)
         } else {
-            self.next_timeout_check = None;
+            None
+        };
+    }
+
+    /// Processes an already-scheduled retry for the pending request at index `i`.
+    ///
+    /// Returns:
+    /// - [`LoopAction::NotHandled`] — no retry is scheduled; caller should fall through.
+    /// - [`LoopAction::Repeat`] — retry was due and the send failed (entry removed); caller
+    ///   must **not** increment `i` so the item that was swapped into position `i` is processed.
+    /// - [`LoopAction::Advance`] — retry was either sent successfully **or** is not yet due;
+    ///   the entry remains at `i`, so the caller should increment `i`.
+    fn try_process_scheduled_retry(
+        &mut self,
+        i: usize,
+        current_millis: u64,
+        response_timeout_ms: u64,
+        new_next_check: &mut u64,
+    ) -> LoopAction {
+        let retry_at = match self.expected_responses[i].next_retry_timestamp {
+            Some(t) => t,
+            None => return LoopAction::NotHandled,
+        };
+
+        if current_millis >= retry_at {
+            return self.send_due_retry(i, current_millis, response_timeout_ms, new_next_check);
         }
+
+        // Retry is scheduled but not yet due – update the next-check watermark.
+        if retry_at < *new_next_check {
+            *new_next_check = retry_at;
+        }
+        LoopAction::Advance
+    }
+
+    /// Attempts to (re)send the ADU for a retry whose timestamp has been reached.
+    ///
+    /// On success, advances retry counters and returns [`LoopAction::Advance`].
+    /// On send failure, removes the entry and returns [`LoopAction::Repeat`].
+    fn send_due_retry(
+        &mut self,
+        i: usize,
+        current_millis: u64,
+        response_timeout_ms: u64,
+        new_next_check: &mut u64,
+    ) -> LoopAction {
+        let expected_response = &self.expected_responses[i];
+        client_log_debug!(
+            "retry due now: txn_id={}, unit_id_or_slave_addr={}, retry_attempt_index={}, retries_left={}",
+            expected_response.txn_id,
+            expected_response.unit_id_or_slave_addr,
+            expected_response.retry_attempt_index.saturating_add(1),
+            expected_response.retries_left
+        );
+
+        // Clone the ADU so we can release the shared borrow before calling send.
+        let adu = self.expected_responses[i].original_adu.clone();
+        if self.transport.send(&adu).is_err() {
+            // Deliberately O(1): response identity is carried in the payload,
+            // not by queue position, so preserving insertion order is unnecessary.
+            // Inline swap_remove + notify to avoid a double-mutable-borrow of `self`.
+            let response = self.expected_responses.swap_remove(i);
+            client_log_debug!(
+                "retry send failed: txn_id={}, unit_id_or_slave_addr={}; dropping request",
+                response.txn_id,
+                response.unit_id_or_slave_addr
+            );
+            self.app.request_failed(
+                response.txn_id,
+                UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+                MbusError::SendFailed,
+            );
+            return LoopAction::Repeat;
+        }
+
+        update_retries(
+            current_millis,
+            response_timeout_ms,
+            new_next_check,
+            &mut self.expected_responses[i],
+        );
+        LoopAction::Advance
+    }
+
+    /// Checks whether the pending request at index `i` has exceeded its response timeout.
+    ///
+    /// Returns:
+    /// - [`LoopAction::NotHandled`] — not yet timed out; caller should advance `i`.
+    /// - [`LoopAction::Repeat`] — entry was removed (retries exhausted); caller must **not**
+    ///   increment `i`.
+    /// - [`LoopAction::Advance`] — a retry was scheduled (non-zero delay); caller should
+    ///   increment `i`.
+    ///
+    /// When the configured retry delay is **zero** (Immediate strategy) the newly scheduled
+    /// retry must be processed within the same poll cycle, so [`LoopAction::Repeat`] is
+    /// returned to re-enter [`try_process_scheduled_retry`] for the same index.
+    fn try_handle_request_timeout(
+        &mut self,
+        i: usize,
+        current_millis: u64,
+        response_timeout_ms: u64,
+        retry_policy: RetryPolicy,
+        new_next_check: &mut u64,
+    ) -> LoopAction {
+        let expires_at = self.expected_responses[i]
+            .sent_timestamp
+            .saturating_add(response_timeout_ms);
+
+        if current_millis <= expires_at {
+            // Still within the window – update watermark and let the caller advance.
+            if expires_at < *new_next_check {
+                *new_next_check = expires_at;
+            }
+            return LoopAction::NotHandled;
+        }
+
+        if self.expected_responses[i].retries_left == 0 {
+            return self.fail_exhausted_request(i);
+        }
+
+        self.schedule_next_retry(i, current_millis, retry_policy, new_next_check)
+    }
+
+    /// Removes the entry at `i` and notifies the application that all retries are exhausted.
+    fn fail_exhausted_request(&mut self, i: usize) -> LoopAction {
+        // Deliberately O(1): timeout handling keys off txn/unit id and
+        // does not rely on stable ordering inside expected_responses.
+        let response = self.expected_responses.swap_remove(i);
+        client_log_debug!(
+            "request exhausted retries: txn_id={}, unit_id_or_slave_addr={}",
+            response.txn_id,
+            response.unit_id_or_slave_addr
+        );
+        self.app.request_failed(
+            response.txn_id,
+            UnitIdOrSlaveAddr::from_u8(response.unit_id_or_slave_addr),
+            MbusError::NoRetriesLeft,
+        );
+        LoopAction::Repeat
+    }
+
+    /// Schedules the next retry for the pending request at index `i`.
+    ///
+    /// Returns [`LoopAction::Repeat`] when the delay is zero so that the retry is sent
+    /// immediately in the same poll cycle. Returns [`LoopAction::Advance`] otherwise.
+    fn schedule_next_retry(
+        &mut self,
+        i: usize,
+        current_millis: u64,
+        retry_policy: RetryPolicy,
+        new_next_check: &mut u64,
+    ) -> LoopAction {
+        let expected_response = &mut self.expected_responses[i];
+        let next_attempt = expected_response.retry_attempt_index.saturating_add(1);
+        let base_delay_ms = retry_policy.backoff.delay_ms_for_retry(next_attempt);
+        let retry_delay_ms = retry_policy
+            .jitter
+            .apply(base_delay_ms, retry_policy.random_fn) as u64;
+        let retry_at = current_millis.saturating_add(retry_delay_ms);
+        expected_response.next_retry_timestamp = Some(retry_at);
+
+        client_log_debug!(
+            "scheduling retry: txn_id={}, unit_id_or_slave_addr={}, next_attempt={}, delay_ms={}, retry_at={}",
+            expected_response.txn_id,
+            expected_response.unit_id_or_slave_addr,
+            next_attempt,
+            retry_delay_ms,
+            retry_at
+        );
+
+        // If delay is zero (Immediate strategy), process the newly scheduled retry
+        // in this same poll cycle without waiting for another call to `poll`.
+        if retry_delay_ms == 0 {
+            client_log_trace!(
+                "retry delay is zero; retry will be processed in the same poll cycle for txn_id={}",
+                expected_response.txn_id
+            );
+            return LoopAction::Repeat;
+        }
+
+        if retry_at < *new_next_check {
+            *new_next_check = retry_at;
+        }
+        LoopAction::Advance
     }
 
     fn add_an_expectation(
@@ -1187,14 +1345,29 @@ where
     }
 }
 
+fn update_retries<TRANSPORT, APP, const N: usize>(
+    current_millis: u64,
+    response_timeout_ms: u64,
+    new_next_check: &mut u64,
+    expected_response: &mut ExpectedResponse<TRANSPORT, APP, N>,
+) {
+    expected_response.retries_left = expected_response.retries_left.saturating_sub(1);
+    expected_response.retry_attempt_index = expected_response.retry_attempt_index.saturating_add(1);
+    expected_response.sent_timestamp = current_millis;
+    expected_response.next_retry_timestamp = None;
+
+    let expires_at = current_millis.saturating_add(response_timeout_ms);
+    if expires_at < *new_next_check {
+        *new_next_check = expires_at;
+    }
+}
+
 /// Implementation of core client services, including methods for sending requests and processing responses.
 impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRANSPORT, APP, N> {
-    /// Creates a new instance of ClientServices, connecting to the transport layer with the provided configuration.
-    pub fn new(
-        mut transport: TRANSPORT,
-        app: APP,
-        config: ModbusConfig,
-    ) -> Result<Self, MbusError> {
+    /// Creates a new instance of ClientServices without connecting to the transport.
+    ///
+    /// The user must call `connect()` explicitly to establish the connection.
+    pub fn new(transport: TRANSPORT, app: APP, config: ModbusConfig) -> Result<Self, MbusError> {
         let transport_type = transport.transport_type();
         if matches!(
             transport_type,
@@ -1203,10 +1376,6 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         {
             return Err(MbusError::InvalidNumOfExpectedRsps);
         }
-
-        transport
-            .connect(&config)
-            .map_err(|_e| MbusError::ConnectionFailed)?;
 
         client_log_debug!(
             "client created with transport_type={:?}, queue_capacity={}",
@@ -1224,6 +1393,19 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         })
     }
 
+    /// Establishes the underlying transport connection using the configured settings.
+    ///
+    /// This method must be called after construction and before sending any requests.
+    /// It is a separate step from construction to allow users explicit control over
+    /// when connections are established.
+    pub fn connect(&mut self) -> Result<(), MbusError>
+    where
+        TRANSPORT::Error: Into<MbusError>,
+    {
+        client_log_debug!("connecting transport");
+        self.transport.connect(&self.config).map_err(|e| e.into())
+    }
+
     /// Returns an immutable reference to the application callback handler.
     ///
     /// This allows observers/tests to inspect application-owned state while keeping
@@ -1237,13 +1419,37 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         self.transport.is_connected()
     }
 
+    /// Closes the underlying transport connection without attempting to reconnect.
+    ///
+    /// Behavior:
+    /// - Drops all currently pending in-flight requests and reports them as
+    ///   `MbusError::ConnectionLost`.
+    /// - Clears any partially received frame bytes.
+    /// - Calls `transport.disconnect()` (best-effort); any error is discarded.
+    ///
+    /// After this call `is_connected()` returns `false`. Use `reconnect()` to
+    /// re-establish the connection and resume sending requests.
+    pub fn disconnect(&mut self)
+    where
+        TRANSPORT::Error: Into<MbusError>,
+    {
+        client_log_debug!(
+            "disconnect requested; pending_requests={}",
+            self.expected_responses.len()
+        );
+        self.fail_all_pending_requests(MbusError::ConnectionLost);
+        self.rxed_frame.clear();
+        self.next_timeout_check = None;
+        let _ = self.transport.disconnect();
+    }
+
     /// Re-establishes the underlying transport connection using the existing configuration.
     ///
     /// Behavior:
     /// - Drops all currently pending in-flight requests and reports them as
     ///   `MbusError::ConnectionLost`.
     /// - Clears any partially received frame bytes.
-    /// - Calls `transport.disconnect()` (best-effort) followed by `transport.connect(&self.config)`.
+    /// - Calls `transport.disconnect()` (best-effort) followed by `connect()`.
     ///
     /// This method does not automatically re-send dropped requests. The application can requeue
     /// requests explicitly after reconnection succeeds.
@@ -1260,7 +1466,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         self.next_timeout_check = None;
 
         let _ = self.transport.disconnect();
-        self.transport.connect(&self.config).map_err(|e| e.into())
+        self.connect()
     }
 
     /// Creates a serial client with a compile-time enforced queue size of exactly 1.
@@ -1270,9 +1476,10 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     /// resolution during compilation.
     ///
     /// Use this constructor when building serial RTU/ASCII clients and prefer
-    /// [`SerialClientServices`] as the type alias for readability.
+    /// [`SerialClientServices`] as the type alias for readability. The user must call
+    /// `connect()` explicitly after construction.
     pub fn new_serial(
-        mut transport: TRANSPORT,
+        transport: TRANSPORT,
         app: APP,
         config: ModbusSerialConfig,
     ) -> Result<Self, MbusError>
@@ -1288,9 +1495,6 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         }
 
         let config = ModbusConfig::Serial(config);
-        transport
-            .connect(&config)
-            .map_err(|_e| MbusError::ConnectionFailed)?;
 
         client_log_debug!("serial client created with queue_capacity={}", N);
 
@@ -1457,12 +1661,14 @@ mod tests {
             ..Default::default()
         };
         let app = MockApp::default();
-        ClientServices::<MockTransport, MockApp, 1>::new_serial(
+        let mut client = ClientServices::<MockTransport, MockApp, 1>::new_serial(
             transport,
             app,
             make_serial_config(),
         )
-        .unwrap()
+        .unwrap();
+        client.connect().unwrap();
+        client
     }
 
     fn make_rtu_exception_adu(
@@ -1936,7 +2142,7 @@ mod tests {
 
     // --- ClientServices Tests ---
 
-    /// Test case: `ClientServices::new` successfully connects to the transport.
+    /// Test case: `ClientServices::new` creates an instance without connecting.
     #[test]
     fn test_client_services_new_success() {
         let transport = MockTransport::default();
@@ -1946,12 +2152,15 @@ mod tests {
         let client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config);
         assert!(client_services.is_ok());
-        assert!(client_services.unwrap().transport.is_connected());
+        let mut client = client_services.unwrap();
+        assert!(!client.is_connected());
+        assert!(client.connect().is_ok());
+        assert!(client.is_connected());
     }
 
-    /// Test case: `ClientServices::new` returns an error if transport connection fails.
+    /// Test case: `connect()` returns an error if transport connection fails.
     #[test]
-    fn test_client_services_new_connection_failure() {
+    fn test_client_services_connect_failure() {
         let mut transport = MockTransport::default();
         transport.connect_should_fail = true;
         let app = MockApp::default();
@@ -1959,8 +2168,11 @@ mod tests {
 
         let client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config);
-        assert!(client_services.is_err());
-        assert_eq!(client_services.unwrap_err(), MbusError::ConnectionFailed);
+        assert!(client_services.is_ok());
+        let mut client = client_services.unwrap();
+        let result = client.connect();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), MbusError::ConnectionFailed);
     }
 
     #[test]
@@ -1987,6 +2199,8 @@ mod tests {
         let client_services =
             ClientServices::<MockTransport, MockApp, 1>::new_serial(transport, app, serial_config);
         assert!(client_services.is_ok());
+        let mut client = client_services.unwrap();
+        assert!(client.connect().is_ok());
     }
 
     #[test]
@@ -1996,6 +2210,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(1).unwrap();
         client_services.read_single_coil(10, unit_id, 0).unwrap();
@@ -2019,6 +2234,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         client_services.transport.connect_should_fail = true;
         let reconnect_result = client_services.reconnect();
@@ -2036,6 +2252,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2071,6 +2288,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2090,6 +2308,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2108,6 +2327,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         // ADU with FC 0x03 (Read Holding Registers) instead of 0x01 (Read Coils)
         let response_adu = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x03, 0x01, 0xB3];
@@ -2132,6 +2352,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         // Malformed ADU (too short)
         let malformed_adu = [0x01, 0x02, 0x03];
@@ -2156,6 +2377,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         // No request was sent, so no expected response is in the queue.
         let response_adu = [0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x01, 0x01, 0x01, 0xB3];
@@ -2180,6 +2402,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2218,6 +2441,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0002;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2287,6 +2511,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0002;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2329,6 +2554,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2375,6 +2601,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2445,6 +2672,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0004;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2500,6 +2728,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0004;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2578,6 +2807,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2661,6 +2891,7 @@ mod tests {
 
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0005;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -2704,6 +2935,7 @@ mod tests {
 
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
 
@@ -2764,6 +2996,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(1).unwrap();
         client_services.read_single_coil(1, unit_id, 0).unwrap();
@@ -2799,6 +3032,7 @@ mod tests {
 
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         client_services
             .read_single_coil(1, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
@@ -2837,6 +3071,7 @@ mod tests {
 
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         client_services
             .read_single_coil(7, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
@@ -2879,6 +3114,7 @@ mod tests {
 
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
         client_services
             .read_single_coil(10, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
             .unwrap();
@@ -2905,6 +3141,7 @@ mod tests {
 
         let mut client_services3 =
             ClientServices::<MockTransport, MockApp, 10>::new(transport3, app3, config3).unwrap();
+        client_services3.connect().unwrap();
         client_services3
             .read_single_coil(12, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
             .unwrap();
@@ -2931,6 +3168,7 @@ mod tests {
 
         let mut client_services2 =
             ClientServices::<MockTransport, MockApp, 10>::new(transport2, app2, config2).unwrap();
+        client_services2.connect().unwrap();
         client_services2
             .read_single_coil(11, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
             .unwrap();
@@ -2971,6 +3209,7 @@ mod tests {
             ModbusConfig::Serial(serial_config),
         )
         .unwrap();
+        client_services.connect().unwrap();
 
         client_services
             .read_single_coil(1, UnitIdOrSlaveAddr::new(1).unwrap(), 0)
@@ -2997,6 +3236,7 @@ mod tests {
         // Create a client with a small capacity for expected responses
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 1>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         // Send one request, which should fill the queue
@@ -3021,6 +3261,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0005;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3056,6 +3297,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0005;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3101,6 +3343,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0006;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3136,6 +3379,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0006;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3181,6 +3425,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0007;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3216,6 +3461,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0007;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3259,6 +3505,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0008;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3297,6 +3544,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0008;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3341,6 +3589,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0009;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3623,6 +3872,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         client_services
@@ -3661,6 +3911,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 10;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3704,6 +3955,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         client_services
@@ -3742,6 +3994,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 10;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3786,6 +4039,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let write_values = [0xAAAA, 0xBBBB];
@@ -3823,6 +4077,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         client_services
@@ -3855,6 +4110,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 11;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3907,6 +4163,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 12;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3948,6 +4205,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 13;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -3998,6 +4256,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 14;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4049,6 +4308,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 15;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4094,6 +4354,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 16;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4137,6 +4398,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 17;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4191,6 +4453,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 20;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4257,6 +4520,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         // Request 1
@@ -4347,6 +4611,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 30;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4398,6 +4663,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 40;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
@@ -4415,6 +4681,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let data = [0x1234, 0x5678];
@@ -4433,6 +4700,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let err = client_services.get_comm_event_counter(60, unit_id).err();
 
@@ -4447,6 +4715,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let err = client_services.report_server_id(70, unit_id).err();
@@ -4464,6 +4733,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0001;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
@@ -4481,6 +4751,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0002;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
@@ -4496,6 +4767,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
@@ -4515,6 +4787,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         let txn_id = 0x0006;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
@@ -4531,6 +4804,7 @@ mod tests {
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
             ClientServices::<MockTransport, MockApp, 10>::new(transport, app, config).unwrap();
+        client_services.connect().unwrap();
 
         // Fill the internal buffer close to its capacity (MAX_ADU_FRAME_LEN = 513) with unparsable garbage
         let initial_garbage = [0xFF; MAX_ADU_FRAME_LEN - 10];

@@ -109,6 +109,7 @@ fn main() -> Result<()> {
 
     let mut client =
         ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
+    client.connect().map_err(|e| anyhow::anyhow!(e))?;
 
     let target_unit_id = UnitIdOrSlaveAddr::try_from(unit_id_val).unwrap();
 
