@@ -1,55 +1,36 @@
 use mbus_client::app::RequestErrorNotifier;
-use mbus_core::transport::TimeKeeper;
 use mbus_core::errors::MbusError;
+use mbus_core::transport::TimeKeeper;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::callbacks::{
-    MbusCallbacks,
-    MbusRequestFailedCtx,
-};
-#[cfg(feature = "coils")]
-use super::callbacks::{
-    MbusReadCoilsCtx,
-    MbusWriteSingleCoilCtx,
-    MbusWriteMultipleCoilsCtx,
-};
-#[cfg(feature = "registers")]
-use super::callbacks::{
-    MbusReadHoldingRegistersCtx,
-    MbusReadInputRegistersCtx,
-    MbusReadWriteMultipleRegistersCtx,
-    MbusWriteSingleRegisterCtx,
-    MbusWriteMultipleRegistersCtx,
-    MbusMaskWriteRegisterCtx,
-};
 #[cfg(feature = "discrete-inputs")]
 use super::callbacks::MbusReadDiscreteInputsCtx;
 #[cfg(feature = "fifo")]
 use super::callbacks::MbusReadFifoQueueCtx;
-#[cfg(feature = "file-record")]
-use super::callbacks::{
-    MbusFileRecordResult,
-    MbusReadFileRecordCtx,
-    MbusWriteFileRecordCtx,
-};
+use super::callbacks::{MbusCallbacks, MbusRequestFailedCtx};
 #[cfg(feature = "diagnostics")]
 use super::callbacks::{
-    MbusReadExceptionStatusCtx,
-    MbusDiagnosticsCtx,
-    MbusCommEventCounterCtx,
-    MbusCommEventLogCtx,
-    MbusReportServerIdCtx,
-    MbusReadDeviceIdCtx,
+    MbusCommEventCounterCtx, MbusCommEventLogCtx, MbusDiagnosticsCtx, MbusReadDeviceIdCtx,
+    MbusReadExceptionStatusCtx, MbusReportServerIdCtx,
 };
+#[cfg(feature = "file-record")]
+use super::callbacks::{MbusFileRecordResult, MbusReadFileRecordCtx, MbusWriteFileRecordCtx};
+#[cfg(feature = "registers")]
+use super::callbacks::{
+    MbusMaskWriteRegisterCtx, MbusReadHoldingRegistersCtx, MbusReadInputRegistersCtx,
+    MbusReadWriteMultipleRegistersCtx, MbusWriteMultipleRegistersCtx, MbusWriteSingleRegisterCtx,
+};
+#[cfg(feature = "coils")]
+use super::callbacks::{MbusReadCoilsCtx, MbusWriteMultipleCoilsCtx, MbusWriteSingleCoilCtx};
 use super::error::MbusStatusCode;
 #[cfg(feature = "coils")]
 use super::models::coils::MbusCoils;
-#[cfg(feature = "registers")]
-use super::models::registers::MbusRegisters;
 #[cfg(feature = "discrete-inputs")]
 use super::models::discrete_inputs::MbusDiscreteInputs;
 #[cfg(feature = "fifo")]
 use super::models::fifo::MbusFifoQueue;
+#[cfg(feature = "registers")]
+use super::models::registers::MbusRegisters;
 
 // ── CApp ──────────────────────────────────────────────────────────────────────
 
@@ -363,11 +344,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
-    fn mask_write_register_response(
-        &mut self,
-        txn_id: u16,
-        unit_id_slave_addr: UnitIdOrSlaveAddr,
-    ) {
+    fn mask_write_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr) {
         if let Some(cb) = self.callbacks.on_mask_write_register {
             let ctx = MbusMaskWriteRegisterCtx {
                 txn_id,
@@ -413,7 +390,8 @@ impl mbus_client::app::DiscreteInputResponse for CApp {
         value: bool,
     ) {
         if let Some(cb) = self.callbacks.on_read_discrete_inputs {
-            let discrete_inputs = mbus_client::services::discrete_input::DiscreteInputs::new(address, 1).unwrap();
+            let discrete_inputs =
+                mbus_client::services::discrete_input::DiscreteInputs::new(address, 1).unwrap();
             let byte_val: u8 = if value { 1 } else { 0 };
             let discrete_inputs = discrete_inputs.with_values(&[byte_val], 1).unwrap();
             let opaque_discrete_inputs = MbusDiscreteInputs::new(discrete_inputs);
@@ -498,11 +476,7 @@ impl mbus_client::app::FileRecordResponse for CApp {
         }
     }
 
-    fn write_file_record_response(
-        &mut self,
-        txn_id: u16,
-        unit_id_slave_addr: UnitIdOrSlaveAddr,
-    ) {
+    fn write_file_record_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr) {
         if let Some(cb) = self.callbacks.on_write_file_record {
             let ctx = MbusWriteFileRecordCtx {
                 txn_id,

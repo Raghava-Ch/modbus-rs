@@ -49,6 +49,7 @@ Top-level features:
 - `serial-rtu`: enables `mbus-serial` for RTU transport use cases
 - `serial-ascii`: enables `mbus-serial` for ASCII transport use cases
 - `tcp`: enables `mbus-network`
+- `async`: enables `mbus-async` async facade re-export (`modbus_rs::mbus_async`)
 - `coils`
 - `registers`
 - `discrete-inputs`
@@ -61,6 +62,7 @@ Top-level features:
 Default behavior:
 
 - `default` enables `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features.
+- `async` is opt-in and must be enabled explicitly when using `.await` APIs.
 
 Example: only enable client + TCP + coil support:
 
@@ -74,6 +76,35 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 ```
 
 For more feature combinations, see [documentation/feature_flags.md](../documentation/feature_flags.md).
+
+### Async Setup
+
+Enable async APIs with the `async` feature and add Tokio:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", default-features = false, features = [
+	"async",
+	"tcp",
+	"coils"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+Use async clients from `modbus_rs::mbus_async` and connect explicitly before requests:
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+		let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+		client.connect().await?;
+
+		let _coils = client.read_multiple_coils(1, 0, 8).await?;
+		Ok(())
+}
+```
 
 ### Logging Setup
 
@@ -128,6 +159,20 @@ Then import WASM API types from `modbus_rs`:
 #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 use modbus_rs::{WasmModbusClient, WasmSerialModbusClient, request_serial_port};
 ```
+
+## Bindings
+
+Bindings are implemented in the `mbus-ffi` crate and distributed separately from the top-level `modbus-rs` Rust API.
+
+- WASM/browser bindings:
+	- crate docs and usage: [../mbus-ffi/README.md](../mbus-ffi/README.md)
+	- browser smoke pages: `mbus-ffi/examples/network_smoke.html` and `mbus-ffi/examples/serial_smoke.html`
+- Native C bindings:
+	- C header: `mbus-ffi/include/mbus_ffi.h`
+	- C smoke example: `mbus-ffi/examples/c_smoke_cmake/`
+	- C test instructions: [../mbus-ffi/README.md](../mbus-ffi/README.md)
+
+If you are building browser or native C integrations, start from `mbus-ffi` directly.
 
 For browser smoke pages in this workspace, build and serve the `mbus-ffi` package path (implementation package used by the HTML examples):
 
@@ -188,6 +233,7 @@ fn main() -> Result<(), MbusError> {
 	let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);
 
 	let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
+	client.connect()?;
 
 	#[cfg(feature = "coils")]
 	client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;

@@ -7,7 +7,9 @@ use super::app::CApp;
 use super::callbacks::MbusCallbacks;
 use super::config::{MbusSerialConfig, serial_config_from_c};
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, MBUS_INVALID_CLIENT_ID, pool_allocate_serial, pool_free, pool_get_serial};
+use super::pool::{
+    MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial, pool_free, with_serial_client,
+};
 use super::transport::{CTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -79,32 +81,30 @@ pub extern "C" fn mbus_serial_client_free(id: MbusClientId) {
 /// Open the serial port with the configured parameters.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_connect(id: MbusClientId) -> MbusStatusCode {
-    let inner = match pool_get_serial(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    match inner.reconnect() {
+    with_serial_client(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
-    }
+    })
+    .unwrap_or_else(|e| e)
 }
 
-/// Close the serial port (currently unsupported).
+/// Close the serial port.
+///
+/// Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
+/// The client ID remains valid; call [`mbus_serial_connect`] to reopen the port.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_disconnect(id: MbusClientId) -> MbusStatusCode {
-    match pool_get_serial(id) {
-        Ok(_) => MbusStatusCode::MbusErrUnsupportedFunction,
-        Err(e) => e,
-    }
+    with_serial_client(id, |inner| {
+        inner.disconnect();
+        MbusStatusCode::MbusOk
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Returns `1` if the serial port is currently open, `0` otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_is_connected(id: MbusClientId) -> u8 {
-    match pool_get_serial(id) {
-        Ok(inner) => if inner.is_connected() { 1 } else { 0 },
-        Err(_) => 0,
-    }
+    with_serial_client(id, |inner| if inner.is_connected() { 1 } else { 0 }).unwrap_or(0)
 }
 
 // ── Poll ──────────────────────────────────────────────────────────────────────
@@ -115,20 +115,15 @@ pub extern "C" fn mbus_serial_is_connected(id: MbusClientId) -> u8 {
 /// invoked synchronously from within this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_poll(id: MbusClientId) {
-    if let Ok(inner) = pool_get_serial(id) {
-        inner.poll();
-    }
+    let _ = with_serial_client(id, |inner| inner.poll());
 }
 
 /// Disconnect then reconnect the serial port.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_reconnect(id: MbusClientId) -> MbusStatusCode {
-    let inner = match pool_get_serial(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    match inner.reconnect() {
+    with_serial_client(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
-    }
+    })
+    .unwrap_or_else(|e| e)
 }

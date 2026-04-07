@@ -3,7 +3,7 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, pool_get_tcp, pool_get_serial};
+use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
 
 macro_rules! tcp_fn {
     ($name:ident, $method:ident $(, $arg:ident : $ty:ty)*) => {
@@ -14,18 +14,16 @@ macro_rules! tcp_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            let inner = match pool_get_tcp(id) {
-                Ok(c) => c,
-                Err(e) => return e,
-            };
-            let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-                Ok(u) => u,
-                Err(e) => return MbusStatusCode::from(e),
-            };
-            match inner.$method(txn_id, uid $(, $arg)*) {
-                Ok(()) => MbusStatusCode::MbusOk,
-                Err(e) => MbusStatusCode::from(e),
-            }
+            with_tcp_client(id, |inner| {
+                let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+                    Ok(u) => u,
+                    Err(e) => return MbusStatusCode::from(e),
+                };
+                match inner.$method(txn_id, uid $(, $arg)*) {
+                    Ok(()) => MbusStatusCode::MbusOk,
+                    Err(e) => MbusStatusCode::from(e),
+                }
+            }).unwrap_or_else(|e| e)
         }
     };
 }
@@ -39,18 +37,16 @@ macro_rules! serial_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            let inner = match pool_get_serial(id) {
-                Ok(c) => c,
-                Err(e) => return e,
-            };
-            let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-                Ok(u) => u,
-                Err(e) => return MbusStatusCode::from(e),
-            };
-            match inner.$method(txn_id, uid $(, $arg)*) {
-                Ok(()) => MbusStatusCode::MbusOk,
-                Err(e) => MbusStatusCode::from(e),
-            }
+            with_serial_client(id, |inner| {
+                let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+                    Ok(u) => u,
+                    Err(e) => return MbusStatusCode::from(e),
+                };
+                match inner.$method(txn_id, uid $(, $arg)*) {
+                    Ok(()) => MbusStatusCode::MbusOk,
+                    Err(e) => MbusStatusCode::from(e),
+                }
+            }).unwrap_or_else(|e| e)
         }
     };
 }
@@ -107,19 +103,18 @@ pub unsafe extern "C" fn mbus_tcp_write_multiple_registers(
     if values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    let inner = match pool_get_tcp(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-        Ok(u) => u,
-        Err(e) => return MbusStatusCode::from(e),
-    };
-    let slice = unsafe { core::slice::from_raw_parts(values, quantity as usize) };
-    match inner.write_multiple_registers(txn_id, uid, address, quantity, slice) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_tcp_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        let slice = unsafe { core::slice::from_raw_parts(values, quantity as usize) };
+        match inner.write_multiple_registers(txn_id, uid, address, quantity, slice) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Write Multiple Registers (FC 0x10) request on a serial client.
@@ -139,19 +134,18 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_registers(
     if values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    let inner = match pool_get_serial(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-        Ok(u) => u,
-        Err(e) => return MbusStatusCode::from(e),
-    };
-    let slice = unsafe { core::slice::from_raw_parts(values, quantity as usize) };
-    match inner.write_multiple_registers(txn_id, uid, address, quantity, slice) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_serial_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        let slice = unsafe { core::slice::from_raw_parts(values, quantity as usize) };
+        match inner.write_multiple_registers(txn_id, uid, address, quantity, slice) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }
 
 // ── Mask write register (FC 0x16) ─────────────────────────────────────────────
@@ -184,21 +178,25 @@ pub unsafe extern "C" fn mbus_tcp_read_write_multiple_registers(
     if write_values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    let inner = match pool_get_tcp(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-        Ok(u) => u,
-        Err(e) => return MbusStatusCode::from(e),
-    };
-    let write_slice = unsafe { core::slice::from_raw_parts(write_values, write_qty as usize) };
-    match inner.read_write_multiple_registers(
-        txn_id, uid, read_address, read_qty, write_address, write_slice,
-    ) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_tcp_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        let write_slice = unsafe { core::slice::from_raw_parts(write_values, write_qty as usize) };
+        match inner.read_write_multiple_registers(
+            txn_id,
+            uid,
+            read_address,
+            read_qty,
+            write_address,
+            write_slice,
+        ) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
@@ -220,19 +218,23 @@ pub unsafe extern "C" fn mbus_serial_read_write_multiple_registers(
     if write_values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    let inner = match pool_get_serial(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) {
-        Ok(u) => u,
-        Err(e) => return MbusStatusCode::from(e),
-    };
-    let write_slice = unsafe { core::slice::from_raw_parts(write_values, write_qty as usize) };
-    match inner.read_write_multiple_registers(
-        txn_id, uid, read_address, read_qty, write_address, write_slice,
-    ) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_serial_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        let write_slice = unsafe { core::slice::from_raw_parts(write_values, write_qty as usize) };
+        match inner.read_write_multiple_registers(
+            txn_id,
+            uid,
+            read_address,
+            read_qty,
+            write_address,
+            write_slice,
+        ) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }

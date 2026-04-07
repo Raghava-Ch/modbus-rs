@@ -92,6 +92,7 @@ fn main() -> Result<()> {
 
     let mut client =
         ClientServices::<_, _, 1>::new(transport, app, ModbusConfig::Serial(serial_config))?;
+    client.connect()?;
 
     let unit = UnitIdOrSlaveAddr::new(unit_id)?;
     client.coils().read_multiple_coils(1, unit, 0, 8)?;

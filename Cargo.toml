@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "xtask",
     "mbus-core",
     "mbus-serial",
     "mbus-network",

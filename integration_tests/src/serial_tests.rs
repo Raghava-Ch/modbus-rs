@@ -95,6 +95,7 @@ fn test_serial_read_coils_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let txn_id = 1;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -165,6 +166,7 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
 
@@ -214,6 +216,7 @@ fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
     let values = [0x1234, 0x5678];
@@ -265,6 +268,7 @@ fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
 
@@ -301,6 +305,7 @@ fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
 
@@ -340,6 +345,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
 
@@ -393,6 +399,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     client.read_device_identification(
         3,
@@ -462,6 +469,7 @@ fn test_serial_read_coils_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let txn_id = 4;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -531,6 +539,7 @@ fn test_serial_write_single_coil_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     client.write_single_coil(20, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, true)?;
 
@@ -581,6 +590,7 @@ fn test_serial_read_holding_registers_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     client.read_holding_registers(21, UnitIdOrSlaveAddr::try_from(1).unwrap(), 1, 2)?;
 
@@ -627,6 +637,7 @@ fn test_serial_read_device_id_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     client.read_device_identification(
         22,
@@ -685,6 +696,7 @@ fn test_serial_broadcast_write_single_coil_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
     client.write_single_coil(23, unit_id, 10, true)?;
@@ -724,6 +736,7 @@ fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
     let config = ModbusConfig::Serial(serial_config);
 
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
     let res = client.read_multiple_coils(24, unit_id, 10, 3);
@@ -758,6 +771,7 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     };
     let config = ModbusConfig::Serial(serial_config);
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     // 1. Send Request 1 (Read Coils)
     client.read_multiple_coils(1, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, 3)?;
@@ -825,6 +839,7 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     };
     let config = ModbusConfig::Serial(serial_config);
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
+    client.connect()?;
 
     let frame1 = b":01010105F8\r\n";
     let frame2 = b":0105000AFF00F1\r\n";

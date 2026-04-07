@@ -71,6 +71,7 @@ If `retry_random_fn` is `None`, jitter strategies gracefully fall back to non-ji
 
 `ClientServices` now exposes explicit connection management helpers:
 
+- `client.connect()` to open the transport after construction.
 - `client.is_connected()` to query transport connection state.
 - `client.reconnect()` to re-establish transport using the current config.
 
@@ -212,6 +213,7 @@ fn main() -> Result<(), MbusError> {
     let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);
 
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
+  client.connect()?;
 
     #[cfg(feature = "coils")]
     client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;

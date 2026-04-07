@@ -33,8 +33,8 @@ Each call gets a unique transaction id. Multiple concurrent calls can be in flig
 simultaneously.
 
 TCP uses a compile-time pipeline depth const generic on `AsyncTcpClient<const N: usize = 9>`.
-The default is `9` via `AsyncTcpClient::connect(...)`, and you can override it at compile time via
-`AsyncTcpClient::<N>::connect_with_pipeline(...)`.
+The default is `9` via `AsyncTcpClient::new(...)`, and you can override it at compile time via
+`AsyncTcpClient::<N>::new_with_pipeline(...)`.
 
 Serial remains request/reply oriented and defaults to `1` in-flight request.
 
@@ -67,7 +67,8 @@ use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client = AsyncTcpClient::connect("192.168.1.10", 502)?;
+    let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+    client.connect().await?;
 
     // Read 10 holding registers starting at address 0
     let regs = client.read_holding_registers(1, 0, 10).await?;
@@ -116,7 +117,8 @@ async fn main() -> anyhow::Result<()> {
         retry_random_fn: None,
     };
 
-    let client = AsyncSerialClient::connect_rtu(config)?;
+    let client = AsyncSerialClient::new_rtu(config)?;
+    client.connect().await?;
 
     let coils = client.read_multiple_coils(1, 0, 8).await?;
     for addr in coils.from_address()..coils.from_address() + coils.quantity() {
@@ -130,6 +132,9 @@ async fn main() -> anyhow::Result<()> {
 ## Available Methods
 
 ### `AsyncTcpClient` and `AsyncSerialClient`
+
+Constructors are side-effect free. Build the client first, then call
+`client.connect().await?` before issuing Modbus requests.
 
 Both clients expose an identical async API:
 
@@ -160,10 +165,10 @@ Both clients expose an identical async API:
 
 | Constructor | Mode |
 |---|---|
-| `AsyncSerialClient::connect_rtu(config)` | RTU |
-| `AsyncSerialClient::connect_rtu_with_poll_interval(config, interval)` | RTU |
-| `AsyncSerialClient::connect_ascii(config)` | ASCII |
-| `AsyncSerialClient::connect_ascii_with_poll_interval(config, interval)` | ASCII |
+| `AsyncSerialClient::new_rtu(config)` | RTU |
+| `AsyncSerialClient::new_rtu_with_poll_interval(config, interval)` | RTU |
+| `AsyncSerialClient::new_ascii(config)` | ASCII |
+| `AsyncSerialClient::new_ascii_with_poll_interval(config, interval)` | ASCII |
 
 Each constructor validates that `ModbusSerialConfig::mode` matches the constructor's expected mode, returning `AsyncError::Mbus(MbusError::InvalidConfiguration)` on mismatch.
 
@@ -196,7 +201,8 @@ Example with custom TCP pipeline depth:
 ```rust
 use modbus_rs::mbus_async::AsyncTcpClient;
 
-let client = AsyncTcpClient::<16>::connect_with_pipeline("127.0.0.1", 502)?;
+let client = AsyncTcpClient::<16>::new_with_pipeline("127.0.0.1", 502)?;
+client.connect().await?;
 ```
 
 ## License

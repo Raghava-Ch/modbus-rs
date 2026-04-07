@@ -10,6 +10,7 @@ Key properties:
 
 - `no_std` compatible — uses `heapless` for fixed-capacity collections
 - Poll-driven — no threads, no async runtime required
+- Optional async facade — `mbus-async` provides Tokio-based `.await` APIs
 - Modular — pick only the transport and function-code features you need
 - Configurable retry policy — exponential/linear/fixed backoff with optional app-provided jitter
 - Supports Modbus TCP, Serial RTU, and Serial ASCII
@@ -22,11 +23,14 @@ The workspace is split into focused crates:
 |---|---|
 | [`mbus-core`](mbus-core/) | Shared protocol types, transport trait, config, errors, data models |
 | [`mbus-client`](mbus-client/) | Client state machine, request/response orchestration, all function-code services |
+| [`mbus-async`](mbus-async/) | Tokio async facade over `mbus-client` (`AsyncTcpClient`, `AsyncSerialClient`) |
 | [`mbus-network`](mbus-network/) | Concrete TCP transport (`StdTcpTransport`) using `std::net::TcpStream` |
 | [`mbus-serial`](mbus-serial/) | Concrete serial transport (`StdSerialTransport`) using the `serialport` crate |
-| [`mbus-ffi`](mbus-ffi/) | WASM/JS bindings for browser-based Modbus over WebSocket and Web Serial |
+| [`mbus-ffi`](mbus-ffi/) | Native C bindings and WASM/browser bindings |
+| [`mbus-server`](mbus-server/) | Server-side workspace crate (currently minimal scaffolding) |
 | [`modbus-rs`](modbus-rs/) | Top-level convenience crate — re-exports everything behind feature flags |
 | [`integration_tests`](integration_tests/) | Integration test suite across all transports |
+| [`xtask`](xtask/) | Workspace automation tasks (header checks, C smoke build/test) |
 
 For most applications, depend only on `modbus-rs`. Use the individual crates when you need lower-level control or a lighter dependency footprint.
 
@@ -52,6 +56,14 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 
 See [documentation/quick_start.md](documentation/quick_start.md) for a complete walkthrough.
 
+## Project Docs
+
+- [documentation/quick_start.md](documentation/quick_start.md) — usage and setup walkthrough
+- [documentation/feature_flags.md](documentation/feature_flags.md) — feature combinations and build examples
+- [CHANGELOG.md](CHANGELOG.md) — release-visible changes
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and validation steps
+- [RELEASE.md](RELEASE.md) — release checklist
+
 ## Feature Flags
 
 Feature flags are defined on the top-level `modbus-rs` crate and propagate into the workspace:
@@ -62,6 +74,7 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 | `tcp` | `mbus-network` — standard Modbus TCP transport |
 | `serial-rtu` | `mbus-serial` for RTU framing |
 | `serial-ascii` | `mbus-serial` for ASCII framing |
+| `async` | `mbus-async` — Tokio async client facade |
 | `coils` | Read/write coil services |
 | `registers` | Read/write holding and input register services |
 | `discrete-inputs` | Read discrete input services |
@@ -72,10 +85,64 @@ Feature flags are defined on the top-level `modbus-rs` crate and propagate into 
 
 Default: all flags are enabled.
 
+`async` is optional and should be enabled explicitly when using `.await` APIs.
+
 Note: WASM/browser APIs are provided by `mbus-ffi` directly. `modbus-rs` does not expose a
 top-level `wasm` feature and does not re-export WASM types.
 
 See [documentation/feature_flags.md](documentation/feature_flags.md) for valid combinations and build examples.
+
+## Async Usage
+
+Async clients are exposed by `mbus-async` and re-exported via `modbus_rs::mbus_async` when the
+`async` feature is enabled.
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", default-features = false, features = [
+    "async",
+    "tcp",
+    "coils"
+] }
+tokio = { version = "1", features = ["full"] }
+```
+
+```rust,no_run
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+        let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+        client.connect().await?;
+        let _coils = client.read_multiple_coils(1, 0, 8).await?;
+        Ok(())
+}
+```
+
+For serial async clients, use `AsyncSerialClient::new_rtu(...)` or `AsyncSerialClient::new_ascii(...)`,
+then call `client.connect().await?` before sending requests.
+
+## Bindings (WASM and C)
+
+Bindings are provided by [`mbus-ffi`](mbus-ffi/) and are intended for browser and native integration use cases.
+
+WASM/browser bindings:
+
+- Docs and usage: [mbus-ffi/README.md](mbus-ffi/README.md)
+- Browser smoke pages:
+    - `mbus-ffi/examples/network_smoke.html`
+    - `mbus-ffi/examples/serial_smoke.html`
+- Package output path: `mbus-ffi/pkg/`
+- WASM-facing source modules: `mbus-ffi/src/wasm/`
+
+Native C bindings:
+
+- C header: `mbus-ffi/include/mbus_ffi.h`
+- C API source: `mbus-ffi/src/c/`
+- Native C smoke project: `mbus-ffi/examples/c_smoke_cmake/`
+- Standalone C binding-layer tests: `mbus-ffi/tests/c_api/test_binding_layer.c`
+
+If your target is browser JavaScript or native C/C++, start from `mbus-ffi` docs first.
 
 ## Basic Usage
 
@@ -127,6 +194,7 @@ impl TimeKeeper for App {
 fn main() -> Result<(), MbusError> {
     let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.1.10", 502)?);
     let mut client = ClientServices::<_, _, 4>::new(MyTransport, App, config)?;
+    client.connect()?;
 
     #[cfg(feature = "registers")]
     client
@@ -283,7 +351,7 @@ The client follows the Modbus TCP Client Activity Diagram from the Modbus TCP/IP
 ```
 ┌──────────────┐      ┌─────────────────────┐       ┌──────────────────┐
 │  Your App    │─────▶│  ClientServices     │──────▶│  Transport trait │
-│              │      │  (mbus-client)      │       │  (mbus-network /     │
+│              │      │  (mbus-client)      │       │  (mbus-network / │
 │  poll() loop │◀─────│  request queue,     │       │   mbus-serial)   │
 │  callbacks   │      │  retry scheduler,   │       └──────────────────┘
 │  TimeKeeper  │      │  timeout tracking   │
@@ -325,6 +393,15 @@ cargo test -p integration_tests
 
 # Check a specific example
 cargo check -p modbus-rs --example tcp_backoff_jitter_example
+
+# Compile all modbus-rs examples
+cargo check -p modbus-rs --examples --all-features
+
+# FFI native C smoke test
+cargo run -p xtask -- build-c-smoke
+
+# FFI Rust-side tests
+cargo test -p mbus-ffi
 ```
 
 ## Documentation

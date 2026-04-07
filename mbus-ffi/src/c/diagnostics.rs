@@ -5,7 +5,7 @@ use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, pool_get_tcp, pool_get_serial};
+use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
 
 macro_rules! tcp_diag_fn {
     ($name:ident, $method:ident $(, $arg:ident : $ty:ty)*) => {
@@ -16,12 +16,13 @@ macro_rules! tcp_diag_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-            let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
-            match inner.$method(txn_id, uid $(, $arg)*) {
-                Ok(()) => MbusStatusCode::MbusOk,
-                Err(e) => MbusStatusCode::from(e),
-            }
+            with_tcp_client(id, |inner| {
+                let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
+                match inner.$method(txn_id, uid $(, $arg)*) {
+                    Ok(()) => MbusStatusCode::MbusOk,
+                    Err(e) => MbusStatusCode::from(e),
+                }
+            }).unwrap_or_else(|e| e)
         }
     };
 }
@@ -35,12 +36,13 @@ macro_rules! serial_diag_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-            let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
-            match inner.$method(txn_id, uid $(, $arg)*) {
-                Ok(()) => MbusStatusCode::MbusOk,
-                Err(e) => MbusStatusCode::from(e),
-            }
+            with_serial_client(id, |inner| {
+                let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
+                match inner.$method(txn_id, uid $(, $arg)*) {
+                    Ok(()) => MbusStatusCode::MbusOk,
+                    Err(e) => MbusStatusCode::from(e),
+                }
+            }).unwrap_or_else(|e| e)
         }
     };
 }
@@ -89,8 +91,10 @@ pub unsafe extern "C" fn mbus_tcp_diagnostics(
     data: *const u16,
     data_len: u16,
 ) -> MbusStatusCode {
-    let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-    diagnostics_impl(inner, txn_id, unit_id, sub_fn, data, data_len)
+    with_tcp_client(id, |inner| {
+        diagnostics_impl(inner, txn_id, unit_id, sub_fn, data, data_len)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Diagnostics (FC 0x08) request on a serial client.
@@ -107,8 +111,10 @@ pub unsafe extern "C" fn mbus_serial_diagnostics(
     data: *const u16,
     data_len: u16,
 ) -> MbusStatusCode {
-    let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-    diagnostics_impl(inner, txn_id, unit_id, sub_fn, data, data_len)
+    with_serial_client(id, |inner| {
+        diagnostics_impl(inner, txn_id, unit_id, sub_fn, data, data_len)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -158,8 +164,10 @@ pub extern "C" fn mbus_tcp_read_device_identification(
     dev_id_code: u8,
     object_id: u8,
 ) -> MbusStatusCode {
-    let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-    read_device_id_impl(inner, txn_id, unit_id, dev_id_code, object_id)
+    with_tcp_client(id, |inner| {
+        read_device_id_impl(inner, txn_id, unit_id, dev_id_code, object_id)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Read Device Identification request on a serial client.
@@ -172,8 +180,10 @@ pub extern "C" fn mbus_serial_read_device_identification(
     dev_id_code: u8,
     object_id: u8,
 ) -> MbusStatusCode {
-    let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-    read_device_id_impl(inner, txn_id, unit_id, dev_id_code, object_id)
+    with_serial_client(id, |inner| {
+        read_device_id_impl(inner, txn_id, unit_id, dev_id_code, object_id)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 #[cfg(feature = "diagnostics")]

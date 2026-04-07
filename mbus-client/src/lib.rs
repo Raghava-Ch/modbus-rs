@@ -74,6 +74,7 @@
 //!
 //! // 3. Create the service (N=5 allows 5 concurrent requests)
 //! let mut client = ClientServices::<_, _, 5>::new(transport, MyDevice, config)?;
+//! client.connect()?;
 //!
 //! // 4. Send a request (only available if the "coils" feature is enabled)
 //! #[cfg(feature = "coils")]

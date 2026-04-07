@@ -14,42 +14,6 @@ typedef struct MbusRegisters MbusRegisters;
 
 
 /**
- * Backoff strategy selector for retry logic.
- */
-typedef enum MbusBackoffStrategy {
-    /**
-     * Retry immediately with no delay.
-     */
-    MbusBackoffImmediate = 0,
-    /**
-     * Retry after a fixed delay (`backoff_base_delay_ms`).
-     */
-    MbusBackoffFixed,
-    /**
-     * Retry with exponentially increasing delay, capped at `backoff_max_delay_ms`.
-     */
-    MbusBackoffExponential,
-    /**
-     * Retry with linearly increasing delay, capped at `backoff_max_delay_ms`.
-     */
-    MbusBackoffLinear,
-} MbusBackoffStrategy;
-
-/**
- * Serial framing mode.
- */
-typedef enum MbusSerialMode {
-    /**
-     * Modbus RTU binary framing with CRC-16.
-     */
-    MbusSerialRtu = 0,
-    /**
-     * Modbus ASCII framing with LRC.
-     */
-    MbusSerialAscii,
-} MbusSerialMode;
-
-/**
  * C-compatible status code returned by every `mbus_*` function.
  *
  * `MBUS_OK` (0) means the request was successfully queued. Actual response data
@@ -240,41 +204,78 @@ typedef enum MbusStatusCode {
      * Client type mismatch (e.g. TCP call on serial ID).
      */
     MbusErrClientTypeMismatch,
+    /**
+     * Client is busy (indicates an illegal re-entrant call from a callback).
+     */
+    MbusErrBusy,
 } MbusStatusCode;
 
 /**
- * Client ID type: index into the static pool.
- *
- * `MBUS_INVALID_CLIENT_ID` (0xFF) indicates failure.
+ * Serial framing mode.
+ */
+typedef enum MbusSerialMode {
+    /**
+     * Modbus RTU binary framing with CRC-16.
+     */
+    MbusSerialRtu = 0,
+    /**
+     * Modbus ASCII framing with LRC.
+     */
+    MbusSerialAscii,
+} MbusSerialMode;
+
+/**
+ * Backoff strategy selector for retry logic.
+ */
+typedef enum MbusBackoffStrategy {
+    /**
+     * Retry immediately with no delay.
+     */
+    MbusBackoffImmediate = 0,
+    /**
+     * Retry after a fixed delay (`backoff_base_delay_ms`).
+     */
+    MbusBackoffFixed,
+    /**
+     * Retry with exponentially increasing delay, capped at `backoff_max_delay_ms`.
+     */
+    MbusBackoffExponential,
+    /**
+     * Retry with linearly increasing delay, capped at `backoff_max_delay_ms`.
+     */
+    MbusBackoffLinear,
+} MbusBackoffStrategy;
+
+/**
+ * Client ID type: an opaque `u8` index into one of the two sub-pools.
+ * Use `MBUS_INVALID_CLIENT_ID` (0xFF) as the sentinel "no client" value.
  */
 typedef uint8_t MbusClientId;
 
 /**
- * Configuration for a Modbus TCP client.
+ * Configuration for a Modbus Serial (RTU or ASCII) client.
  *
- * All pointer fields (`host`) must remain valid for the duration of the
- * `mbus_tcp_client_new` call. They are copied internally and do not need to
- * outlive the call.
+ * `port_name` must remain valid for the duration of `mbus_serial_client_new`.
  */
-typedef struct MbusTcpConfig {
+typedef struct MbusSerialConfig {
     /**
-     * Null-terminated hostname or IPv4/IPv6 address string (max 63 bytes excl. NUL).
+     * Null-terminated serial port path (e.g. `"/dev/ttyUSB0"` or `"COM3"`).
      */
-    const char *host;
+    const char *port_name;
     /**
-     * TCP port (default Modbus port is 502).
+     * Baud rate (e.g. 9600, 19200, 115200).
      */
-    uint16_t port;
+    uint32_t baud_rate;
     /**
-     * Timeout waiting for the TCP connection to be established, in milliseconds.
+     * Framing mode: RTU or ASCII.
      */
-    uint32_t connection_timeout_ms;
+    enum MbusSerialMode mode;
     /**
      * Timeout waiting for a Modbus response, in milliseconds.
      */
     uint32_t response_timeout_ms;
     /**
-     * Number of retry attempts before reporting failure via the error callback.
+     * Number of retry attempts.
      */
     uint8_t retries;
     /**
@@ -282,19 +283,18 @@ typedef struct MbusTcpConfig {
      */
     enum MbusBackoffStrategy backoff_strategy;
     /**
-     * Base delay (ms) used by `MbusBackoffFixed`, `MbusBackoffExponential`, and
-     * `MbusBackoffLinear`.
+     * Base delay (ms).
      */
     uint32_t backoff_base_delay_ms;
     /**
-     * Maximum delay cap (ms) used by `MbusBackoffExponential` and `MbusBackoffLinear`.
+     * Maximum delay cap (ms).
      */
     uint32_t backoff_max_delay_ms;
     /**
-     * Jitter percentage (0 = no jitter, 1–100 = ±N% random spread on top of backoff).
+     * Jitter percentage (0–100).
      */
     uint8_t jitter_percent;
-} MbusTcpConfig;
+} MbusSerialConfig;
 
 /**
  * C-provided transport callbacks.
@@ -965,29 +965,31 @@ typedef struct MbusCallbacks {
 } MbusCallbacks;
 
 /**
- * Configuration for a Modbus Serial (RTU or ASCII) client.
+ * Configuration for a Modbus TCP client.
  *
- * `port_name` must remain valid for the duration of `mbus_serial_client_new`.
+ * All pointer fields (`host`) must remain valid for the duration of the
+ * `mbus_tcp_client_new` call. They are copied internally and do not need to
+ * outlive the call.
  */
-typedef struct MbusSerialConfig {
+typedef struct MbusTcpConfig {
     /**
-     * Null-terminated serial port path (e.g. `"/dev/ttyUSB0"` or `"COM3"`).
+     * Null-terminated hostname or IPv4/IPv6 address string (max 63 bytes excl. NUL).
      */
-    const char *port_name;
+    const char *host;
     /**
-     * Baud rate (e.g. 9600, 19200, 115200).
+     * TCP port (default Modbus port is 502).
      */
-    uint32_t baud_rate;
+    uint16_t port;
     /**
-     * Framing mode: RTU or ASCII.
+     * Timeout waiting for the TCP connection to be established, in milliseconds.
      */
-    enum MbusSerialMode mode;
+    uint32_t connection_timeout_ms;
     /**
      * Timeout waiting for a Modbus response, in milliseconds.
      */
     uint32_t response_timeout_ms;
     /**
-     * Number of retry attempts.
+     * Number of retry attempts before reporting failure via the error callback.
      */
     uint8_t retries;
     /**
@@ -995,18 +997,19 @@ typedef struct MbusSerialConfig {
      */
     enum MbusBackoffStrategy backoff_strategy;
     /**
-     * Base delay (ms).
+     * Base delay (ms) used by `MbusBackoffFixed`, `MbusBackoffExponential`, and
+     * `MbusBackoffLinear`.
      */
     uint32_t backoff_base_delay_ms;
     /**
-     * Maximum delay cap (ms).
+     * Maximum delay cap (ms) used by `MbusBackoffExponential` and `MbusBackoffLinear`.
      */
     uint32_t backoff_max_delay_ms;
     /**
-     * Jitter percentage (0–100).
+     * Jitter percentage (0 = no jitter, 1–100 = ±N% random spread on top of backoff).
      */
     uint8_t jitter_percent;
-} MbusSerialConfig;
+} MbusTcpConfig;
 
 /**
  * A single sub-request passed to [`mbus_tcp_read_file_record`] /
@@ -1071,6 +1074,17 @@ uint16_t mbus_coils_quantity(const MbusCoils *coils);
 enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, bool *out_value);
 
 /**
+ * Reads a single coil value by 0-based index into `out_value`.
+ *
+ * `index` must be less than [`mbus_coils_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_coils_value`], no knowledge of
+ * the Modbus starting address is required.
+ */
+enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
+                                              uint16_t index,
+                                              bool *out_value);
+
+/**
  * Returns a raw pointer to the packed coil bit-values. Valid during callback only.
  */
 const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
@@ -1091,6 +1105,17 @@ uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs
 enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discrete_inputs,
                                                uint16_t address,
                                                bool *out_value);
+
+/**
+ * Reads a single discrete input value by 0-based index into `out_value`.
+ *
+ * `index` must be less than [`mbus_discrete_inputs_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_discrete_inputs_value`], no knowledge
+ * of the Modbus starting address is required.
+ */
+enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs *discrete_inputs,
+                                                        uint16_t index,
+                                                        bool *out_value);
 
 /**
  * Returns a raw pointer to the discrete input bit-values. Valid during callback only.
@@ -1137,9 +1162,93 @@ enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
                                          uint16_t *out_value);
 
 /**
+ * Reads a single register value by 0-based index into `out_value`.
+ *
+ * `index` must be less than [`mbus_registers_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
+ * the Modbus starting address is required.
+ */
+enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers,
+                                                  uint16_t index,
+                                                  uint16_t *out_value);
+
+/**
  * Returns a raw pointer to the register values. Valid during callback only.
  */
 const uint16_t *mbus_registers_values_ptr(const MbusRegisters *registers);
+
+/**
+ * Lock the global pool (used only during client creation/destruction).
+ */
+extern void mbus_pool_lock(void);
+
+/**
+ * Unlock the global pool.
+ */
+extern void mbus_pool_unlock(void);
+
+/**
+ * Lock a specific client instance (used continuously during polling and requests).
+ */
+extern void mbus_client_lock(MbusClientId id);
+
+/**
+ * Unlock a specific client instance.
+ */
+extern void mbus_client_unlock(MbusClientId id);
+
+/**
+ * Create a new Modbus Serial client.
+ *
+ * Returns a `MbusClientId` on success, or `MBUS_INVALID_CLIENT_ID` on failure.
+ *
+ * # Safety
+ * `config`, `transport_callbacks`, and `callbacks` must be valid non-null
+ * pointers for the duration of this call. They are not retained after the
+ * call returns.
+ */
+MbusClientId mbus_serial_client_new(const struct MbusSerialConfig *config,
+                                    const struct MbusTransportCallbacks *transport_callbacks,
+                                    const struct MbusCallbacks *callbacks);
+
+/**
+ * Free a Modbus Serial client created by [`mbus_serial_client_new`].
+ *
+ * After this call the ID is invalid and must not be used.
+ * Passing `MBUS_INVALID_CLIENT_ID` is a no-op.
+ */
+void mbus_serial_client_free(MbusClientId id);
+
+/**
+ * Open the serial port with the configured parameters.
+ */
+enum MbusStatusCode mbus_serial_connect(MbusClientId id);
+
+/**
+ * Close the serial port.
+ *
+ * Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
+ * The client ID remains valid; call [`mbus_serial_connect`] to reopen the port.
+ */
+enum MbusStatusCode mbus_serial_disconnect(MbusClientId id);
+
+/**
+ * Returns `1` if the serial port is currently open, `0` otherwise.
+ */
+uint8_t mbus_serial_is_connected(MbusClientId id);
+
+/**
+ * Drive the serial Modbus state machine once.
+ *
+ * Call periodically from your application loop. All registered callbacks are
+ * invoked synchronously from within this call.
+ */
+void mbus_serial_poll(MbusClientId id);
+
+/**
+ * Disconnect then reconnect the serial port.
+ */
+enum MbusStatusCode mbus_serial_reconnect(MbusClientId id);
 
 /**
  * Create a new Modbus TCP client.
@@ -1175,7 +1284,10 @@ void mbus_tcp_client_free(MbusClientId id);
 enum MbusStatusCode mbus_tcp_connect(MbusClientId id);
 
 /**
- * Close the TCP connection (currently unsupported).
+ * Close the TCP connection.
+ *
+ * Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
+ * The client ID remains valid; call [`mbus_tcp_connect`] to reconnect.
  */
 enum MbusStatusCode mbus_tcp_disconnect(MbusClientId id);
 
@@ -1197,56 +1309,6 @@ void mbus_tcp_poll(MbusClientId id);
  * Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.
  */
 enum MbusStatusCode mbus_tcp_reconnect(MbusClientId id);
-
-/**
- * Create a new Modbus Serial client.
- *
- * Returns a `MbusClientId` on success, or `MBUS_INVALID_CLIENT_ID` on failure.
- *
- * # Safety
- * `config`, `transport_callbacks`, and `callbacks` must be valid non-null
- * pointers for the duration of this call. They are not retained after the
- * call returns.
- */
-MbusClientId mbus_serial_client_new(const struct MbusSerialConfig *config,
-                                    const struct MbusTransportCallbacks *transport_callbacks,
-                                    const struct MbusCallbacks *callbacks);
-
-/**
- * Free a Modbus Serial client created by [`mbus_serial_client_new`].
- *
- * After this call the ID is invalid and must not be used.
- * Passing `MBUS_INVALID_CLIENT_ID` is a no-op.
- */
-void mbus_serial_client_free(MbusClientId id);
-
-/**
- * Open the serial port with the configured parameters.
- */
-enum MbusStatusCode mbus_serial_connect(MbusClientId id);
-
-/**
- * Close the serial port (currently unsupported).
- */
-enum MbusStatusCode mbus_serial_disconnect(MbusClientId id);
-
-/**
- * Returns `1` if the serial port is currently open, `0` otherwise.
- */
-uint8_t mbus_serial_is_connected(MbusClientId id);
-
-/**
- * Drive the serial Modbus state machine once.
- *
- * Call periodically from your application loop. All registered callbacks are
- * invoked synchronously from within this call.
- */
-void mbus_serial_poll(MbusClientId id);
-
-/**
- * Disconnect then reconnect the serial port.
- */
-enum MbusStatusCode mbus_serial_reconnect(MbusClientId id);
 
 /**
  * Queue a Read Coils (FC 0x01) request.
@@ -1332,64 +1394,51 @@ enum MbusStatusCode mbus_serial_write_multiple_coils(MbusClientId id,
                                                      uint16_t quantity);
 
 /**
- * Queue a Write Multiple Registers (FC 0x10) request.
- *
- * `values` must point to at least `quantity` `u16` words, valid for this call only.
+ * Queue a Diagnostics (FC 0x08) request.
  *
  * # Safety
- * `values` must be a valid non-null pointer.
+ * If `data_len > 0`, `data` must be valid for that many `u16` words.
  */
-enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
-                                                      uint16_t txn_id,
-                                                      uint8_t unit_id,
-                                                      uint16_t address,
-                                                      const uint16_t *values,
-                                                      uint16_t quantity);
+enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
+                                         uint16_t txn_id,
+                                         uint8_t unit_id,
+                                         uint16_t sub_fn,
+                                         const uint16_t *data,
+                                         uint16_t data_len);
 
 /**
- * Queue a Write Multiple Registers (FC 0x10) request on a serial client.
+ * Queue a Diagnostics (FC 0x08) request on a serial client.
  *
  * # Safety
- * `values` must be a valid non-null pointer.
+ * If `data_len > 0`, `data` must be valid for that many `u16` words.
  */
-enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
-                                                         uint16_t txn_id,
-                                                         uint8_t unit_id,
-                                                         uint16_t address,
-                                                         const uint16_t *values,
-                                                         uint16_t quantity);
+enum MbusStatusCode mbus_serial_diagnostics(MbusClientId id,
+                                            uint16_t txn_id,
+                                            uint8_t unit_id,
+                                            uint16_t sub_fn,
+                                            const uint16_t *data,
+                                            uint16_t data_len);
 
 /**
- * Queue a Read/Write Multiple Registers (FC 0x17) request.
+ * Queue a Read Device Identification (FC 0x2B/0x0E) request.
  *
- * `write_values` must point to at least `write_qty` valid `u16` words.
- *
- * # Safety
- * `write_values` must be a valid non-null pointer.
+ * `dev_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
+ * `object_id`: starting object ID (0x00–0xFF).
  */
-enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
+enum MbusStatusCode mbus_tcp_read_device_identification(MbusClientId id,
+                                                        uint16_t txn_id,
+                                                        uint8_t unit_id,
+                                                        uint8_t dev_id_code,
+                                                        uint8_t object_id);
+
+/**
+ * Queue a Read Device Identification request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_device_identification(MbusClientId id,
                                                            uint16_t txn_id,
                                                            uint8_t unit_id,
-                                                           uint16_t read_address,
-                                                           uint16_t read_qty,
-                                                           uint16_t write_address,
-                                                           const uint16_t *write_values,
-                                                           uint16_t write_qty);
-
-/**
- * Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
- *
- * # Safety
- * `write_values` must be a valid non-null pointer.
- */
-enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
-                                                              uint16_t txn_id,
-                                                              uint8_t unit_id,
-                                                              uint16_t read_address,
-                                                              uint16_t read_qty,
-                                                              uint16_t write_address,
-                                                              const uint16_t *write_values,
-                                                              uint16_t write_qty);
+                                                           uint8_t dev_id_code,
+                                                           uint8_t object_id);
 
 /**
  * Queue a Read Discrete Inputs (FC 0x02) request.
@@ -1496,50 +1545,63 @@ enum MbusStatusCode mbus_serial_write_file_record(MbusClientId id,
                                                   uint16_t count);
 
 /**
- * Queue a Diagnostics (FC 0x08) request.
+ * Queue a Write Multiple Registers (FC 0x10) request.
+ *
+ * `values` must point to at least `quantity` `u16` words, valid for this call only.
  *
  * # Safety
- * If `data_len > 0`, `data` must be valid for that many `u16` words.
+ * `values` must be a valid non-null pointer.
  */
-enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
-                                         uint16_t txn_id,
-                                         uint8_t unit_id,
-                                         uint16_t sub_fn,
-                                         const uint16_t *data,
-                                         uint16_t data_len);
+enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
+                                                      uint16_t txn_id,
+                                                      uint8_t unit_id,
+                                                      uint16_t address,
+                                                      const uint16_t *values,
+                                                      uint16_t quantity);
 
 /**
- * Queue a Diagnostics (FC 0x08) request on a serial client.
+ * Queue a Write Multiple Registers (FC 0x10) request on a serial client.
  *
  * # Safety
- * If `data_len > 0`, `data` must be valid for that many `u16` words.
+ * `values` must be a valid non-null pointer.
  */
-enum MbusStatusCode mbus_serial_diagnostics(MbusClientId id,
-                                            uint16_t txn_id,
-                                            uint8_t unit_id,
-                                            uint16_t sub_fn,
-                                            const uint16_t *data,
-                                            uint16_t data_len);
+enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
+                                                         uint16_t txn_id,
+                                                         uint8_t unit_id,
+                                                         uint16_t address,
+                                                         const uint16_t *values,
+                                                         uint16_t quantity);
 
 /**
- * Queue a Read Device Identification (FC 0x2B/0x0E) request.
+ * Queue a Read/Write Multiple Registers (FC 0x17) request.
  *
- * `dev_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
- * `object_id`: starting object ID (0x00–0xFF).
+ * `write_values` must point to at least `write_qty` valid `u16` words.
+ *
+ * # Safety
+ * `write_values` must be a valid non-null pointer.
  */
-enum MbusStatusCode mbus_tcp_read_device_identification(MbusClientId id,
-                                                        uint16_t txn_id,
-                                                        uint8_t unit_id,
-                                                        uint8_t dev_id_code,
-                                                        uint8_t object_id);
-
-/**
- * Queue a Read Device Identification request on a serial client.
- */
-enum MbusStatusCode mbus_serial_read_device_identification(MbusClientId id,
+enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
                                                            uint16_t txn_id,
                                                            uint8_t unit_id,
-                                                           uint8_t dev_id_code,
-                                                           uint8_t object_id);
+                                                           uint16_t read_address,
+                                                           uint16_t read_qty,
+                                                           uint16_t write_address,
+                                                           const uint16_t *write_values,
+                                                           uint16_t write_qty);
+
+/**
+ * Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
+ *
+ * # Safety
+ * `write_values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
+                                                              uint16_t txn_id,
+                                                              uint8_t unit_id,
+                                                              uint16_t read_address,
+                                                              uint16_t read_qty,
+                                                              uint16_t write_address,
+                                                              const uint16_t *write_values,
+                                                              uint16_t write_qty);
 
 #endif  /* MBUS_FFI_H */

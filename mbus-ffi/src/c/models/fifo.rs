@@ -1,6 +1,6 @@
-use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "fifo")]
 use crate::c::MbusStatusCode;
+use mbus_core::models::fifo_queue::FifoQueue;
 
 // ── Opaque Handle ─────────────────────────────────────────────────────────────
 
@@ -67,7 +67,9 @@ pub unsafe extern "C" fn mbus_fifo_queue_value(
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 /// Returns a raw pointer to the FIFO values. Valid during callback only.
-pub unsafe extern "C" fn mbus_fifo_queue_values_ptr(fifo_queue: *const MbusFifoQueue) -> *const u16 {
+pub unsafe extern "C" fn mbus_fifo_queue_values_ptr(
+    fifo_queue: *const MbusFifoQueue,
+) -> *const u16 {
     if fifo_queue.is_null() {
         return core::ptr::null();
     }

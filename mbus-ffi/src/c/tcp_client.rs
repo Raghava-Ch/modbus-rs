@@ -6,7 +6,9 @@ use super::app::CApp;
 use super::callbacks::MbusCallbacks;
 use super::config::{MbusTcpConfig, tcp_config_from_c};
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, MBUS_INVALID_CLIENT_ID, pool_allocate_tcp, pool_free, pool_get_tcp};
+use super::pool::{
+    MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_tcp, pool_free, with_tcp_client,
+};
 use super::transport::{CTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -78,32 +80,30 @@ pub extern "C" fn mbus_tcp_client_free(id: MbusClientId) {
 /// Returns `MBUS_OK` on success or a specific error code on failure.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_connect(id: MbusClientId) -> MbusStatusCode {
-    let inner = match pool_get_tcp(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    match inner.reconnect() {
+    with_tcp_client(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
-    }
+    })
+    .unwrap_or_else(|e| e)
 }
 
-/// Close the TCP connection (currently unsupported).
+/// Close the TCP connection.
+///
+/// Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
+/// The client ID remains valid; call [`mbus_tcp_connect`] to reconnect.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_disconnect(id: MbusClientId) -> MbusStatusCode {
-    match pool_get_tcp(id) {
-        Ok(_) => MbusStatusCode::MbusErrUnsupportedFunction,
-        Err(e) => e,
-    }
+    with_tcp_client(id, |inner| {
+        inner.disconnect();
+        MbusStatusCode::MbusOk
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Returns `1` if the TCP connection is currently open, `0` otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_is_connected(id: MbusClientId) -> u8 {
-    match pool_get_tcp(id) {
-        Ok(inner) => if inner.is_connected() { 1 } else { 0 },
-        Err(_) => 0,
-    }
+    with_tcp_client(id, |inner| if inner.is_connected() { 1 } else { 0 }).unwrap_or(0)
 }
 
 // ── Poll ──────────────────────────────────────────────────────────────────────
@@ -115,9 +115,7 @@ pub extern "C" fn mbus_tcp_is_connected(id: MbusClientId) -> u8 {
 /// loop. All registered callbacks are invoked synchronously from within this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_poll(id: MbusClientId) {
-    if let Ok(inner) = pool_get_tcp(id) {
-        inner.poll();
-    }
+    let _ = with_tcp_client(id, |inner| inner.poll());
 }
 
 // ── Reconnect helper ──────────────────────────────────────────────────────────
@@ -125,12 +123,9 @@ pub extern "C" fn mbus_tcp_poll(id: MbusClientId) {
 /// Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_reconnect(id: MbusClientId) -> MbusStatusCode {
-    let inner = match pool_get_tcp(id) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    match inner.reconnect() {
+    with_tcp_client(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
-    }
+    })
+    .unwrap_or_else(|e| e)
 }

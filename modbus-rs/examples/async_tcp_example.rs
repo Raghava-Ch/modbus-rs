@@ -16,8 +16,12 @@ async fn main() -> Result<()> {
         .and_then(|v| v.parse::<u8>().ok())
         .unwrap_or(1);
 
-    println!("Connecting to {}:{} (unit {})", host, port, unit_id);
-    let client = AsyncTcpClient::connect(&host, port)?;
+    println!(
+        "Preparing async TCP client for {}:{} (unit {})",
+        host, port, unit_id
+    );
+    let client = AsyncTcpClient::new(&host, port)?;
+    client.connect().await?;
 
     // --- Reads ---
     let coils = client.read_multiple_coils(unit_id, 0, 8).await?;

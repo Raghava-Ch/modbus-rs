@@ -10,8 +10,7 @@ use super::error::MbusStatusCode;
 /// C callback: open / connect the transport.
 pub type MbusTransportConnectCb = unsafe extern "C" fn(userdata: *mut c_void) -> MbusStatusCode;
 /// C callback: close / disconnect the transport.
-pub type MbusTransportDisconnectCb =
-    unsafe extern "C" fn(userdata: *mut c_void) -> MbusStatusCode;
+pub type MbusTransportDisconnectCb = unsafe extern "C" fn(userdata: *mut c_void) -> MbusStatusCode;
 /// C callback: send a frame.
 pub type MbusTransportSendCb =
     unsafe extern "C" fn(data: *const u8, len: u16, userdata: *mut c_void) -> MbusStatusCode;
@@ -38,9 +37,18 @@ pub struct MbusTransportCallbacks {
     /// Called to close/disconnect the transport.
     pub on_disconnect: Option<unsafe extern "C" fn(userdata: *mut c_void) -> MbusStatusCode>,
     /// Called to send a frame.
-    pub on_send: Option<unsafe extern "C" fn(data: *const u8, len: u16, userdata: *mut c_void) -> MbusStatusCode>,
+    pub on_send: Option<
+        unsafe extern "C" fn(data: *const u8, len: u16, userdata: *mut c_void) -> MbusStatusCode,
+    >,
     /// Called to receive a frame.
-    pub on_recv: Option<unsafe extern "C" fn(buffer: *mut u8, buffer_cap: u16, out_len: *mut u16, userdata: *mut c_void) -> MbusStatusCode>,
+    pub on_recv: Option<
+        unsafe extern "C" fn(
+            buffer: *mut u8,
+            buffer_cap: u16,
+            out_len: *mut u16,
+            userdata: *mut c_void,
+        ) -> MbusStatusCode,
+    >,
     /// Called to query connection state.
     pub on_is_connected: Option<unsafe extern "C" fn(userdata: *mut c_void) -> u8>,
 }
@@ -115,7 +123,14 @@ impl Transport for CTransport {
         let mut out_len: u16 = 0;
         let cap = u16::try_from(MAX_ADU_FRAME_LEN).map_err(|_| MbusError::BufferTooSmall)?;
 
-        let status = unsafe { cb(buf.as_mut_ptr(), cap, &mut out_len as *mut u16, self.callbacks.userdata) };
+        let status = unsafe {
+            cb(
+                buf.as_mut_ptr(),
+                cap,
+                &mut out_len as *mut u16,
+                self.callbacks.userdata,
+            )
+        };
         if status != MbusStatusCode::MbusOk {
             return Err(status_to_error(status));
         }

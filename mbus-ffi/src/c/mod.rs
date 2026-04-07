@@ -5,41 +5,43 @@
 //!
 //! # Design
 //!
-//! - **Static client pool**: Clients are stored in a fixed-capacity static
-//!   pool (sized via the `MBUS_MAX_CLIENTS` environment variable at build time,
-//!   default = 1).
-//! - **ID-based API**: C code receives an opaque `MbusClientId` (u8) and uses
-//!   it for all subsequent operations. No Rust pointers are exposed.
+//! - **Split typed static pools**: TCP clients occupy `tcp_slots[0..MAX_TCP_CLIENTS]`
+//!   and Serial clients occupy `serial_slots[0..MAX_SERIAL_CLIENTS]`. Pool sizes
+//!   are configured via `MBUS_MAX_TCP_CLIENTS` and `MBUS_MAX_SERIAL_CLIENTS`
+//!   environment variables at build time (both default to 1).
+//! - **ID-based API**: C code receives an opaque `MbusClientId` (u8). The MSB
+//!   encodes the pool type (0 = TCP, 1 = Serial); the lower 7 bits are the slot
+//!   index. `0xFF` is the reserved invalid sentinel.
 //! - **Zero heap allocation**: Everything is `core`-only + `heapless`.
 //! - **Callback-driven**: Responses are delivered via C function-pointer
 //!   callbacks registered at client creation time.
 
 // ── Sub-modules ──────────────────────────────────────────────────────────────
 
-pub mod error;
-pub mod pool;
-pub mod transport;
+pub mod app;
 pub mod callbacks;
 pub mod config;
-pub mod app;
+pub mod error;
 pub mod models;
-pub mod tcp_client;
+pub mod pool;
 pub mod serial_client;
+pub mod tcp_client;
+pub mod transport;
 
 #[cfg(feature = "coils")]
 pub mod coils;
-#[cfg(feature = "registers")]
-pub mod registers;
+#[cfg(feature = "diagnostics")]
+pub mod diagnostics;
 #[cfg(feature = "discrete-inputs")]
 pub mod discrete_inputs;
 #[cfg(feature = "fifo")]
 pub mod fifo;
 #[cfg(feature = "file-record")]
 pub mod file_record;
-#[cfg(feature = "diagnostics")]
-pub mod diagnostics;
+#[cfg(feature = "registers")]
+pub mod registers;
 
 // ── Re-exports ───────────────────────────────────────────────────────────────
 
 pub use error::MbusStatusCode;
-pub use pool::{MbusClientId, MBUS_INVALID_CLIENT_ID};
+pub use pool::{MBUS_INVALID_CLIENT_ID, MbusClientId};

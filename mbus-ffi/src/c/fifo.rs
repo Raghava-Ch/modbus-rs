@@ -3,7 +3,7 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, pool_get_tcp, pool_get_serial};
+use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
 
 /// Queue a Read FIFO Queue (FC 0x18) request.
 ///
@@ -16,12 +16,17 @@ pub extern "C" fn mbus_tcp_read_fifo_queue(
     unit_id: u8,
     address: u16,
 ) -> MbusStatusCode {
-    let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
-    match inner.read_fifo_queue(txn_id, uid, address) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_tcp_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        match inner.read_fifo_queue(txn_id, uid, address) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Read FIFO Queue (FC 0x18) request on a serial client.
@@ -33,10 +38,15 @@ pub extern "C" fn mbus_serial_read_fifo_queue(
     unit_id: u8,
     address: u16,
 ) -> MbusStatusCode {
-    let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-    let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
-    match inner.read_fifo_queue(txn_id, uid, address) {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
-    }
+    with_serial_client(id, |inner| {
+        let uid = match UnitIdOrSlaveAddr::new(unit_id) {
+            Ok(u) => u,
+            Err(e) => return MbusStatusCode::from(e),
+        };
+        match inner.read_fifo_queue(txn_id, uid, address) {
+            Ok(()) => MbusStatusCode::MbusOk,
+            Err(e) => MbusStatusCode::from(e),
+        }
+    })
+    .unwrap_or_else(|e| e)
 }

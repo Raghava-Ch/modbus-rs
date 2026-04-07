@@ -15,37 +15,53 @@ fn main() {
     }
 
     // Read CARGO_CFG_PANIC to detect if we are building with unwinding (e.g. during cargo test)
-    if let Ok(panic_strat) = std::env::var("CARGO_CFG_PANIC") {
-        if panic_strat == "unwind" {
-            println!("cargo::rustc-cfg=has_unwind");
-        }
+    if let Ok(panic_strat) = std::env::var("CARGO_CFG_PANIC")
+        && panic_strat == "unwind"
+    {
+        println!("cargo::rustc-cfg=has_unwind");
     }
 
-    // ── MBUS_MAX_CLIENTS ─────────────────────────────────────────────────────
+    // ── MBUS_MAX_TCP_CLIENTS ──────────────────────────────────────────────────
     //
-    // Read the `MBUS_MAX_CLIENTS` environment variable (set by the C project's
-    // build system). Default: 1. Valid range: [1, 254].
-    // Generates `$OUT_DIR/pool_config.rs` containing:
-    //   `pub(crate) const MAX_CLIENTS: usize = N;`
-    //
-    // Re-run this build script whenever the env var changes.
-    println!("cargo::rerun-if-env-changed=MBUS_MAX_CLIENTS");
+    // Controls how many TCP client slots are pre-allocated in the static pool.
+    // Default: 1. Valid range: [1, 127].
+    // IDs 0x00..=0x7E index the TCP pool (MSB = 0).
+    println!("cargo::rerun-if-env-changed=MBUS_MAX_TCP_CLIENTS");
 
-    let max_clients: usize = match std::env::var("MBUS_MAX_CLIENTS") {
+    let max_tcp: usize = match std::env::var("MBUS_MAX_TCP_CLIENTS") {
         Ok(val) => {
-            let n: usize = val
-                .parse()
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "MBUS_MAX_CLIENTS must be a valid integer, got: \"{val}\""
-                    )
-                });
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_MAX_TCP_CLIENTS must be a valid integer, got: \"{val}\"")
+            });
             if n == 0 {
-                panic!("MBUS_MAX_CLIENTS must be >= 1, got: 0");
+                panic!("MBUS_MAX_TCP_CLIENTS must be >= 1, got: 0");
             }
-            if n > 254 {
+            if n > 127 {
+                panic!("MBUS_MAX_TCP_CLIENTS must be <= 127 (MSB=0 range), got: {n}");
+            }
+            n
+        }
+        Err(_) => 1, // default
+    };
+
+    // ── MBUS_MAX_SERIAL_CLIENTS ───────────────────────────────────────────────
+    //
+    // Controls how many Serial client slots are pre-allocated in the static pool.
+    // Default: 1. Valid range: [1, 126].
+    // IDs 0x80..=0xFD index the Serial pool (MSB = 1). 0xFF = INVALID_ID.
+    println!("cargo::rerun-if-env-changed=MBUS_MAX_SERIAL_CLIENTS");
+
+    let max_serial: usize = match std::env::var("MBUS_MAX_SERIAL_CLIENTS") {
+        Ok(val) => {
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_MAX_SERIAL_CLIENTS must be a valid integer, got: \"{val}\"")
+            });
+            if n == 0 {
+                panic!("MBUS_MAX_SERIAL_CLIENTS must be >= 1, got: 0");
+            }
+            if n > 126 {
                 panic!(
-                    "MBUS_MAX_CLIENTS must be <= 254 (0xFF is reserved as INVALID_ID), got: {n}"
+                    "MBUS_MAX_SERIAL_CLIENTS must be <= 126 (MSB=1 range, 0xFF reserved), got: {n}"
                 );
             }
             n
@@ -58,8 +74,10 @@ fn main() {
     std::fs::write(
         &config_path,
         format!(
-            "/// Maximum number of Modbus client slots (set via `MBUS_MAX_CLIENTS` env var, default 1).\n\
-             pub(crate) const MAX_CLIENTS: usize = {max_clients};\n"
+            "/// Maximum number of TCP client slots (set via `MBUS_MAX_TCP_CLIENTS` env var, default 1).\n\
+             pub(crate) const MAX_TCP_CLIENTS: usize = {max_tcp};\n\
+             /// Maximum number of Serial client slots (set via `MBUS_MAX_SERIAL_CLIENTS` env var, default 1).\n\
+             pub(crate) const MAX_SERIAL_CLIENTS: usize = {max_serial};\n"
         ),
     )
     .expect("failed to write pool_config.rs");

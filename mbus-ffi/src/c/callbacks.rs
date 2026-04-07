@@ -6,12 +6,12 @@ use super::error::MbusStatusCode;
 
 #[cfg(feature = "coils")]
 use super::models::coils::MbusCoils;
-#[cfg(feature = "registers")]
-use super::models::registers::MbusRegisters;
 #[cfg(feature = "discrete-inputs")]
 use super::models::discrete_inputs::MbusDiscreteInputs;
 #[cfg(feature = "fifo")]
 use super::models::fifo::MbusFifoQueue;
+#[cfg(feature = "registers")]
+use super::models::registers::MbusRegisters;
 
 // ── File-record response view type ───────────────────────────────────────────
 
@@ -395,24 +395,30 @@ pub struct MbusCallbacks {
     pub on_write_single_coil: Option<unsafe extern "C" fn(ctx: *const MbusWriteSingleCoilCtx)>,
     #[cfg(feature = "coils")]
     /// Called when a Write Multiple Coils response is received.
-    pub on_write_multiple_coils: Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleCoilsCtx)>,
+    pub on_write_multiple_coils:
+        Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleCoilsCtx)>,
 
     // ── Register callbacks (feature "registers") ──────────────────────────
     #[cfg(feature = "registers")]
     /// Called when a Read Holding Registers response is received.
-    pub on_read_holding_registers: Option<unsafe extern "C" fn(ctx: *const MbusReadHoldingRegistersCtx)>,
+    pub on_read_holding_registers:
+        Option<unsafe extern "C" fn(ctx: *const MbusReadHoldingRegistersCtx)>,
     #[cfg(feature = "registers")]
     /// Called when a Read Input Registers response is received.
-    pub on_read_input_registers: Option<unsafe extern "C" fn(ctx: *const MbusReadInputRegistersCtx)>,
+    pub on_read_input_registers:
+        Option<unsafe extern "C" fn(ctx: *const MbusReadInputRegistersCtx)>,
     #[cfg(feature = "registers")]
     /// Called when a Read/Write Multiple Registers response is received.
-    pub on_read_write_multiple_registers: Option<unsafe extern "C" fn(ctx: *const MbusReadWriteMultipleRegistersCtx)>,
+    pub on_read_write_multiple_registers:
+        Option<unsafe extern "C" fn(ctx: *const MbusReadWriteMultipleRegistersCtx)>,
     #[cfg(feature = "registers")]
     /// Called when a Write Single Register response is received.
-    pub on_write_single_register: Option<unsafe extern "C" fn(ctx: *const MbusWriteSingleRegisterCtx)>,
+    pub on_write_single_register:
+        Option<unsafe extern "C" fn(ctx: *const MbusWriteSingleRegisterCtx)>,
     #[cfg(feature = "registers")]
     /// Called when a Write Multiple Registers response is received.
-    pub on_write_multiple_registers: Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleRegistersCtx)>,
+    pub on_write_multiple_registers:
+        Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleRegistersCtx)>,
     #[cfg(feature = "registers")]
     /// Called when a Mask Write Register response is received.
     pub on_mask_write_register: Option<unsafe extern "C" fn(ctx: *const MbusMaskWriteRegisterCtx)>,
@@ -420,7 +426,8 @@ pub struct MbusCallbacks {
     // ── Discrete input callbacks (feature "discrete-inputs") ──────────────
     #[cfg(feature = "discrete-inputs")]
     /// Called when a Read Discrete Inputs response is received.
-    pub on_read_discrete_inputs: Option<unsafe extern "C" fn(ctx: *const MbusReadDiscreteInputsCtx)>,
+    pub on_read_discrete_inputs:
+        Option<unsafe extern "C" fn(ctx: *const MbusReadDiscreteInputsCtx)>,
 
     // ── FIFO callbacks (feature "fifo") ───────────────────────────────────
     #[cfg(feature = "fifo")]
@@ -438,7 +445,8 @@ pub struct MbusCallbacks {
     // ── Diagnostics callbacks (feature "diagnostics") ─────────────────────
     #[cfg(feature = "diagnostics")]
     /// Called when a Read Exception Status response is received.
-    pub on_read_exception_status: Option<unsafe extern "C" fn(ctx: *const MbusReadExceptionStatusCtx)>,
+    pub on_read_exception_status:
+        Option<unsafe extern "C" fn(ctx: *const MbusReadExceptionStatusCtx)>,
     #[cfg(feature = "diagnostics")]
     /// Called when a Diagnostics response is received.
     pub on_diagnostics: Option<unsafe extern "C" fn(ctx: *const MbusDiagnosticsCtx)>,

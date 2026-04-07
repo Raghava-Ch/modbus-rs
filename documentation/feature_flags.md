@@ -28,8 +28,12 @@ Defined features:
 - `logging`: Enables `log` facade diagnostics in `mbus-network` and `mbus-serial`.
 
 Default behavior:
-- `default` currently enables: `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features above.
+- `default` currently enables: `client`, `serial-rtu`, `tcp`, and all function-group features above.
 - The `async` feature is **not enabled by default** — add it explicitly when you need `.await` APIs.
+
+Important:
+- `serial-ascii` is available but **not** part of default features; enable it explicitly for ASCII builds.
+- `modbus-rs` does not expose a top-level `wasm` feature. Browser and native C bindings are provided by `mbus-ffi`.
 
 ## Async Crate (`mbus-async`)
 
@@ -252,6 +256,25 @@ Filter only internal client state-machine logs:
 RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
 ```
 
+## Bindings Note (WASM and C)
+
+Feature flags documented here apply to the Rust API crates.
+
+For bindings:
+
+- WASM/browser bindings are provided by `mbus-ffi` (`mbus-ffi/src/wasm/`, package output in `mbus-ffi/pkg/`).
+- Native C bindings are provided by `mbus-ffi` (`mbus-ffi/include/mbus_ffi.h`, C API in `mbus-ffi/src/c/`).
+
+Useful binding validation commands:
+
+```bash
+# Rust-side FFI tests
+cargo test -p mbus-ffi
+
+# Native C smoke flow
+cargo run -p xtask -- build-c-smoke
+```
+
 ## Notes About Feature Names
 
 Use hyphenated names exactly as defined in `Cargo.toml`:
@@ -301,6 +324,7 @@ Important operational model:
 
 `mbus-client` now provides additional operational APIs:
 
+- `ClientServices::connect()`
 - `ClientServices::is_connected()`
 - `ClientServices::reconnect()`
 - `ClientServices::new_serial(...)`

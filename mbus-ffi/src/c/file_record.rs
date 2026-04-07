@@ -6,7 +6,7 @@ use mbus_core::models::file_record::SubRequest;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, pool_get_tcp, pool_get_serial};
+use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
 
 /// A single sub-request passed to [`mbus_tcp_read_file_record`] /
 /// [`mbus_tcp_write_file_record`] (and their serial equivalents).
@@ -46,9 +46,13 @@ pub unsafe extern "C" fn mbus_tcp_read_file_record(
     sub_reqs: *const MbusSubRequest,
     count: u16,
 ) -> MbusStatusCode {
-    if sub_reqs.is_null() { return MbusStatusCode::MbusErrNullPointer; }
-    let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-    read_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    if sub_reqs.is_null() {
+        return MbusStatusCode::MbusErrNullPointer;
+    }
+    with_tcp_client(id, |inner| {
+        read_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Read File Record (FC 0x14) request on a serial client.
@@ -64,9 +68,13 @@ pub unsafe extern "C" fn mbus_serial_read_file_record(
     sub_reqs: *const MbusSubRequest,
     count: u16,
 ) -> MbusStatusCode {
-    if sub_reqs.is_null() { return MbusStatusCode::MbusErrNullPointer; }
-    let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-    read_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    if sub_reqs.is_null() {
+        return MbusStatusCode::MbusErrNullPointer;
+    }
+    with_serial_client(id, |inner| {
+        read_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 #[cfg(feature = "file-record")]
@@ -88,11 +96,9 @@ where
     let c_slice = unsafe { core::slice::from_raw_parts(sub_reqs, count as usize) };
     let mut sub_request = SubRequest::new();
     for sr in c_slice {
-        if let Err(e) = sub_request.add_read_sub_request(
-            sr.file_number,
-            sr.record_number,
-            sr.record_length,
-        ) {
+        if let Err(e) =
+            sub_request.add_read_sub_request(sr.file_number, sr.record_number, sr.record_length)
+        {
             return MbusStatusCode::from(e);
         }
     }
@@ -118,9 +124,13 @@ pub unsafe extern "C" fn mbus_tcp_write_file_record(
     sub_reqs: *const MbusSubRequest,
     count: u16,
 ) -> MbusStatusCode {
-    if sub_reqs.is_null() { return MbusStatusCode::MbusErrNullPointer; }
-    let inner = match pool_get_tcp(id) { Ok(c) => c, Err(e) => return e };
-    write_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    if sub_reqs.is_null() {
+        return MbusStatusCode::MbusErrNullPointer;
+    }
+    with_tcp_client(id, |inner| {
+        write_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 /// Queue a Write File Record (FC 0x15) request on a serial client.
@@ -137,9 +147,13 @@ pub unsafe extern "C" fn mbus_serial_write_file_record(
     sub_reqs: *const MbusSubRequest,
     count: u16,
 ) -> MbusStatusCode {
-    if sub_reqs.is_null() { return MbusStatusCode::MbusErrNullPointer; }
-    let inner = match pool_get_serial(id) { Ok(c) => c, Err(e) => return e };
-    write_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    if sub_reqs.is_null() {
+        return MbusStatusCode::MbusErrNullPointer;
+    }
+    with_serial_client(id, |inner| {
+        write_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
+    })
+    .unwrap_or_else(|e| e)
 }
 
 #[cfg(feature = "file-record")]
@@ -164,15 +178,17 @@ where
         if sr.data.is_null() || sr.data_len == 0 {
             return MbusStatusCode::MbusErrNullPointer;
         }
-        let word_slice =
-            unsafe { core::slice::from_raw_parts(sr.data, sr.data_len as usize) };
+        let word_slice = unsafe { core::slice::from_raw_parts(sr.data, sr.data_len as usize) };
         let mut hvec: HVec<u16, MAX_PDU_DATA_LEN> = HVec::new();
         if hvec.extend_from_slice(word_slice).is_err() {
             return MbusStatusCode::MbusErrBufferTooSmall;
         }
-        if let Err(e) =
-            sub_request.add_write_sub_request(sr.file_number, sr.record_number, sr.record_length, hvec)
-        {
+        if let Err(e) = sub_request.add_write_sub_request(
+            sr.file_number,
+            sr.record_number,
+            sr.record_length,
+            hvec,
+        ) {
             return MbusStatusCode::from(e);
         }
     }

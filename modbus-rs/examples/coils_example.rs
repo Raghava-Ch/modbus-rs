@@ -99,6 +99,7 @@ fn main() -> Result<()> {
 
     let mut client =
         ClientServices::<_, _, 10>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
+    client.connect().map_err(|e| anyhow::anyhow!(e))?;
 
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
 

@@ -55,6 +55,7 @@ fn test_client_services_read_single_coil() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 2;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -132,6 +133,7 @@ fn test_client_services_read_coils() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 5;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -213,6 +215,7 @@ fn test_client_services_write_single_coil() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 3;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -298,6 +301,7 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 4;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -374,6 +378,7 @@ fn test_client_services_server_exception_response() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 1;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -424,6 +429,7 @@ fn test_client_services_server_closes_connection() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 1;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -472,6 +478,7 @@ fn test_client_services_server_timeout() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 1;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -545,6 +552,7 @@ fn test_client_services_read_discrete_inputs() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 6;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -630,6 +638,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 7;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -722,6 +731,7 @@ fn test_client_services_read_device_identification() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 8;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -814,6 +824,7 @@ fn test_client_services_read_device_identification_multi_transaction() -> Result
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     // Send Request 1
     client
@@ -907,6 +918,7 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     let txn_id = 100;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
@@ -975,6 +987,7 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     client
         .encapsulated_interface_transport(
@@ -1037,6 +1050,7 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     client
         .encapsulated_interface_transport(
@@ -1112,6 +1126,7 @@ fn test_client_services_tcp_fragmented_stream() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     // 1. Queue Request 1 and Poll. StdTcpTransport internally receives fragmented chunks.
     client
@@ -1191,6 +1206,7 @@ fn test_client_services_tcp_noise_injection() -> Result<()> {
     let config = ModbusConfig::Tcp(tcp_config);
 
     let mut client = ClientServices::<_, _, 10>::new(transport, app, config).unwrap();
+    client.connect().unwrap();
 
     // 1. Queue Request 1
     client

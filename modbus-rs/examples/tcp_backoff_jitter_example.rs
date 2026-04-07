@@ -87,6 +87,7 @@ fn main() -> Result<()> {
     tcp_config.retry_random_fn = Some(app_random_u32);
 
     let mut client = ClientServices::<_, _, 8>::new(transport, app, ModbusConfig::Tcp(tcp_config))?;
+    client.connect()?;
 
     let unit = UnitIdOrSlaveAddr::new(unit_id)?;
     client.coils().read_multiple_coils(1, unit, 0, 8)?;
