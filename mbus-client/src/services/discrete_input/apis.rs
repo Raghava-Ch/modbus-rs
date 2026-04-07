@@ -57,9 +57,7 @@ where
             Self::handle_read_discrete_inputs_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }
@@ -110,9 +108,7 @@ where
             Self::handle_read_discrete_inputs_response,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
 
         Ok(())
     }

@@ -25,11 +25,13 @@ Defined features:
 - `fifo`: Enables FIFO queue model/service support.
 - `file-record`: Enables file record model/service support.
 - `diagnostics`: Enables diagnostics and device identification support.
+- `traffic`: Enables raw TX/RX frame traffic hooks in `mbus-client` and async callback forwarding in `mbus-async`.
 - `logging`: Enables `log` facade diagnostics in `mbus-network` and `mbus-serial`.
 
 Default behavior:
 - `default` currently enables: `client`, `serial-rtu`, `tcp`, and all function-group features above.
 - The `async` feature is **not enabled by default** — add it explicitly when you need `.await` APIs.
+- The `traffic` feature is **not enabled by default** — add it when you need raw frame observability.
 
 Important:
 - `serial-ascii` is available but **not** part of default features; enable it explicitly for ASCII builds.
@@ -53,6 +55,7 @@ Defined features:
 | `fifo` | FIFO queue async method |
 | `file-record` | File record read/write async methods |
 | `diagnostics` | Device identification, diagnostics, event log, report-server-id async methods |
+| `traffic` | Async dedicated-thread callback API (`set_traffic_handler`) and traffic event forwarding |
 
 Default features in `mbus-async`: `tcp`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`.
 
@@ -102,6 +105,7 @@ Defined features:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `traffic` (enables `TrafficNotifier` and `TrafficDirection`)
 
 Each feature forwards to its equivalent in `mbus-core`.
 
@@ -215,11 +219,23 @@ cargo check --no-default-features --features async,tcp,coils,registers,discrete-
 # Async serial RTU
 cargo check --no-default-features --features async,serial-rtu,coils,registers
 
+# Sync traffic hooks
+cargo check --no-default-features --features client,tcp,coils,traffic
+
+# Async traffic hooks
+cargo check --no-default-features --features async,tcp,coils,traffic
+
 # Run async TCP example
 cargo run --package modbus-rs --example async_tcp_example --features async
 
 # Run async serial RTU example
 cargo run --package modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
+
+# Run sync traffic example
+cargo run --package modbus-rs --example traffic_sync_example --features traffic
+
+# Run async traffic example
+cargo run --package modbus-rs --example traffic_async_tcp_example --features async,traffic
 ```
 
 ## Logging Setup

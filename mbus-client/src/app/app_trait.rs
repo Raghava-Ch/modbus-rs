@@ -88,6 +88,52 @@ pub trait RequestErrorNotifier {
     );
 }
 
+#[cfg(feature = "traffic")]
+/// Direction of raw Modbus frame traffic observed by the client stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrafficDirection {
+    /// Outgoing request ADU sent by the client.
+    Tx,
+    /// Incoming response ADU received by the client.
+    Rx,
+}
+
+#[cfg(feature = "traffic")]
+/// Optional raw-frame traffic notifications emitted by the client stack.
+///
+/// This trait is opt-in and enabled only with the `traffic` feature. A
+/// blanket no-op implementation is provided for all app types so applications
+/// are never forced to implement it.
+pub trait TrafficNotifier {
+    /// Called when a request frame is sent.
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_slave_addr: UnitIdOrSlaveAddr, _frame: &[u8]) {
+    }
+
+    /// Called when a response frame is received.
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_slave_addr: UnitIdOrSlaveAddr, _frame: &[u8]) {
+    }
+
+    /// Called when sending a request frame failed.
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+        _frame: &[u8],
+    ) {
+    }
+
+    /// Called when processing/receiving a response frame failed.
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+        _frame: &[u8],
+    ) {
+    }
+}
+
 /// Trait defining the expected response handling for coil-related Modbus operations.
 ///
 /// Implementors of this trait to deliver the responses to the application layer,

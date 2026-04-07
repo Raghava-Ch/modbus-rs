@@ -85,6 +85,9 @@ impl RequestErrorNotifier for WasmAppRouter {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_client::app::TrafficNotifier for WasmAppRouter {}
+
 // ── CoilResponse ─────────────────────────────────────────────────────────────
 
 impl CoilResponse for WasmAppRouter {

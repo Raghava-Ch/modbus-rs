@@ -80,6 +80,9 @@ impl RequestErrorNotifier for CApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_client::app::TrafficNotifier for CApp {}
+
 // ── CoilResponse ─────────────────────────────────────────────────────────────
 
 #[cfg(feature = "coils")]
