@@ -42,14 +42,14 @@ Add the full default setup (TCP + Serial RTU + Serial ASCII + all function codes
 
 ```toml
 [dependencies]
-modbus-rs = "0.4.0"
+modbus-rs = "0.5.0"
 ```
 
 Minimal TCP client with coil support only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
     "client",
     "tcp",
     "coils"
@@ -105,7 +105,7 @@ Async clients are exposed by `mbus-async` and re-exported via `modbus_rs::mbus_a
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
     "async",
     "tcp",
     "coils"
@@ -134,7 +134,7 @@ Enable `traffic` to observe raw TX/RX ADU frames in both sync and async flows.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
     "client",
     "tcp",
     "coils",
@@ -319,7 +319,7 @@ Enable logging with TCP only:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
+modbus-rs = { version = "0.5.0", default-features = false, features = [
     "tcp",
     "logging"
 ] }
