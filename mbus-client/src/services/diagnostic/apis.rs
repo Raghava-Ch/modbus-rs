@@ -57,9 +57,7 @@ where
             Self::handle_read_device_identification_rsp,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -107,9 +105,7 @@ where
             )?;
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -152,9 +148,7 @@ where
         )?;
 
         // Dispatch the frame through the configured serial transport.
-        self.transport
-            .send(&frame)
-            .map_err(|_| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -225,9 +219,7 @@ where
             )?;
         }
 
-        self.transport
-            .send(&frame)
-            .map_err(|_| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -262,9 +254,7 @@ where
             Self::handle_get_comm_event_counter_rsp,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -299,9 +289,7 @@ where
             Self::handle_get_comm_event_log_rsp,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 
@@ -337,9 +325,7 @@ where
             Self::handle_report_server_id_rsp,
         )?;
 
-        self.transport
-            .send(&frame)
-            .map_err(|_| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 }

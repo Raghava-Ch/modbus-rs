@@ -20,8 +20,9 @@ This enables:
 - client services
 - TCP transport
 - Serial RTU transport
-- Serial ASCII transport
 - all supported function-group features
+
+`serial-ascii` and `async` are opt-in features.
 
 ### Minimal TCP client
 
@@ -231,6 +232,25 @@ The workspace contains real examples in `modbus-rs/examples/`.
 ### Async Serial RTU examples
 
 - [async_serial_rtu_example.rs](../modbus-rs/examples/async_serial_rtu_example.rs)
+
+### Traffic observability examples
+
+Enable `traffic` when you want raw TX/RX frame callbacks for debugging tools:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", default-features = false, features = [
+  "client",
+  "tcp",
+  "coils",
+  "traffic"
+] }
+```
+
+Dedicated examples:
+
+- [traffic_sync_example.rs](../modbus-rs/examples/traffic_sync_example.rs)
+- [traffic_async_tcp_example.rs](../modbus-rs/examples/traffic_async_tcp_example.rs)
 
 ## 4. Async Usage (Tokio)
 

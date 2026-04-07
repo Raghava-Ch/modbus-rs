@@ -37,3 +37,4 @@ file-record = ["mbus-core/file-record"]    # Enables Modbus File Record (FC 0x14
 diagnostics = ["mbus-core/diagnostics"]     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
 serial-ascii = ["mbus-core/serial-ascii"]   # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
 logging = ["dep:log"]
+traffic = []

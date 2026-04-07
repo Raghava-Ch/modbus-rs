@@ -1,11 +1,37 @@
 # modbus-rs
 
-`modbus-rs` is the top-level crate in the workspace and the recommended entry point for
-most users.
+`modbus-rs` is a low-footprint, cross-platform Modbus client workspace built for both embedded and desktop/server systems.
+It runs on no_std and std targets (MCUs, RTOS, Windows, Linux, macOS), supports TCP/RTU/ASCII, provides sync and async APIs, and uses feature gating to keep binaries minimal.
+Advanced reliability features include configurable retry, backoff, and jitter, with optional native C and WASM bindings via `mbus-ffi`.
 
 It re-exports the core protocol crate, client services, and optional TCP/Serial transport
 implementations behind feature flags so you can choose between convenience and minimal
 binary size.
+
+## Basic Async Usage Example
+
+```rust,no_run
+use modbus_rs::Coils;
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+	let host = "127.0.0.1";
+    let port = 502;
+    let unit_id = 1;
+
+    let client = AsyncTcpClient::new(&host, port)?;
+    client.connect().await?;
+
+    let coils: Coils = client.read_multiple_coils(unit_id, 0, 8).await?;
+	for addr in 0..8 {
+		println!("coil[{}] = {}", addr, coils.value(addr)?);
+	}
+
+    let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, true).await?;
+    println!("Wrote coil[{}] = {}", wr_addr, wr_val);
+}
+```
 
 ## What This Crate Is
 
@@ -27,7 +53,7 @@ For consumers, `modbus-rs` is the intended public API surface.
 
 - Use `modbus-rs` in application `Cargo.toml`.
 - Access all request/response service features through `modbus-rs` re-exports.
-- Access WASM-facing client types through `modbus-rs` re-exports on `wasm32` with the `wasm` feature enabled.
+- For browser/WASM or native C integrations, use `mbus-ffi` directly.
 
 Helper crates (`mbus-core`, `mbus-client`, `mbus-network`, `mbus-serial`, `mbus-ffi`) remain workspace building blocks.
 
@@ -56,12 +82,14 @@ Top-level features:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `traffic`: enables raw TX/RX frame observability hooks for sync and async clients
 - `logging`: enables `log` facade diagnostics in `mbus-network` and `mbus-serial`
-- `wasm`: enables browser WASM re-exports (`WasmModbusClient`, `WasmSerialModbusClient`, `request_serial_port`) through `modbus-rs`
 
 Default behavior:
 
-- `default` enables `client`, `serial-rtu`, `serial-ascii`, `tcp`, and all function-group features.
+- `default` enables `client`, `serial-rtu`, `tcp`, and all function-group features.
+- `serial-ascii` and `async` are opt-in.
+- `serial-ascii`, `async`, and `traffic` are opt-in.
 - `async` is opt-in and must be enabled explicitly when using `.await` APIs.
 
 Example: only enable client + TCP + coil support:
@@ -106,6 +134,25 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+### Traffic Hooks Setup
+
+Enable traffic observability for raw ADU TX/RX frame callbacks:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.4.0", default-features = false, features = [
+	"client",
+	"tcp",
+	"coils",
+	"traffic"
+] }
+```
+
+Dedicated examples:
+
+- sync traffic observer: `examples/traffic_sync_example.rs`
+- async traffic observer: `examples/traffic_async_tcp_example.rs`
+
 ### Logging Setup
 
 The `logging` feature enables instrumentation points through the `log` facade.
@@ -137,27 +184,20 @@ modbus-rs = { version = "0.4.0", default-features = false, features = [
 ] }
 ```
 
-### WASM browser client setup via modbus-rs re-exports
+### WASM browser setup (independent `mbus-ffi` crate)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4.0", default-features = false, features = [
-	"wasm",
-	"client",
-	"coils",
-	"registers",
-	"discrete-inputs",
-	"fifo",
-	"file-record",
-	"diagnostics"
-] }
+modbus-rs = { version = "0.4.0", default-features = false, features = ["client", "tcp", "coils"] }
 ```
 
-Then import WASM API types from `modbus_rs`:
+Then use `mbus-ffi` for browser/WASM bindings:
 
-```rust
-#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
-use modbus_rs::{WasmModbusClient, WasmSerialModbusClient, request_serial_port};
+```bash
+cd /path/to/modbus-rs
+wasm-pack build ./mbus-ffi --target web --features wasm,full
+cd mbus-ffi
+python3 -m http.server 8089
 ```
 
 ## Bindings
@@ -254,6 +294,8 @@ fn main() -> Result<(), MbusError> {
 - [feature_facades_showcase.rs](examples/feature_facades_showcase.rs)
 - [tcp_backoff_jitter_example.rs](examples/tcp_backoff_jitter_example.rs)
 - [logging_example.rs](examples/logging_example.rs)
+- [traffic_sync_example.rs](examples/traffic_sync_example.rs) (`traffic` feature)
+- [traffic_async_tcp_example.rs](examples/traffic_async_tcp_example.rs) (`async,traffic` features)
 
 ### Serial RTU examples
 
