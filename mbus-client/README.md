@@ -116,6 +116,7 @@ Available features:
 - `file-record`
 - `diagnostics`
 - `serial-ascii` (forwards to `mbus-core/serial-ascii` to enable ASCII-sized ADU buffers)
+- `traffic` (enables raw TX/RX frame callbacks via `TrafficNotifier`)
 - `logging` (enables low-priority internal state-machine diagnostics via the `log` facade)
 
 Default behavior:
@@ -131,6 +132,81 @@ Example (minimal feature set):
 ```toml
 [dependencies]
 mbus-client = { version = "0.4.0", default-features = false, features = ["coils"] }
+```
+
+## Traffic Callbacks (optional `traffic` feature)
+
+When `traffic` is enabled, apps can implement `TrafficNotifier` to observe raw ADU frames:
+
+```rust,no_run
+use mbus_client::app::{TrafficDirection, TrafficNotifier};
+use mbus_core::transport::UnitIdOrSlaveAddr;
+
+struct App;
+
+impl TrafficNotifier for App {
+  fn on_tx_frame(
+    &mut self,
+    txn_id: u16,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
+    frame_bytes: &[u8],
+  ) {
+    println!(
+      "[{:?}] txn={} unit={} bytes={:02X?}",
+      TrafficDirection::Tx,
+      txn_id,
+      unit_id_slave_addr.get(),
+      frame_bytes
+    );
+  }
+
+  fn on_rx_frame(
+    &mut self,
+    txn_id: u16,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
+    frame_bytes: &[u8],
+  ) {
+    println!(
+      "[{:?}] txn={} unit={} bytes={:02X?}",
+      TrafficDirection::Rx,
+      txn_id,
+      unit_id_slave_addr.get(),
+      frame_bytes
+    );
+  }
+
+  fn on_tx_error(
+    &mut self,
+    txn_id: u16,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
+    error: mbus_core::errors::MbusError,
+    frame_bytes: &[u8],
+  ) {
+    println!(
+      "[{:?}] txn={} unit={} error={error:?} bytes={:02X?}",
+      TrafficDirection::Tx,
+      txn_id,
+      unit_id_slave_addr.get(),
+      frame_bytes
+    );
+  }
+
+  fn on_rx_error(
+    &mut self,
+    txn_id: u16,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
+    error: mbus_core::errors::MbusError,
+    frame_bytes: &[u8],
+  ) {
+    println!(
+      "[{:?}] txn={} unit={} error={error:?} bytes={:02X?}",
+      TrafficDirection::Rx,
+      txn_id,
+      unit_id_slave_addr.get(),
+      frame_bytes
+    );
+  }
+}
 ```
 
 ## Logging

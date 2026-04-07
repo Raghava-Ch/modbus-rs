@@ -9,7 +9,7 @@ homepage = "https://github.com/Raghava-Ch/modbus-rs"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "High-level Modbus client facade for embedded and std environments with TCP, RTU, and ASCII support"
+description = "Feature-gated, low-footprint Modbus client stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
 
 [dependencies]
 mbus-core   = { workspace = true }
@@ -55,6 +55,7 @@ file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
 logging = ["mbus-network?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
 async = ["dep:mbus-async"]
+traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
 
 [[example]]
 name = "async_tcp_example"
@@ -63,3 +64,11 @@ required-features = ["async"]
 [[example]]
 name = "async_serial_rtu_example"
 required-features = ["async", "serial-rtu"]
+
+[[example]]
+name = "traffic_sync_example"
+required-features = ["traffic", "client", "tcp", "coils"]
+
+[[example]]
+name = "traffic_async_tcp_example"
+required-features = ["async", "traffic", "tcp", "coils"]

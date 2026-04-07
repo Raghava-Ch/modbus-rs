@@ -13,6 +13,8 @@
 //! - [`run_worker`] drives polling and response routing.
 
 use std::collections::HashMap;
+#[cfg(feature = "traffic")]
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, mpsc};
@@ -32,6 +34,8 @@ use mbus_client::app::FileRecordResponse;
 #[cfg(feature = "registers")]
 use mbus_client::app::RegisterResponse;
 use mbus_client::app::RequestErrorNotifier;
+#[cfg(feature = "traffic")]
+use mbus_client::app::{TrafficDirection, TrafficNotifier};
 use mbus_client::services::ClientServices;
 #[cfg(feature = "coils")]
 use mbus_client::services::coil::Coils;
@@ -110,6 +114,28 @@ impl std::error::Error for AsyncError {
 
 type PendingSender = oneshot::Sender<Result<WorkerResponse, MbusError>>;
 type PendingStore = Arc<Mutex<HashMap<u16, PendingSender>>>;
+#[cfg(feature = "traffic")]
+type TrafficHandler = Box<dyn FnMut(&TrafficEvent) + Send + 'static>;
+#[cfg(feature = "traffic")]
+type TrafficHandlerStore = Arc<Mutex<Option<TrafficHandler>>>;
+#[cfg(feature = "traffic")]
+type TrafficSender = Sender<TrafficEvent>;
+
+#[cfg(feature = "traffic")]
+/// Async traffic event emitted from the worker thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrafficEvent {
+    /// Outbound or inbound frame direction.
+    pub direction: TrafficDirection,
+    /// Transaction identifier associated with the request lifecycle.
+    pub txn_id: u16,
+    /// Unit id (TCP) or slave address (Serial) for this frame.
+    pub unit_id_slave_addr: UnitIdOrSlaveAddr,
+    /// Raw ADU bytes observed on the wire.
+    pub frame: Vec<u8>,
+    /// Error details when the traffic event corresponds to a failed TX/RX path.
+    pub error: Option<MbusError>,
+}
 
 enum WorkerCommand {
     Connect {
@@ -315,6 +341,8 @@ enum WorkerResponse {
 
 struct AsyncApp {
     pending: PendingStore,
+    #[cfg(feature = "traffic")]
+    traffic_sender: TrafficSender,
 }
 
 impl AsyncApp {
@@ -332,6 +360,26 @@ impl AsyncApp {
 
     fn reject(&self, txn_id: u16, error: MbusError) {
         self.complete(txn_id, Err(error));
+    }
+
+    #[cfg(feature = "traffic")]
+    fn emit_traffic(
+        &self,
+        direction: TrafficDirection,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: Option<MbusError>,
+        frame_bytes: &[u8],
+    ) {
+        let event = TrafficEvent {
+            direction,
+            txn_id,
+            unit_id_slave_addr,
+            frame: frame_bytes.to_vec(),
+            error,
+        };
+
+        let _ = self.traffic_sender.send(event);
     }
 }
 
@@ -352,6 +400,82 @@ impl RequestErrorNotifier for AsyncApp {
         error: MbusError,
     ) {
         self.reject(txn_id, error);
+    }
+}
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for AsyncApp {
+    fn on_tx_frame(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        frame_bytes: &[u8],
+    ) {
+        self.emit_traffic(
+            TrafficDirection::Tx,
+            txn_id,
+            unit_id_slave_addr,
+            None,
+            frame_bytes,
+        );
+    }
+
+    fn on_rx_frame(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        frame_bytes: &[u8],
+    ) {
+        self.emit_traffic(
+            TrafficDirection::Rx,
+            txn_id,
+            unit_id_slave_addr,
+            None,
+            frame_bytes,
+        );
+    }
+
+    fn on_tx_error(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame_bytes: &[u8],
+    ) {
+        self.emit_traffic(
+            TrafficDirection::Tx,
+            txn_id,
+            unit_id_slave_addr,
+            Some(error),
+            frame_bytes,
+        );
+    }
+
+    fn on_rx_error(
+        &mut self,
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame_bytes: &[u8],
+    ) {
+        self.emit_traffic(
+            TrafficDirection::Rx,
+            txn_id,
+            unit_id_slave_addr,
+            Some(error),
+            frame_bytes,
+        );
+    }
+}
+
+#[cfg(feature = "traffic")]
+fn run_traffic_dispatcher(receiver: Receiver<TrafficEvent>, traffic_handler: TrafficHandlerStore) {
+    while let Ok(event) = receiver.recv() {
+        if let Ok(mut handler_slot) = traffic_handler.lock()
+            && let Some(handler) = handler_slot.as_mut()
+        {
+            let _ = catch_unwind(AssertUnwindSafe(|| handler(&event)));
+        }
     }
 }
 
@@ -1019,3 +1143,67 @@ mod serial_client;
 pub(crate) use client_core::AsyncClientCore;
 pub use network_client::AsyncTcpClient;
 pub use serial_client::AsyncSerialClient;
+
+#[cfg(all(test, feature = "traffic"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_async_app_emits_traffic_event_to_channel() {
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (traffic_sender, traffic_receiver) = mpsc::channel();
+
+        let mut app = AsyncApp {
+            pending,
+            traffic_sender,
+        };
+
+        let unit = UnitIdOrSlaveAddr::new(1).unwrap();
+        app.on_tx_frame(42, unit, &[0xAA, 0x55]);
+
+        let event = traffic_receiver
+            .recv_timeout(Duration::from_millis(100))
+            .unwrap();
+        assert_eq!(event.direction, TrafficDirection::Tx);
+        assert_eq!(event.txn_id, 42);
+        assert_eq!(event.unit_id_slave_addr, unit);
+        assert_eq!(event.frame, vec![0xAA, 0x55]);
+        assert_eq!(event.error, None);
+    }
+
+    #[test]
+    fn test_async_app_emits_traffic_error_event_to_channel() {
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (traffic_sender, traffic_receiver) = mpsc::channel();
+
+        let mut app = AsyncApp {
+            pending,
+            traffic_sender,
+        };
+
+        let unit = UnitIdOrSlaveAddr::new(1).unwrap();
+        app.on_rx_error(77, unit, MbusError::ChecksumError, &[0xAB]);
+
+        let event = traffic_receiver
+            .recv_timeout(Duration::from_millis(100))
+            .unwrap();
+        assert_eq!(event.direction, TrafficDirection::Rx);
+        assert_eq!(event.txn_id, 77);
+        assert_eq!(event.unit_id_slave_addr, unit);
+        assert_eq!(event.frame, vec![0xAB]);
+        assert_eq!(event.error, Some(MbusError::ChecksumError));
+    }
+
+    #[test]
+    fn test_async_client_core_set_and_clear_traffic_handler() {
+        let (sender, _receiver) = mpsc::channel();
+        let traffic_handler: TrafficHandlerStore = Arc::new(Mutex::new(None));
+        let core = AsyncClientCore::new(sender, traffic_handler.clone());
+
+        core.set_traffic_handler(|_evt| {});
+        assert!(traffic_handler.lock().unwrap().is_some());
+
+        core.clear_traffic_handler();
+        assert!(traffic_handler.lock().unwrap().is_none());
+    }
+}

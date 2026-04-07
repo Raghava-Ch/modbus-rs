@@ -60,9 +60,7 @@ where
         )?;
 
         // Dispatch the compiled ADU frame through the underlying transport (TCP/RTU/ASCII).
-        self.transport
-            .send(&frame)
-            .map_err(|_e| MbusError::SendFailed)?;
+        self.dispatch_request_frame(txn_id, unit_id_slave_addr, &frame)?;
         Ok(())
     }
 }
