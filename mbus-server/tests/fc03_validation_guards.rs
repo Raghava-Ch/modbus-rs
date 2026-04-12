@@ -7,6 +7,7 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
 use mbus_server::ServerServices;
 use mbus_server::ModbusAppHandler;
+use mbus_server::ResilienceConfig;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -113,7 +114,7 @@ fn run_single_request(
     };
     let app = GuardedApp::new(app_calls.clone(), app_response_len);
 
-    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1));
+    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1), ResilienceConfig::default());
     server.poll();
 
     let frames = sent_frames.lock().expect("sent_frames mutex poisoned");

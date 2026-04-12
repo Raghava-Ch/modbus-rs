@@ -16,6 +16,7 @@
 pub mod coils;
 pub mod exception;
 pub mod framing;
+pub mod resilience;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;
 
@@ -23,11 +24,16 @@ use crate::app::ModbusAppHandler;
 use heapless::Vec;
 use mbus_core::{
     data_unit::common::{
-        self, MAX_ADU_FRAME_LEN, ModbusMessage, SlaveAddress, derive_length_from_bytes,
+        self, AdditionalAddress, MAX_ADU_FRAME_LEN, ModbusMessage, SlaveAddress,
+        derive_length_from_bytes,
     },
     errors::MbusError,
     function_codes::public::FunctionCode,
-    transport::{ModbusConfig, Transport, UnitIdOrSlaveAddr},
+    transport::{ModbusConfig, Transport, TransportType, UnitIdOrSlaveAddr},
+};
+use resilience::{
+    PendingRequest, PendingResponse, RequestPriority, RequestQueue, ResilienceConfig,
+    ResponseQueue, OverflowPolicy,
 };
 
 // ---------------------------------------------------------------------------
@@ -74,7 +80,15 @@ pub(crate) use server_log_trace;
 ///
 /// Owns the transport and the application callback handler. Construct via
 /// [`ServerServices::new`], call `connect()`, then drive `poll()` in a loop.
-pub struct ServerServices<TRANSPORT, APP> {
+///
+/// ## Generic Parameters
+///
+/// - `TRANSPORT`: implements [`Transport`].
+/// - `APP`: implements [`ModbusAppHandler`].
+/// - `QUEUE_DEPTH` *(default: `8`)*: maximum number of concurrently-buffered
+///   requests **and** pending responses.  Increase on resource-rich targets;
+///   decrease (or keep at `1`) on constrained embedded targets.
+pub struct ServerServices<TRANSPORT, APP, const QUEUE_DEPTH: usize = 8> {
     /// The unit ID (TCP) or slave address (Serial) this server responds to.
     ///
     /// Frames addressed to any other unit are silently discarded without a response.
@@ -88,26 +102,75 @@ pub struct ServerServices<TRANSPORT, APP> {
     pub(super) config: ModbusConfig,
     /// Internal buffer for partially-received frames.
     pub(super) rxed_frame: Vec<u8, MAX_ADU_FRAME_LEN>,
+    /// Resilience configuration (timeouts, priority queue, retry policy).
+    pub(super) resilience: ResilienceConfig,
+    /// Priority-ordered queue for incoming requests.
+    pub(super) request_queue: RequestQueue<QUEUE_DEPTH>,
+    /// FIFO retry queue for responses that could not be sent immediately.
+    pub(super) response_queue: ResponseQueue<QUEUE_DEPTH>,
+    /// Number of responses dropped due to queue overflow.
+    pub(super) dropped_response_count: u32,
+    /// Number of requests rejected due to response queue back-pressure.
+    pub(super) rejected_request_count: u32,
+    /// Peak observed utilization of the response retry queue (as a count).
+    pub(super) peak_response_queue_size: usize,
 }
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP>
+impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP, 8>
 where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
 {
-    /// Creates a new [`ServerServices`] with the provided transport, application
-    /// handler, configuration, and slave address.
+    /// Creates a new [`ServerServices`] with the default queue depth of `8`.
+    ///
+    /// Pass [`ResilienceConfig::default()`] to disable all resilience features.
     ///
     /// Call [`connect`](Self::connect) before polling.
+    ///
+    /// ## Custom queue depth
+    ///
+    /// To use a different queue depth, construct with an explicit type annotation
+    /// and call [`ServerServices::with_queue_depth`]:
+    ///
+    /// ```ignore
+    /// let server: ServerServices<_, _, 16> =
+    ///     ServerServices::with_queue_depth(transport, app, config, addr, resilience);
+    /// ```
     pub fn new(
         transport: TRANSPORT,
         app: APP,
         config: ModbusConfig,
         slave_address: UnitIdOrSlaveAddr,
+        resilience: ResilienceConfig,
+    ) -> Self {
+        Self::with_queue_depth(transport, app, config, slave_address, resilience)
+    }
+}
+
+impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
+where
+    TRANSPORT: Transport,
+    APP: ModbusAppHandler,
+{
+    /// Creates a [`ServerServices`] with an explicitly-sized queue depth `QUEUE_DEPTH`.
+    ///
+    /// Prefer [`ServerServices::new`] for the default depth of `8`.  Use this
+    /// constructor when you need a different depth:
+    ///
+    /// ```ignore
+    /// let server: ServerServices<_, _, 16> =
+    ///     ServerServices::with_queue_depth(transport, app, config, addr, resilience);
+    /// ```
+    pub fn with_queue_depth(
+        transport: TRANSPORT,
+        app: APP,
+        config: ModbusConfig,
+        slave_address: UnitIdOrSlaveAddr,
+        resilience: ResilienceConfig,
     ) -> Self {
         Self {
             slave_address,
@@ -115,8 +178,32 @@ where
             transport,
             config,
             rxed_frame: Vec::new(),
+            resilience,
+            request_queue: RequestQueue::new(),
+            response_queue: ResponseQueue::new(),
+            dropped_response_count: 0,
+            rejected_request_count: 0,
+            peak_response_queue_size: 0,
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Internal clock helper
+    // -----------------------------------------------------------------------
+
+    /// Returns the current time in milliseconds as provided by the configured
+    /// [`ClockFn`](resilience::ClockFn), or `0` when no clock is available.
+    #[inline]
+    pub(super) fn now_ms(&self) -> u64 {
+        match self.resilience.clock_fn {
+            Some(f) => f(),
+            None => 0,
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Lifecycle
+    // -----------------------------------------------------------------------
 
     /// Establishes the underlying transport connection.
     pub fn connect(&mut self) -> Result<(), MbusError>
@@ -177,21 +264,140 @@ where
             ModbusConfig::Serial(config) => config.retry_attempts,
         }
     }
+
+    /// Returns a shared reference to the resilience configuration.
+    pub fn resilience(&self) -> &ResilienceConfig {
+        &self.resilience
+    }
+
+    /// Returns `true` when the frame must be silently discarded due to address filtering.
+    fn should_drop_for_address(&self, message: &ModbusMessage) -> bool {
+        let wire_txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+        let function_code = message.pdu.function_code();
+        let wire_addr = unit_id_or_slave_addr.get();
+        let own_addr = self.slave_address.get();
+
+        if wire_addr == own_addr {
+            return false;
+        }
+
+        if wire_addr == 0 {
+            server_log_trace!(
+                "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast write forwarding not yet implemented)",
+                wire_txn_id,
+                function_code as u8,
+            );
+        } else {
+            server_log_trace!(
+                "dropping misaddressed frame: txn_id={}, wire_addr={}, own_addr={}",
+                wire_txn_id,
+                wire_addr,
+                own_addr,
+            );
+        }
+
+        true
+    }
+
+    /// Checks whether back-pressure should be applied to avoid response queue overflow.
+    ///
+    /// Returns `true` if the response queue utilization exceeds 80% and the configured
+    /// overflow policy is `RejectRequest`.
+    fn should_apply_back_pressure(&self) -> bool {
+        if self.resilience.timeouts.overflow_policy != OverflowPolicy::RejectRequest {
+            return false;
+        }
+        let capacity = QUEUE_DEPTH;
+        let utilization = (self.response_queue.len() * 100) / capacity;
+        utilization >= 80
+    }
+
+    /// Returns the number of requests currently waiting in the priority queue.
+    pub fn pending_request_count(&self) -> usize {
+        self.request_queue.len()
+    }
+
+    /// Returns the number of responses currently waiting in the retry queue.
+    pub fn pending_response_count(&self) -> usize {
+        self.response_queue.len()
+    }
+
+    /// Returns the number of responses that have been dropped due to queue overflow.
+    pub fn dropped_response_count(&self) -> u32 {
+        self.dropped_response_count
+    }
+
+    /// Returns the number of requests that have been rejected due to back-pressure.
+    pub fn rejected_request_count(&self) -> u32 {
+        self.rejected_request_count
+    }
+
+    /// Returns the peak utilization observed in the response retry queue.
+    pub fn peak_response_queue_size(&self) -> usize {
+        self.peak_response_queue_size
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Receive pipeline
+// Exception response helper + send pipeline
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Exception response helper
-// ---------------------------------------------------------------------------
-
-impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP>
+impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
 where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
 {
+    /// Attempts to send `frame` over the transport.
+    ///
+    /// On failure the frame is copied into the response retry queue (if space
+    /// is available) so that [`poll`](Self::poll) can retry it on subsequent
+    /// calls.  An optional `send_ms` threshold from [`ResilienceConfig`]
+    /// produces a debug-level log if the send duration exceeds the limit.
+    pub(super) fn try_send_or_queue(&mut self, frame: &[u8], txn_id: u16) {
+        let start = self.now_ms();
+        match self.transport.send(frame) {
+            Ok(_) => {
+                let elapsed = self.now_ms().saturating_sub(start);
+                let threshold = self.resilience.timeouts.send_ms as u64;
+                if threshold > 0 && elapsed > threshold {
+                    server_log_debug!(
+                        "txn_id={}: send took {}ms (threshold={}ms)",
+                        txn_id,
+                        elapsed,
+                        threshold
+                    );
+                }
+            }
+            Err(err) => {
+                server_log_debug!(
+                    "txn_id={}: transport send failed ({:?}); queuing for retry",
+                    txn_id, err
+                );
+                let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                if queued.extend_from_slice(frame).is_ok() {
+                    let queued_at = self.now_ms();
+                    if !self.response_queue.push_back(PendingResponse {
+                        frame: queued,
+                        retry_count: 0,
+                        queued_at_ms: queued_at,
+                    }) {
+                        server_log_debug!(
+                            "txn_id={}: response queue full; dropping response",
+                            txn_id
+                        );
+                        self.dropped_response_count = self.dropped_response_count.saturating_add(1);
+                    }
+                }
+                // Track peak queue utilization after queueing attempt
+                let current_size = self.response_queue.len();
+                if current_size > self.peak_response_queue_size {
+                    self.peak_response_queue_size = current_size;
+                }
+            }
+        }
+    }
+
     /// Builds and sends an exception ADU for a failed request.
     ///
     /// Exception code mapping is derived from the function code and the
@@ -223,27 +429,20 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!(
-                "FC{:02X}: failed to send exception response: {:?}",
-                function_code as u8,
-                err
-            );
-        } else {
-            server_log_trace!(
-                "FC{:02X}: sent exception response with code 0x{:02X}",
-                function_code as u8,
-                exception_code as u8
-            );
-        }
+        server_log_trace!(
+            "FC{:02X}: sending exception response with code 0x{:02X}",
+            function_code as u8,
+            exception_code as u8
+        );
+        self.try_send_or_queue(&response, txn_id);
     }
 }
 
 // ---------------------------------------------------------------------------
-// Receive pipeline
+// Receive + dispatch pipeline
 // ---------------------------------------------------------------------------
 
-impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP>
+impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
 where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
@@ -272,23 +471,7 @@ where
         // stacks send. If your client uses 0xFF as a wildcard, configure the server
         // with slave_address = 0xFF.
         // -----------------------------------------------------------------------
-        let wire_addr = unit_id_or_slave_addr.get();
-        let own_addr = self.slave_address.get();
-        if wire_addr != own_addr {
-            if wire_addr == 0 {
-                server_log_trace!(
-                    "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast write forwarding not yet implemented)",
-                    wire_txn_id,
-                    function_code as u8,
-                );
-            } else {
-                server_log_trace!(
-                    "dropping misaddressed frame: txn_id={}, wire_addr={}, own_addr={}",
-                    wire_txn_id,
-                    wire_addr,
-                    own_addr,
-                );
-            }
+        if self.should_drop_for_address(message) {
             return;
         }
 
@@ -301,7 +484,7 @@ where
             unit_id_or_slave_addr.get(),
         );
 
-        use mbus_core::function_codes::public::FunctionCode::*;
+        use FunctionCode::*;
         match function_code {
             #[cfg(feature = "coils")]
             ReadCoils => {
@@ -364,16 +547,204 @@ where
 
     /// Main execution loop. Call this in a tight loop to receive and dispatch
     /// incoming Modbus requests.
+    ///
+    /// Each call to `poll` performs the following steps in order:
+    ///
+    /// 1. **Drain response queue** — retry any previously-failed sends.
+    /// 2. **Receive** — read bytes from the transport into the internal buffer.
+    /// 3. **Ingest frames** — parse complete frames; queue or dispatch depending
+    ///    on [`ResilienceConfig::enable_priority_queue`].
+    /// 4. **Expire stale queued requests** — discard requests that have exceeded
+    ///    [`TimeoutConfig::request_deadline_ms`] (if configured).
+    /// 5. **Dispatch queued requests** — process all buffered requests in
+    ///    priority order (only reached when `enable_priority_queue` is `true`).
     pub fn poll(&mut self) {
+        // Step 1 — retry queued responses from previous failed sends.
+        self.drain_response_queue();
+
+        // Step 2 — receive bytes from the transport.
         match self.transport.recv() {
             Ok(frame) => {
                 self.append_to_rxed_frame(frame);
-                self.process_rxed_frame();
             }
             Err(err) => {
                 self.handle_recv_error(err);
+                return;
             }
         }
+
+        // Step 3 — parse complete frames and either queue or dispatch them.
+        self.process_rxed_frame();
+
+        // Steps 4 & 5 — only relevant when the priority queue is active.
+        if self.resilience.enable_priority_queue {
+            // Expire requests that have waited too long.
+            let deadline = self.resilience.timeouts.request_deadline_ms;
+            if deadline > 0 {
+                let now = self.now_ms();
+                if self.resilience.timeouts.strict_mode {
+                    let expired = self.request_queue.take_expired(now, deadline);
+                    if !expired.is_empty() {
+                        server_log_debug!("{} stale request(s) expired from queue", expired.len());
+                        for pending in expired {
+                            self.handle_expired_request_strict(pending);
+                        }
+                    }
+                } else {
+                    let expired = self.request_queue.expire_stale(now, deadline);
+                    if expired > 0 {
+                        server_log_debug!("{} stale request(s) expired from queue", expired);
+                    }
+                }
+            }
+
+            // Dispatch all queued requests in priority order.
+            while let Some(pending) = self.request_queue.pop_highest_priority() {
+                self.dispatch_pending_request(pending);
+            }
+        }
+    }
+
+    /// Attempts to resend queued responses from previous poll cycles.
+    ///
+    /// Iterates at most `len` items (the queue length at call time) so that a
+    /// persistent transport failure does not starve the receive path.
+    ///
+    /// When `TimeoutConfig::response_retry_interval_ms` is configured and a
+    /// clock is available, each queued response is retried only after the
+    /// configured interval has elapsed since its last enqueue/retry timestamp.
+    fn drain_response_queue(&mut self) {
+        let retry_interval_ms = self.resilience.timeouts.response_retry_interval_ms as u64;
+        let has_clock = self.resilience.clock_fn.is_some();
+        let pending_count = self.response_queue.len();
+        for _ in 0..pending_count {
+            let mut pending = match self.response_queue.pop_front() {
+                Some(p) => p,
+                None => break,
+            };
+            if pending.retry_count >= self.resilience.max_send_retries {
+                server_log_debug!(
+                    "dropping queued response after {} retry attempt(s)",
+                    pending.retry_count
+                );
+                continue;
+            }
+
+            if retry_interval_ms > 0 && has_clock {
+                let elapsed = self.now_ms().saturating_sub(pending.queued_at_ms);
+                if elapsed < retry_interval_ms {
+                    let _ = self.response_queue.push_back(pending);
+                    // Preserve FIFO order: if the head is not due yet, later
+                    // items should wait as well.
+                    break;
+                }
+            }
+
+            match self.transport.send(&pending.frame) {
+                Ok(_) => {
+                    server_log_trace!(
+                        "queued response sent on retry attempt {}",
+                        pending.retry_count + 1
+                    );
+                }
+                Err(err) => {
+                    server_log_debug!(
+                        "queued response retry {} failed: {:?}; requeueing",
+                        pending.retry_count + 1,
+                        err
+                    );
+                    pending.retry_count += 1;
+                    pending.queued_at_ms = self.now_ms();
+                    let _ = self.response_queue.push_back(pending);
+                    // Do not try more this poll; let the transport recover.
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Dispatches a request that was previously placed into the priority queue.
+    ///
+    /// Measures the dispatch duration and emits a debug log if it exceeds the
+    /// configured [`TimeoutConfig::app_callback_ms`] threshold.
+    fn dispatch_pending_request(&mut self, pending: PendingRequest) {
+        let transport_type = self.transport.transport_type();
+
+        let expected_length =
+            match derive_length_from_bytes(pending.frame.as_slice(), transport_type) {
+                Some(len) => len,
+                None => {
+                    server_log_debug!("queued request: could not derive frame length; dropping");
+                    return;
+                }
+            };
+
+        let message = match common::decompile_adu_frame(
+            &pending.frame[..expected_length],
+            transport_type,
+        ) {
+            Ok(msg) => msg,
+            Err(err) => {
+                server_log_debug!("queued request: decompile failed: {:?}; dropping", err);
+                return;
+            }
+        };
+
+        let message = match self.reframe_message(message) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let start = self.now_ms();
+        self.dispatch_request(&message);
+        let elapsed = self.now_ms().saturating_sub(start);
+        let threshold = self.resilience.timeouts.app_callback_ms as u64;
+        if threshold > 0 && elapsed > threshold {
+            server_log_debug!(
+                "app callback for queued request took {}ms (threshold={}ms)",
+                elapsed,
+                threshold
+            );
+        }
+    }
+
+    /// In strict timeout mode, sends an exception response for an expired
+    /// queued request instead of silently dropping it.
+    fn handle_expired_request_strict(&mut self, pending: PendingRequest) {
+        let transport_type = self.transport.transport_type();
+
+        let expected_length = match derive_length_from_bytes(pending.frame.as_slice(), transport_type)
+        {
+            Some(len) => len,
+            None => {
+                server_log_debug!("strict expiry: unable to derive frame length; dropping");
+                return;
+            }
+        };
+
+        let message = match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type)
+        {
+            Ok(msg) => msg,
+            Err(err) => {
+                server_log_debug!("strict expiry: failed to decompile queued request: {:?}", err);
+                return;
+            }
+        };
+
+        let message = match self.reframe_message(message) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+        let function_code = message.pdu.function_code();
+        self.send_exception_response(
+            txn_id,
+            unit_id_or_slave_addr,
+            function_code,
+            MbusError::Timeout,
+        );
     }
 
     fn handle_recv_error(&mut self, err: <TRANSPORT as Transport>::Error) {
@@ -497,8 +868,7 @@ where
             }
         };
 
-        use mbus_core::data_unit::common::AdditionalAddress;
-        use mbus_core::transport::TransportType::*;
+        use TransportType::*;
         let message = match self.transport.transport_type() {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
@@ -519,10 +889,97 @@ where
             }
         };
 
-        self.dispatch_request(&message);
-        server_log_trace!("frame dispatch complete for {} bytes", expected_length);
+        if self.should_drop_for_address(&message) {
+            return Ok(expected_length);
+        }
 
+        if self.resilience.enable_priority_queue {
+            // Check if back-pressure should be applied
+            if self.should_apply_back_pressure() {
+                server_log_debug!(
+                    "txn_id={}: request rejected due to response queue back-pressure (utilization >= 80%)",
+                    message.transaction_id()
+                );
+                self.rejected_request_count = self.rejected_request_count.saturating_add(1);
+                self.send_exception_response(
+                    message.transaction_id(),
+                    message.unit_id_or_slave_addr(),
+                    message.pdu.function_code(),
+                    MbusError::TooManyRequests,
+                );
+                return Ok(expected_length);
+            }
+
+            // Route to priority queue for ordered dispatch.
+            let priority = RequestPriority::from_function_code(message.pdu.function_code());
+            let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+            let _ = raw_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
+            let received_at = self.now_ms();
+            if !self.request_queue.push(PendingRequest {
+                frame: raw_frame,
+                priority,
+                received_at_ms: received_at,
+            }) {
+                server_log_debug!(
+                    "request queue full; dispatching immediately (priority={:?})",
+                    priority
+                );
+                let start = self.now_ms();
+                self.dispatch_request(&message);
+                let elapsed = self.now_ms().saturating_sub(start);
+                let threshold = self.resilience.timeouts.app_callback_ms as u64;
+                if threshold > 0 && elapsed > threshold {
+                    server_log_debug!(
+                        "app callback took {}ms (threshold={}ms) [queue-full fallback]",
+                        elapsed,
+                        threshold
+                    );
+                }
+            }
+        } else {
+            // Hot path: dispatch immediately.
+            let start = self.now_ms();
+            self.dispatch_request(&message);
+            let elapsed = self.now_ms().saturating_sub(start);
+            let threshold = self.resilience.timeouts.app_callback_ms as u64;
+            if threshold > 0 && elapsed > threshold {
+                server_log_debug!(
+                    "app callback took {}ms (threshold={}ms)",
+                    elapsed,
+                    threshold
+                );
+            }
+        }
+
+        server_log_trace!("frame ingest complete for {} bytes", expected_length);
         Ok(expected_length)
+    }
+
+    /// Re-frames a parsed `ModbusMessage` from raw bytes into the correct
+    /// address variant for the active transport type.
+    fn reframe_message(&self, message: ModbusMessage) -> Option<ModbusMessage> {
+        use TransportType::*;
+        match self.transport.transport_type() {
+            StdTcp | CustomTcp => {
+                let mbap_header = match message.additional_address() {
+                    AdditionalAddress::MbapHeader(h) => h,
+                    _ => return None,
+                };
+                Some(ModbusMessage::new(
+                    AdditionalAddress::MbapHeader(*mbap_header),
+                    message.pdu,
+                ))
+            }
+            StdSerial(_) | CustomSerial(_) => {
+                let addr = match message.additional_address() {
+                    AdditionalAddress::SlaveAddress(s) => s.address(),
+                    _ => return None,
+                };
+                let additional =
+                    AdditionalAddress::SlaveAddress(SlaveAddress::new(addr).ok()?);
+                Some(ModbusMessage::new(additional, message.pdu))
+            }
+        }
     }
 }
 

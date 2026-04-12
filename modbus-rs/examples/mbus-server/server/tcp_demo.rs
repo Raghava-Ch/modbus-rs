@@ -8,7 +8,7 @@ use mbus_core::transport::{
 };
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
-    ServerServices, modbus_app,
+    ResilienceConfig, ServerServices, modbus_app,
 };
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -243,7 +243,7 @@ fn worker_loop(
     let config = ModbusConfig::Tcp(tcp_cfg);
     let access = OwnedWorkerApp::new(seed_app());
     let app = ForwardingApp::new(access);
-    let mut server = ServerServices::new(transport, app, config, unit);
+    let mut server = ServerServices::new(transport, app, config, unit, ResilienceConfig::default());
 
     if let Err(err) = server.connect() {
         eprintln!("[worker-{worker_id}] connect failed for {peer}: {err}");

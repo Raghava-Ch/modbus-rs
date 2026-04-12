@@ -7,6 +7,7 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ServerServices;
 use mbus_server::ModbusAppHandler;
+use mbus_server::ResilienceConfig;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -106,7 +107,7 @@ fn run_once(request: HVec<u8, MAX_ADU_FRAME_LEN>, app: RegisterApp) -> (Register
         connected: true,
     };
 
-    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1));
+    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1), ResilienceConfig::default());
     server.poll();
 
     let response = sent_frames

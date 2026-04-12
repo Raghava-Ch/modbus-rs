@@ -3,7 +3,7 @@ use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr};
 use mbus_network::AcceptedTcpTransport;
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
-    ServerServices, modbus_app,
+    ResilienceConfig, ServerServices, modbus_app,
 };
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
@@ -199,7 +199,7 @@ fn run_server_loop(host: &str, port: u16, unit: UnitIdOrSlaveAddr) -> Result<()>
                 thread::spawn(move || {
                     let transport = AcceptedTcpTransport::new(stream);
                     let mut server =
-                        ServerServices::new(transport, app, ModbusConfig::Tcp(cfg), unit);
+                        ServerServices::new(transport, app, ModbusConfig::Tcp(cfg), unit, ResilienceConfig::default());
 
                     if let Err(err) = server.connect() {
                         eprintln!("server connect failed for {peer}: {err}");
