@@ -17,6 +17,7 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
 use mbus_server::ServerServices;
 use mbus_server::ModbusAppHandler;
+use mbus_server::ResilienceConfig;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -144,7 +145,7 @@ fn run_request(
         calls: calls.clone(),
     };
 
-    let mut server = ServerServices::new(transport, app, tcp_config(), server_unit);
+    let mut server = ServerServices::new(transport, app, tcp_config(), server_unit, ResilienceConfig::default());
     server.connect().expect("connect should succeed");
     server.poll();
 
@@ -253,7 +254,7 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
         let app = CountingApp {
             calls: calls.clone(),
         };
-        let mut server = ServerServices::new(transport, app, tcp_config(), server_unit);
+        let mut server = ServerServices::new(transport, app, tcp_config(), server_unit, ResilienceConfig::default());
         server.connect().expect("connect should succeed");
         server.poll();
     }
@@ -279,7 +280,7 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
         let app = CountingApp {
             calls: calls.clone(),
         };
-        let mut server = ServerServices::new(transport, app, tcp_config(), server_unit);
+        let mut server = ServerServices::new(transport, app, tcp_config(), server_unit, ResilienceConfig::default());
         server.connect().expect("connect should succeed");
         server.poll();
     }

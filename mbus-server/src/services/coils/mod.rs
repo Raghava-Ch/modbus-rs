@@ -24,7 +24,7 @@ const FC15_MIN_QUANTITY: u16 = 1;
 /// FC15 quantity upper bound (inclusive).
 const FC15_MAX_QUANTITY: u16 = 1968;
 
-impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP>
+impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
 where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
@@ -130,9 +130,7 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!("FC01: transport send failed: {:?}", err);
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 
     /// Handles FC05 (Write Single Coil).
@@ -215,9 +213,7 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!("FC05: transport send failed: {:?}", err);
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 
     /// Handles FC15 (Write Multiple Coils).
@@ -316,9 +312,7 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!("FC15: transport send failed: {:?}", err);
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 }
 

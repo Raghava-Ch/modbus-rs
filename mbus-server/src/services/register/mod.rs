@@ -35,7 +35,7 @@ const FC16_MIN_QUANTITY: u16 = 1;
 #[cfg(feature = "holding-registers")]
 const FC16_MAX_QUANTITY: u16 = 123;
 
-impl<TRANSPORT, APP> ServerServices<TRANSPORT, APP>
+impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
 where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
@@ -163,9 +163,7 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!("FC06: transport send failed: {:?}", err);
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 
     /// Handles FC16 (Write Multiple Registers).
@@ -269,9 +267,7 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!("FC16: transport send failed: {:?}", err);
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 
     /// Shared implementation for FC03/FC04-style register reads.
@@ -371,12 +367,6 @@ where
             }
         };
 
-        if let Err(err) = self.transport.send(&response) {
-            server_log_debug!(
-                "FC{:02X}: transport send failed: {:?}",
-                function_code as u8,
-                err
-            );
-        }
+        self.try_send_or_queue(&response, txn_id);
     }
 }

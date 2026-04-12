@@ -12,7 +12,7 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ServerServices};
+use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ResilienceConfig, ServerServices};
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ fn run_once(
 
     // KEY: ServerServices<MockTransport, ForwardingApp<MutexAccess>>
     let mut server: ServerServices<MockTransport, ForwardingApp<MutexAccess>> =
-        ServerServices::new(transport, fwd_app, tcp_config(), unit_id(1));
+        ServerServices::new(transport, fwd_app, tcp_config(), unit_id(1), ResilienceConfig::default());
 
     server.poll();
 

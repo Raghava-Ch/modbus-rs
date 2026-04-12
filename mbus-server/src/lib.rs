@@ -23,6 +23,7 @@ pub use mbus_macros::HoldingRegistersModel;
 pub use mbus_macros::InputRegistersModel;
 pub use mbus_macros::modbus_app;
 pub use services::ServerServices;
+pub use services::resilience::{ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig};
 
 #[cfg(feature = "coils")]
 pub use mbus_core::models::coil::*;

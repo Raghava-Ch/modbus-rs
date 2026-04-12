@@ -169,6 +169,66 @@ Compile-time diagnostics distinguish between:
 - Validation errors are emitted at compile time for common mapping mistakes.
 - Runtime arrays remain stack-owned.
 
+## Resilience configuration
+
+`ServerServices` accepts a `ResilienceConfig` that controls queueing, retries,
+and timeout policy.
+
+### Timed retry schedule
+
+- `max_send_retries`: retry budget for queued responses after send failure.
+- `timeouts.response_retry_interval_ms`: minimum delay between retry attempts
+	for the same queued response.
+- `clock_fn`: required to enforce the retry interval deterministically.
+
+If `response_retry_interval_ms > 0` and `clock_fn` is set, retries are
+time-gated by elapsed milliseconds. If no clock is provided, retries are still
+performed but cadence is poll-driven.
+
+### Overflow policy
+
+- `timeouts.overflow_policy = DropResponse`: legacy behavior. If a response send
+	fails and the retry queue is full, the response is dropped.
+- `timeouts.overflow_policy = RejectRequest`: when the response retry queue reaches
+	80% utilization, new addressed unicast requests are rejected before dispatch so
+	the server avoids applying more state changes that it may not be able to confirm.
+	The rejection is sent as a normal Modbus exception response using the current
+	`TooManyRequests -> ServerDeviceFailure` mapping.
+
+Important protocol note:
+- broadcast frames and misaddressed frames are never answered, even under
+	back-pressure. They are still silently discarded.
+- `RejectRequest` therefore only applies to requests actually addressed to this
+	server.
+
+### Example
+
+```rust
+use mbus_server::{OverflowPolicy, ResilienceConfig, TimeoutConfig};
+
+let resilience = ResilienceConfig {
+		timeouts: TimeoutConfig {
+				app_callback_ms: 20,
+				send_ms: 50,
+				response_retry_interval_ms: 100,
+				request_deadline_ms: 500,
+				strict_mode: true,
+				overflow_policy: OverflowPolicy::RejectRequest,
+		},
+		clock_fn: Some(my_monotonic_ms),
+		max_send_retries: 3,
+		enable_priority_queue: true,
+};
+```
+
+This configuration means:
+- app callbacks are monitored against a 20ms threshold
+- send duration is monitored against a 50ms threshold
+- failed response sends are retried at most every 100ms
+- queued requests older than 500ms are expired using strict mode behaviour
+- once the response retry queue reaches 80% utilization, new addressed unicast
+	requests are rejected instead of admitting more work that may not be confirmable
+
 ## Detailed design
 
 See [documentation/server_macro_phase1.md](../documentation/server_macro_phase1.md).
