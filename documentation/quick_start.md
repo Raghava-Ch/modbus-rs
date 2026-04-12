@@ -209,29 +209,29 @@ The workspace contains real examples in `modbus-rs/examples/`.
 
 ### TCP examples
 
-- [coils_example.rs](../modbus-rs/examples/coils_example.rs)
-- [registers_example.rs](../modbus-rs/examples/registers_example.rs)
-- [discrete_inputs_example.rs](../modbus-rs/examples/discrete_inputs_example.rs)
-- [device_id_example.rs](../modbus-rs/examples/device_id_example.rs)
+- [coils_example.rs](../modbus-rs/examples/modbus-rs/client/tcp/coils_example.rs)
+- [registers_example.rs](../modbus-rs/examples/modbus-rs/client/tcp/registers_example.rs)
+- [discrete_inputs_example.rs](../modbus-rs/examples/modbus-rs/client/tcp/discrete_inputs_example.rs)
+- [device_id_example.rs](../modbus-rs/examples/modbus-rs/client/tcp/device_id_example.rs)
 
 ### Serial RTU examples
 
-- [coils_serial_example.rs](../modbus-rs/examples/coils_serial_example.rs)
-- [registers_serial_example.rs](../modbus-rs/examples/registers_serial_example.rs)
-- [discrete_inputs_serial_example.rs](../modbus-rs/examples/discrete_inputs_serial_example.rs)
-- [device_id_serial_example.rs](../modbus-rs/examples/device_id_serial_example.rs)
+- [coils_serial_example.rs](../modbus-rs/examples/modbus-rs/client/serial/coils_serial_example.rs)
+- [registers_serial_example.rs](../modbus-rs/examples/modbus-rs/client/serial/registers_serial_example.rs)
+- [discrete_inputs_serial_example.rs](../modbus-rs/examples/modbus-rs/client/serial/discrete_inputs_serial_example.rs)
+- [device_id_serial_example.rs](../modbus-rs/examples/modbus-rs/client/serial/device_id_serial_example.rs)
 
 ### Serial ASCII examples
 
-- [ascii_serial_example.rs](../modbus-rs/examples/ascii_serial_example.rs)
+- [ascii_serial_example.rs](../modbus-rs/examples/modbus-rs/client/serial/ascii_serial_example.rs)
 
 ### Async TCP examples
 
-- [async_tcp_example.rs](../modbus-rs/examples/async_tcp_example.rs)
+- [async_tcp_example.rs](../modbus-rs/examples/modbus-rs/client/async/async_tcp_example.rs)
 
 ### Async Serial RTU examples
 
-- [async_serial_rtu_example.rs](../modbus-rs/examples/async_serial_rtu_example.rs)
+- [async_serial_rtu_example.rs](../modbus-rs/examples/modbus-rs/client/async/async_serial_rtu_example.rs)
 
 ### Traffic observability examples
 
@@ -249,8 +249,8 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 
 Dedicated examples:
 
-- [traffic_sync_example.rs](../modbus-rs/examples/traffic_sync_example.rs)
-- [traffic_async_tcp_example.rs](../modbus-rs/examples/traffic_async_tcp_example.rs)
+- [traffic_sync_example.rs](../modbus-rs/examples/modbus-rs/client/traffic/traffic_sync_example.rs)
+- [traffic_async_tcp_example.rs](../modbus-rs/examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs)
 
 ## 4. Async Usage (Tokio)
 
@@ -380,36 +380,36 @@ Run examples from the workspace root.
 ### TCP sync example
 
 ```bash
-cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-features --features client,tcp,coils
 ```
 
 ### Serial RTU sync example
 
 ```bash
-cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils --no-default-features --features client,serial-rtu,coils
 ```
 
 ### Serial ASCII sync example
 
 ```bash
-cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils
+cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-default-features --features client,serial-ascii,coils
 ```
 
 ### Async TCP example
 
 ```bash
-cargo run -p modbus-rs --example async_tcp_example --features async
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --features async
 # With explicit host/port/unit:
-cargo run -p modbus-rs --example async_tcp_example --features async -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --features async -- 192.168.1.10 502 1
 ```
 
 ### Async serial RTU example
 
 ```bash
-cargo run -p modbus-rs --example async_serial_rtu_example \
+cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu \
   --no-default-features --features async,serial-rtu,coils,registers
 # With explicit port/unit:
-cargo run -p modbus-rs --example async_serial_rtu_example \
+cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu \
   --no-default-features --features async,serial-rtu,coils,registers \
   -- /dev/ttyUSB0 1
 ```
@@ -417,7 +417,7 @@ cargo run -p modbus-rs --example async_serial_rtu_example \
 You can also use the default feature set if you want everything enabled:
 
 ```bash
-cargo run -p modbus-rs --example coils_example
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils
 ```
 
 ## 6. Transport Setup Notes

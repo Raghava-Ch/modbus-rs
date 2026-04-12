@@ -213,7 +213,6 @@ fn print_help() {
     println!("  cargo run -p xtask -- build-c-smoke");
 }
 
-
 fn main() -> ExitCode {
     let root = repo_root();
     let mut args = env::args();

@@ -1,18 +1,177 @@
 # modbus-server
 
-`modbus-server` is a reserved crate in the `modbus-rs` workspace.
+`modbus-server` contains the server-side foundations for compile-time mapping.
 
 ## Status
 
-This crate is **not implemented yet**.
+Phase 1 is focused on derive-driven model declarations for:
+- coils
+- holding registers
+- input registers
 
-It currently exists to reserve the crate name and define a stable place for future async functionality in an upcoming release.
+The stack remains the owner of protocol memory. User code declares typed models and derives mapping metadata.
 
+## Phase 1 API
+
+`mbus-server` re-exports these derives:
+- `CoilsModel`
+- `HoldingRegistersModel`
+- `InputRegistersModel`
+- `modbus_app`
+
+### Coils example
+
+```rust
+use mbus_server::CoilsModel;
+
+#[derive(Debug, Clone, Default, CoilsModel)]
+struct Coils {
+	#[coil(addr = 0)]
+	run_enable: bool,
+	#[coil(addr = 1)]
+	fault_reset: bool,
+}
+```
+
+### Holding registers + app routing example
+
+```rust
+use mbus_server::{HoldingRegistersModel, modbus_app};
+
+#[derive(Debug, Clone, Default, HoldingRegistersModel)]
+struct ChillerRegs {
+	#[reg(addr = 0, scale = 0.1, unit = "C")]
+	supply_temp: u16,
+	#[reg(addr = 1)]
+	return_temp: u16,
+}
+
+#[derive(Debug, Default)]
+#[modbus_app(holding_registers(chiller))]
+struct App {
+	chiller: ChillerRegs,
+}
+```
+
+### Generated API
+
+`CoilsModel` generates:
+- `CoilMap` implementation with FC01/FC05/FC15 support
+
+`HoldingRegistersModel` generates:
+- per-field getter methods (`field_name()`)
+- per-field setter methods (`set_field_name(u16)`)
+- `HoldingRegisterMap` implementation with FC03 `encode()` support
+- optional engineering helpers when `scale` is provided:
+	- `field_name_scaled() -> f32`
+	- `set_field_name_scaled(f32) -> Result<(), MbusError>`
+- optional unit helper when `unit` is provided:
+	- `field_name_unit() -> &'static str`
+
+`InputRegistersModel` generates:
+- per-field getter methods (`field_name()`)
+- per-field setter methods (`set_field_name(u16)`) for local model updates
+- `InputRegisterMap` implementation with FC04 `encode()` support only
+- no register write trait methods (no `write_single` / `write_many`)
+
+### Ergonomic encode() calls
+
+To call `encode()` as a method (`my_regs.encode(...)`) without manually importing
+the trait path each time, import the crate prelude:
+
+```rust
+use mbus_server::prelude::*;
+```
+
+`modbus_app` generates:
+- direct `ModbusAppHandler` implementation on your app struct
+- compile-time overlap checks across all selected `holding_registers(...)` maps
+
+### Forwarding wrapper for runtime-owned app state
+
+`modbus_app` implements `ModbusAppHandler` on your concrete app model. In real deployments,
+that model is often wrapped by runtime state containers (mutexes, critical sections,
+RTOS primitives, shared ownership handles, etc.).
+
+To avoid writing repetitive callback delegation, `mbus-server` provides:
+- `ModbusAppAccess`: one method (`with_app_mut`) to provide temporary mutable access
+- `ForwardingApp<A>`: adapts any `A: ModbusAppAccess` into `ModbusAppHandler`
+
+This design keeps `mbus-server` `no_std` while letting user code choose the synchronization
+mechanism that matches the execution environment.
+
+#### `std` host/server usage (desktop, Linux, macOS, Windows)
+
+```rust
+use std::sync::{Arc, Mutex};
+use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+
+#[derive(Clone)]
+struct SharedApp {
+	inner: Arc<Mutex<MyApp>>,
+}
+
+impl ModbusAppAccess for SharedApp {
+	type App = MyApp;
+
+	fn with_app_mut<R, F>(&self, f: F) -> R
+	where
+		F: FnOnce(&mut Self::App) -> R,
+	{
+		let mut guard = self.inner.lock().expect("app lock poisoned");
+		f(&mut guard)
+	}
+}
+
+let app = ForwardingApp::new(shared_state);
+// pass `app` to ServerServices::new(...)
+```
+
+#### Bare-metal / RTOS usage
+
+Implement `ModbusAppAccess` with your own primitive:
+- bare-metal single thread: interior mutability + ownership discipline
+- interrupt-safe: critical-section lock
+- RTOS: mutex/semaphore wrappers
+
+The protocol stack only depends on `with_app_mut`, not on any concrete lock type.
+
+### Attribute keys (phase 1)
+
+For `CoilsModel`:
+- `addr` required
+
+For `HoldingRegistersModel`:
+- `addr` required via `#[reg(addr = N)]`
+- field type must be `u16` (wire-ready register word)
+- `scale` optional numeric literal (generates `*_scaled` helper methods)
+- `unit` optional string literal (generates `*_unit` helper method)
+
+For `InputRegistersModel`:
+- `addr` required via `#[reg(addr = N)]`
+- field type must be `u16` (wire-ready register word)
+- `scale` optional numeric literal (generates `*_scaled` helper methods)
+- `unit` optional string literal (generates `*_unit` helper method)
+
+## Feature gates
+
+- `holding-registers`: enables FC03/FC06/FC10 server handling and `HoldingRegistersModel`
+- `input-registers`: enables FC04 server handling and `InputRegistersModel`
+- `registers`: compatibility alias that enables both `holding-registers` and `input-registers`
+
+Compile-time diagnostics distinguish between:
+- duplicate register addresses
+- overlapping map ranges in `#[modbus_app]`
 
 ## Current Behavior
 
-- No public FFI API is provided yet.
-- The crate should not be used in production.
+- Compile-time descriptor tables are generated by derive macros.
+- Validation errors are emitted at compile time for common mapping mistakes.
+- Runtime arrays remain stack-owned.
+
+## Detailed design
+
+See [documentation/server_macro_phase1.md](../documentation/server_macro_phase1.md).
 
 ## License
 

@@ -592,7 +592,7 @@ impl TryFrom<u8> for UnitIdOrSlaveAddr {
 pub trait Transport {
     /// The specific error type returned by this transport implementation.
     /// It must be convertible into the common `MbusError` for upper-layer processing.
-    type Error: Into<MbusError>;
+    type Error: Into<MbusError> + core::fmt::Debug;
 
     /// Establishes the physical or logical connection to the Modbus server/slave.
     ///
