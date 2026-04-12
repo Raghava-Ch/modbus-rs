@@ -13,7 +13,7 @@
 //! This module is `no_std` compatible and uses `repr` attributes to ensure
 //! memory layout matches the protocol's byte-level requirements.
 
-use crate::errors::MbusError;
+use crate::errors::{ExceptionCode, MbusError};
 
 /// Modbus Public Function Codes.
 ///
@@ -183,6 +183,85 @@ pub enum FunctionCode {
     ///
     /// Section 6.19, 6.20, 6.21
     EncapsulatedInterfaceTransport = 0x2B,
+
+    // ============================================================
+    // Exception Responses (0x80 bit set)
+    // ============================================================
+    /// 0x81 — Exception Response for Read Coils (0x01 | 0x80)
+    #[cfg(feature = "coils")]
+    ReadCoilsException = 0x81,
+
+    /// 0x82 — Exception Response for Read Discrete Inputs (0x02 | 0x80)
+    #[cfg(feature = "discrete-inputs")]
+    ReadDiscreteInputsException = 0x82,
+
+    /// 0x83 — Exception Response for Read Holding Registers (0x03 | 0x80)
+    #[cfg(feature = "registers")]
+    ReadHoldingRegistersException = 0x83,
+
+    /// 0x84 — Exception Response for Read Input Registers (0x04 | 0x80)
+    #[cfg(feature = "registers")]
+    ReadInputRegistersException = 0x84,
+
+    /// 0x85 — Exception Response for Write Single Coil (0x05 | 0x80)
+    #[cfg(feature = "coils")]
+    WriteSingleCoilException = 0x85,
+
+    /// 0x86 — Exception Response for Write Single Register (0x06 | 0x80)
+    #[cfg(feature = "registers")]
+    WriteSingleRegisterException = 0x86,
+
+    /// 0x87 — Exception Response for Read Exception Status (0x07 | 0x80)
+    #[cfg(feature = "diagnostics")]
+    ReadExceptionStatusException = 0x87,
+
+    /// 0x88 — Exception Response for Diagnostics (0x08 | 0x80)
+    #[cfg(feature = "diagnostics")]
+    DiagnosticsException = 0x88,
+
+    /// 0x8B — Exception Response for Get Communication Event Counter (0x0B | 0x80)
+    #[cfg(feature = "diagnostics")]
+    GetCommEventCounterException = 0x8B,
+
+    /// 0x8C — Exception Response for Get Communication Event Log (0x0C | 0x80)
+    #[cfg(feature = "diagnostics")]
+    GetCommEventLogException = 0x8C,
+
+    /// 0x8F — Exception Response for Write Multiple Coils (0x0F | 0x80)
+    #[cfg(feature = "coils")]
+    WriteMultipleCoilsException = 0x8F,
+
+    /// 0x90 — Exception Response for Write Multiple Registers (0x10 | 0x80)
+    #[cfg(feature = "registers")]
+    WriteMultipleRegistersException = 0x90,
+
+    /// 0x91 — Exception Response for Report Server ID (0x11 | 0x80)
+    #[cfg(feature = "diagnostics")]
+    ReportServerIdException = 0x91,
+
+    /// 0x94 — Exception Response for Read File Record (0x14 | 0x80)
+    #[cfg(feature = "file-record")]
+    ReadFileRecordException = 0x94,
+
+    /// 0x95 — Exception Response for Write File Record (0x15 | 0x80)
+    #[cfg(feature = "file-record")]
+    WriteFileRecordException = 0x95,
+
+    /// 0x96 — Exception Response for Mask Write Register (0x16 | 0x80)
+    #[cfg(feature = "registers")]
+    MaskWriteRegisterException = 0x96,
+
+    /// 0x97 — Exception Response for Read/Write Multiple Registers (0x17 | 0x80)
+    #[cfg(feature = "registers")]
+    ReadWriteMultipleRegistersException = 0x97,
+
+    /// 0x98 — Exception Response for Read FIFO Queue (0x18 | 0x80)
+    #[cfg(feature = "fifo")]
+    ReadFifoQueueException = 0x98,
+
+    /// 0xAB — Exception Response for Encapsulated Interface Transport (0x2B | 0x80)
+    #[cfg(feature = "diagnostics")]
+    EncapsulatedInterfaceTransportException = 0xAB,
 }
 
 impl TryFrom<u8> for FunctionCode {
@@ -230,7 +309,157 @@ impl TryFrom<u8> for FunctionCode {
             0x18 => Ok(ReadFifoQueue),
             #[cfg(feature = "diagnostics")]
             0x2B => Ok(EncapsulatedInterfaceTransport),
+            // Exception responses (0x80 bit set)
+            #[cfg(feature = "coils")]
+            0x81 => Ok(ReadCoilsException),
+            #[cfg(feature = "discrete-inputs")]
+            0x82 => Ok(ReadDiscreteInputsException),
+            #[cfg(feature = "registers")]
+            0x83 => Ok(ReadHoldingRegistersException),
+            #[cfg(feature = "registers")]
+            0x84 => Ok(ReadInputRegistersException),
+            #[cfg(feature = "coils")]
+            0x85 => Ok(WriteSingleCoilException),
+            #[cfg(feature = "registers")]
+            0x86 => Ok(WriteSingleRegisterException),
+            #[cfg(feature = "diagnostics")]
+            0x87 => Ok(ReadExceptionStatusException),
+            #[cfg(feature = "diagnostics")]
+            0x88 => Ok(DiagnosticsException),
+            #[cfg(feature = "diagnostics")]
+            0x8B => Ok(GetCommEventCounterException),
+            #[cfg(feature = "diagnostics")]
+            0x8C => Ok(GetCommEventLogException),
+            #[cfg(feature = "coils")]
+            0x8F => Ok(WriteMultipleCoilsException),
+            #[cfg(feature = "registers")]
+            0x90 => Ok(WriteMultipleRegistersException),
+            #[cfg(feature = "diagnostics")]
+            0x91 => Ok(ReportServerIdException),
+            #[cfg(feature = "file-record")]
+            0x94 => Ok(ReadFileRecordException),
+            #[cfg(feature = "file-record")]
+            0x95 => Ok(WriteFileRecordException),
+            #[cfg(feature = "registers")]
+            0x96 => Ok(MaskWriteRegisterException),
+            #[cfg(feature = "registers")]
+            0x97 => Ok(ReadWriteMultipleRegistersException),
+            #[cfg(feature = "fifo")]
+            0x98 => Ok(ReadFifoQueueException),
+            #[cfg(feature = "diagnostics")]
+            0xAB => Ok(EncapsulatedInterfaceTransportException),
             _ => Err(MbusError::UnsupportedFunction(value)),
+        }
+    }
+}
+
+impl FunctionCode {
+    /// Maps an application error to the corresponding Modbus exception code.
+    ///
+    /// This method determines the appropriate exception code to return based on the
+    /// error that occurred during request processing. For errors that don't map to
+    /// a specific exception code, `ServerDeviceFailure` is used as a default.
+    ///
+    /// # Arguments
+    /// * `error` - The error that occurred during processing
+    ///
+    /// # Returns
+    /// The Modbus exception code to send in the response
+    ///
+    /// # Example
+    /// ```ignore
+    /// let fc = FunctionCode::ReadHoldingRegisters;
+    /// let error = MbusError::InvalidAddress;
+    /// let exc_code = fc.exception_code_for_error(&error);
+    /// assert_eq!(exc_code, ExceptionCode::IllegalDataAddress);
+    /// ```
+    pub fn exception_code_for_error(&self, error: &MbusError) -> ExceptionCode {
+        match error {
+            // Protocol/address errors
+            MbusError::InvalidAddress | MbusError::InvalidOffset | MbusError::InvalidDataLen => {
+                ExceptionCode::IllegalDataAddress
+            }
+            // Quantity/value errors
+            MbusError::InvalidQuantity | MbusError::InvalidValue | MbusError::InvalidByteCount => {
+                ExceptionCode::IllegalDataValue
+            }
+            // Parsing errors (malformed request)
+            MbusError::ParseError | MbusError::BasicParseError | MbusError::InvalidPduLength => {
+                ExceptionCode::IllegalDataAddress
+            }
+            // Function code errors
+            MbusError::InvalidFunctionCode | MbusError::UnsupportedFunction(_) => {
+                ExceptionCode::IllegalFunction
+            }
+            // Default: all other errors map to server device failure
+            _ => ExceptionCode::ServerDeviceFailure,
+        }
+    }
+
+    /// Returns the exception function code variant (with 0x80 bit set) for this function code.
+    ///
+    /// Exception responses use function codes with the high bit (0x80) set to indicate
+    /// that an exception occurred. This method maps normal function codes to their
+    /// exception equivalents.
+    ///
+    /// # Returns
+    /// The exception function code variant, or `None` if this is not a valid function code
+    /// that can have exceptions.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let fc = FunctionCode::ReadHoldingRegisters;
+    /// let exc_fc = fc.exception_response();
+    /// assert_eq!(exc_fc, Some(FunctionCode::ReadHoldingRegistersException));
+    /// ```
+    pub fn exception_response(&self) -> Option<FunctionCode> {
+        match self {
+            #[cfg(feature = "coils")]
+            FunctionCode::ReadCoils => Some(FunctionCode::ReadCoilsException),
+            #[cfg(feature = "discrete-inputs")]
+            FunctionCode::ReadDiscreteInputs => Some(FunctionCode::ReadDiscreteInputsException),
+            #[cfg(feature = "registers")]
+            FunctionCode::ReadHoldingRegisters => Some(FunctionCode::ReadHoldingRegistersException),
+            #[cfg(feature = "registers")]
+            FunctionCode::ReadInputRegisters => Some(FunctionCode::ReadInputRegistersException),
+            #[cfg(feature = "coils")]
+            FunctionCode::WriteSingleCoil => Some(FunctionCode::WriteSingleCoilException),
+            #[cfg(feature = "registers")]
+            FunctionCode::WriteSingleRegister => Some(FunctionCode::WriteSingleRegisterException),
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::ReadExceptionStatus => Some(FunctionCode::ReadExceptionStatusException),
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::Diagnostics => Some(FunctionCode::DiagnosticsException),
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::GetCommEventCounter => Some(FunctionCode::GetCommEventCounterException),
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::GetCommEventLog => Some(FunctionCode::GetCommEventLogException),
+            #[cfg(feature = "coils")]
+            FunctionCode::WriteMultipleCoils => Some(FunctionCode::WriteMultipleCoilsException),
+            #[cfg(feature = "registers")]
+            FunctionCode::WriteMultipleRegisters => {
+                Some(FunctionCode::WriteMultipleRegistersException)
+            }
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::ReportServerId => Some(FunctionCode::ReportServerIdException),
+            #[cfg(feature = "file-record")]
+            FunctionCode::ReadFileRecord => Some(FunctionCode::ReadFileRecordException),
+            #[cfg(feature = "file-record")]
+            FunctionCode::WriteFileRecord => Some(FunctionCode::WriteFileRecordException),
+            #[cfg(feature = "registers")]
+            FunctionCode::MaskWriteRegister => Some(FunctionCode::MaskWriteRegisterException),
+            #[cfg(feature = "registers")]
+            FunctionCode::ReadWriteMultipleRegisters => {
+                Some(FunctionCode::ReadWriteMultipleRegistersException)
+            }
+            #[cfg(feature = "fifo")]
+            FunctionCode::ReadFifoQueue => Some(FunctionCode::ReadFifoQueueException),
+            #[cfg(feature = "diagnostics")]
+            FunctionCode::EncapsulatedInterfaceTransport => {
+                Some(FunctionCode::EncapsulatedInterfaceTransportException)
+            }
+            // Already exception codes or default
+            _ => None,
         }
     }
 }

@@ -105,7 +105,7 @@ In most applications, `mbus-network` is used together with `mbus-client`:
 Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under GNU GPL v3.0.
-See [LICENSE](./LICENSE) for details.
+See [LICENSE](../LICENSE) for details.
 
 ## Contact
 

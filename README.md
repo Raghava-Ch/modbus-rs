@@ -144,8 +144,8 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 
 Dedicated examples:
 
-- Sync: `modbus-rs/examples/traffic_sync_example.rs`
-- Async: `modbus-rs/examples/traffic_async_tcp_example.rs`
+- Sync: `modbus-rs/examples/modbus-rs/client/traffic/traffic_sync_example.rs`
+- Async: `modbus-rs/examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs`
 
 ## Bindings (WASM and C)
 
@@ -303,7 +303,7 @@ Available strategies:
 
 When `retry_random_fn` is `None`, jitter is skipped and the base delay is used as-is. This lets you defer RNG setup without changing the rest of the config.
 
-See [documentation/feature_flags.md](documentation/feature_flags.md) or the [tcp_backoff_jitter_example](modbus-rs/examples/tcp_backoff_jitter_example.rs) and [serial_rtu_backoff_jitter_example](modbus-rs/examples/serial_rtu_backoff_jitter_example.rs) for full runnable examples.
+See [documentation/feature_flags.md](documentation/feature_flags.md) or the [tcp_backoff_jitter_example](modbus-rs/examples/modbus-rs/client/tcp/tcp_backoff_jitter_example.rs) and [serial_rtu_backoff_jitter_example](modbus-rs/examples/modbus-rs/client/serial/serial_rtu_backoff_jitter_example.rs) for full runnable examples.
 
 ## Logging
 
@@ -328,13 +328,13 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 Run the logging example:
 
 ```bash
-RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+RUST_LOG=debug cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
 ```
 
 Filter only client internals at low priority:
 
 ```bash
-RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,client,logging
 ```
 
 ## Examples
@@ -343,49 +343,49 @@ All examples live in [`modbus-rs/examples/`](modbus-rs/examples/) and are run fr
 
 ### Async (Rust)
 
-- [modbus-rs/examples/async_tcp_example.rs](modbus-rs/examples/async_tcp_example.rs)
-- [modbus-rs/examples/async_serial_rtu_example.rs](modbus-rs/examples/async_serial_rtu_example.rs)
+- [modbus-rs/examples/modbus-rs/client/async/async_tcp_example.rs](modbus-rs/examples/modbus-rs/client/async/async_tcp_example.rs)
+- [modbus-rs/examples/modbus-rs/client/async/async_serial_rtu_example.rs](modbus-rs/examples/modbus-rs/client/async/async_serial_rtu_example.rs)
 
 ```bash
 # Async TCP
-cargo run -p modbus-rs --example async_tcp_example --features async
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --features async
 
 # Async serial RTU
-cargo run -p modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
+cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu --no-default-features --features async,serial-rtu,coils,registers
 
 # Sync traffic callback demo
-cargo run -p modbus-rs --example traffic_sync_example --features traffic
+cargo run -p modbus-rs --example modbus_rs_client_traffic_sync_tcp --features traffic
 
 # Async traffic callback demo
-cargo run -p modbus-rs --example traffic_async_tcp_example --features async,traffic
+cargo run -p modbus-rs --example modbus_rs_client_traffic_async_tcp --features async,traffic
 ```
 
 ### TCP
 
 ```bash
-cargo run -p modbus-rs --example coils_example -- 192.168.1.10 502 1
-cargo run -p modbus-rs --example registers_example -- 192.168.1.10 502 1
-cargo run -p modbus-rs --example discrete_inputs_example -- 192.168.1.10 502 1
-cargo run -p modbus-rs --example device_id_example -- 192.168.1.10 502 1
-cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
-cargo run -p modbus-rs --example tcp_backoff_jitter_example -- 192.168.1.10 502 1
-cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_tcp_registers -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_tcp_discrete_inputs -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_tcp_device_id -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter -- 192.168.1.10 502 1
+cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
 ```
 
 ### Serial RTU
 
 ```bash
-cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils -- /dev/ttyUSB0 1
-cargo run -p modbus-rs --example registers_serial_example --no-default-features --features client,serial-rtu,registers -- /dev/ttyUSB0 1
-cargo run -p modbus-rs --example discrete_inputs_serial_example --no-default-features --features client,serial-rtu,discrete-inputs -- /dev/ttyUSB0 1
-cargo run -p modbus-rs --example device_id_serial_example --no-default-features --features client,serial-rtu,diagnostics -- /dev/ttyUSB0 1
-cargo run -p modbus-rs --example serial_rtu_backoff_jitter_example --no-default-features --features client,serial-rtu,registers -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils --no-default-features --features client,serial-rtu,coils -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_registers --no-default-features --features client,serial-rtu,registers -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_discrete_inputs --no-default-features --features client,serial-rtu,discrete-inputs -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_device_id --no-default-features --features client,serial-rtu,diagnostics -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_backoff_jitter --no-default-features --features client,serial-rtu,registers -- /dev/ttyUSB0 1
 ```
 
 ### Serial ASCII
 
 ```bash
-cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils -- /dev/ttyUSB0 1
+cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-default-features --features client,serial-ascii,coils -- /dev/ttyUSB0 1
 ```
 
 ### WASM Browser Smoke Examples (`mbus-ffi`)
@@ -459,7 +459,7 @@ cargo test -p mbus-client
 cargo test -p integration_tests
 
 # Check a specific example
-cargo check -p modbus-rs --example tcp_backoff_jitter_example
+cargo check -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter
 
 # Compile all modbus-rs examples
 cargo check -p modbus-rs --examples --all-features

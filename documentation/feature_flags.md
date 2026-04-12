@@ -226,16 +226,16 @@ cargo check --no-default-features --features client,tcp,coils,traffic
 cargo check --no-default-features --features async,tcp,coils,traffic
 
 # Run async TCP example
-cargo run --package modbus-rs --example async_tcp_example --features async
+cargo run --package modbus-rs --example modbus_rs_client_async_tcp --features async
 
 # Run async serial RTU example
-cargo run --package modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
+cargo run --package modbus-rs --example modbus_rs_client_async_serial_rtu --no-default-features --features async,serial-rtu,coils,registers
 
 # Run sync traffic example
-cargo run --package modbus-rs --example traffic_sync_example --features traffic
+cargo run --package modbus-rs --example modbus_rs_client_traffic_sync_tcp --features traffic
 
 # Run async traffic example
-cargo run --package modbus-rs --example traffic_async_tcp_example --features async,traffic
+cargo run --package modbus-rs --example modbus_rs_client_traffic_async_tcp --features async,traffic
 ```
 
 ## Logging Setup
@@ -263,13 +263,13 @@ env_logger::init();
 Then run with a log level (example):
 
 ```bash
-RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+RUST_LOG=debug cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
 ```
 
 Filter only internal client state-machine logs:
 
 ```bash
-RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,client,logging
 ```
 
 ## Bindings Note (WASM and C)

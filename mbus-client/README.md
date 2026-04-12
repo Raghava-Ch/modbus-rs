@@ -228,7 +228,7 @@ Examples of logged events:
 Typical filtering example:
 
 ```bash
-RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,client,logging
 ```
 
 ## Usage Pattern
@@ -354,7 +354,7 @@ cargo check -p mbus-client --no-default-features --features registers,discrete-i
 Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under GNU GPL v3.0.
-See [LICENSE](./LICENSE) for details.
+See [LICENSE](../LICENSE) for details.
 
 ## Disclaimer
 

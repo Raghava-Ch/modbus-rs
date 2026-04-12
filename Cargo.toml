@@ -4,6 +4,7 @@ members = [
     "mbus-core",
     "mbus-serial",
     "mbus-network",
+    "mbus-macros",
     "modbus-rs",
     "integration_tests",
     "mbus-client",
@@ -33,6 +34,7 @@ mbus-network= { version = "0.5.0", path = "./mbus-network" }
 mbus-client = { version = "0.5.0", path = "./mbus-client" }
 mbus-async = { version = "0.5.0", path = "./mbus-async" }
 mbus-ffi    = { version = "0.5.0", path = "./mbus-ffi" }
+mbus-macros = { version = "0.2.0", path = "./mbus-macros" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
