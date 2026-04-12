@@ -24,6 +24,7 @@ heapless = { workspace = true }
 anyhow = "1.0.102"
 env_logger = "0.11"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+mbus-server = { version = "0.2.0", path = "../mbus-server" }
 
 [build-dependencies]
 
@@ -37,7 +38,8 @@ default = [
     "serial-rtu",
     "tcp",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -49,6 +51,8 @@ serial-ascii = ["mbus-serial", "mbus-core/serial-ascii", "mbus-async?/serial-asc
 tcp = ["mbus-network", "mbus-async?/tcp"]
 coils = ["mbus-core/coils", "mbus-async?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
+holding-registers = ["registers"]
+input-registers = ["registers"]
 discrete-inputs = ["mbus-core/discrete-inputs", "mbus-async?/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
 file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
@@ -58,17 +62,88 @@ async = ["dep:mbus-async"]
 traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
 
 [[example]]
-name = "async_tcp_example"
+name = "modbus_rs_client_async_tcp"
+path = "examples/modbus-rs/client/async/async_tcp_example.rs"
 required-features = ["async"]
 
 [[example]]
-name = "async_serial_rtu_example"
+name = "modbus_rs_client_async_serial_rtu"
+path = "examples/modbus-rs/client/async/async_serial_rtu_example.rs"
 required-features = ["async", "serial-rtu"]
 
 [[example]]
-name = "traffic_sync_example"
+name = "modbus_rs_client_traffic_sync_tcp"
+path = "examples/modbus-rs/client/traffic/traffic_sync_example.rs"
 required-features = ["traffic", "client", "tcp", "coils"]
 
 [[example]]
-name = "traffic_async_tcp_example"
+name = "modbus_rs_client_traffic_async_tcp"
+path = "examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs"
 required-features = ["async", "traffic", "tcp", "coils"]
+
+[[example]]
+name = "modbus_rs_client_tcp_coils"
+path = "examples/modbus-rs/client/tcp/coils_example.rs"
+
+[[example]]
+name = "modbus_rs_client_tcp_registers"
+path = "examples/modbus-rs/client/tcp/registers_example.rs"
+
+[[example]]
+name = "modbus_rs_client_tcp_discrete_inputs"
+path = "examples/modbus-rs/client/tcp/discrete_inputs_example.rs"
+
+[[example]]
+name = "modbus_rs_client_tcp_device_id"
+path = "examples/modbus-rs/client/tcp/device_id_example.rs"
+
+[[example]]
+name = "modbus_rs_client_tcp_backoff_jitter"
+path = "examples/modbus-rs/client/tcp/tcp_backoff_jitter_example.rs"
+
+[[example]]
+name = "modbus_rs_client_tcp_logging"
+path = "examples/modbus-rs/client/tcp/logging_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_rtu_coils"
+path = "examples/modbus-rs/client/serial/coils_serial_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_rtu_registers"
+path = "examples/modbus-rs/client/serial/registers_serial_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_rtu_discrete_inputs"
+path = "examples/modbus-rs/client/serial/discrete_inputs_serial_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_rtu_device_id"
+path = "examples/modbus-rs/client/serial/device_id_serial_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_rtu_backoff_jitter"
+path = "examples/modbus-rs/client/serial/serial_rtu_backoff_jitter_example.rs"
+
+[[example]]
+name = "modbus_rs_client_serial_ascii_coils"
+path = "examples/modbus-rs/client/serial/ascii_serial_example.rs"
+
+[[example]]
+name = "modbus_rs_client_showcase_feature_facades"
+path = "examples/modbus-rs/client/showcase/feature_facades_showcase.rs"
+
+[[example]]
+name = "modbus_rs_server_showcase_coils_registers"
+path = "examples/mbus-server/server/showcase_coils_registers.rs"
+required-features = ["coils", "holding-registers", "input-registers"]
+
+[[example]]
+name = "modbus_rs_server_tcp_demo"
+path = "examples/mbus-server/server/tcp_demo.rs"
+required-features = ["coils", "holding-registers", "input-registers"]
+
+[[example]]
+name = "modbus_rs_server_std_transport_client_demo"
+path = "examples/mbus-server/server/std_transport_client_demo.rs"
+required-features = ["tcp", "coils", "holding-registers", "input-registers"]

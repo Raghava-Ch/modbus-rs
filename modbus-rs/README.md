@@ -78,6 +78,8 @@ Top-level features:
 - `async`: enables `mbus-async` async facade re-export (`modbus_rs::mbus_async`)
 - `coils`
 - `registers`
+- `holding-registers` (alias of `registers`; useful when matching server-side naming)
+- `input-registers` (alias of `registers`; useful when matching server-side naming)
 - `discrete-inputs`
 - `fifo`
 - `file-record`
@@ -150,8 +152,8 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 
 Dedicated examples:
 
-- sync traffic observer: `examples/traffic_sync_example.rs`
-- async traffic observer: `examples/traffic_async_tcp_example.rs`
+- sync traffic observer: `examples/modbus-rs/client/traffic/traffic_sync_example.rs`
+- async traffic observer: `examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs`
 
 ### Logging Setup
 
@@ -287,55 +289,55 @@ fn main() -> Result<(), MbusError> {
 
 ### TCP examples
 
-- [coils_example.rs](examples/coils_example.rs)
-- [registers_example.rs](examples/registers_example.rs)
-- [discrete_inputs_example.rs](examples/discrete_inputs_example.rs)
-- [device_id_example.rs](examples/device_id_example.rs)
-- [feature_facades_showcase.rs](examples/feature_facades_showcase.rs)
-- [tcp_backoff_jitter_example.rs](examples/tcp_backoff_jitter_example.rs)
-- [logging_example.rs](examples/logging_example.rs)
-- [traffic_sync_example.rs](examples/traffic_sync_example.rs) (`traffic` feature)
-- [traffic_async_tcp_example.rs](examples/traffic_async_tcp_example.rs) (`async,traffic` features)
+- [coils_example.rs](examples/modbus-rs/client/tcp/coils_example.rs)
+- [registers_example.rs](examples/modbus-rs/client/tcp/registers_example.rs)
+- [discrete_inputs_example.rs](examples/modbus-rs/client/tcp/discrete_inputs_example.rs)
+- [device_id_example.rs](examples/modbus-rs/client/tcp/device_id_example.rs)
+- [feature_facades_showcase.rs](examples/modbus-rs/client/showcase/feature_facades_showcase.rs)
+- [tcp_backoff_jitter_example.rs](examples/modbus-rs/client/tcp/tcp_backoff_jitter_example.rs)
+- [logging_example.rs](examples/modbus-rs/client/tcp/logging_example.rs)
+- [traffic_sync_example.rs](examples/modbus-rs/client/traffic/traffic_sync_example.rs) (`traffic` feature)
+- [traffic_async_tcp_example.rs](examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs) (`async,traffic` features)
 
 ### Serial RTU examples
 
-- [coils_serial_example.rs](examples/coils_serial_example.rs)
-- [registers_serial_example.rs](examples/registers_serial_example.rs)
-- [discrete_inputs_serial_example.rs](examples/discrete_inputs_serial_example.rs)
-- [device_id_serial_example.rs](examples/device_id_serial_example.rs)
-- [serial_rtu_backoff_jitter_example.rs](examples/serial_rtu_backoff_jitter_example.rs)
+- [coils_serial_example.rs](examples/modbus-rs/client/serial/coils_serial_example.rs)
+- [registers_serial_example.rs](examples/modbus-rs/client/serial/registers_serial_example.rs)
+- [discrete_inputs_serial_example.rs](examples/modbus-rs/client/serial/discrete_inputs_serial_example.rs)
+- [device_id_serial_example.rs](examples/modbus-rs/client/serial/device_id_serial_example.rs)
+- [serial_rtu_backoff_jitter_example.rs](examples/modbus-rs/client/serial/serial_rtu_backoff_jitter_example.rs)
 
 ### Serial ASCII examples
 
-- [ascii_serial_example.rs](examples/ascii_serial_example.rs)
+- [ascii_serial_example.rs](examples/modbus-rs/client/serial/ascii_serial_example.rs)
 
 Run examples from the workspace root:
 
 ```bash
 # TCP
-cargo run -p modbus-rs --example coils_example --no-default-features --features client,tcp,coils
-cargo run -p modbus-rs --example registers_example --no-default-features --features client,tcp,registers
-cargo run -p modbus-rs --example discrete_inputs_example --no-default-features --features client,tcp,discrete-inputs
-cargo run -p modbus-rs --example device_id_example --no-default-features --features client,tcp,diagnostics
-cargo run -p modbus-rs --example feature_facades_showcase --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
-cargo run -p modbus-rs --example tcp_backoff_jitter_example --no-default-features --features client,tcp,coils
-cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
-cargo run -p modbus-rs --example traffic_sync_example --no-default-features --features client,tcp,coils,traffic
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-features --features client,tcp,coils
+cargo run -p modbus-rs --example modbus_rs_client_tcp_registers --no-default-features --features client,tcp,registers
+cargo run -p modbus-rs --example modbus_rs_client_tcp_discrete_inputs --no-default-features --features client,tcp,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_tcp_device_id --no-default-features --features client,tcp,diagnostics
+cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter --no-default-features --features client,tcp,coils
+cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
+cargo run -p modbus-rs --example modbus_rs_client_traffic_sync_tcp --no-default-features --features client,tcp,coils,traffic
 
 # Async
-cargo run -p modbus-rs --example async_tcp_example --no-default-features --features async,tcp,coils,registers,discrete-inputs
-cargo run -p modbus-rs --example traffic_async_tcp_example --no-default-features --features async,tcp,coils,traffic
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,tcp,coils,registers,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_traffic_async_tcp --no-default-features --features async,tcp,coils,traffic
 
 # Serial RTU
-cargo run -p modbus-rs --example coils_serial_example --no-default-features --features client,serial-rtu,coils
-cargo run -p modbus-rs --example registers_serial_example --no-default-features --features client,serial-rtu,registers
-cargo run -p modbus-rs --example discrete_inputs_serial_example --no-default-features --features client,serial-rtu,discrete-inputs
-cargo run -p modbus-rs --example device_id_serial_example --no-default-features --features client,serial-rtu,diagnostics
-cargo run -p modbus-rs --example serial_rtu_backoff_jitter_example --no-default-features --features client,serial-rtu,coils
-cargo run -p modbus-rs --example async_serial_rtu_example --no-default-features --features async,serial-rtu,coils,registers
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils --no-default-features --features client,serial-rtu,coils
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_registers --no-default-features --features client,serial-rtu,registers
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_discrete_inputs --no-default-features --features client,serial-rtu,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_device_id --no-default-features --features client,serial-rtu,diagnostics
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_backoff_jitter --no-default-features --features client,serial-rtu,coils
+cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu --no-default-features --features async,serial-rtu,coils,registers
 
 # Serial ASCII
-cargo run -p modbus-rs --example ascii_serial_example --no-default-features --features client,serial-ascii,coils
+cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-default-features --features client,serial-ascii,coils
 ```
 
 ## Workspace Structure
@@ -384,7 +386,7 @@ Additional workspace documentation is available in the `documentation/` folder:
 Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under GNU GPL v3.0.
-See [LICENSE](./LICENSE) for details.
+See [LICENSE](../LICENSE) for details.
 
 ## Disclaimer
 

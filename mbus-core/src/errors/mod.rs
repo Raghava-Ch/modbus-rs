@@ -12,6 +12,29 @@
 
 use core::fmt;
 
+/// Modbus exception codes as defined in the Modbus Application Protocol Specification V1.1b3.
+///
+/// These codes are used in exception responses (function code | 0x80) to indicate
+/// the type of error that occurred when processing a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ExceptionCode {
+    /// 0x01: Illegal Function - The function code is not supported by the server.
+    IllegalFunction = 0x01,
+    /// 0x02: Illegal Data Address - The addressed register does not exist.
+    IllegalDataAddress = 0x02,
+    /// 0x03: Illegal Data Value - The quantity of items to read/write is invalid.
+    IllegalDataValue = 0x03,
+    /// 0x04: Server Device Failure - Unrecoverable device failure.
+    ServerDeviceFailure = 0x04,
+}
+
+impl From<ExceptionCode> for u8 {
+    fn from(code: ExceptionCode) -> Self {
+        code as u8
+    }
+}
+
 /// Represents a Modbus error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MbusError {

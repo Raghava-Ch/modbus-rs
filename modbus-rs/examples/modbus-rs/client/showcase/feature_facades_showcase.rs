@@ -1,7 +1,11 @@
 #![cfg_attr(
     not(all(
         feature = "coils",
-        feature = "registers",
+        any(
+            feature = "registers",
+            feature = "holding-registers",
+            feature = "input-registers"
+        ),
         feature = "discrete-inputs",
         feature = "diagnostics",
         feature = "fifo",
@@ -81,7 +85,11 @@ impl CoilResponse for App {
     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
-#[cfg(feature = "registers")]
+#[cfg(any(
+    feature = "registers",
+    feature = "holding-registers",
+    feature = "input-registers"
+))]
 impl RegisterResponse for App {
     fn read_multiple_holding_registers_response(
         &mut self,
@@ -199,7 +207,11 @@ impl FileRecordResponse for App {
 fn main() -> Result<(), MbusError> {
     if !cfg!(all(
         feature = "coils",
-        feature = "registers",
+        any(
+            feature = "registers",
+            feature = "holding-registers",
+            feature = "input-registers"
+        ),
         feature = "discrete-inputs",
         feature = "diagnostics",
         feature = "fifo",
@@ -229,7 +241,11 @@ fn main() -> Result<(), MbusError> {
         println!("coils facade: ok");
     }
 
-    #[cfg(feature = "registers")]
+    #[cfg(any(
+        feature = "registers",
+        feature = "holding-registers",
+        feature = "input-registers"
+    ))]
     {
         client
             .registers()
