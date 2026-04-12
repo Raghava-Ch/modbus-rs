@@ -38,7 +38,14 @@ pub use mbus_client::services::file_record::{
     FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SUB_REQ_PARAM_BYTE_LEN, SubRequest,
     SubRequestParams,
 };
-#[cfg(all(feature = "client", feature = "registers"))]
+#[cfg(all(
+    feature = "client",
+    any(
+        feature = "registers",
+        feature = "holding-registers",
+        feature = "input-registers"
+    )
+))]
 pub use mbus_client::services::register::{MAX_REGISTERS_PER_PDU, Registers};
 
 #[cfg(feature = "async")]

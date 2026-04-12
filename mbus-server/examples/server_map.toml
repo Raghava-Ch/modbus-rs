@@ -1,0 +1,36 @@
+version = 1
+
+[[units]]
+id = 1
+
+[[units.coils.blocks]]
+start_address = 0
+quantity = 8
+default = false
+access = "rw"
+
+[[units.coils.overrides]]
+address = 3
+value = true
+
+[[units.discrete_inputs.blocks]]
+start_address = 0
+quantity = 4
+default = false
+access = "r"
+
+[[units.holding_registers.blocks]]
+start_address = 0
+quantity = 6
+default = 0
+access = "rw"
+
+[[units.holding_registers.overrides]]
+address = 1
+value = 42
+
+[[units.input_registers.blocks]]
+start_address = 0
+quantity = 3
+default = 100
+access = "r"

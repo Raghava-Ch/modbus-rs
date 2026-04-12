@@ -93,6 +93,15 @@ pub const ERROR_BIT_MASK: u8 = 0x80;
 /// Bit mask used to extract the base function code from the function code byte.
 pub const FUNCTION_CODE_MASK: u8 = 0x7F;
 
+/// Offset of the high byte of the starting address in PDU data (for read/write functions).
+pub const PDU_ADDRESS_OFFSET_1B: usize = 0;
+/// Offset of the low byte of the starting address in PDU data.
+pub const PDU_ADDRESS_OFFSET_2B: usize = PDU_ADDRESS_OFFSET_1B + 1;
+/// Offset of the high byte of the quantity/count in PDU data.
+pub const PDU_QUANTITY_OFFSET_1B: usize = 2;
+/// Offset of the low byte of the quantity/count in PDU data.
+pub const PDU_QUANTITY_OFFSET_2B: usize = PDU_QUANTITY_OFFSET_1B + 1;
+
 /// Checks if the given function code byte indicates an exception (error bit is set).
 ///
 /// # Arguments
@@ -598,6 +607,64 @@ impl Pdu {
         self.error_code
     }
 
+    /// Reads the starting address from the PDU data.
+    ///
+    /// # Valid for
+    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
+    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
+    ///
+    /// # Returns
+    /// The starting address as a big-endian 16-bit value from PDU bytes 0-1.
+    ///
+    /// # Errors
+    /// Returns `InvalidPduLength` if `data_len < 2`.
+    ///
+    /// # Warnings
+    /// **DO NOT CALL on**:
+    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no address.
+    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
+    /// - **Other function codes**: Each has its own unique PDU layout.
+    ///
+    /// Calling on unsupported frames will silently read incorrect data.
+    pub fn address_read_frame(&self) -> Result<u16, MbusError> {
+        if self.data_len < 2 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(u16::from_be_bytes([
+            self.data[PDU_ADDRESS_OFFSET_1B],
+            self.data[PDU_ADDRESS_OFFSET_2B],
+        ]))
+    }
+
+    /// Reads the quantity/count from the PDU data.
+    ///
+    /// # Valid for
+    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
+    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
+    ///
+    /// # Returns
+    /// The quantity/count as a big-endian 16-bit value from PDU bytes 2-3.
+    ///
+    /// # Errors
+    /// Returns `InvalidPduLength` if `data_len < 4`.
+    ///
+    /// # Warnings
+    /// **DO NOT CALL on**:
+    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no quantity.
+    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
+    /// - **Other function codes**: Each has its own unique PDU layout.
+    ///
+    /// Calling on unsupported frames will silently read incorrect data.
+    pub fn quantity_from_read_frame(&self) -> Result<u16, MbusError> {
+        if self.data_len < 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(u16::from_be_bytes([
+            self.data[PDU_QUANTITY_OFFSET_1B],
+            self.data[PDU_QUANTITY_OFFSET_2B],
+        ]))
+    }
+
     /// Converts the PDU into its byte representation.
     ///
     /// This method serializes the function code and its associated data payload.
@@ -608,6 +675,7 @@ impl Pdu {
     /// # Returns
     /// `Ok(Vec<u8, 253>)` containing the PDU bytes, or an `MbusError` if
     /// the PDU cannot be serialized (e.g., due to buffer overflow).
+    ///
     pub fn to_bytes(&self) -> Result<Vec<u8, 253>, MbusError> {
         let mut pdu_bytes = Vec::new(); // Capacity is 253 (1 byte FC + 252 bytes data)
         pdu_bytes
