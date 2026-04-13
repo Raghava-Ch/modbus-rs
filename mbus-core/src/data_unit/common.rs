@@ -1068,64 +1068,6 @@ impl Pdu {
             payload_len,
         })
     }
-    ///
-    /// # Valid for
-    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
-    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
-    ///
-    /// # Returns
-    /// The starting address as a big-endian 16-bit value from PDU bytes 0-1.
-    ///
-    /// # Errors
-    /// Returns `InvalidPduLength` if `data_len < 2`.
-    ///
-    /// # Warnings
-    /// **DO NOT CALL on**:
-    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no address.
-    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
-    /// - **Other function codes**: Each has its own unique PDU layout.
-    ///
-    /// Calling on unsupported frames will silently read incorrect data.
-    #[deprecated(note = "Use `read_window()` or `write_single_u16_fields()` instead")]
-    pub fn address_read_frame(&self) -> Result<u16, MbusError> {
-        if self.data_len < 2 {
-            return Err(MbusError::InvalidPduLength);
-        }
-        Ok(u16::from_be_bytes([
-            self.data[PDU_ADDRESS_OFFSET_1B],
-            self.data[PDU_ADDRESS_OFFSET_2B],
-        ]))
-    }
-
-    /// Reads the quantity/count from the PDU data.
-    ///
-    /// # Valid for
-    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
-    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
-    ///
-    /// # Returns
-    /// The quantity/count as a big-endian 16-bit value from PDU bytes 2-3.
-    ///
-    /// # Errors
-    /// Returns `InvalidPduLength` if `data_len < 4`.
-    ///
-    /// # Warnings
-    /// **DO NOT CALL on**:
-    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no quantity.
-    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
-    /// - **Other function codes**: Each has its own unique PDU layout.
-    ///
-    /// Calling on unsupported frames will silently read incorrect data.
-    #[deprecated(note = "Use `read_window()` instead")]
-    pub fn quantity_from_read_frame(&self) -> Result<u16, MbusError> {
-        if self.data_len < 4 {
-            return Err(MbusError::InvalidPduLength);
-        }
-        Ok(u16::from_be_bytes([
-            self.data[PDU_QUANTITY_OFFSET_1B],
-            self.data[PDU_QUANTITY_OFFSET_2B],
-        ]))
-    }
 
     /// Converts the PDU into its byte representation.
     ///
