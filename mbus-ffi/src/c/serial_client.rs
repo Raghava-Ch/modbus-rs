@@ -10,7 +10,7 @@ use super::error::MbusStatusCode;
 use super::pool::{
     MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial, pool_free, with_serial_client,
 };
-use super::transport::{CTransport, MbusTransportCallbacks, validate_transport_callbacks};
+use super::transport::{CSerialTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn mbus_serial_client_new(
         return MBUS_INVALID_CLIENT_ID;
     }
     let app = CApp::new(cb);
-    let transport = CTransport::new_serial(
+    let transport = CSerialTransport::new(
         transport_cb,
         match serial_config.mode {
             SerialMode::Rtu => SerialMode::Rtu,

@@ -39,12 +39,12 @@
 //! # impl YourTransport { fn new() -> Self { Self } }
 //! # impl Transport for YourTransport {
 //! #     type Error = MbusError;
+//! #     const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 //! #     fn connect(&mut self, _: &ModbusConfig) -> Result<(), Self::Error> { Ok(()) }
 //! #     fn disconnect(&mut self) -> Result<(), Self::Error> { Ok(()) }
 //! #     fn send(&mut self, _: &[u8]) -> Result<(), Self::Error> { Ok(()) }
 //! #     fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> { Ok(Vec::new()) }
 //! #     fn is_connected(&self) -> bool { true }
-//! #     fn transport_type(&self) -> TransportType { TransportType::StdTcp }
 //! # }
 //! // 1. Define your application state and implement response traits
 //! // Application traits and service modules are feature-gated.

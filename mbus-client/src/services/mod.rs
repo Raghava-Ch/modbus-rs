@@ -1821,7 +1821,7 @@ mod tests {
 
     impl Transport for MockTransport {
         type Error = MbusError;
-        const TRANSPORT_TYPE: Option<TransportType> = None;
+        const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
         fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
             if self.connect_should_fail {

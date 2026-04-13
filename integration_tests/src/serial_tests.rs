@@ -34,6 +34,7 @@ impl MockSerialTransport {
 impl Transport for MockSerialTransport {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         Ok(())

@@ -27,6 +27,7 @@ struct ScriptedTransport {
 
 impl Transport for ScriptedTransport {
     type Error = MbusError;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         self.connected = true;
@@ -57,10 +58,6 @@ impl Transport for ScriptedTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }
 
@@ -75,6 +72,7 @@ struct ScriptedSerialTransport {
 impl Transport for ScriptedSerialTransport {
     type Error = MbusError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(SerialMode::Rtu);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         self.connected = true;
@@ -105,10 +103,6 @@ impl Transport for ScriptedSerialTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdSerial(SerialMode::Rtu)
     }
 }
 

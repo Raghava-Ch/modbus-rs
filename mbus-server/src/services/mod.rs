@@ -309,10 +309,7 @@ where
             return false;
         }
 
-        let serial_capable = match TRANSPORT::TRANSPORT_TYPE {
-            Some(transport_type) => transport_type.is_serial_type(),
-            None => self.transport.transport_type().is_serial_type(),
-        };
+        let serial_capable = TRANSPORT::TRANSPORT_TYPE.is_serial_type();
 
         if !serial_capable {
             return false;

@@ -89,7 +89,7 @@ impl StdTcpTransport {
 
 impl Transport for StdTcpTransport {
     type Error = TransportError;
-    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     /// Establishes a TCP connection to the specified remote address.
     ///
@@ -245,11 +245,6 @@ impl Transport for StdTcpTransport {
     /// This is a best-effort check and indicates if a `TcpStream` is currently held.
     fn is_connected(&self) -> bool {
         self.stream.is_some()
-    }
-
-    /// Returns the type of transport.
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }
 

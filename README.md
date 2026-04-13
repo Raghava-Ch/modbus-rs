@@ -187,14 +187,13 @@ struct MyTransport { /* ... */ }
 
 impl Transport for MyTransport {
     type Error = MbusError;
-    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
     const SUPPORTS_BROADCAST_WRITES: bool = false;
     fn connect(&mut self, _: &ModbusConfig) -> Result<(), Self::Error> { Ok(()) }
     fn disconnect(&mut self) -> Result<(), Self::Error> { Ok(()) }
     fn send(&mut self, _: &[u8]) -> Result<(), Self::Error> { Ok(()) }
     fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> { Ok(Vec::new()) }
     fn is_connected(&self) -> bool { true }
-    fn transport_type(&self) -> TransportType { TransportType::StdTcp }
 }
 
 struct App;

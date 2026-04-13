@@ -31,7 +31,7 @@ use mbus_client::services::ClientServices;
 
 use super::app::CApp;
 use super::error::MbusStatusCode;
-use super::transport::CTransport;
+use super::transport::{CTcpTransport, CSerialTransport};
 
 use crate::{MAX_SERIAL_CLIENTS, MAX_TCP_CLIENTS};
 
@@ -116,9 +116,9 @@ impl Drop for BorrowGuard<'_> {
 // ── Client inner types ────────────────────────────────────────────────────────
 
 /// Type alias for a fully-specialised TCP client.
-pub(super) type TcpInner = ClientServices<CTransport, CApp, TCP_PIPELINE>;
+pub(super) type TcpInner = ClientServices<CTcpTransport, CApp, TCP_PIPELINE>;
 /// Type alias for a fully-specialised Serial client.
-pub(super) type SerialInner = ClientServices<CTransport, CApp, SERIAL_PIPELINE>;
+pub(super) type SerialInner = ClientServices<CSerialTransport, CApp, SERIAL_PIPELINE>;
 
 // ── ID helpers ────────────────────────────────────────────────────────────────
 
