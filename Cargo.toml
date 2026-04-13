@@ -34,6 +34,7 @@ mbus-network= { version = "0.5.0", path = "./mbus-network" }
 mbus-client = { version = "0.5.0", path = "./mbus-client" }
 mbus-async = { version = "0.5.0", path = "./mbus-async" }
 mbus-ffi    = { version = "0.5.0", path = "./mbus-ffi" }
+mbus-server = { version = "0.2.0", path = "./mbus-server" }
 mbus-macros = { version = "0.2.0", path = "./mbus-macros" }
 
 heapless = { version = "0.8.0" }

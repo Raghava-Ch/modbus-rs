@@ -30,6 +30,7 @@ impl MockAsyncSerialTransport {
 
 impl Transport for MockAsyncSerialTransport {
     type Error = TransportError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         Ok(())

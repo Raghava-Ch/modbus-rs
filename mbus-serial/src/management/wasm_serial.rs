@@ -291,6 +291,8 @@ impl WasmSerialTransport {
 
 impl Transport for WasmSerialTransport {
     type Error = TransportError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: Option<TransportType> = None;
 
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
         let serial_config = match config {

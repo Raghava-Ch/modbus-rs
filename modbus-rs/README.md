@@ -72,6 +72,8 @@ Depending on enabled features, this crate re-exports:
 Top-level features:
 
 - `client`: enables `mbus-client`
+- `server`: enables `mbus-server` re-exports including `ServerServices`,
+  resilience configuration, and derive-based server helpers
 - `serial-rtu`: enables `mbus-serial` for RTU transport use cases
 - `serial-ascii`: enables `mbus-serial` for ASCII transport use cases
 - `tcp`: enables `mbus-network`
@@ -90,6 +92,7 @@ Top-level features:
 Default behavior:
 
 - `default` enables `client`, `serial-rtu`, `tcp`, and all function-group features.
+- `server` is opt-in at the top-level facade.
 - `serial-ascii` and `async` are opt-in.
 - `serial-ascii`, `async`, and `traffic` are opt-in.
 - `async` is opt-in and must be enabled explicitly when using `.await` APIs.
@@ -242,6 +245,8 @@ struct MockTransport;
 
 impl Transport for MockTransport {
 	type Error = MbusError;
+	const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+	const SUPPORTS_BROADCAST_WRITES: bool = false;
 
 	fn connect(&mut self, _: &ModbusConfig) -> Result<(), Self::Error> { Ok(()) }
 	fn disconnect(&mut self) -> Result<(), Self::Error> { Ok(()) }
@@ -379,7 +384,7 @@ Additional workspace documentation is available in the `documentation/` folder:
 
 - This project is under active development.
 - Feature names use hyphenated forms such as `discrete-inputs` and `file-record`.
-- A future server-side feature is planned but not implemented yet.
+- Server APIs are available behind the `server` feature.
 
 ## License
 

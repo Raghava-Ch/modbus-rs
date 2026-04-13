@@ -7,7 +7,10 @@ use heapless::Vec as HVec;
 use mbus_core::data_unit::common::{compile_adu_frame, MAX_ADU_FRAME_LEN, Pdu};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
-use mbus_core::transport::{ModbusConfig, Transport, TransportType, UnitIdOrSlaveAddr};
+use mbus_core::transport::{
+    BaudRate, BackoffStrategy, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+    Parity, SerialMode, Transport, TransportType, UnitIdOrSlaveAddr,
+};
 use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices, TimeoutConfig, OverflowPolicy};
 use std::collections::VecDeque;
 use std::cell::Cell;
@@ -61,11 +64,64 @@ impl Transport for ScriptedTransport {
     }
 }
 
+#[derive(Debug)]
+struct ScriptedSerialTransport {
+    recv_queue: VecDeque<HVec<u8, MAX_ADU_FRAME_LEN>>,
+    sent_frames: Arc<Mutex<Vec<Vec<u8>>>>,
+    send_failures_remaining: Arc<AtomicUsize>,
+    connected: bool,
+}
+
+impl Transport for ScriptedSerialTransport {
+    type Error = MbusError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+
+    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+        self.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&mut self) -> Result<(), Self::Error> {
+        self.connected = false;
+        Ok(())
+    }
+
+    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+        let remaining = self.send_failures_remaining.load(Ordering::SeqCst);
+        if remaining > 0 {
+            self.send_failures_remaining.fetch_sub(1, Ordering::SeqCst);
+            return Err(MbusError::SendFailed);
+        }
+        self.sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .push(adu.to_vec());
+        Ok(())
+    }
+
+    fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+        self.recv_queue.pop_front().ok_or(MbusError::Timeout)
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn transport_type(&self) -> TransportType {
+        TransportType::StdSerial(SerialMode::Rtu)
+    }
+}
+
 #[derive(Debug, Default)]
 struct ProbeApp {
     call_order: Arc<Mutex<Vec<u8>>>,
     fc03_calls: Arc<AtomicUsize>,
     fc06_calls: Arc<AtomicUsize>,
+    #[cfg(feature = "coils")]
+    fc05_calls: Arc<AtomicUsize>,
+    #[cfg(feature = "coils")]
+    fc0f_calls: Arc<AtomicUsize>,
+    fc10_calls: Arc<AtomicUsize>,
 }
 
 impl ModbusAppHandler for ProbeApp {
@@ -116,6 +172,39 @@ impl ModbusAppHandler for ProbeApp {
         Ok(())
     }
 
+    #[cfg(feature = "coils")]
+    fn write_single_coil_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _address: u16,
+        _value: bool,
+    ) -> Result<(), MbusError> {
+        self.fc05_calls.fetch_add(1, Ordering::SeqCst);
+        self.call_order
+            .lock()
+            .expect("call_order mutex poisoned")
+            .push(5);
+        Ok(())
+    }
+
+    #[cfg(feature = "coils")]
+    fn write_multiple_coils_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _starting_address: u16,
+        _quantity: u16,
+        _values: &[u8],
+    ) -> Result<(), MbusError> {
+        self.fc0f_calls.fetch_add(1, Ordering::SeqCst);
+        self.call_order
+            .lock()
+            .expect("call_order mutex poisoned")
+            .push(15);
+        Ok(())
+    }
+
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -123,7 +212,12 @@ impl ModbusAppHandler for ProbeApp {
         _starting_address: u16,
         _values: &[u16],
     ) -> Result<(), MbusError> {
-        Err(MbusError::InvalidFunctionCode)
+        self.fc10_calls.fetch_add(1, Ordering::SeqCst);
+        self.call_order
+            .lock()
+            .expect("call_order mutex poisoned")
+            .push(16);
+        Ok(())
     }
 }
 
@@ -156,6 +250,83 @@ fn build_fc06_write_request_for_unit(txn_id: u16, wire_unit: u8) -> HVec<u8, MAX
     );
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
+}
+
+fn build_serial_fc06_write_request_for_unit(
+    txn_id: u16,
+    wire_unit: u8,
+) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x02, 0xAB, 0xCD];
+    let pdu = Pdu::new(
+        FunctionCode::WriteSingleRegister,
+        HVec::from_slice(&payload).expect("payload fits"),
+        payload.len() as u8,
+    );
+    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
+        .expect("serial request ADU should compile")
+}
+
+#[cfg(feature = "coils")]
+fn build_serial_fc05_write_request_for_unit(
+    txn_id: u16,
+    wire_unit: u8,
+) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x02, 0xFF, 0x00];
+    let pdu = Pdu::new(
+        FunctionCode::WriteSingleCoil,
+        HVec::from_slice(&payload).expect("payload fits"),
+        payload.len() as u8,
+    );
+    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
+        .expect("serial request ADU should compile")
+}
+
+#[cfg(feature = "coils")]
+fn build_serial_fc0f_write_request_for_unit(
+    txn_id: u16,
+    wire_unit: u8,
+) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x05, 0x00, 0x03, 0x01, 0x05];
+    let pdu = Pdu::new(
+        FunctionCode::WriteMultipleCoils,
+        HVec::from_slice(&payload).expect("payload fits"),
+        payload.len() as u8,
+    );
+    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
+        .expect("serial request ADU should compile")
+}
+
+fn build_serial_fc10_write_request_for_unit(
+    txn_id: u16,
+    wire_unit: u8,
+) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x10, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78];
+    let pdu = Pdu::new(
+        FunctionCode::WriteMultipleRegisters,
+        HVec::from_slice(&payload).expect("payload fits"),
+        payload.len() as u8,
+    );
+    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
+        .expect("serial request ADU should compile")
+}
+
+fn serial_rtu_config() -> ModbusConfig {
+    let mut port_path = heapless::String::<64>::new();
+    port_path.push_str("/dev/mock").expect("mock serial path should fit");
+
+    ModbusConfig::Serial(ModbusSerialConfig {
+        port_path,
+        baud_rate: BaudRate::Baud9600,
+        data_bits: DataBits::Eight,
+        parity: Parity::None,
+        stop_bits: 1,
+        response_timeout_ms: 1_000,
+        mode: SerialMode::Rtu,
+        retry_attempts: 3,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
+    })
 }
 
 fn txn_id_from_adu(frame: &[u8]) -> u16 {
@@ -210,6 +381,7 @@ fn resilience_config_is_applied_at_construction() {
         clock_fn: Some(stepping_clock_ms),
         max_send_retries: 4,
         enable_priority_queue: true,
+        enable_broadcast_writes: false,
     };
 
     let server: ServerServices<ScriptedTransport, ProbeApp> =
@@ -222,6 +394,7 @@ fn resilience_config_is_applied_at_construction() {
     assert!(server.resilience().timeouts.strict_mode);
     assert_eq!(server.resilience().max_send_retries, 4);
     assert!(server.resilience().enable_priority_queue);
+    assert!(!server.resilience().enable_broadcast_writes);
     assert_eq!(server.pending_request_count(), 0);
     assert_eq!(server.pending_response_count(), 0);
 }
@@ -759,6 +932,7 @@ fn metrics_track_dropped_responses_on_queue_overflow() {
                 clock_fn: None,
                 max_send_retries: 3,
                 enable_priority_queue: false, // Direct dispatch, not queued
+                enable_broadcast_writes: false,
             },
         );
 
@@ -844,6 +1018,7 @@ fn addressed_unicast_request_is_rejected_with_exception_under_back_pressure() {
             clock_fn: Some(manual_clock_ms),
             max_send_retries: 3,
             enable_priority_queue: true,
+            enable_broadcast_writes: false,
         },
     );
 
@@ -910,6 +1085,7 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
             clock_fn: Some(manual_clock_ms),
             max_send_retries: 3,
             enable_priority_queue: true,
+            enable_broadcast_writes: false,
         },
     );
 
@@ -971,6 +1147,7 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
             clock_fn: Some(manual_clock_ms),
             max_send_retries: 3,
             enable_priority_queue: true,
+            enable_broadcast_writes: true,
         },
     );
 
@@ -991,5 +1168,246 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
     assert!(
         sent.is_empty(),
         "broadcast must not generate a response under back-pressure"
+    );
+}
+
+#[test]
+fn serial_broadcast_write_is_applied_without_response_under_back_pressure() {
+    reset_manual_clock_ms(0);
+
+    let sent_frames = Arc::new(Mutex::new(Vec::new()));
+    let app = ProbeApp::default();
+    let fc06_count = Arc::clone(&app.fc06_calls);
+
+    let mut recv_queue = VecDeque::new();
+    for txn_id in 1..=7u16 {
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+    }
+    recv_queue.push_back(build_serial_fc06_write_request_for_unit(8, 0));
+
+    let transport = ScriptedSerialTransport {
+        recv_queue,
+        sent_frames: Arc::clone(&sent_frames),
+        send_failures_remaining: Arc::new(AtomicUsize::new(7)),
+        connected: true,
+    };
+
+    let mut server: ServerServices<ScriptedSerialTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_ms),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: true,
+        },
+    );
+
+    for _ in 0..7 {
+        server.poll();
+    }
+
+    assert_eq!(server.pending_response_count(), 7);
+    assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
+
+    server.poll();
+
+    assert_eq!(server.pending_response_count(), 7);
+    assert_eq!(server.rejected_request_count(), 0);
+    assert_eq!(fc06_count.load(Ordering::SeqCst), 8);
+
+    let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
+    assert!(
+        sent.is_empty(),
+        "serial broadcast write must not generate any response under back-pressure"
+    );
+}
+
+#[cfg(feature = "coils")]
+#[test]
+fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pressure() {
+    reset_manual_clock_ms(0);
+
+    let sent_frames = Arc::new(Mutex::new(Vec::new()));
+    let app = ProbeApp::default();
+    let fc05_count = Arc::clone(&app.fc05_calls);
+    let fc06_count = Arc::clone(&app.fc06_calls);
+
+    let mut recv_queue = VecDeque::new();
+    for txn_id in 1..=7u16 {
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+    }
+    recv_queue.push_back(build_serial_fc05_write_request_for_unit(8, 0));
+
+    let transport = ScriptedSerialTransport {
+        recv_queue,
+        sent_frames: Arc::clone(&sent_frames),
+        send_failures_remaining: Arc::new(AtomicUsize::new(7)),
+        connected: true,
+    };
+
+    let mut server: ServerServices<ScriptedSerialTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_ms),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: true,
+        },
+    );
+
+    for _ in 0..7 {
+        server.poll();
+    }
+
+    server.poll();
+
+    assert_eq!(server.pending_response_count(), 7);
+    assert_eq!(server.rejected_request_count(), 0);
+    assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
+    assert_eq!(fc05_count.load(Ordering::SeqCst), 1);
+    assert!(
+        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        "serial broadcast FC05 must not generate a response"
+    );
+}
+
+#[cfg(feature = "coils")]
+#[test]
+fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_pressure() {
+    reset_manual_clock_ms(0);
+
+    let sent_frames = Arc::new(Mutex::new(Vec::new()));
+    let app = ProbeApp::default();
+    let fc0f_count = Arc::clone(&app.fc0f_calls);
+    let fc06_count = Arc::clone(&app.fc06_calls);
+
+    let mut recv_queue = VecDeque::new();
+    for txn_id in 1..=7u16 {
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+    }
+    recv_queue.push_back(build_serial_fc0f_write_request_for_unit(8, 0));
+
+    let transport = ScriptedSerialTransport {
+        recv_queue,
+        sent_frames: Arc::clone(&sent_frames),
+        send_failures_remaining: Arc::new(AtomicUsize::new(7)),
+        connected: true,
+    };
+
+    let mut server: ServerServices<ScriptedSerialTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_ms),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: true,
+        },
+    );
+
+    for _ in 0..7 {
+        server.poll();
+    }
+
+    server.poll();
+
+    assert_eq!(server.pending_response_count(), 7);
+    assert_eq!(server.rejected_request_count(), 0);
+    assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
+    assert_eq!(fc0f_count.load(Ordering::SeqCst), 1);
+    assert!(
+        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        "serial broadcast FC0F must not generate a response"
+    );
+}
+
+#[test]
+fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_back_pressure() {
+    reset_manual_clock_ms(0);
+
+    let sent_frames = Arc::new(Mutex::new(Vec::new()));
+    let app = ProbeApp::default();
+    let fc10_count = Arc::clone(&app.fc10_calls);
+    let fc06_count = Arc::clone(&app.fc06_calls);
+
+    let mut recv_queue = VecDeque::new();
+    for txn_id in 1..=7u16 {
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+    }
+    recv_queue.push_back(build_serial_fc10_write_request_for_unit(8, 0));
+
+    let transport = ScriptedSerialTransport {
+        recv_queue,
+        sent_frames: Arc::clone(&sent_frames),
+        send_failures_remaining: Arc::new(AtomicUsize::new(7)),
+        connected: true,
+    };
+
+    let mut server: ServerServices<ScriptedSerialTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_ms),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: true,
+        },
+    );
+
+    for _ in 0..7 {
+        server.poll();
+    }
+
+    server.poll();
+
+    assert_eq!(server.pending_response_count(), 7);
+    assert_eq!(server.rejected_request_count(), 0);
+    assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
+    assert_eq!(fc10_count.load(Ordering::SeqCst), 1);
+    assert!(
+        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        "serial broadcast FC10 must not generate a response"
     );
 }

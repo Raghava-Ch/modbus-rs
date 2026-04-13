@@ -92,8 +92,8 @@ pub struct ServerServices<TRANSPORT, APP, const QUEUE_DEPTH: usize = 8> {
     /// The unit ID (TCP) or slave address (Serial) this server responds to.
     ///
     /// Frames addressed to any other unit are silently discarded without a response.
-    /// Broadcast frames (address `0`) are also silently discarded; full broadcast
-    /// write forwarding for Serial transports is not yet implemented.
+    /// Broadcast frames (address `0`) are silently discarded unless Serial
+    /// broadcast writes are explicitly enabled in [`ResilienceConfig`].
     pub(super) slave_address: UnitIdOrSlaveAddr,
     pub(super) app: APP,
     /// Transport layer used for sending and receiving Modbus frames.
@@ -284,7 +284,7 @@ where
 
         if wire_addr == 0 {
             server_log_trace!(
-                "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast write forwarding not yet implemented)",
+                "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast disabled or unsupported transport)",
                 wire_txn_id,
                 function_code as u8,
             );
@@ -298,6 +298,69 @@ where
         }
 
         true
+    }
+
+    fn should_handle_broadcast_write(&self, message: &ModbusMessage) -> bool {
+        if !self.resilience.enable_broadcast_writes || !message.unit_id_or_slave_addr().is_broadcast() {
+            return false;
+        }
+
+        if !TRANSPORT::SUPPORTS_BROADCAST_WRITES {
+            return false;
+        }
+
+        let serial_capable = match TRANSPORT::TRANSPORT_TYPE {
+            Some(transport_type) => transport_type.is_serial_type(),
+            None => self.transport.transport_type().is_serial_type(),
+        };
+
+        if !serial_capable {
+            return false;
+        }
+
+        self.is_supported_broadcast_write_function(message.pdu.function_code())
+    }
+
+    fn is_supported_broadcast_write_function(&self, function_code: FunctionCode) -> bool {
+        match function_code {
+            #[cfg(feature = "coils")]
+            FunctionCode::WriteSingleCoil | FunctionCode::WriteMultipleCoils => true,
+            #[cfg(feature = "holding-registers")]
+            FunctionCode::WriteSingleRegister | FunctionCode::WriteMultipleRegisters => true,
+            _ => false,
+        }
+    }
+
+    fn dispatch_broadcast_write_no_response(&mut self, message: &ModbusMessage) {
+        server_log_trace!(
+            "dispatching serial broadcast write with no response: txn_id={}, fc=0x{:02X}",
+            message.transaction_id(),
+            message.pdu.function_code() as u8,
+        );
+
+        match message.pdu.function_code() {
+            #[cfg(feature = "coils")]
+            FunctionCode::WriteSingleCoil => {
+                self.handle_broadcast_write_single_coil_request(message)
+            }
+            #[cfg(feature = "holding-registers")]
+            FunctionCode::WriteSingleRegister => {
+                self.handle_broadcast_write_single_register_request(message)
+            }
+            #[cfg(feature = "coils")]
+            FunctionCode::WriteMultipleCoils => {
+                self.handle_broadcast_write_multiple_coils_request(message)
+            }
+            #[cfg(feature = "holding-registers")]
+            FunctionCode::WriteMultipleRegisters => {
+                self.handle_broadcast_write_multiple_registers_request(message)
+            }
+            _ => server_log_debug!(
+                "unsupported broadcast write FC ignored: txn_id={}, fc=0x{:02X}",
+                message.transaction_id(),
+                message.pdu.function_code() as u8,
+            ),
+        }
     }
 
     /// Checks whether back-pressure should be applied to avoid response queue overflow.
@@ -452,6 +515,11 @@ where
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
         let function_code = message.pdu.function_code();
 
+        if self.should_handle_broadcast_write(message) {
+            self.dispatch_broadcast_write_no_response(message);
+            return;
+        }
+
         // -----------------------------------------------------------------------
         // Unit ID / slave address filtering (Modbus spec requirement)
         //
@@ -461,10 +529,8 @@ where
         // owns that address and the response would corrupt the bus).
         //
         // Broadcast (address 0):
-        //   - Serial RTU/ASCII: write function codes should be processed without
-        //     sending a response. Full broadcast write forwarding is not yet
-        //     implemented; broadcast frames are currently discarded so that a
-        //     partial implementation never sends accidental responses.
+        //   - Serial RTU/ASCII: when enabled, supported write function codes are
+        //     dispatched without sending any response.
         //   - TCP: broadcast is rarely used in TCP Modbus and is discarded here.
         //
         // Note: TCP MBAP unit ID 0xFF is a legacy "not-used" marker that some TCP
@@ -888,6 +954,11 @@ where
                 ModbusMessage::new(additional_address, message.pdu)
             }
         };
+
+        if self.should_handle_broadcast_write(&message) {
+            self.dispatch_broadcast_write_no_response(&message);
+            return Ok(expected_length);
+        }
 
         if self.should_drop_for_address(&message) {
             return Ok(expected_length);

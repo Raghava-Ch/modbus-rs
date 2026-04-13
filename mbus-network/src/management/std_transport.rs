@@ -89,6 +89,7 @@ impl StdTcpTransport {
 
 impl Transport for StdTcpTransport {
     type Error = TransportError;
+    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
 
     /// Establishes a TCP connection to the specified remote address.
     ///

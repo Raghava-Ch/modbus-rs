@@ -166,6 +166,39 @@ where
         self.try_send_or_queue(&response, txn_id);
     }
 
+    /// Handles a Serial broadcast FC06 request without emitting any response.
+    pub(super) fn handle_broadcast_write_single_register_request(
+        &mut self,
+        message: &ModbusMessage,
+    ) {
+        let txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        let (address, value) = match parse_write_single_request(message) {
+            Ok(values) => values,
+            Err(err) => {
+                server_log_debug!(
+                    "FC06 broadcast ignored due to invalid request: txn_id={}, error={:?}",
+                    txn_id,
+                    err
+                );
+                return;
+            }
+        };
+
+        if let Err(err) =
+            self.app
+                .write_single_register_request(txn_id, unit_id_or_slave_addr, address, value)
+        {
+            server_log_debug!(
+                "FC06 broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                err
+            );
+        }
+    }
+
     /// Handles FC16 (Write Multiple Registers).
     ///
     /// Validates quantity and byte-count consistency, converts payload bytes
@@ -368,5 +401,74 @@ where
         };
 
         self.try_send_or_queue(&response, txn_id);
+    }
+
+    /// Handles a Serial broadcast FC10 request without emitting any response.
+    pub(super) fn handle_broadcast_write_multiple_registers_request(
+        &mut self,
+        message: &ModbusMessage,
+    ) {
+        let txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        let (address, quantity, byte_count, values) = match parse_write_multiple_request(message) {
+            Ok(values) => values,
+            Err(err) => {
+                server_log_debug!(
+                    "FC10 broadcast ignored due to invalid request: txn_id={}, error={:?}",
+                    txn_id,
+                    err
+                );
+                return;
+            }
+        };
+
+        if !(FC16_MIN_QUANTITY..=FC16_MAX_QUANTITY).contains(&quantity) {
+            server_log_debug!(
+                "FC10 broadcast ignored due to invalid quantity: txn_id={}, quantity={}",
+                txn_id,
+                quantity
+            );
+            return;
+        }
+        if address.checked_add(quantity - 1).is_none() {
+            server_log_debug!(
+                "FC10 broadcast ignored due to address overflow: txn_id={}, address={}, quantity={}",
+                txn_id,
+                address,
+                quantity
+            );
+            return;
+        }
+
+        let expected_byte_count = quantity as usize * 2;
+        if byte_count as usize != expected_byte_count || values.len() != expected_byte_count {
+            server_log_debug!(
+                "FC10 broadcast ignored due to invalid byte count: txn_id={}, byte_count={}, expected={}",
+                txn_id,
+                byte_count,
+                expected_byte_count
+            );
+            return;
+        }
+
+        let mut registers = [0u16; FC16_MAX_QUANTITY as usize];
+        for (index, chunk) in values.chunks_exact(2).enumerate() {
+            registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        }
+
+        if let Err(err) = self.app.write_multiple_registers_request(
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            &registers[..quantity as usize],
+        ) {
+            server_log_debug!(
+                "FC10 broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                err
+            );
+        }
     }
 }

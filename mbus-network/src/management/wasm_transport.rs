@@ -57,6 +57,7 @@ impl WasmWsTransport {
 
 impl Transport for WasmWsTransport {
     type Error = TransportError;
+    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::CustomTcp);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         let ws = WebSocket::new(&self.url).map_err(|_| TransportError::ConnectionFailed)?;

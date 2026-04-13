@@ -119,6 +119,8 @@ struct MockTransport;
 
 impl Transport for MockTransport {
     type Error = MbusError;
+  const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+  const SUPPORTS_BROADCAST_WRITES: bool = false;
 
     fn connect(&mut self, _: &ModbusConfig) -> Result<(), Self::Error> { Ok(()) }
     fn disconnect(&mut self) -> Result<(), Self::Error> { Ok(()) }

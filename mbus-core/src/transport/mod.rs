@@ -594,6 +594,21 @@ pub trait Transport {
     /// It must be convertible into the common `MbusError` for upper-layer processing.
     type Error: Into<MbusError> + core::fmt::Debug;
 
+    /// Compile-time capability flag for Serial-style broadcast write semantics.
+    ///
+    /// Set this to `true` for transport implementations that can safely apply
+    /// Modbus broadcast writes (address `0`) with no response. Most transports
+    /// should keep the default `false`.
+    const SUPPORTS_BROADCAST_WRITES: bool = false;
+
+    /// Optional compile-time transport type metadata.
+    ///
+    /// Implementations with a fixed transport kind should set this to
+    /// `Some(...)` to enable additional compile-time specialization.
+    /// Implementations that can represent multiple families at runtime
+    /// (for example, wrappers that may be TCP or Serial) can keep `None`.
+    const TRANSPORT_TYPE: Option<TransportType> = None;
+
     /// Establishes the physical or logical connection to the Modbus server/slave.
     ///
     /// # Arguments
