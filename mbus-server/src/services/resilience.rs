@@ -16,7 +16,11 @@
 //!   used by `ServerServices` at runtime.
 
 use heapless::{Deque, Vec};
-use mbus_core::{data_unit::common::MAX_ADU_FRAME_LEN, function_codes::public::FunctionCode};
+use mbus_core::{
+    data_unit::common::MAX_ADU_FRAME_LEN,
+    function_codes::public::FunctionCode,
+    transport::UnitIdOrSlaveAddr,
+};
 
 // ---------------------------------------------------------------------------
 // Clock abstraction
@@ -384,6 +388,10 @@ impl<const N: usize> RequestQueue<N> {
 pub(crate) struct PendingResponse {
     /// Serialised ADU bytes to transmit.
     pub(crate) frame: Vec<u8, MAX_ADU_FRAME_LEN>,
+    /// Transaction identifier associated with this response.
+    pub(crate) txn_id: u16,
+    /// Address metadata (TCP unit id or serial slave address).
+    pub(crate) unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     /// How many send attempts have already been made.
     pub(crate) retry_count: u8,
     /// Clock value (ms) when this response was first queued.

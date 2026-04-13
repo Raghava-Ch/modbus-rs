@@ -161,7 +161,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Handles a Serial broadcast FC06 request without emitting any response.
@@ -298,7 +298,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Shared implementation for FC03/FC04-style register reads.
@@ -397,7 +397,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Handles a Serial broadcast FC10 request without emitting any response.

@@ -130,7 +130,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Handles FC05 (Write Single Coil).
@@ -213,7 +213,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Handles a Serial broadcast FC05 request without emitting any response.
@@ -355,7 +355,7 @@ where
             }
         };
 
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 
     /// Handles a Serial broadcast FC15 request without emitting any response.
