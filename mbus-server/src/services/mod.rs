@@ -14,6 +14,8 @@
 
 #[cfg(feature = "coils")]
 pub mod coils;
+#[cfg(feature = "discrete-inputs")]
+pub mod discrete_input;
 pub mod exception;
 pub mod framing;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
@@ -573,6 +575,10 @@ where
             ReadCoils => {
                 self.handle_read_coils_request(wire_txn_id, unit_id_or_slave_addr, message)
             }
+            #[cfg(feature = "discrete-inputs")]
+            ReadDiscreteInputs => {
+                self.handle_read_discrete_inputs_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
             #[cfg(feature = "holding-registers")]
             ReadHoldingRegisters => self.handle_read_holding_registers_request(
                 wire_txn_id,
@@ -609,7 +615,6 @@ where
             ),
             // MaskWriteRegister => ,
             // ReadWriteMultipleRegisters => ,
-            // ReadDiscreteInputs => ,
             // ReadFifoQueue => ,
             // ReadFileRecord => ,
             // WriteFileRecord => ,

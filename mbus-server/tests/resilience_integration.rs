@@ -611,6 +611,13 @@ fn failed_send_is_retried_on_next_poll() {
     server.poll();
     assert_eq!(server.pending_response_count(), 0);
 
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 1);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 1);
+    }
+
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
     assert_eq!(sent.len(), 1, "queued response should be sent on retry");
     assert_eq!(txn_id_from_adu(&sent[0]), 0x3001);
@@ -819,6 +826,13 @@ fn response_queue_full_drops_additional_failed_responses() {
             .len(),
         0
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[test]
@@ -931,6 +945,13 @@ fn strict_mode_expiry_sends_exception_responses() {
             ExceptionCode::ServerDeviceFailure as u8,
             "timeout expiry should map to ServerDeviceFailure exception code"
         );
+    }
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 2);
     }
 }
 
@@ -1308,6 +1329,13 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
         sent.is_empty(),
         "misaddressed frames must not generate a response under back-pressure"
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 7);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 7);
+    }
 }
 
 #[test]
@@ -1370,6 +1398,13 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
         sent.is_empty(),
         "broadcast must not generate a response under back-pressure"
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 7);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 7);
+    }
 }
 
 #[test]
