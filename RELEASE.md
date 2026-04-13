@@ -6,6 +6,7 @@ Use this checklist before tagging a new workspace release.
 
 - Update `CHANGELOG.md` with user-visible changes and breaking behavior.
 - Review root `README.md`, crate READMEs, and `documentation/` for API drift.
+- Update `documentation/migration_guide.md` for any new breaking changes.
 - Run `cargo fmt --check`.
 - Run `cargo clippy --workspace`.
 - Run `cargo test --workspace`.

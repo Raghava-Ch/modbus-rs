@@ -12,26 +12,30 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
-struct MockAsyncSerialTransport {
+struct MockAsyncSerialTransport<const ASCII: bool = false> {
     sent_frames: Arc<Mutex<Vec<Vec<u8>>>>,
     recv_frames: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    mode: SerialMode,
 }
 
-impl MockAsyncSerialTransport {
-    fn new(mode: SerialMode) -> Self {
+impl<const ASCII: bool> MockAsyncSerialTransport<ASCII> {
+    const MODE: SerialMode = if ASCII {
+        SerialMode::Ascii
+    } else {
+        SerialMode::Rtu
+    };
+
+    fn new() -> Self {
         Self {
             sent_frames: Arc::new(Mutex::new(Vec::new())),
             recv_frames: Arc::new(Mutex::new(VecDeque::new())),
-            mode,
         }
     }
 }
 
-impl Transport for MockAsyncSerialTransport {
+impl<const ASCII: bool> Transport for MockAsyncSerialTransport<ASCII> {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         Ok(())
@@ -69,10 +73,6 @@ impl Transport for MockAsyncSerialTransport {
 
     fn is_connected(&self) -> bool {
         true
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(self.mode)
     }
 }
 
@@ -233,7 +233,7 @@ fn test_async_serial_multiple_constructor_variants() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
-    let transport = MockAsyncSerialTransport::new(SerialMode::Rtu);
+    let transport = MockAsyncSerialTransport::<false>::new();
     let sent = transport.sent_frames.clone();
     let recv = transport.recv_frames.clone();
 
@@ -266,7 +266,7 @@ async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_serial_e2e_write_single_register_rtu() -> Result<()> {
-    let transport = MockAsyncSerialTransport::new(SerialMode::Rtu);
+    let transport = MockAsyncSerialTransport::<false>::new();
     let sent = transport.sent_frames.clone();
     let recv = transport.recv_frames.clone();
 
@@ -295,7 +295,7 @@ async fn test_async_serial_e2e_write_single_register_rtu() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_serial_e2e_serial_diagnostics_paths_rtu() -> Result<()> {
-    let transport = MockAsyncSerialTransport::new(SerialMode::Rtu);
+    let transport = MockAsyncSerialTransport::<false>::new();
     let recv = transport.recv_frames.clone();
 
     {
@@ -328,7 +328,7 @@ async fn test_async_serial_e2e_serial_diagnostics_paths_rtu() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_serial_e2e_exception_propagation_rtu() -> Result<()> {
-    let transport = MockAsyncSerialTransport::new(SerialMode::Rtu);
+    let transport = MockAsyncSerialTransport::<false>::new();
     let recv = transport.recv_frames.clone();
 
     recv.lock()

@@ -16,9 +16,9 @@
 pub mod coils;
 pub mod exception;
 pub mod framing;
-pub mod resilience;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;
+pub mod resilience;
 
 use crate::app::ModbusAppHandler;
 use heapless::Vec;
@@ -32,8 +32,8 @@ use mbus_core::{
     transport::{ModbusConfig, Transport, TransportType, UnitIdOrSlaveAddr},
 };
 use resilience::{
-    PendingRequest, PendingResponse, RequestPriority, RequestQueue, ResilienceConfig,
-    ResponseQueue, OverflowPolicy,
+    OverflowPolicy, PendingRequest, PendingResponse, RequestPriority, RequestQueue,
+    ResilienceConfig, ResponseQueue,
 };
 
 // ---------------------------------------------------------------------------
@@ -301,7 +301,9 @@ where
     }
 
     fn should_handle_broadcast_write(&self, message: &ModbusMessage) -> bool {
-        if !self.resilience.enable_broadcast_writes || !message.unit_id_or_slave_addr().is_broadcast() {
+        if !self.resilience.enable_broadcast_writes
+            || !message.unit_id_or_slave_addr().is_broadcast()
+        {
             return false;
         }
 
@@ -432,7 +434,8 @@ where
             Err(err) => {
                 server_log_debug!(
                     "txn_id={}: transport send failed ({:?}); queuing for retry",
-                    txn_id, err
+                    txn_id,
+                    err
                 );
                 let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
                 if queued.extend_from_slice(frame).is_ok() {
@@ -476,7 +479,7 @@ where
             unit_id_or_slave_addr,
             function_code,
             exception_code,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         ) {
             Ok(adu) => adu,
             Err(err) => {
@@ -731,7 +734,7 @@ where
     /// Measures the dispatch duration and emits a debug log if it exceeds the
     /// configured [`TimeoutConfig::app_callback_ms`] threshold.
     fn dispatch_pending_request(&mut self, pending: PendingRequest) {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         let expected_length =
             match derive_length_from_bytes(pending.frame.as_slice(), transport_type) {
@@ -742,16 +745,14 @@ where
                 }
             };
 
-        let message = match common::decompile_adu_frame(
-            &pending.frame[..expected_length],
-            transport_type,
-        ) {
-            Ok(msg) => msg,
-            Err(err) => {
-                server_log_debug!("queued request: decompile failed: {:?}; dropping", err);
-                return;
-            }
-        };
+        let message =
+            match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type) {
+                Ok(msg) => msg,
+                Err(err) => {
+                    server_log_debug!("queued request: decompile failed: {:?}; dropping", err);
+                    return;
+                }
+            };
 
         let message = match self.reframe_message(message) {
             Some(m) => m,
@@ -774,25 +775,28 @@ where
     /// In strict timeout mode, sends an exception response for an expired
     /// queued request instead of silently dropping it.
     fn handle_expired_request_strict(&mut self, pending: PendingRequest) {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
-        let expected_length = match derive_length_from_bytes(pending.frame.as_slice(), transport_type)
-        {
-            Some(len) => len,
-            None => {
-                server_log_debug!("strict expiry: unable to derive frame length; dropping");
-                return;
-            }
-        };
+        let expected_length =
+            match derive_length_from_bytes(pending.frame.as_slice(), transport_type) {
+                Some(len) => len,
+                None => {
+                    server_log_debug!("strict expiry: unable to derive frame length; dropping");
+                    return;
+                }
+            };
 
-        let message = match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type)
-        {
-            Ok(msg) => msg,
-            Err(err) => {
-                server_log_debug!("strict expiry: failed to decompile queued request: {:?}", err);
-                return;
-            }
-        };
+        let message =
+            match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type) {
+                Ok(msg) => msg,
+                Err(err) => {
+                    server_log_debug!(
+                        "strict expiry: failed to decompile queued request: {:?}",
+                        err
+                    );
+                    return;
+                }
+            };
 
         let message = match self.reframe_message(message) {
             Some(m) => m,
@@ -891,7 +895,7 @@ where
 
     fn ingest_frame(&mut self) -> Result<usize, MbusError> {
         let frame = self.rxed_frame.as_slice();
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         server_log_trace!(
             "attempting frame ingest: transport_type={:?}, buffer_len={}",
@@ -932,7 +936,7 @@ where
         };
 
         use TransportType::*;
-        let message = match self.transport.transport_type() {
+        let message = match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(header) => header,
@@ -1027,7 +1031,7 @@ where
     /// address variant for the active transport type.
     fn reframe_message(&self, message: ModbusMessage) -> Option<ModbusMessage> {
         use TransportType::*;
-        match self.transport.transport_type() {
+        match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(h) => h,
@@ -1043,8 +1047,7 @@ where
                     AdditionalAddress::SlaveAddress(s) => s.address(),
                     _ => return None,
                 };
-                let additional =
-                    AdditionalAddress::SlaveAddress(SlaveAddress::new(addr).ok()?);
+                let additional = AdditionalAddress::SlaveAddress(SlaveAddress::new(addr).ok()?);
                 Some(ModbusMessage::new(additional, message.pdu))
             }
         }

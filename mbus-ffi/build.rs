@@ -24,8 +24,8 @@ fn main() {
     // ── MBUS_MAX_TCP_CLIENTS ──────────────────────────────────────────────────
     //
     // Controls how many TCP client slots are pre-allocated in the static pool.
-    // Default: 1. Valid range: [1, 127].
-    // IDs 0x00..=0x7E index the TCP pool (MSB = 0).
+    // Default: 1. Valid range: [1, 255].
+    // IDs 0x00xx index the TCP pool (high byte = 0x00).
     println!("cargo::rerun-if-env-changed=MBUS_MAX_TCP_CLIENTS");
 
     let max_tcp: usize = match std::env::var("MBUS_MAX_TCP_CLIENTS") {
@@ -36,8 +36,8 @@ fn main() {
             if n == 0 {
                 panic!("MBUS_MAX_TCP_CLIENTS must be >= 1, got: 0");
             }
-            if n > 127 {
-                panic!("MBUS_MAX_TCP_CLIENTS must be <= 127 (MSB=0 range), got: {n}");
+            if n > 255 {
+                panic!("MBUS_MAX_TCP_CLIENTS must be <= 255, got: {n}");
             }
             n
         }
@@ -46,9 +46,9 @@ fn main() {
 
     // ── MBUS_MAX_SERIAL_CLIENTS ───────────────────────────────────────────────
     //
-    // Controls how many Serial client slots are pre-allocated in the static pool.
-    // Default: 1. Valid range: [1, 126].
-    // IDs 0x80..=0xFD index the Serial pool (MSB = 1). 0xFF = INVALID_ID.
+    // Controls how many Serial client slots are pre-allocated in each of the
+    // RTU and ASCII sub-pools. Default: 1. Valid range: [1, 255].
+    // IDs 0x01xx index the RTU pool, 0x02xx the ASCII pool.
     println!("cargo::rerun-if-env-changed=MBUS_MAX_SERIAL_CLIENTS");
 
     let max_serial: usize = match std::env::var("MBUS_MAX_SERIAL_CLIENTS") {
@@ -59,10 +59,8 @@ fn main() {
             if n == 0 {
                 panic!("MBUS_MAX_SERIAL_CLIENTS must be >= 1, got: 0");
             }
-            if n > 126 {
-                panic!(
-                    "MBUS_MAX_SERIAL_CLIENTS must be <= 126 (MSB=1 range, 0xFF reserved), got: {n}"
-                );
+            if n > 255 {
+                panic!("MBUS_MAX_SERIAL_CLIENTS must be <= 255, got: {n}");
             }
             n
         }

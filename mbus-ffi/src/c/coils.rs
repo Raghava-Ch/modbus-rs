@@ -5,7 +5,7 @@ use mbus_client::services::coil::Coils;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
+use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 macro_rules! call_tcp {
     ($id:ident, $method:ident, $txn_id:ident, $unit_id:ident $(, $arg:ident)*) => {{
@@ -24,7 +24,7 @@ macro_rules! call_tcp {
 
 macro_rules! call_serial {
     ($id:ident, $method:ident, $txn_id:ident, $unit_id:ident $(, $arg:ident)*) => {{
-        with_serial_client($id, |inner| {
+        with_serial_client_uniform!($id, |inner| {
             let uid = match UnitIdOrSlaveAddr::new($unit_id) {
                 Ok(u) => u,
                 Err(e) => return MbusStatusCode::from(e),
@@ -128,7 +128,7 @@ pub extern "C" fn mbus_serial_write_single_coil(
     address: u16,
     value: u8,
 ) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_coils(
     if values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),

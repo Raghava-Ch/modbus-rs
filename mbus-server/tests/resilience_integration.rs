@@ -4,16 +4,20 @@ mod common;
 use common::{build_request, tcp_config, unit_id};
 
 use heapless::Vec as HVec;
-use mbus_core::data_unit::common::{compile_adu_frame, MAX_ADU_FRAME_LEN, Pdu};
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
-    BaudRate, BackoffStrategy, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-    Parity, SerialMode, Transport, TransportType, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, Transport, TransportType, UnitIdOrSlaveAddr,
 };
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices, TimeoutConfig, OverflowPolicy};
-use std::collections::VecDeque;
+use mbus_server::{
+    ModbusAppHandler, OverflowPolicy, ResilienceConfig, ServerServices, TimeoutConfig,
+};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::cell::Cell;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -215,6 +219,9 @@ impl ModbusAppHandler for ProbeApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for ProbeApp {}
+
 fn build_fc03_read_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let payload = [0x00, 0x00, 0x00, 0x01];
     build_request(
@@ -256,8 +263,13 @@ fn build_serial_fc06_write_request_for_unit(
         HVec::from_slice(&payload).expect("payload fits"),
         payload.len() as u8,
     );
-    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
-        .expect("serial request ADU should compile")
+    compile_adu_frame(
+        txn_id,
+        wire_unit,
+        pdu,
+        TransportType::StdSerial(SerialMode::Rtu),
+    )
+    .expect("serial request ADU should compile")
 }
 
 #[cfg(feature = "coils")]
@@ -271,8 +283,13 @@ fn build_serial_fc05_write_request_for_unit(
         HVec::from_slice(&payload).expect("payload fits"),
         payload.len() as u8,
     );
-    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
-        .expect("serial request ADU should compile")
+    compile_adu_frame(
+        txn_id,
+        wire_unit,
+        pdu,
+        TransportType::StdSerial(SerialMode::Rtu),
+    )
+    .expect("serial request ADU should compile")
 }
 
 #[cfg(feature = "coils")]
@@ -286,8 +303,13 @@ fn build_serial_fc0f_write_request_for_unit(
         HVec::from_slice(&payload).expect("payload fits"),
         payload.len() as u8,
     );
-    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
-        .expect("serial request ADU should compile")
+    compile_adu_frame(
+        txn_id,
+        wire_unit,
+        pdu,
+        TransportType::StdSerial(SerialMode::Rtu),
+    )
+    .expect("serial request ADU should compile")
 }
 
 fn build_serial_fc10_write_request_for_unit(
@@ -300,13 +322,20 @@ fn build_serial_fc10_write_request_for_unit(
         HVec::from_slice(&payload).expect("payload fits"),
         payload.len() as u8,
     );
-    compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
-        .expect("serial request ADU should compile")
+    compile_adu_frame(
+        txn_id,
+        wire_unit,
+        pdu,
+        TransportType::StdSerial(SerialMode::Rtu),
+    )
+    .expect("serial request ADU should compile")
 }
 
 fn serial_rtu_config() -> ModbusConfig {
     let mut port_path = heapless::String::<64>::new();
-    port_path.push_str("/dev/mock").expect("mock serial path should fit");
+    port_path
+        .push_str("/dev/mock")
+        .expect("mock serial path should fit");
 
     ModbusConfig::Serial(ModbusSerialConfig {
         port_path,
@@ -378,8 +407,13 @@ fn resilience_config_is_applied_at_construction() {
         enable_broadcast_writes: false,
     };
 
-    let server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(transport, ProbeApp::default(), tcp_config(), unit_id(1), resilience);
+    let server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        ProbeApp::default(),
+        tcp_config(),
+        unit_id(1),
+        resilience,
+    );
 
     assert_eq!(server.resilience().timeouts.app_callback_ms, 11);
     assert_eq!(server.resilience().timeouts.send_ms, 22);
@@ -431,8 +465,16 @@ fn priority_queue_dispatches_write_before_read() {
 
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
     assert_eq!(sent.len(), 2, "both requests should be responded to");
-    assert_eq!(txn_id_from_adu(&sent[0]), 0x1002, "FC06 should respond first");
-    assert_eq!(txn_id_from_adu(&sent[1]), 0x1001, "FC03 should respond second");
+    assert_eq!(
+        txn_id_from_adu(&sent[0]),
+        0x1002,
+        "FC06 should respond first"
+    );
+    assert_eq!(
+        txn_id_from_adu(&sent[1]),
+        0x1001,
+        "FC03 should respond second"
+    );
 }
 
 #[test]
@@ -502,8 +544,13 @@ fn failed_send_is_retried_on_next_poll() {
         ..ResilienceConfig::default()
     };
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(transport, ProbeApp::default(), tcp_config(), unit_id(1), resilience);
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        ProbeApp::default(),
+        tcp_config(),
+        unit_id(1),
+        resilience,
+    );
 
     // First poll: request is processed, initial send fails, response is queued.
     server.poll();
@@ -547,24 +594,47 @@ fn queued_response_retry_waits_for_configured_interval() {
         ..ResilienceConfig::default()
     };
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(transport, ProbeApp::default(), tcp_config(), unit_id(1), resilience);
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        ProbeApp::default(),
+        tcp_config(),
+        unit_id(1),
+        resilience,
+    );
 
     // Poll #1: request is processed, immediate send fails, response is queued.
     server.poll();
     assert_eq!(server.pending_response_count(), 1);
-    assert_eq!(sent_frames.lock().expect("sent_frames mutex poisoned").len(), 0);
+    assert_eq!(
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .len(),
+        0
+    );
 
     // Poll #2 at t=0: retry is not due yet.
     server.poll();
     assert_eq!(server.pending_response_count(), 1);
-    assert_eq!(sent_frames.lock().expect("sent_frames mutex poisoned").len(), 0);
+    assert_eq!(
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .len(),
+        0
+    );
 
     // Poll #3 at t=49ms: still not due.
     reset_manual_clock_ms(49);
     server.poll();
     assert_eq!(server.pending_response_count(), 1);
-    assert_eq!(sent_frames.lock().expect("sent_frames mutex poisoned").len(), 0);
+    assert_eq!(
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .len(),
+        0
+    );
 
     // Poll #4 at t=50ms: retry becomes due and should succeed.
     reset_manual_clock_ms(50);
@@ -590,8 +660,13 @@ fn retry_budget_zero_drops_queued_response_without_retry() {
         ..ResilienceConfig::default()
     };
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(transport, ProbeApp::default(), tcp_config(), unit_id(1), resilience);
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        ProbeApp::default(),
+        tcp_config(),
+        unit_id(1),
+        resilience,
+    );
 
     // Poll #1 queues failed response.
     server.poll();
@@ -626,8 +701,13 @@ fn queued_response_is_dropped_after_retry_budget_is_exhausted() {
         ..ResilienceConfig::default()
     };
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(transport, ProbeApp::default(), tcp_config(), unit_id(1), resilience);
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        ProbeApp::default(),
+        tcp_config(),
+        unit_id(1),
+        resilience,
+    );
 
     // Poll #1 queues failed response.
     server.poll();
@@ -783,15 +863,25 @@ fn strict_mode_expiry_sends_exception_responses() {
     assert_eq!(server.pending_request_count(), 0);
 
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
-    assert_eq!(sent.len(), 2, "strict mode should emit exception for each stale request");
+    assert_eq!(
+        sent.len(),
+        2,
+        "strict mode should emit exception for each stale request"
+    );
 
     let mut txn_ids = vec![txn_id_from_adu(&sent[0]), txn_id_from_adu(&sent[1])];
     txn_ids.sort_unstable();
     assert_eq!(txn_ids, vec![0x3501, 0x3502]);
 
     for frame in sent.iter() {
-        assert!(frame.len() >= 9, "exception ADU must contain MBAP + FC + EX");
-        assert_eq!(frame[7], 0x83, "expired FC03 should respond with FC03 exception code");
+        assert!(
+            frame.len() >= 9,
+            "exception ADU must contain MBAP + FC + EX"
+        );
+        assert_eq!(
+            frame[7], 0x83,
+            "expired FC03 should respond with FC03 exception code"
+        );
         assert_eq!(
             frame[8],
             ExceptionCode::ServerDeviceFailure as u8,
@@ -873,14 +963,13 @@ fn parser_resync_recovers_from_garbage_prefix() {
         connected: true,
     };
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(
-            transport,
-            app,
-            tcp_config(),
-            unit_id(1),
-            ResilienceConfig::default(),
-        );
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
 
     server.poll();
 
@@ -941,11 +1030,17 @@ fn metrics_track_dropped_responses_on_queue_overflow() {
     }
 
     // Verify metrics: 1 response dropped (req 2 and/or 3)
-    assert_eq!(server.dropped_response_count(), 1, "Expected 1 dropped response");
-    assert_eq!(server.peak_response_queue_size(), 1, "Queue never exceeds 1");
+    assert_eq!(
+        server.dropped_response_count(),
+        1,
+        "Expected 1 dropped response"
+    );
+    assert_eq!(
+        server.peak_response_queue_size(),
+        1,
+        "Queue never exceeds 1"
+    );
 }
-
-
 
 #[test]
 fn back_pressure_metrics_initialized() {
@@ -959,14 +1054,13 @@ fn back_pressure_metrics_initialized() {
         connected: true,
     };
 
-    let server: ServerServices<ScriptedTransport, ProbeApp> =
-        ServerServices::new(
-            transport,
-            app,
-            tcp_config(),
-            unit_id(1),
-            ResilienceConfig::default(),
-        );
+    let server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
 
     // Verify metrics start at zero
     assert_eq!(server.dropped_response_count(), 0);
@@ -1030,10 +1124,20 @@ fn addressed_unicast_request_is_rejected_with_exception_under_back_pressure() {
     assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
 
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
-    assert_eq!(sent.len(), 1, "rejected addressed request should emit one exception response");
+    assert_eq!(
+        sent.len(),
+        1,
+        "rejected addressed request should emit one exception response"
+    );
     assert_eq!(txn_id_from_adu(&sent[0]), 8);
-    assert!(sent[0][7] & 0x80 != 0, "rejected request should use exception function code");
-    assert_eq!(sent[0][7], 0x86, "FC06 rejection should emit FC06 exception response");
+    assert!(
+        sent[0][7] & 0x80 != 0,
+        "rejected request should use exception function code"
+    );
+    assert_eq!(
+        sent[0][7], 0x86,
+        "FC06 rejection should emit FC06 exception response"
+    );
     assert_eq!(
         sent[0][8],
         ExceptionCode::ServerDeviceFailure as u8,
@@ -1282,7 +1386,10 @@ fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pre
     assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
     assert_eq!(fc05_count.load(Ordering::SeqCst), 1);
     assert!(
-        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .is_empty(),
         "serial broadcast FC05 must not generate a response"
     );
 }
@@ -1342,7 +1449,10 @@ fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_
     assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
     assert_eq!(fc0f_count.load(Ordering::SeqCst), 1);
     assert!(
-        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .is_empty(),
         "serial broadcast FC0F must not generate a response"
     );
 }
@@ -1401,7 +1511,10 @@ fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_b
     assert_eq!(fc06_count.load(Ordering::SeqCst), 7);
     assert_eq!(fc10_count.load(Ordering::SeqCst), 1);
     assert!(
-        sent_frames.lock().expect("sent_frames mutex poisoned").is_empty(),
+        sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .is_empty(),
         "serial broadcast FC10 must not generate a response"
     );
 }

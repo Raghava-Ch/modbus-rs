@@ -256,8 +256,9 @@ impl ModbusMessage {
         match self.additional_address {
             AdditionalAddress::MbapHeader(header) => match header.unit_id {
                 0 => UnitIdOrSlaveAddr::new_broadcast_address(),
-                unit_id => UnitIdOrSlaveAddr::try_from(unit_id)
-                    .unwrap_or(UnitIdOrSlaveAddr::default()),
+                unit_id => {
+                    UnitIdOrSlaveAddr::try_from(unit_id).unwrap_or(UnitIdOrSlaveAddr::default())
+                }
             },
             AdditionalAddress::SlaveAddress(slave_address) => match slave_address.address() {
                 0 => UnitIdOrSlaveAddr::new_broadcast_address(),

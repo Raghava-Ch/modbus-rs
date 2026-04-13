@@ -204,6 +204,34 @@ fn cmd_build_c_smoke(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn cmd_check_feature_matrix(root: &Path) -> Result<(), String> {
+    run_step("cargo", &["check", "--features", "full"], root)?;
+    run_step("cargo", &["check", "--workspace", "--all-features"], root)?;
+    run_step(
+        "cargo",
+        &["test", "-p", "mbus-client", "--doc", "--all-features"],
+        root,
+    )?;
+    run_step(
+        "cargo",
+        &["test", "-p", "mbus-server", "--all-features"],
+        root,
+    )?;
+    run_step(
+        "cargo",
+        &["test", "-p", "mbus-async", "--all-features"],
+        root,
+    )?;
+    Ok(())
+}
+
+fn cmd_check_release(root: &Path) -> Result<(), String> {
+    cmd_check_header(root)?;
+    cmd_build_c_smoke(root)?;
+    cmd_check_feature_matrix(root)?;
+    Ok(())
+}
+
 fn print_help() {
     println!("xtask commands:");
     println!("  cargo run -p xtask -- gen-header");
@@ -211,6 +239,8 @@ fn print_help() {
     println!("  cargo run -p xtask -- gen-feature-header");
     println!("  cargo run -p xtask -- check-feature-header");
     println!("  cargo run -p xtask -- build-c-smoke");
+    println!("  cargo run -p xtask -- check-feature-matrix");
+    println!("  cargo run -p xtask -- check-release");
 }
 
 fn main() -> ExitCode {
@@ -228,6 +258,8 @@ fn main() -> ExitCode {
         "gen-feature-header" => cmd_gen_feature_header(&root),
         "check-feature-header" => cmd_check_feature_header(&root),
         "build-c-smoke" => cmd_build_c_smoke(&root),
+        "check-feature-matrix" => cmd_check_feature_matrix(&root),
+        "check-release" => cmd_check_release(&root),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())

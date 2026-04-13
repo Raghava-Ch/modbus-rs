@@ -111,7 +111,7 @@ impl AsyncSerialClient {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
 
-        let transport = StdSerialTransport::new(SerialMode::Rtu);
+        let transport = StdRtuTransport::new();
         let config = ModbusConfig::Serial(serial_config);
         Self::from_transport_config(transport, config, Duration::from_millis(20))
     }
@@ -130,7 +130,7 @@ impl AsyncSerialClient {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
 
-        let transport = StdSerialTransport::new(SerialMode::Rtu);
+        let transport = StdRtuTransport::new();
         let config = ModbusConfig::Serial(serial_config);
         Self::from_transport_config(transport, config, poll_interval)
     }
@@ -146,7 +146,7 @@ impl AsyncSerialClient {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
 
-        let transport = StdSerialTransport::new(SerialMode::Ascii);
+        let transport = StdAsciiTransport::new();
         let config = ModbusConfig::Serial(serial_config);
         Self::from_transport_config(transport, config, Duration::from_millis(20))
     }
@@ -165,7 +165,7 @@ impl AsyncSerialClient {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
 
-        let transport = StdSerialTransport::new(SerialMode::Ascii);
+        let transport = StdAsciiTransport::new();
         let config = ModbusConfig::Serial(serial_config);
         Self::from_transport_config(transport, config, poll_interval)
     }
@@ -230,8 +230,8 @@ impl AsyncSerialClient {
 
     /// Internal constructor used by the RTU/ASCII helpers.
     #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
-    fn from_transport_config(
-        transport: StdSerialTransport,
+    fn from_transport_config<const ASCII: bool>(
+        transport: StdSerialTransport<ASCII>,
         config: ModbusConfig,
         poll_interval: Duration,
     ) -> Result<Self, AsyncError> {

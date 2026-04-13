@@ -38,23 +38,44 @@ macro_rules! serial_log_warn {
 }
 
 /// A concrete implementation of `Transport` for Serial communication using `serialport` crate.
-/// Supports both RTU and ASCII modes.
+///
+/// The const generic `ASCII` selects the framing mode at compile time:
+/// - `false` → Modbus RTU (binary + CRC)
+/// - `true`  → Modbus ASCII (`:` delimited + LRC)
+///
+/// Prefer the type aliases [`StdRtuTransport`] and [`StdAsciiTransport`].
 #[derive(Debug)]
-pub struct StdSerialTransport {
+pub struct StdSerialTransport<const ASCII: bool = false> {
     port: Option<Box<dyn SerialPort>>,
-    mode: SerialMode, // The serial mode (RTU or ASCII).
     // Store the configured timeout to restore it after dynamic adjustments in recv
     timeout: Duration,
     // Store the baud rate to calculate inter-frame delays dynamically.
     baud_rate: u32,
 }
 
-impl StdSerialTransport {
+/// Modbus RTU serial transport.
+pub type StdRtuTransport = StdSerialTransport<false>;
+/// Modbus ASCII serial transport.
+pub type StdAsciiTransport = StdSerialTransport<true>;
+
+impl<const ASCII: bool> Default for StdSerialTransport<ASCII> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const ASCII: bool> StdSerialTransport<ASCII> {
+    /// The serial mode determined by the `ASCII` const generic.
+    const MODE: SerialMode = if ASCII {
+        SerialMode::Ascii
+    } else {
+        SerialMode::Rtu
+    };
+
     /// Creates a new `StdSerialTransport` instance.
-    pub fn new(mode: SerialMode) -> Self {
+    pub fn new() -> Self {
         Self {
             port: None,
-            mode,
             timeout: Duration::from_secs(1), // Default safe value, overwritten in connect
             baud_rate: 9600,                 // Default, overwritten in connect.
         }
@@ -81,10 +102,10 @@ impl StdSerialTransport {
     }
 }
 
-impl Transport for StdSerialTransport {
+impl<const ASCII: bool> Transport for StdSerialTransport<ASCII> {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(SerialMode::Rtu);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(Self::MODE);
 
     /// Establishes a connection to the specified serial port.
     ///
@@ -101,7 +122,7 @@ impl Transport for StdSerialTransport {
         };
 
         // Ensure the mode from the configuration matches the mode this transport was initialized with.
-        if serial_config.mode != self.mode {
+        if serial_config.mode != Self::MODE {
             return Err(TransportError::InvalidConfiguration);
         }
 
@@ -283,11 +304,5 @@ impl Transport for StdSerialTransport {
     /// Checks if the transport is currently connected to a remote host.
     fn is_connected(&self) -> bool {
         self.port.is_some()
-    }
-
-    /// Returns the type of transport.
-    fn transport_type(&self) -> TransportType {
-        let mode = self.mode; // SerialMode implements Copy, so no need to clone
-        TransportType::StdSerial(mode)
     }
 }

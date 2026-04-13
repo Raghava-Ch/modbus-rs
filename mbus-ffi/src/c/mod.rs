@@ -5,13 +5,14 @@
 //!
 //! # Design
 //!
-//! - **Split typed static pools**: TCP clients occupy `tcp_slots[0..MAX_TCP_CLIENTS]`
-//!   and Serial clients occupy `serial_slots[0..MAX_SERIAL_CLIENTS]`. Pool sizes
-//!   are configured via `MBUS_MAX_TCP_CLIENTS` and `MBUS_MAX_SERIAL_CLIENTS`
+//! - **Split typed static pools**: TCP clients occupy `tcp_slots[0..MAX_TCP_CLIENTS]`,
+//!   Serial RTU clients occupy `serial_rtu_slots[0..MAX_SERIAL_CLIENTS]`, and
+//!   Serial ASCII clients occupy `serial_ascii_slots[0..MAX_SERIAL_CLIENTS]`.
+//!   Pool sizes are configured via `MBUS_MAX_TCP_CLIENTS` and `MBUS_MAX_SERIAL_CLIENTS`
 //!   environment variables at build time (both default to 1).
-//! - **ID-based API**: C code receives an opaque `MbusClientId` (u8). The MSB
-//!   encodes the pool type (0 = TCP, 1 = Serial); the lower 7 bits are the slot
-//!   index. `0xFF` is the reserved invalid sentinel.
+//! - **ID-based API**: C code receives an opaque `MbusClientId` (u16). The high
+//!   byte encodes the pool type (0x00 = TCP, 0x01 = Serial RTU, 0x02 = Serial ASCII);
+//!   the low byte is the slot index. `0xFFFF` is the reserved invalid sentinel.
 //! - **Zero heap allocation**: Everything is `core`-only + `heapless`.
 //! - **Callback-driven**: Responses are delivered via C function-pointer
 //!   callbacks registered at client creation time.

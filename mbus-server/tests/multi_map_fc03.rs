@@ -2,6 +2,8 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
 use mbus_server::{HoldingRegistersModel, modbus_app};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 #[derive(Debug, Default, HoldingRegistersModel)]
 struct ChillerContiguous {
@@ -26,6 +28,9 @@ struct ContiguousApp {
     compressor: CompressorContiguous,
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for ContiguousApp {}
+
 #[derive(Debug, Default, HoldingRegistersModel)]
 struct ChillerWithGap {
     #[reg(addr = 0)]
@@ -46,6 +51,9 @@ struct GapApp {
     chiller: ChillerWithGap,
     compressor: CompressorWithGap,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for GapApp {}
 
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")

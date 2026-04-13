@@ -111,7 +111,7 @@ pub(super) fn build_echo_u16_response<TRANSPORT: Transport>(
 
 /// Compiles a complete ADU frame from a function code and PDU payload.
 fn build_response_frame<TRANSPORT: Transport>(
-    transport: &TRANSPORT,
+    _: &TRANSPORT,
     txn_id: u16,
     unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
@@ -123,6 +123,6 @@ fn build_response_frame<TRANSPORT: Transport>(
         txn_id,
         unit_id_or_slave_addr.get(),
         pdu,
-        transport.transport_type(),
+        TRANSPORT::TRANSPORT_TYPE,
     )
 }

@@ -5,7 +5,7 @@ use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
+use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 macro_rules! tcp_diag_fn {
     ($name:ident, $method:ident $(, $arg:ident : $ty:ty)*) => {
@@ -36,7 +36,7 @@ macro_rules! serial_diag_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            with_serial_client(id, |inner| {
+            with_serial_client_uniform!(id, |inner| {
                 let uid = match UnitIdOrSlaveAddr::new(unit_id) { Ok(u) => u, Err(e) => return MbusStatusCode::from(e) };
                 match inner.$method(txn_id, uid $(, $arg)*) {
                     Ok(()) => MbusStatusCode::MbusOk,
@@ -111,7 +111,7 @@ pub unsafe extern "C" fn mbus_serial_diagnostics(
     data: *const u16,
     data_len: u16,
 ) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         diagnostics_impl(inner, txn_id, unit_id, sub_fn, data, data_len)
     })
     .unwrap_or_else(|e| e)
@@ -180,7 +180,7 @@ pub extern "C" fn mbus_serial_read_device_identification(
     dev_id_code: u8,
     object_id: u8,
 ) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         read_device_id_impl(inner, txn_id, unit_id, dev_id_code, object_id)
     })
     .unwrap_or_else(|e| e)

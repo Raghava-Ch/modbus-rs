@@ -10,7 +10,7 @@ The `modbus-rs` ecosystem is composed of several crates, each with a distinct re
 -   **`mbus-client`**: Implements the Modbus client state machine and services for handling various Modbus function codes.
 -   **`mbus-async`**: Provides an async facade (`AsyncTcpClient`, `AsyncSerialClient`) over the poll-driven client core.
 -   **`mbus-network`**: Provides the standard TCP transport implementation (`StdTcpTransport`).
--   **`mbus-serial`**: Provides standard Serial transport implementations (`StdSerialTransport`) for RTU/ASCII modes.
+-   **`mbus-serial`**: Provides standard Serial transport implementations (`StdRtuTransport`, `StdAsciiTransport`) for RTU/ASCII modes.
 -   **`mbus-ffi`**: Provides native C bindings and WASM/browser bindings.
 -   **`modbus-rs`**: Top-level convenience crate that re-exports workspace APIs behind feature flags.
 -   **`integration_tests`**: End-to-end validation across TCP, serial, and async flows.

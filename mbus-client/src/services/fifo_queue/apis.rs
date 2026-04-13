@@ -46,7 +46,7 @@ where
             txn_id,
             unit_id_slave_addr.get(),
             address,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // Register an expectation in the client state machine.

@@ -6,7 +6,7 @@ use mbus_core::models::file_record::SubRequest;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
+use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 /// A single sub-request passed to [`mbus_tcp_read_file_record`] /
 /// [`mbus_tcp_write_file_record`] (and their serial equivalents).
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn mbus_serial_read_file_record(
     if sub_reqs.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         read_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
     })
     .unwrap_or_else(|e| e)
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn mbus_serial_write_file_record(
     if sub_reqs.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         write_file_record_impl(inner, txn_id, unit_id, sub_reqs, count)
     })
     .unwrap_or_else(|e| e)

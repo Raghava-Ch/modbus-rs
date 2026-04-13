@@ -4,6 +4,8 @@ use core::cell::RefCell;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -64,11 +66,18 @@ impl ModbusAppHandler for CoilApp {
         if starting_address != 0 || quantity > 8 || values.is_empty() {
             return Err(MbusError::InvalidAddress);
         }
-        let mask = if quantity == 8 { 0xFF } else { (1u8 << quantity) - 1 };
+        let mask = if quantity == 8 {
+            0xFF
+        } else {
+            (1u8 << quantity) - 1
+        };
         self.coils = (self.coils & !mask) | (values[0] & mask);
         Ok(())
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for CoilApp {}
 
 #[derive(Debug, Clone)]
 struct CountingMutexAccess {

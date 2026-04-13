@@ -2,7 +2,7 @@ use anyhow::Result;
 use modbus_rs::{
     BackoffStrategy, BaudRate, ClientServices, CoilResponse, Coils, DataBits, JitterStrategy,
     MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
-    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -72,7 +72,7 @@ fn main() -> Result<()> {
     println!("--- Modbus Serial RTU Backoff + Jitter Example ---");
     println!("Serial Port: {} unit={}", port_path, unit_id);
 
-    let transport = StdSerialTransport::new(SerialMode::Rtu);
+    let transport = StdRtuTransport::new();
     let app = ClientApp;
 
     let serial_config = ModbusSerialConfig {

@@ -13,28 +13,32 @@ use crate::mock_app::MockApp;
 /// A custom mock transport that simulates a serial connection.
 /// It captures sent frames for verification and allows injecting response frames.
 #[derive(Debug, Clone)]
-struct MockSerialTransport {
+struct MockSerialTransport<const ASCII: bool = false> {
     /// Shared buffer to store data sent by the client.
     sent_data: Rc<RefCell<Vec<u8>>>,
     /// Shared buffer to stage data to be received by the client.
     recv_data: Rc<RefCell<Vec<u8>>>,
-    mode: SerialMode,
 }
 
-impl MockSerialTransport {
-    fn new(mode: SerialMode) -> Self {
+impl<const ASCII: bool> MockSerialTransport<ASCII> {
+    const MODE: SerialMode = if ASCII {
+        SerialMode::Ascii
+    } else {
+        SerialMode::Rtu
+    };
+
+    fn new() -> Self {
         Self {
             sent_data: Rc::new(RefCell::new(Vec::new())),
             recv_data: Rc::new(RefCell::new(Vec::new())),
-            mode,
         }
     }
 }
 
-impl Transport for MockSerialTransport {
+impl<const ASCII: bool> Transport for MockSerialTransport<ASCII> {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         Ok(())
@@ -67,15 +71,11 @@ impl Transport for MockSerialTransport {
     fn is_connected(&self) -> bool {
         true
     }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(self.mode)
-    }
 }
 
 #[test]
 fn test_serial_read_coils_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -148,7 +148,7 @@ fn test_serial_read_coils_rtu() -> Result<()> {
 /// It should construct the frame with address 0, transmit it, and expect no response.
 #[test]
 fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let app = MockApp::default();
 
@@ -198,7 +198,7 @@ fn test_serial_broadcast_write_single_coil_rtu() -> Result<()> {
 /// It should transmit correctly via serial without blocking the queue waiting for a response.
 #[test]
 fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let app = MockApp::default();
 
@@ -250,7 +250,7 @@ fn test_serial_broadcast_write_multiple_registers_rtu() -> Result<()> {
 /// It should yield an immediate error and send nothing.
 #[test]
 fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let app = MockApp::default();
 
@@ -288,7 +288,7 @@ fn test_serial_broadcast_read_coils_not_allowed() -> Result<()> {
 /// Only certain diagnostic sub-functions (like ForceListenOnlyMode) are permitted for broadcasting.
 #[test]
 fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let app = MockApp::default();
 
     let serial_config = ModbusSerialConfig {
@@ -325,7 +325,7 @@ fn test_serial_broadcast_diagnostics_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_write_single_coil_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -379,7 +379,7 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_read_device_id_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -448,7 +448,7 @@ fn test_serial_read_device_id_rtu() -> Result<()> {
 
 #[test]
 fn test_serial_read_coils_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -519,7 +519,7 @@ fn test_serial_read_coils_ascii() -> Result<()> {
 
 #[test]
 fn test_serial_write_single_coil_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -570,7 +570,7 @@ fn test_serial_write_single_coil_ascii() -> Result<()> {
 
 #[test]
 fn test_serial_read_holding_registers_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -617,7 +617,7 @@ fn test_serial_read_holding_registers_ascii() -> Result<()> {
 
 #[test]
 fn test_serial_read_device_id_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -678,7 +678,7 @@ fn test_serial_read_device_id_ascii() -> Result<()> {
 
 #[test]
 fn test_serial_broadcast_write_single_coil_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let app = MockApp::default();
 
@@ -718,7 +718,7 @@ fn test_serial_broadcast_write_single_coil_ascii() -> Result<()> {
 
 #[test]
 fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let sent_data = transport.sent_data.clone();
     let app = MockApp::default();
 
@@ -753,7 +753,7 @@ fn test_serial_broadcast_read_coils_not_allowed_ascii() -> Result<()> {
 /// It verifies the client processes the complete frame and queues the remainder seamlessly.
 #[test]
 fn test_serial_fragmented_frames_rtu() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Rtu);
+    let transport = MockSerialTransport::<false>::new();
     let sent_data = transport.sent_data.clone();
     let recv_data = transport.recv_data.clone();
 
@@ -822,7 +822,7 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
 /// Test case: Simulates fragmented frames over Modbus ASCII where delimiting characters determine boundaries.
 #[test]
 fn test_serial_fragmented_frames_ascii() -> Result<()> {
-    let transport = MockSerialTransport::new(SerialMode::Ascii);
+    let transport = MockSerialTransport::<true>::new();
     let recv_data = transport.recv_data.clone();
 
     let app = MockApp::default();

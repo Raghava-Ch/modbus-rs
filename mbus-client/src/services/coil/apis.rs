@@ -47,7 +47,7 @@ where
             unit_id_slave_addr.get(),
             address,
             quantity,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // 2. Register the request in the expectation manager to handle the incoming response
@@ -98,7 +98,7 @@ where
         }
 
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::read_coils_request (qty=1)
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
             unit_id_slave_addr.get(),
@@ -146,7 +146,7 @@ where
         address: u16,
         value: bool,
     ) -> Result<(), MbusError> {
-        let transport_type = self.transport.transport_type(); // Access self.transport directly
+        let transport_type = TRANSPORT::TRANSPORT_TYPE; // Access self.transport directly
 
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_single_coil_request
         let frame = coil::service::ServiceBuilder::write_single_coil(
@@ -205,7 +205,7 @@ where
         address: u16,
         values: &Coils,
     ) -> Result<(), MbusError> {
-        let transport_type = self.transport.transport_type(); // Access self.transport directly
+        let transport_type = TRANSPORT::TRANSPORT_TYPE; // Access self.transport directly
 
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_multiple_coils_request
         let frame = coil::service::ServiceBuilder::write_multiple_coils(
