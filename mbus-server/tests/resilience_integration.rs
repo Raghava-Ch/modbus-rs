@@ -120,6 +120,14 @@ struct ProbeApp {
     #[cfg(feature = "coils")]
     fc0f_calls: Arc<AtomicUsize>,
     fc10_calls: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_errors: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_errors: Arc<AtomicUsize>,
 }
 
 impl ModbusAppHandler for ProbeApp {
@@ -220,10 +228,46 @@ impl ModbusAppHandler for ProbeApp {
 }
 
 #[cfg(feature = "traffic")]
-impl TrafficNotifier for ProbeApp {}
+impl TrafficNotifier for ProbeApp {
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_rx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_tx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_rx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_tx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+}
 
 fn build_fc03_read_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let payload = [0x00, 0x00, 0x00, 0x01];
+    build_request(
+        txn_id,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &payload,
+    )
+}
+
+fn build_fc03_invalid_quantity_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x00, 0x00, 0x00];
     build_request(
         txn_id,
         unit_id(1),
@@ -888,6 +932,65 @@ fn strict_mode_expiry_sends_exception_responses() {
             "timeout expiry should map to ServerDeviceFailure exception code"
         );
     }
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn traffic_callbacks_emit_for_successful_request_and_response() {
+    let request = build_fc03_read_request(0x4401);
+    let transport = ScriptedTransport {
+        recv_queue: VecDeque::from([request]),
+        sent_frames: Arc::new(Mutex::new(Vec::new())),
+        send_failures_remaining: Arc::new(AtomicUsize::new(0)),
+        connected: true,
+    };
+
+    let app = ProbeApp::default();
+    let server_resilience = ResilienceConfig::default();
+
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        server_resilience,
+    );
+
+    server.poll();
+
+    assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+    assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 0);
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn traffic_callbacks_emit_for_exception_and_send_failure() {
+    let request = build_fc03_invalid_quantity_request(0x4402);
+    let transport = ScriptedTransport {
+        recv_queue: VecDeque::from([request]),
+        sent_frames: Arc::new(Mutex::new(Vec::new())),
+        send_failures_remaining: Arc::new(AtomicUsize::new(1)),
+        connected: true,
+    };
+
+    let app = ProbeApp::default();
+    let server_resilience = ResilienceConfig::default();
+
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        server_resilience,
+    );
+
+    server.poll();
+
+    assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 1);
 }
 
 #[test]
