@@ -193,6 +193,23 @@ pub struct ByteCountPayload<'a> {
     pub payload: &'a [u8],
 }
 
+/// Parsed FC17 read/write multiple registers request fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadWriteMultipleFields<'a> {
+    /// Read starting address from request bytes 0-1.
+    pub read_address: u16,
+    /// Quantity to read from request bytes 2-3.
+    pub read_quantity: u16,
+    /// Write starting address from request bytes 4-5.
+    pub write_address: u16,
+    /// Quantity to write from request bytes 6-7.
+    pub write_quantity: u16,
+    /// Write byte count from request byte 8.
+    pub write_byte_count: u8,
+    /// Write value bytes following the byte-count field.
+    pub write_values: &'a [u8],
+}
+
 /// Modbus TCP Application Data Unit (ADU) Header (MBAP).
 #[derive(Debug, Clone, Copy)]
 pub struct MbapHeader {
@@ -750,6 +767,35 @@ impl Pdu {
         Ok(ByteCountPayload {
             byte_count,
             payload: &self.data[1..expected_len],
+        })
+    }
+
+    /// Parses FC17 read/write multiple registers payload.
+    pub fn read_write_multiple_fields(&self) -> Result<ReadWriteMultipleFields<'_>, MbusError> {
+        if self.data_len < 9 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let read_address = u16::from_be_bytes([self.data[0], self.data[1]]);
+        let read_quantity = u16::from_be_bytes([self.data[2], self.data[3]]);
+        let write_address = u16::from_be_bytes([self.data[4], self.data[5]]);
+        let write_quantity = u16::from_be_bytes([self.data[6], self.data[7]]);
+        let write_byte_count = self.data[8];
+        let expected_len = 9usize
+            .checked_add(write_byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(ReadWriteMultipleFields {
+            read_address,
+            read_quantity,
+            write_address,
+            write_quantity,
+            write_byte_count,
+            write_values: &self.data[9..expected_len],
         })
     }
 
@@ -1347,6 +1393,47 @@ mod tests {
         let pdu = Pdu::from_bytes(&[0x03, 0x03, 0x12, 0x34]).expect("valid pdu");
         let err = pdu
             .byte_count_payload()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[
+            0x17, 0x00, 0x10, 0x00, 0x02, 0x00, 0x20, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78,
+        ])
+        .expect("valid pdu");
+        let parsed = pdu
+            .read_write_multiple_fields()
+            .expect("read/write multiple fields should parse");
+
+        assert_eq!(parsed.read_address, 0x0010);
+        assert_eq!(parsed.read_quantity, 0x0002);
+        assert_eq!(parsed.write_address, 0x0020);
+        assert_eq!(parsed.write_quantity, 0x0002);
+        assert_eq!(parsed.write_byte_count, 0x04);
+        assert_eq!(parsed.write_values, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_rejects_short_pdu() {
+        let pdu = Pdu::from_bytes(&[0x17, 0x00, 0x10, 0x00, 0x02, 0x00]).expect("valid pdu");
+        let err = pdu
+            .read_write_multiple_fields()
+            .expect_err("PDU too short should error");
+
+        assert_eq!(err, MbusError::InvalidPduLength);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[
+            0x17, 0x00, 0x10, 0x00, 0x02, 0x00, 0x20, 0x00, 0x02, 0x05, 0x12, 0x34, 0x56, 0x78,
+        ])
+        .expect("valid pdu");
+        let err = pdu
+            .read_write_multiple_fields()
             .expect_err("byte count mismatch should error");
 
         assert_eq!(err, MbusError::InvalidByteCount);
