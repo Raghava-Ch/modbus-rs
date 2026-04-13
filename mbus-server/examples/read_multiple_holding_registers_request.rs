@@ -15,6 +15,8 @@ use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
 use mbus_server::{HoldingRegistersModel, ResilienceConfig, ServerServices, modbus_app};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 // ---------------------------------------------------------------------------
 // Register map 1 — chiller loop (addresses 0-3)
@@ -77,6 +79,9 @@ struct PlantControllerApp {
     chiller: ChillerRegisters,
     compressor: CompressorRegisters,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for PlantControllerApp {}
 
 // ---------------------------------------------------------------------------
 // Minimal in-memory transport
@@ -171,7 +176,13 @@ fn run_request(request: Vec<u8, MAX_ADU_FRAME_LEN>) -> Vec<u8, MAX_ADU_FRAME_LEN
     let _discharge_kpa = app.compressor.discharge_pressure_scaled();
     let _discharge_unit = CompressorRegisters::discharge_pressure_unit();
 
-    let mut server = ServerServices::new(transport, app, config, unit_id(1), ResilienceConfig::default());
+    let mut server = ServerServices::new(
+        transport,
+        app,
+        config,
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
     server.connect().expect("connect");
     server.poll();
 

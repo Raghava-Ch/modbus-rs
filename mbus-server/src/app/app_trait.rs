@@ -44,47 +44,43 @@ pub enum TrafficDirection {
 }
 
 #[cfg(feature = "traffic")]
-/// Optional raw-frame traffic notifications emitted by the client stack.
+/// Optional traffic notifications emitted by the server stack.
 ///
-/// This trait is opt-in and enabled only with the `traffic` feature. A
-/// blanket no-op implementation is provided for all app types so applications
-/// are never forced to implement it.
+/// This trait is opt-in and enabled only with the `traffic` feature.  All
+/// methods have default no-op implementations, so only override the ones you
+/// care about.
 pub trait TrafficNotifier {
-    /// Called when a request frame is sent.
+    /// Called when a request frame has been received and is about to be dispatched.
     fn on_tx_frame(
         &mut self,
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _frame: &[u8],
     ) {
     }
 
-    /// Called when a response frame is received.
+    /// Called when an incoming request frame is accepted for dispatch.
     fn on_rx_frame(
         &mut self,
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _frame: &[u8],
     ) {
     }
 
-    /// Called when sending a request frame failed.
+    /// Called when sending a response frame failed.
     fn on_tx_error(
         &mut self,
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
-        _frame: &[u8],
     ) {
     }
 
-    /// Called when processing/receiving a response frame failed.
+    /// Called when processing an incoming request frame failed.
     fn on_rx_error(
         &mut self,
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
-        _frame: &[u8],
     ) {
     }
 }
@@ -194,17 +190,17 @@ pub trait CoilRequest {
     }
 }
 
-/// Trait defining the expected request handling for FIFO Queue Modbus operations.
-///
-/// ## When Callback Is Fired
-/// - `read_fifo_queue_request` is invoked after a successful FC 0x18 request.
-///
-/// ## Data Semantics
-/// - `fifo_queue` contains values in server-returned order.
-/// - Quantity in the payload may vary between calls depending on device state.
-///
-/// ## Implementation Guidance
-///   non-blocking because it runs in the `poll()` execution path.
+// Trait defining the expected request handling for FIFO Queue Modbus operations.
+//
+// ## When Callback Is Fired
+// - `read_fifo_queue_request` is invoked after a successful FC 0x18 request.
+//
+// ## Data Semantics
+// - `fifo_queue` contains values in server-returned order.
+// - Quantity in the payload may vary between calls depending on device state.
+//
+// ## Implementation Guidance
+//   non-blocking because it runs in the `poll()` execution path.
 // #[cfg(feature = "fifo")]
 // pub trait FifoQueueRequest {
 //     /// Handles a Read FIFO Queue request.
@@ -270,6 +266,23 @@ pub trait CoilRequest {
 // }
 
 /// Defines callbacks for handling requests to Modbus register-related operations.
+/// Internal trait that aggregates conditional requirements for [`ModbusAppHandler`].
+///
+/// When the `traffic` feature is active this also requires [`TrafficNotifier`] to
+/// be implemented; otherwise every type satisfies it automatically.
+#[doc(hidden)]
+#[cfg(not(feature = "traffic"))]
+pub trait AppRequirements {}
+#[cfg(not(feature = "traffic"))]
+impl<T> AppRequirements for T {}
+
+#[doc(hidden)]
+#[cfg(feature = "traffic")]
+pub trait AppRequirements: TrafficNotifier {}
+#[cfg(feature = "traffic")]
+impl<T: TrafficNotifier> AppRequirements for T {}
+
+/// Defines callbacks for handling requests to Modbus register-related operations.
 ///
 /// Implementors of this trait provide the storage and routing logic used by the
 /// server when it receives register or coil requests.
@@ -288,7 +301,7 @@ pub trait CoilRequest {
 /// - Register writes receive already-decoded `u16` values.
 /// - Coil reads write packed Modbus coil bytes into `out` and return the packed byte count.
 /// - Multi-write coil requests pass the original packed request bytes plus the validated quantity.
-pub trait ModbusAppHandler {
+pub trait ModbusAppHandler: AppRequirements {
     /// Handles a `Read Coils` (FC 0x01) request.
     #[cfg(feature = "coils")]
     fn read_coils_request(
@@ -465,6 +478,39 @@ impl<A> ForwardingApp<A> {
     /// Consumes the adapter and returns the wrapped access object.
     pub fn into_inner(self) -> A {
         self.inner
+    }
+}
+
+#[cfg(feature = "traffic")]
+impl<A: ModbusAppAccess> TrafficNotifier for ForwardingApp<A> {
+    fn on_rx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.inner
+            .with_app_mut(|app| app.on_rx_frame(txn_id, unit_id_or_slave_addr))
+    }
+
+    fn on_tx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.inner
+            .with_app_mut(|app| app.on_tx_frame(txn_id, unit_id_or_slave_addr))
+    }
+
+    fn on_rx_error(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+    ) {
+        self.inner
+            .with_app_mut(|app| app.on_rx_error(txn_id, unit_id_or_slave_addr, error))
+    }
+
+    fn on_tx_error(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+    ) {
+        self.inner
+            .with_app_mut(|app| app.on_tx_error(txn_id, unit_id_or_slave_addr, error))
     }
 }
 

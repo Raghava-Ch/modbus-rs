@@ -217,10 +217,7 @@ where
     }
 
     /// Handles a Serial broadcast FC05 request without emitting any response.
-    pub(super) fn handle_broadcast_write_single_coil_request(
-        &mut self,
-        message: &ModbusMessage,
-    ) {
+    pub(super) fn handle_broadcast_write_single_coil_request(&mut self, message: &ModbusMessage) {
         let txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 

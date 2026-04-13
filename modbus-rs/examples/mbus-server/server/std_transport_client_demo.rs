@@ -198,8 +198,13 @@ fn run_server_loop(host: &str, port: u16, unit: UnitIdOrSlaveAddr) -> Result<()>
                 let app = ForwardingApp::new(shared.clone());
                 thread::spawn(move || {
                     let transport = AcceptedTcpTransport::new(stream);
-                    let mut server =
-                        ServerServices::new(transport, app, ModbusConfig::Tcp(cfg), unit, ResilienceConfig::default());
+                    let mut server = ServerServices::new(
+                        transport,
+                        app,
+                        ModbusConfig::Tcp(cfg),
+                        unit,
+                        ResilienceConfig::default(),
+                    );
 
                     if let Err(err) = server.connect() {
                         eprintln!("server connect failed for {peer}: {err}");

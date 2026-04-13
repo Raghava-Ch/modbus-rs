@@ -20,25 +20,27 @@ pub use mbus_client::app::*;
 #[cfg(feature = "client")]
 pub use mbus_client::services::{ClientServices, SerialClientServices};
 
-#[cfg(feature = "server")]
-pub use mbus_server::{
-    ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy,
-    RequestPriority, ResilienceConfig, ServerServices, TimeoutConfig,
-};
+#[cfg(all(feature = "server", feature = "coils"))]
+pub use mbus_server::CoilMap;
 #[cfg(all(feature = "server", feature = "coils"))]
 pub use mbus_server::CoilsModel;
 #[cfg(all(feature = "server", feature = "holding-registers"))]
+pub use mbus_server::HoldingRegisterMap;
+#[cfg(all(feature = "server", feature = "holding-registers"))]
 pub use mbus_server::HoldingRegistersModel;
+#[cfg(all(feature = "server", feature = "input-registers"))]
+pub use mbus_server::InputRegisterMap;
 #[cfg(all(feature = "server", feature = "input-registers"))]
 pub use mbus_server::InputRegistersModel;
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;
-#[cfg(all(feature = "server", feature = "coils"))]
-pub use mbus_server::CoilMap;
-#[cfg(all(feature = "server", feature = "holding-registers"))]
-pub use mbus_server::HoldingRegisterMap;
-#[cfg(all(feature = "server", feature = "input-registers"))]
-pub use mbus_server::InputRegisterMap;
+#[cfg(feature = "server")]
+pub use mbus_server::{
+    ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy, RequestPriority,
+    ResilienceConfig, ServerServices, TimeoutConfig,
+};
+#[cfg(all(feature = "server", feature = "traffic"))]
+pub use mbus_server::TrafficNotifier;
 
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};

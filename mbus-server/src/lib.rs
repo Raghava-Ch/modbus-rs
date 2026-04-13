@@ -15,6 +15,8 @@ pub mod app;
 pub mod services;
 
 pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+#[cfg(feature = "traffic")]
+pub use app::TrafficNotifier;
 #[cfg(feature = "coils")]
 pub use mbus_macros::CoilsModel;
 #[cfg(feature = "holding-registers")]
@@ -23,7 +25,9 @@ pub use mbus_macros::HoldingRegistersModel;
 pub use mbus_macros::InputRegistersModel;
 pub use mbus_macros::modbus_app;
 pub use services::ServerServices;
-pub use services::resilience::{ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig};
+pub use services::resilience::{
+    ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig,
+};
 
 #[cfg(feature = "coils")]
 pub use mbus_core::models::coil::*;

@@ -63,6 +63,7 @@ See [documentation/quick_start.md](documentation/quick_start.md) for a complete 
 - [documentation/quick_start.md](documentation/quick_start.md) — usage and setup walkthrough
 - [documentation/feature_flags.md](documentation/feature_flags.md) — feature combinations and build examples
 - [documentation/architecture.md](documentation/architecture.md) — architecture and runtime model
+- [documentation/migration_guide.md](documentation/migration_guide.md) — breaking-change migration steps (Rust + C/FFI)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution workflow and validation steps
 - [RELEASE.md](RELEASE.md) — release checklist
 - [mbus-ffi/README.md](mbus-ffi/README.md) — WASM and native C binding docs

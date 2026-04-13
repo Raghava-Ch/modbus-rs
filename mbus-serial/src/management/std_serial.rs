@@ -58,6 +58,12 @@ pub type StdRtuTransport = StdSerialTransport<false>;
 /// Modbus ASCII serial transport.
 pub type StdAsciiTransport = StdSerialTransport<true>;
 
+impl<const ASCII: bool> Default for StdSerialTransport<ASCII> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const ASCII: bool> StdSerialTransport<ASCII> {
     /// The serial mode determined by the `ASCII` const generic.
     const MODE: SerialMode = if ASCII {

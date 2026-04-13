@@ -2,6 +2,8 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
 use mbus_server::{InputRegistersModel, modbus_app};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 #[cfg(feature = "coils")]
 use mbus_server::CoilsModel;
@@ -29,6 +31,9 @@ struct InputContiguousApp {
     b: InputsBContiguous,
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for InputContiguousApp {}
+
 #[derive(Debug, Default, InputRegistersModel)]
 struct InputsAGap {
     #[reg(addr = 0)]
@@ -49,6 +54,9 @@ struct InputGapApp {
     a: InputsAGap,
     b: InputsBGap,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for InputGapApp {}
 
 #[cfg(feature = "coils")]
 #[derive(Debug, Default, CoilsModel)]
@@ -76,6 +84,9 @@ struct CoilsContiguousApp {
     b: CoilsBContiguous,
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for CoilsContiguousApp {}
+
 #[cfg(feature = "coils")]
 #[derive(Debug, Default, CoilsModel)]
 struct CoilsAGap {
@@ -99,6 +110,9 @@ struct CoilsGapApp {
     a: CoilsAGap,
     b: CoilsBGap,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for CoilsGapApp {}
 
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")

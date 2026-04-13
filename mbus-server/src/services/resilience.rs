@@ -15,11 +15,8 @@
 //! - [`RequestQueue`] / [`ResponseQueue`]: fixed-capacity heapless collections
 //!   used by `ServerServices` at runtime.
 
-use mbus_core::{
-    data_unit::common::MAX_ADU_FRAME_LEN,
-    function_codes::public::FunctionCode,
-};
 use heapless::{Deque, Vec};
+use mbus_core::{data_unit::common::MAX_ADU_FRAME_LEN, function_codes::public::FunctionCode};
 
 // ---------------------------------------------------------------------------
 // Clock abstraction
@@ -167,12 +164,8 @@ impl RequestPriority {
     pub fn from_function_code(fc: FunctionCode) -> Self {
         use FunctionCode::*;
         match fc {
-            ReadCoils
-            | ReadDiscreteInputs
-            | ReadHoldingRegisters
-            | ReadInputRegisters
-            | ReadFifoQueue
-            | ReadFileRecord => Self::Read,
+            ReadCoils | ReadDiscreteInputs | ReadHoldingRegisters | ReadInputRegisters
+            | ReadFifoQueue | ReadFileRecord => Self::Read,
 
             WriteSingleCoil
             | WriteSingleRegister
@@ -378,14 +371,6 @@ impl<const N: usize> RequestQueue<N> {
         expired
     }
 
-    pub(crate) fn is_full(&self) -> bool {
-        self.items.len() == N
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-
     pub(crate) fn len(&self) -> usize {
         self.items.len()
     }
@@ -433,10 +418,6 @@ impl<const N: usize> ResponseQueue<N> {
     /// Removes and returns the oldest queued response.
     pub(crate) fn pop_front(&mut self) -> Option<PendingResponse> {
         self.items.pop_front()
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.items.is_empty()
     }
 
     pub(crate) fn len(&self) -> usize {
