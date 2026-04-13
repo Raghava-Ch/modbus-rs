@@ -9,7 +9,7 @@ use super::error::MbusStatusCode;
 use super::pool::{
     MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_tcp, pool_free, with_tcp_client,
 };
-use super::transport::{CTransport, MbusTransportCallbacks, validate_transport_callbacks};
+use super::transport::{CTcpTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn mbus_tcp_client_new(
         return MBUS_INVALID_CLIENT_ID;
     }
     let app = CApp::new(cb);
-    let transport = CTransport::new_tcp(transport_cb);
+    let transport = CTcpTransport::new(transport_cb);
 
     let inner = match ClientServices::new(transport, app, modbus_config) {
         Ok(i) => i,

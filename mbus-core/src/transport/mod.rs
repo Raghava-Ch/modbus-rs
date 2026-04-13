@@ -601,13 +601,16 @@ pub trait Transport {
     /// should keep the default `false`.
     const SUPPORTS_BROADCAST_WRITES: bool = false;
 
-    /// Optional compile-time transport type metadata.
+    /// Compile-time transport type metadata.
     ///
-    /// Implementations with a fixed transport kind should set this to
-    /// `Some(...)` to enable additional compile-time specialization.
-    /// Implementations that can represent multiple families at runtime
-    /// (for example, wrappers that may be TCP or Serial) can keep `None`.
-    const TRANSPORT_TYPE: Option<TransportType> = None;
+    /// Every implementation must declare its transport family here.
+    /// For transports whose serial mode (RTU / ASCII) is chosen at runtime,
+    /// set this to a representative value (e.g. `StdSerial(SerialMode::Rtu)`)
+    /// and override [`transport_type()`](Transport::transport_type) to return
+    /// the actual instance mode. The compile-time value is used by the server
+    /// for optimizations such as broadcast eligibility (`is_serial_type()`),
+    /// while the runtime method is authoritative for framing decisions.
+    const TRANSPORT_TYPE: TransportType;
 
     /// Establishes the physical or logical connection to the Modbus server/slave.
     ///
@@ -665,7 +668,13 @@ pub trait Transport {
     ///
     /// The Modbus Client Services use this to determine how to strip network headers (like MBAP)
     /// or validate checksums based on whether it is a TCP, RTU, or ASCII implementation.
-    fn transport_type(&self) -> TransportType;
+    ///
+    /// The default implementation returns [`Self::TRANSPORT_TYPE`]. Override this
+    /// method when the serial mode is selected at runtime (e.g. per-instance RTU
+    /// vs ASCII).
+    fn transport_type(&self) -> TransportType {
+        Self::TRANSPORT_TYPE
+    }
 }
 
 /// A trait for abstracting time-related operations, primarily for mocking in tests

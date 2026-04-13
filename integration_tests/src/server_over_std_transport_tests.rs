@@ -83,7 +83,7 @@ impl AcceptedTcpTransport {
 
 impl Transport for AcceptedTcpTransport {
     type Error = TransportError;
-    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
         let tcp_cfg = match config {
@@ -165,10 +165,6 @@ impl Transport for AcceptedTcpTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }
 
@@ -359,7 +355,7 @@ fn spawn_server_once() -> (u16, thread::JoinHandle<()>) {
         cfg.response_timeout_ms = 100;
 
         let mut server =
-            ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1));
+            ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
 
         server.connect().expect("server connect");
 
@@ -385,7 +381,7 @@ fn spawn_server_for_clients(client_count: usize) -> (u16, thread::JoinHandle<()>
             cfg.response_timeout_ms = 100;
 
             let mut server =
-                ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1));
+                ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
 
             server.connect().expect("server connect");
 
@@ -415,7 +411,7 @@ fn spawn_server_concurrent(client_count: usize) -> (u16, thread::JoinHandle<()>)
                 cfg.response_timeout_ms = 100;
 
                 let mut server =
-                    ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1));
+                    ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
 
                 server.connect().expect("server connect");
 

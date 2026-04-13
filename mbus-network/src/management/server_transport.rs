@@ -41,7 +41,7 @@ impl AcceptedTcpTransport {
 
 impl Transport for AcceptedTcpTransport {
     type Error = TransportError;
-    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
         let tcp_cfg = match config {
@@ -119,9 +119,5 @@ impl Transport for AcceptedTcpTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }

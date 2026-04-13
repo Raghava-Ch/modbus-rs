@@ -91,6 +91,7 @@ struct DemoTransport {
 
 impl Transport for DemoTransport {
     type Error = TransportError;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         self.connected = true;
@@ -114,10 +115,6 @@ impl Transport for DemoTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }
 

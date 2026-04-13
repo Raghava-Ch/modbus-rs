@@ -24,7 +24,7 @@ pub struct MockTransport {
 
 impl Transport for MockTransport {
     type Error = TransportError;
-    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         self.connected = true;
@@ -50,10 +50,6 @@ impl Transport for MockTransport {
 
     fn is_connected(&self) -> bool {
         self.connected
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
     }
 }
 
