@@ -120,7 +120,7 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::ReadExceptionStatus {
             return Err(MbusError::InvalidFunctionCode);
         }
-        Ok(pdu.single_byte_payload()?)
+        pdu.single_byte_payload()
     }
 
     /// Parses a Diagnostics (FC 0x08) response PDU.

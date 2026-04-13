@@ -5,7 +5,7 @@
 //! feature flag and live here so neither sub-module must depend on the other.
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, ModbusMessage, Pdu};
+use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, ModbusMessage, Pdu};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{Transport, UnitIdOrSlaveAddr};
@@ -40,50 +40,37 @@ pub(super) fn parse_write_multiple_request(
 
 /// Builds a read-style response payload: byte_count + raw payload bytes.
 pub(super) fn build_byte_count_prefixed_response<TRANSPORT: Transport>(
-    transport: &TRANSPORT,
+    _: &TRANSPORT,
     txn_id: u16,
     unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     payload: &[u8],
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let byte_count = u8::try_from(payload.len()).map_err(|_| MbusError::InvalidByteCount)?;
-    let mut data = Vec::<u8, MAX_PDU_DATA_LEN>::new();
-    data.push(byte_count)
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    data.extend_from_slice(payload)
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    build_response_frame(
-        transport,
+    let pdu = Pdu::build_byte_count_payload(function_code, payload)?;
+    common::compile_adu_frame(
         txn_id,
-        unit_id_or_slave_addr,
-        function_code,
-        data,
-        byte_count.saturating_add(1),
+        unit_id_or_slave_addr.get(),
+        pdu,
+        TRANSPORT::TRANSPORT_TYPE,
     )
 }
 
 /// Builds a write-style echo response containing two `u16` values.
 #[cfg(feature = "holding-registers")]
 pub(super) fn build_echo_u16_response<TRANSPORT: Transport>(
-    transport: &TRANSPORT,
+    _: &TRANSPORT,
     txn_id: u16,
     unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     first: u16,
     second: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let mut data = Vec::<u8, MAX_PDU_DATA_LEN>::new();
-    data.extend_from_slice(&first.to_be_bytes())
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    data.extend_from_slice(&second.to_be_bytes())
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    build_response_frame(
-        transport,
+    let pdu = Pdu::build_write_single_u16(function_code, first, second)?;
+    common::compile_adu_frame(
         txn_id,
-        unit_id_or_slave_addr,
-        function_code,
-        data,
-        4,
+        unit_id_or_slave_addr.get(),
+        pdu,
+        TRANSPORT::TRANSPORT_TYPE,
     )
 }
 
@@ -101,41 +88,14 @@ pub(super) fn parse_mask_write_request(
 /// Builds an FC16 mask-write echo response containing address, and-mask, and or-mask.
 #[cfg(feature = "holding-registers")]
 pub(super) fn build_mask_write_echo_response<TRANSPORT: Transport>(
-    transport: &TRANSPORT,
+    _: &TRANSPORT,
     txn_id: u16,
     unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     address: u16,
     and_mask: u16,
     or_mask: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let mut data = Vec::<u8, MAX_PDU_DATA_LEN>::new();
-    data.extend_from_slice(&address.to_be_bytes())
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    data.extend_from_slice(&and_mask.to_be_bytes())
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    data.extend_from_slice(&or_mask.to_be_bytes())
-        .map_err(|_| MbusError::BufferTooSmall)?;
-
-    build_response_frame(
-        transport,
-        txn_id,
-        unit_id_or_slave_addr,
-        FunctionCode::MaskWriteRegister,
-        data,
-        6,
-    )
-}
-
-/// Compiles a complete ADU frame from a function code and PDU payload.
-fn build_response_frame<TRANSPORT: Transport>(
-    _: &TRANSPORT,
-    txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-    function_code: FunctionCode,
-    data: Vec<u8, MAX_PDU_DATA_LEN>,
-    data_len: u8,
-) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let pdu = Pdu::new(function_code, data, data_len);
+    let pdu = Pdu::build_mask_write_register(address, and_mask, or_mask)?;
     common::compile_adu_frame(
         txn_id,
         unit_id_or_slave_addr.get(),
@@ -143,3 +103,4 @@ fn build_response_frame<TRANSPORT: Transport>(
         TRANSPORT::TRANSPORT_TYPE,
     )
 }
+

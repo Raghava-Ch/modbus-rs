@@ -8,7 +8,7 @@
 use std::sync::{Arc, Mutex};
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu};
+use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
@@ -133,13 +133,8 @@ fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
 
 /// Build a raw FC03 ADU that reads `qty` registers starting at `start_addr`.
 fn build_fc03_request(start_addr: u16, qty: u16) -> Vec<u8, MAX_ADU_FRAME_LEN> {
-    let hi_addr = (start_addr >> 8) as u8;
-    let lo_addr = start_addr as u8;
-    let hi_qty = (qty >> 8) as u8;
-    let lo_qty = qty as u8;
-    let payload: Vec<u8, MAX_PDU_DATA_LEN> =
-        Vec::from_slice(&[hi_addr, lo_addr, hi_qty, lo_qty]).expect("valid FC03 payload");
-    let pdu = Pdu::new(FunctionCode::ReadHoldingRegisters, payload, 4);
+    let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, start_addr, qty)
+        .expect("valid FC03 payload");
     common::compile_adu_frame(0x0001, unit_id(1).get(), pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }

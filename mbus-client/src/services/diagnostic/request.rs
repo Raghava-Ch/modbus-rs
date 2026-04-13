@@ -12,7 +12,6 @@
 //! This module is designed for `no_std` environments using `heapless` collections.
 
 use crate::services::diagnostic::{ObjectId, ReadDeviceIdCode};
-use heapless::Vec;
 use mbus_core::{
     data_unit::common::Pdu,
     errors::MbusError,
@@ -30,7 +29,7 @@ impl ReqPduCompiler {
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
     pub(super) fn read_exception_status_request() -> Result<Pdu, MbusError> {
-        Ok(Pdu::new(FunctionCode::ReadExceptionStatus, Vec::new(), 0))
+        Ok(Pdu::build_empty(FunctionCode::ReadExceptionStatus))
     }
 
     /// Creates a Diagnostics (FC 0x08) request PDU.
@@ -60,17 +59,17 @@ impl ReqPduCompiler {
 
     /// Creates a Get Comm Event Counter (FC 0x0B) request PDU.
     pub(super) fn get_comm_event_counter_request() -> Result<Pdu, MbusError> {
-        Ok(Pdu::new(FunctionCode::GetCommEventCounter, Vec::new(), 0))
+        Ok(Pdu::build_empty(FunctionCode::GetCommEventCounter))
     }
 
     /// Creates a Get Comm Event Log (FC 0x0C) request PDU.
     pub(super) fn get_comm_event_log_request() -> Result<Pdu, MbusError> {
-        Ok(Pdu::new(FunctionCode::GetCommEventLog, Vec::new(), 0))
+        Ok(Pdu::build_empty(FunctionCode::GetCommEventLog))
     }
 
     /// Creates a Report Server ID (FC 0x11) request PDU.
     pub(super) fn report_server_id_request() -> Result<Pdu, MbusError> {
-        Ok(Pdu::new(FunctionCode::ReportServerId, Vec::new(), 0))
+        Ok(Pdu::build_empty(FunctionCode::ReportServerId))
     }
 
     /// Creates an Encapsulated Interface Transport (FC 0x2B) request PDU.
