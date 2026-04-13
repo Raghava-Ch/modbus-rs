@@ -43,7 +43,7 @@ where
             unit_id_slave_addr.get(),
             address,
             quantity,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -94,7 +94,7 @@ where
             unit_id_slave_addr.get(),
             address,
             1,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(

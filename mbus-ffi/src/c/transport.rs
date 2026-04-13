@@ -63,16 +63,24 @@ impl CTcpTransport {
     }
 }
 
-pub(super) struct CSerialTransport {
+pub(super) struct CSerialTransport<const ASCII: bool = false> {
     callbacks: MbusTransportCallbacks,
-    mode: SerialMode,
 }
 
-impl CSerialTransport {
-    pub(super) fn new(callbacks: MbusTransportCallbacks, mode: SerialMode) -> Self {
-        Self { callbacks, mode }
+impl<const ASCII: bool> CSerialTransport<ASCII> {
+    const MODE: SerialMode = if ASCII {
+        SerialMode::Ascii
+    } else {
+        SerialMode::Rtu
+    };
+
+    pub(super) fn new(callbacks: MbusTransportCallbacks) -> Self {
+        Self { callbacks }
     }
 }
+
+pub(super) type CRtuTransport = CSerialTransport<false>;
+pub(super) type CAsciiTransport = CSerialTransport<true>;
 
 pub(super) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
     callbacks.on_connect.is_some()
@@ -173,10 +181,10 @@ impl Transport for CTcpTransport {
     }
 }
 
-impl Transport for CSerialTransport {
+impl<const ASCII: bool> Transport for CSerialTransport<ASCII> {
     type Error = MbusError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         c_connect(&self.callbacks)
@@ -196,10 +204,6 @@ impl Transport for CSerialTransport {
 
     fn is_connected(&self) -> bool {
         c_is_connected(&self.callbacks)
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(self.mode)
     }
 }
 

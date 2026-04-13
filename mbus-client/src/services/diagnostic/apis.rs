@@ -43,7 +43,7 @@ where
             unit_id_slave_addr.get(),
             read_device_id_code,
             object_id,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -84,12 +84,12 @@ where
             unit_id_slave_addr.get(),
             mei_type,
             data,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // If this is a broadcast and serial transport, we do not expect a response. Do not queue it.
         if unit_id_slave_addr.is_broadcast() {
-            if self.transport.transport_type().is_tcp_type() {
+            if TRANSPORT::TRANSPORT_TYPE.is_tcp_type() {
                 return Err(MbusError::BroadcastNotAllowed);
             }
         } else {
@@ -135,7 +135,7 @@ where
         // Delegate PDU and ADU construction to the ServiceBuilder.
         let frame = diagnostic::service::ServiceBuilder::read_exception_status(
             unit_id_slave_addr.get(),
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // Register the expectation so the client knows how to handle the incoming response byte.
@@ -202,7 +202,7 @@ where
             unit_id_slave_addr.get(),
             sub_function,
             data,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // If this is a broadcast and serial transport, we do not expect a response. Do not queue it.
@@ -243,7 +243,7 @@ where
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_counter(
             unit_id_slave_addr.get(),
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -278,7 +278,7 @@ where
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_log(
             unit_id_slave_addr.get(),
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -314,7 +314,7 @@ where
 
         let frame = diagnostic::service::ServiceBuilder::report_server_id(
             unit_id_slave_addr.get(),
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(

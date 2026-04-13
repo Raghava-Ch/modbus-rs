@@ -13,7 +13,7 @@ pub use mbus_core::transport::{
 #[cfg(feature = "tcp")]
 pub use mbus_network::StdTcpTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
-pub use mbus_serial::StdSerialTransport;
+pub use mbus_serial::{StdAsciiTransport, StdRtuTransport, StdSerialTransport};
 
 #[cfg(feature = "client")]
 pub use mbus_client::app::*;

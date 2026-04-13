@@ -247,10 +247,10 @@ typedef enum MbusBackoffStrategy {
 } MbusBackoffStrategy;
 
 /**
- * Client ID type: an opaque `u8` index into one of the two sub-pools.
- * Use `MBUS_INVALID_CLIENT_ID` (0xFF) as the sentinel "no client" value.
+ * Client ID type: an opaque `u16` index into one of the three sub-pools.
+ * Use `MBUS_INVALID_CLIENT_ID` (0xFFFF) as the sentinel "no client" value.
  */
-typedef uint8_t MbusClientId;
+typedef uint16_t MbusClientId;
 
 /**
  * Configuration for a Modbus Serial (RTU or ASCII) client.
@@ -1048,7 +1048,7 @@ typedef struct MbusSubRequest {
 /**
  * Sentinel value meaning "no valid client".
  */
-#define MBUS_INVALID_CLIENT_ID 255
+#define MBUS_INVALID_CLIENT_ID 65535
 
 /**
  * Returns a static null-terminated C string describing the status code.

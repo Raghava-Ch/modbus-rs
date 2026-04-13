@@ -663,18 +663,6 @@ pub trait Transport {
     /// Note: For connectionless or semi-connected states (like some RS-485 setups), this
     /// might continually return `true` as long as the local port is open.
     fn is_connected(&self) -> bool;
-
-    /// Returns an identifier indicating the mode and type of this transport.
-    ///
-    /// The Modbus Client Services use this to determine how to strip network headers (like MBAP)
-    /// or validate checksums based on whether it is a TCP, RTU, or ASCII implementation.
-    ///
-    /// The default implementation returns [`Self::TRANSPORT_TYPE`]. Override this
-    /// method when the serial mode is selected at runtime (e.g. per-instance RTU
-    /// vs ASCII).
-    fn transport_type(&self) -> TransportType {
-        Self::TRANSPORT_TYPE
-    }
 }
 
 /// A trait for abstracting time-related operations, primarily for mocking in tests

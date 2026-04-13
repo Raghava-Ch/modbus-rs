@@ -3,7 +3,7 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
+use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 macro_rules! tcp_fn {
     ($name:ident, $method:ident $(, $arg:ident : $ty:ty)*) => {
@@ -37,7 +37,7 @@ macro_rules! serial_fn {
             unit_id: u8,
             $($arg: $ty,)*
         ) -> MbusStatusCode {
-            with_serial_client(id, |inner| {
+            with_serial_client_uniform!(id, |inner| {
                 let uid = match UnitIdOrSlaveAddr::new(unit_id) {
                     Ok(u) => u,
                     Err(e) => return MbusStatusCode::from(e),
@@ -134,7 +134,7 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_registers(
     if values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn mbus_serial_read_write_multiple_registers(
     if write_values.is_null() {
         return MbusStatusCode::MbusErrNullPointer;
     }
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),

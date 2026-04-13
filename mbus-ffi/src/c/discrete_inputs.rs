@@ -3,7 +3,7 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 use super::error::MbusStatusCode;
-use super::pool::{MbusClientId, with_serial_client, with_tcp_client};
+use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 /// Queue a Read Discrete Inputs (FC 0x02) request.
 ///
@@ -40,7 +40,7 @@ pub extern "C" fn mbus_serial_read_discrete_inputs(
     address: u16,
     quantity: u16,
 ) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
@@ -84,7 +84,7 @@ pub extern "C" fn mbus_serial_read_single_discrete_input(
     unit_id: u8,
     address: u16,
 ) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         let uid = match UnitIdOrSlaveAddr::new(unit_id) {
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),

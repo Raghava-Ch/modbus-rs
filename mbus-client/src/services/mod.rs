@@ -801,7 +801,7 @@ where
         let wire_txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 
-        let index = if self.transport.transport_type().is_tcp_type() {
+        let index = if T::TRANSPORT_TYPE.is_tcp_type() {
             self.expected_responses.iter().position(|r| {
                 r.txn_id == wire_txn_id && r.unit_id_or_slave_addr == unit_id_or_slave_addr.into()
             })
@@ -1453,7 +1453,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     ///
     /// The user must call `connect()` explicitly to establish the connection.
     pub fn new(transport: TRANSPORT, app: APP, config: ModbusConfig) -> Result<Self, MbusError> {
-        let transport_type = transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         if matches!(
             transport_type,
             TransportType::StdSerial(_) | TransportType::CustomSerial(_)
@@ -1571,7 +1571,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     where
         [(); N]: SerialQueueSizeOne,
     {
-        let transport_type = transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         if !matches!(
             transport_type,
             TransportType::StdSerial(_) | TransportType::CustomSerial(_)
@@ -1612,7 +1612,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     /// Ingests received Modbus frames from the transport layer.
     fn ingest_frame(&mut self) -> Result<usize, MbusError> {
         let frame = self.rxed_frame.as_slice();
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         client_log_trace!(
             "attempting frame ingest: transport_type={:?}, buffer_len={}",
@@ -1653,7 +1653,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         };
         use mbus_core::data_unit::common::AdditionalAddress;
         use mbus_core::transport::TransportType::*;
-        let message = match self.transport.transport_type() {
+        let message = match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(header) => header,
@@ -1777,13 +1777,10 @@ mod tests {
         }
     }
 
-    fn make_serial_client() -> ClientServices<MockTransport, MockApp, 1> {
-        let transport = MockTransport {
-            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
-            ..Default::default()
-        };
+    fn make_serial_client() -> ClientServices<MockSerialTransport, MockApp, 1> {
+        let transport = MockSerialTransport::default();
         let app = MockApp::default();
-        let mut client = ClientServices::<MockTransport, MockApp, 1>::new_serial(
+        let mut client = ClientServices::<MockSerialTransport, MockApp, 1>::new_serial(
             transport,
             app,
             make_serial_config(),
@@ -1816,12 +1813,12 @@ mod tests {
         pub connect_should_fail: bool,
         pub send_should_fail: bool,
         pub is_connected_flag: RefCell<bool>,
-        pub transport_type: Option<TransportType>,
     }
 
     impl Transport for MockTransport {
         type Error = MbusError;
         const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
+        const SUPPORTS_BROADCAST_WRITES: bool = false;
 
         fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
             if self.connect_should_fail {
@@ -1864,9 +1861,56 @@ mod tests {
         fn is_connected(&self) -> bool {
             *self.is_connected_flag.borrow()
         }
+    }
 
-        fn transport_type(&self) -> TransportType {
-            self.transport_type.unwrap_or(TransportType::StdTcp)
+    #[derive(Debug, Default)]
+    struct MockSerialTransport {
+        pub sent_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>,
+        pub recv_frames: RefCell<Deque<Vec<u8, MAX_ADU_FRAME_LEN>, MOCK_DEQUE_CAPACITY>>,
+        pub recv_error: RefCell<Option<MbusError>>,
+        pub is_connected_flag: RefCell<bool>,
+    }
+
+    impl Transport for MockSerialTransport {
+        type Error = MbusError;
+        const TRANSPORT_TYPE: TransportType =
+            TransportType::CustomSerial(SerialMode::Rtu);
+        const SUPPORTS_BROADCAST_WRITES: bool = true;
+
+        fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+            *self.is_connected_flag.borrow_mut() = true;
+            Ok(())
+        }
+
+        fn disconnect(&mut self) -> Result<(), Self::Error> {
+            *self.is_connected_flag.borrow_mut() = false;
+            Ok(())
+        }
+
+        fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+            let mut vec_adu = Vec::new();
+            vec_adu
+                .extend_from_slice(adu)
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+            self.sent_frames
+                .borrow_mut()
+                .push_back(vec_adu)
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+            Ok(())
+        }
+
+        fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+            if let Some(err) = self.recv_error.borrow_mut().take() {
+                return Err(err);
+            }
+            self.recv_frames
+                .borrow_mut()
+                .pop_front()
+                .ok_or(MbusError::Timeout)
+        }
+
+        fn is_connected(&self) -> bool {
+            *self.is_connected_flag.borrow()
         }
     }
 
@@ -2358,10 +2402,7 @@ mod tests {
 
     #[test]
     fn test_client_services_new_serial_success() {
-        let transport = MockTransport {
-            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
-            ..Default::default()
-        };
+        let transport = MockSerialTransport::default();
         let app = MockApp::default();
         let serial_config = ModbusSerialConfig {
             port_path: heapless::String::<64>::from_str("/dev/ttyUSB0").unwrap(),
@@ -2378,7 +2419,7 @@ mod tests {
         };
 
         let client_services =
-            ClientServices::<MockTransport, MockApp, 1>::new_serial(transport, app, serial_config);
+            ClientServices::<MockSerialTransport, MockApp, 1>::new_serial(transport, app, serial_config);
         assert!(client_services.is_ok());
         let mut client = client_services.unwrap();
         assert!(client.connect().is_ok());
@@ -3475,10 +3516,7 @@ mod tests {
 
     #[test]
     fn test_serial_retry_scheduling_uses_backoff() {
-        let transport = MockTransport {
-            transport_type: Some(TransportType::StdSerial(SerialMode::Rtu)),
-            ..Default::default()
-        };
+        let transport = MockSerialTransport::default();
         let app = MockApp::default();
 
         let serial_config = ModbusSerialConfig {
@@ -3495,7 +3533,7 @@ mod tests {
             retry_random_fn: None,
         };
 
-        let mut client_services = ClientServices::<MockTransport, MockApp, 1>::new(
+        let mut client_services = ClientServices::<MockSerialTransport, MockApp, 1>::new(
             transport,
             app,
             ModbusConfig::Serial(serial_config),

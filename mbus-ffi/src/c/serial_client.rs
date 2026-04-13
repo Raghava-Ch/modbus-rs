@@ -8,9 +8,12 @@ use super::callbacks::MbusCallbacks;
 use super::config::{MbusSerialConfig, serial_config_from_c};
 use super::error::MbusStatusCode;
 use super::pool::{
-    MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial, pool_free, with_serial_client,
+    MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial_ascii, pool_allocate_serial_rtu,
+    pool_free, with_serial_client_uniform,
 };
-use super::transport::{CSerialTransport, MbusTransportCallbacks, validate_transport_callbacks};
+use super::transport::{
+    CAsciiTransport, CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks,
+};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -45,23 +48,32 @@ pub unsafe extern "C" fn mbus_serial_client_new(
     if !validate_transport_callbacks(&transport_cb) {
         return MBUS_INVALID_CLIENT_ID;
     }
-    let app = CApp::new(cb);
-    let transport = CSerialTransport::new(
-        transport_cb,
-        match serial_config.mode {
-            SerialMode::Rtu => SerialMode::Rtu,
-            SerialMode::Ascii => SerialMode::Ascii,
-        },
-    );
 
-    let inner = match ClientServices::new_serial(transport, app, serial_config) {
-        Ok(i) => i,
-        Err(_) => return MBUS_INVALID_CLIENT_ID,
-    };
-
-    match pool_allocate_serial(inner) {
-        Ok(id) => id,
-        Err(_) => MBUS_INVALID_CLIENT_ID,
+    match serial_config.mode {
+        SerialMode::Rtu => {
+            let app = CApp::new(cb);
+            let transport = CRtuTransport::new(transport_cb);
+            let inner = match ClientServices::new_serial(transport, app, serial_config) {
+                Ok(i) => i,
+                Err(_) => return MBUS_INVALID_CLIENT_ID,
+            };
+            match pool_allocate_serial_rtu(inner) {
+                Ok(id) => id,
+                Err(_) => MBUS_INVALID_CLIENT_ID,
+            }
+        }
+        SerialMode::Ascii => {
+            let app = CApp::new(cb);
+            let transport = CAsciiTransport::new(transport_cb);
+            let inner = match ClientServices::new_serial(transport, app, serial_config) {
+                Ok(i) => i,
+                Err(_) => return MBUS_INVALID_CLIENT_ID,
+            };
+            match pool_allocate_serial_ascii(inner) {
+                Ok(id) => id,
+                Err(_) => MBUS_INVALID_CLIENT_ID,
+            }
+        }
     }
 }
 
@@ -81,7 +93,7 @@ pub extern "C" fn mbus_serial_client_free(id: MbusClientId) {
 /// Open the serial port with the configured parameters.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_connect(id: MbusClientId) -> MbusStatusCode {
-    with_serial_client(id, |inner| match inner.reconnect() {
+    with_serial_client_uniform!(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
     })
@@ -94,7 +106,7 @@ pub extern "C" fn mbus_serial_connect(id: MbusClientId) -> MbusStatusCode {
 /// The client ID remains valid; call [`mbus_serial_connect`] to reopen the port.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_disconnect(id: MbusClientId) -> MbusStatusCode {
-    with_serial_client(id, |inner| {
+    with_serial_client_uniform!(id, |inner| {
         inner.disconnect();
         MbusStatusCode::MbusOk
     })
@@ -104,7 +116,7 @@ pub extern "C" fn mbus_serial_disconnect(id: MbusClientId) -> MbusStatusCode {
 /// Returns `1` if the serial port is currently open, `0` otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_is_connected(id: MbusClientId) -> u8 {
-    with_serial_client(id, |inner| if inner.is_connected() { 1 } else { 0 }).unwrap_or(0)
+    with_serial_client_uniform!(id, |inner| if inner.is_connected() { 1 } else { 0 }).unwrap_or(0)
 }
 
 // ── Poll ──────────────────────────────────────────────────────────────────────
@@ -115,13 +127,13 @@ pub extern "C" fn mbus_serial_is_connected(id: MbusClientId) -> u8 {
 /// invoked synchronously from within this call.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_poll(id: MbusClientId) {
-    let _ = with_serial_client(id, |inner| inner.poll());
+    let _ = with_serial_client_uniform!(id, |inner| inner.poll());
 }
 
 /// Disconnect then reconnect the serial port.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_reconnect(id: MbusClientId) -> MbusStatusCode {
-    with_serial_client(id, |inner| match inner.reconnect() {
+    with_serial_client_uniform!(id, |inner| match inner.reconnect() {
         Ok(()) => MbusStatusCode::MbusOk,
         Err(e) => MbusStatusCode::from(e),
     })

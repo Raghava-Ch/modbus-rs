@@ -52,7 +52,7 @@ where
             txn_id,
             unit_id_slave_addr.get(),
             sub_request,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // Register an expectation so the client knows how to route the incoming response.
@@ -101,7 +101,7 @@ where
             txn_id,
             unit_id_slave_addr.get(),
             sub_request,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // Register the expectation for the response handler.

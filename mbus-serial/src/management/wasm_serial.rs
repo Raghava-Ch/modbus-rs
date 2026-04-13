@@ -24,22 +24,38 @@ struct SerialShared {
 
 /// Browser Web Serial transport for wasm32 targets.
 ///
+/// The const generic `ASCII` selects the framing mode at compile time:
+/// - `false` → Modbus RTU (binary + CRC)
+/// - `true`  → Modbus ASCII (`:` delimited + LRC)
+///
+/// Prefer the type aliases [`WasmRtuTransport`] and [`WasmAsciiTransport`].
+///
 /// This transport expects a JS `SerialPort` object to be attached first via
 /// `attach_port()`. The actual permission flow (`navigator.serial.requestPort()`)
 /// must stay in a user-gesture-driven JS/WASM entry point.
 #[derive(Debug)]
-pub struct WasmSerialTransport {
+pub struct WasmSerialTransport<const ASCII: bool = false> {
     port: Option<JsValue>,
-    mode: SerialMode,
     shared: Rc<RefCell<SerialShared>>,
 }
 
-impl WasmSerialTransport {
-    /// Creates a new browser serial transport for the requested serial mode.
-    pub fn new(mode: SerialMode) -> Self {
+/// Modbus RTU browser serial transport.
+pub type WasmRtuTransport = WasmSerialTransport<false>;
+/// Modbus ASCII browser serial transport.
+pub type WasmAsciiTransport = WasmSerialTransport<true>;
+
+impl<const ASCII: bool> WasmSerialTransport<ASCII> {
+    /// The serial mode determined by the `ASCII` const generic.
+    const MODE: SerialMode = if ASCII {
+        SerialMode::Ascii
+    } else {
+        SerialMode::Rtu
+    };
+
+    /// Creates a new browser serial transport.
+    pub fn new() -> Self {
         Self {
             port: None,
-            mode,
             shared: Rc::new(RefCell::new(SerialShared {
                 rx_buf: VecDeque::new(),
                 tx_queue: VecDeque::new(),
@@ -289,10 +305,10 @@ impl WasmSerialTransport {
     }
 }
 
-impl Transport for WasmSerialTransport {
+impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
 
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
         let serial_config = match config {
@@ -300,7 +316,7 @@ impl Transport for WasmSerialTransport {
             _ => return Err(TransportError::InvalidConfiguration),
         };
 
-        if serial_config.mode != self.mode {
+        if serial_config.mode != Self::MODE {
             return Err(TransportError::InvalidConfiguration);
         }
 
@@ -382,9 +398,5 @@ impl Transport for WasmSerialTransport {
     fn is_connected(&self) -> bool {
         let state = self.shared.borrow();
         state.connected || state.opening
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(self.mode)
     }
 }

@@ -123,6 +123,6 @@ fn build_response_frame<TRANSPORT: Transport>(
         txn_id,
         unit_id_or_slave_addr.get(),
         pdu,
-        transport.transport_type(),
+        TRANSPORT::TRANSPORT_TYPE,
     )
 }

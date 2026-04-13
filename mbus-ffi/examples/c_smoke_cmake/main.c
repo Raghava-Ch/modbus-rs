@@ -34,15 +34,17 @@ void mbus_pool_unlock(void) {
 #define MAX_CLIENTS 64
 static pthread_mutex_t g_client_mutexes[MAX_CLIENTS] = { PTHREAD_MUTEX_INITIALIZER };
 
-void mbus_client_lock(uint8_t id) {
-    if (id < MAX_CLIENTS) {
-        pthread_mutex_lock(&g_client_mutexes[id]);
+void mbus_client_lock(MbusClientId id) {
+    uint8_t slot = (uint8_t)(id & 0xFFu);
+    if (slot < MAX_CLIENTS) {
+        pthread_mutex_lock(&g_client_mutexes[slot]);
     }
 }
 
-void mbus_client_unlock(uint8_t id) {
-    if (id < MAX_CLIENTS) {
-        pthread_mutex_unlock(&g_client_mutexes[id]);
+void mbus_client_unlock(MbusClientId id) {
+    uint8_t slot = (uint8_t)(id & 0xFFu);
+    if (slot < MAX_CLIENTS) {
+        pthread_mutex_unlock(&g_client_mutexes[slot]);
     }
 }
 

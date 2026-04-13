@@ -46,7 +46,7 @@ where
             unit_id_slave_addr.get(),
             from_address,
             quantity,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -105,7 +105,7 @@ where
             unit_id_slave_addr.get(),
             address,
             1, // quantity = 1
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         // Register an expectation. We use OperationMeta::Single to signal the response
@@ -165,7 +165,7 @@ where
             unit_id_slave_addr.get(),
             address,
             quantity,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -220,7 +220,7 @@ where
             unit_id_slave_addr.get(),
             address,
             1,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         self.add_an_expectation(
@@ -270,7 +270,7 @@ where
         address: u16,
         value: u16,
     ) -> Result<(), MbusError> {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::write_single_register(
             txn_id,
             unit_id_slave_addr.get(),
@@ -332,7 +332,7 @@ where
         quantity: u16,
         values: &[u16],
     ) -> Result<(), MbusError> {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::write_multiple_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -398,7 +398,7 @@ where
         }
 
         // 1. Construct the ADU frame using the register service
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::read_write_multiple_registers(
             txn_id,
             unit_id_slave_addr.get(),
@@ -464,11 +464,11 @@ where
             address,
             and_mask,
             or_mask,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         )?;
 
         if unit_id_slave_addr.is_broadcast() {
-            if self.transport.transport_type().is_tcp_type() {
+            if TRANSPORT::TRANSPORT_TYPE.is_tcp_type() {
                 return Err(MbusError::BroadcastNotAllowed);
             }
         } else {

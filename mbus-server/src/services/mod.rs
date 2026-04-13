@@ -476,7 +476,7 @@ where
             unit_id_or_slave_addr,
             function_code,
             exception_code,
-            self.transport.transport_type(),
+            TRANSPORT::TRANSPORT_TYPE,
         ) {
             Ok(adu) => adu,
             Err(err) => {
@@ -731,7 +731,7 @@ where
     /// Measures the dispatch duration and emits a debug log if it exceeds the
     /// configured [`TimeoutConfig::app_callback_ms`] threshold.
     fn dispatch_pending_request(&mut self, pending: PendingRequest) {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         let expected_length =
             match derive_length_from_bytes(pending.frame.as_slice(), transport_type) {
@@ -774,7 +774,7 @@ where
     /// In strict timeout mode, sends an exception response for an expired
     /// queued request instead of silently dropping it.
     fn handle_expired_request_strict(&mut self, pending: PendingRequest) {
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         let expected_length = match derive_length_from_bytes(pending.frame.as_slice(), transport_type)
         {
@@ -891,7 +891,7 @@ where
 
     fn ingest_frame(&mut self) -> Result<usize, MbusError> {
         let frame = self.rxed_frame.as_slice();
-        let transport_type = self.transport.transport_type();
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         server_log_trace!(
             "attempting frame ingest: transport_type={:?}, buffer_len={}",
@@ -932,7 +932,7 @@ where
         };
 
         use TransportType::*;
-        let message = match self.transport.transport_type() {
+        let message = match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(header) => header,
@@ -1027,7 +1027,7 @@ where
     /// address variant for the active transport type.
     fn reframe_message(&self, message: ModbusMessage) -> Option<ModbusMessage> {
         use TransportType::*;
-        match self.transport.transport_type() {
+        match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
                 let mbap_header = match message.additional_address() {
                     AdditionalAddress::MbapHeader(h) => h,

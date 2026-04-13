@@ -61,6 +61,10 @@ use mbus_core::transport::{ModbusSerialConfig, SerialMode};
 use mbus_network::StdTcpTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use mbus_serial::StdSerialTransport;
+#[cfg(feature = "serial-rtu")]
+use mbus_serial::StdRtuTransport;
+#[cfg(feature = "serial-ascii")]
+use mbus_serial::StdAsciiTransport;
 use tokio::sync::oneshot;
 
 #[cfg(feature = "diagnostics")]

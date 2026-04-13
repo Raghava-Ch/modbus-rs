@@ -2,7 +2,7 @@ use anyhow::Result;
 use modbus_rs::{
     BackoffStrategy, BaudRate, ClientServices, CoilResponse, Coils, DataBits, JitterStrategy,
     MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier, SerialMode,
-    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    StdAsciiTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -114,7 +114,7 @@ fn main() -> Result<()> {
     println!("Connecting to Serial Port: {}", port_path);
 
     // Initialize transport with ASCII mode
-    let transport = StdSerialTransport::new(SerialMode::Ascii);
+    let transport = StdAsciiTransport::new();
     let app = ClientApp::default();
 
     // Configure serial port for standard Modbus ASCII:

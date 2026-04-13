@@ -14,14 +14,14 @@ If you need direct access to serial transport internals, use `mbus-serial` direc
 
 - Implements `Transport` from `mbus-core`.
 - Connects to real serial ports via the `serialport` crate.
-- Supports both `SerialMode::Rtu` and `SerialMode::Ascii`.
+- Supports both RTU (`StdRtuTransport`) and ASCII (`StdAsciiTransport`) modes.
 
 This crate does not implement high-level request/response orchestration by itself.
 That logic lives in `mbus-client`.
 
 ## What Is Included
 
-- `StdSerialTransport`: concrete serial implementation of `modbus_rs::Transport`.
+- `StdRtuTransport` / `StdAsciiTransport`: concrete serial implementations of `modbus_rs::Transport`.
 - Serial connection handling (open/close/check connection).
 - ADU send/receive support.
 - Error mapping from I/O errors to `TransportError`.
@@ -31,7 +31,7 @@ That logic lives in `mbus-client`.
 
 The crate currently re-exports:
 
-- `StdSerialTransport`
+- `StdSerialTransport`, `StdRtuTransport`, `StdAsciiTransport`
 
 from:
 
@@ -52,7 +52,7 @@ modbus-rs = "0.5.0"
 use modbus_rs::{
 	BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
 	ModbusSerialConfig, Parity, SerialMode,
-	StdSerialTransport, Transport,
+	StdRtuTransport, Transport,
 };
 
 fn connect_serial() -> Result<(), MbusError> {
@@ -70,7 +70,7 @@ fn connect_serial() -> Result<(), MbusError> {
 		retry_random_fn: None,
 	});
 
-	let mut transport = StdSerialTransport::new(SerialMode::Rtu);
+	let mut transport = StdRtuTransport::new();
 	transport.connect(&config)?;
 
 	// send/recv calls are used by higher-level client code
@@ -83,10 +83,10 @@ fn connect_serial() -> Result<(), MbusError> {
 ### 3) List available serial ports
 
 ```rust
-use modbus_rs::StdSerialTransport;
+use modbus_rs::StdRtuTransport;
 
 fn list_ports() {
-	match StdSerialTransport::available_ports() {
+	match StdRtuTransport::available_ports() {
 		Ok(ports) => {
 			for p in ports {
 				println!("{}", p.port_name);
@@ -99,7 +99,7 @@ fn list_ports() {
 
 ## Configuration Notes
 
-- `StdSerialTransport::new(mode)` must match the mode in `ModbusSerialConfig`.
+- Use `StdRtuTransport::new()` with `SerialMode::Rtu` configs and `StdAsciiTransport::new()` with `SerialMode::Ascii` configs.
   If they do not match, `connect` returns `TransportError::InvalidConfiguration`.
 - `stop_bits` must be `1` or `2`.
 - `response_timeout_ms` controls serial read timeout behavior.
@@ -130,7 +130,7 @@ env_logger = "0.11"
 In most applications, `mbus-serial` is used together with `mbus-client`:
 
 1. Build `ModbusConfig::Serial(...)`.
-2. Instantiate `StdSerialTransport`.
+2. Instantiate `StdRtuTransport` or `StdAsciiTransport`.
 3. Pass transport into `ClientServices` from `mbus-client`.
 4. Use client services for function-code operations.
 

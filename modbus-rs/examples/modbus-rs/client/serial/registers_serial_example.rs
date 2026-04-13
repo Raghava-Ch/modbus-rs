@@ -2,7 +2,7 @@ use anyhow::Result;
 use modbus_rs::{
     BackoffStrategy, BaudRate, ClientServices, DataBits, JitterStrategy, MbusError, ModbusConfig,
     ModbusSerialConfig, Parity, RegisterResponse, Registers, RequestErrorNotifier, SerialMode,
-    StdSerialTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -142,7 +142,7 @@ fn main() -> Result<()> {
     println!("--- Modbus Serial Registers Example ---");
     println!("Connecting to Serial Port: {}", port_path);
 
-    let transport = StdSerialTransport::new(SerialMode::Rtu);
+    let transport = StdRtuTransport::new();
     let app = ClientApp::default();
 
     let serial_config = ModbusSerialConfig {

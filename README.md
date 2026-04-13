@@ -27,7 +27,7 @@ The workspace is split into focused crates:
 | [`mbus-client`](mbus-client/) | Client state machine, request/response orchestration, all function-code services |
 | [`mbus-async`](mbus-async/) | Tokio async facade over `mbus-client` (`AsyncTcpClient`, `AsyncSerialClient`) |
 | [`mbus-network`](mbus-network/) | Concrete TCP transport (`StdTcpTransport`) using `std::net::TcpStream` |
-| [`mbus-serial`](mbus-serial/) | Concrete serial transport (`StdSerialTransport`) using the `serialport` crate |
+| [`mbus-serial`](mbus-serial/) | Concrete serial transports (`StdRtuTransport`, `StdAsciiTransport`) using the `serialport` crate |
 | [`mbus-ffi`](mbus-ffi/) | Native C bindings and WASM/browser bindings |
 | [`mbus-server`](mbus-server/) | Server-side workspace crate (currently minimal scaffolding) |
 | [`modbus-rs`](modbus-rs/) | Top-level convenience crate — re-exports everything behind feature flags |
@@ -268,7 +268,7 @@ let config = ModbusSerialConfig {
 
 ### Serial ASCII
 
-Use the same `ModbusSerialConfig` with `mode: SerialMode::Ascii` and pair it with `StdSerialTransport::new(SerialMode::Ascii)`.
+Use the same `ModbusSerialConfig` with `mode: SerialMode::Ascii` and pair it with `StdAsciiTransport::new()`.
 
 ## Retry Backoff and Jitter
 
