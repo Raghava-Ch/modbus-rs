@@ -198,11 +198,11 @@ mod tests {
         let pdu = Pdu::new(FunctionCode::WriteFileRecord, pdu_data, data.len() as u8);
 
         let err = ResponseParser::parse_write_file_record_response(&pdu).unwrap_err();
-        // The parser loop checks `i + sub_req_len > data.len()`.
+        // byte_count_payload() returns InvalidByteCount when data.len() != 1 + byte_count.
         // i=1. sub_req_len = 7 + 4 = 11.
         // 1 + 11 = 12. data.len() = 8.
         // 12 > 8 -> Error.
-        assert_eq!(err, MbusError::InvalidPduLength);
+        assert_eq!(err, MbusError::InvalidByteCount);
     }
 
     // --- FileRecordService Tests ---

@@ -127,6 +127,37 @@ pub const PDU_FC17_WRITE_BYTE_COUNT_OFFSET: usize = 8;
 /// Offset of the write values data in FC17 PDU data.
 pub const PDU_FC17_WRITE_VALUES_OFFSET: usize = 9;
 
+/// Offset of the high byte of the sub-function code in FC08 (Diagnostics) PDU data.
+pub const PDU_SUB_FUNCTION_OFFSET_1B: usize = 0;
+/// Offset of the low byte of the sub-function code in FC08 (Diagnostics) PDU data.
+pub const PDU_SUB_FUNCTION_OFFSET_2B: usize = 1;
+
+/// Offset of the MEI type byte in FC2B (Encapsulated Interface Transport) PDU data.
+pub const PDU_MEI_TYPE_OFFSET: usize = 0;
+/// Offset of the read device ID code byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_READ_CODE_OFFSET: usize = 1;
+/// Offset of the conformity level byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_CONFORMITY_LEVEL_OFFSET: usize = 2;
+/// Offset of the more-follows byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_MORE_FOLLOWS_OFFSET: usize = 3;
+/// Offset of the next object ID byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_NEXT_OBJECT_ID_OFFSET: usize = 4;
+/// Offset of the number-of-objects byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_NUM_OBJECTS_OFFSET: usize = 5;
+/// Offset of the objects data payload in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_OBJECTS_DATA_OFFSET: usize = 6;
+
+/// Offset of the high byte of FIFO byte count in FC18 (Read FIFO Queue) PDU data.
+pub const PDU_FIFO_BYTE_COUNT_OFFSET_1B: usize = 0;
+/// Offset of the low byte of FIFO byte count in FC18 PDU data.
+pub const PDU_FIFO_BYTE_COUNT_OFFSET_2B: usize = 1;
+/// Offset of the high byte of FIFO count in FC18 PDU data.
+pub const PDU_FIFO_COUNT_OFFSET_1B: usize = 2;
+/// Offset of the low byte of FIFO count in FC18 PDU data.
+pub const PDU_FIFO_COUNT_OFFSET_2B: usize = 3;
+/// Offset of the FIFO values payload in FC18 PDU data.
+pub const PDU_FIFO_VALUES_OFFSET: usize = 4;
+
 /// Checks if the given function code byte indicates an exception (error bit is set).
 ///
 /// # Arguments
@@ -233,6 +264,68 @@ pub struct ReadWriteMultipleFields<'a> {
     pub write_byte_count: u8,
     /// Write value bytes following the byte-count field.
     pub write_values: &'a [u8],
+}
+
+/// Parsed sub-function + even-length payload for FC08 (Diagnostics) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubFunctionPayload<'a> {
+    /// Sub-function code from data bytes 0-1.
+    pub sub_function: u16,
+    /// Even-length payload bytes following the sub-function field.
+    pub payload: &'a [u8],
+}
+
+/// Parsed two-u16 payload for fixed-width responses like FC0B (Get Comm Event Counter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct U16PairFields {
+    /// First u16 value from data bytes 0-1.
+    pub first: u16,
+    /// Second u16 value from data bytes 2-3.
+    pub second: u16,
+}
+
+/// Parsed MEI type + data payload for FC2B (Encapsulated Interface Transport) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeiTypePayload<'a> {
+    /// Raw MEI type byte at data offset 0.
+    pub mei_type_byte: u8,
+    /// Payload bytes following the MEI type field.
+    pub payload: &'a [u8],
+}
+
+/// Parsed FIFO queue response payload for FC18 (Read FIFO Queue) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FifoPayload<'a> {
+    /// 2-byte FIFO byte count from data bytes 0-1.
+    pub fifo_byte_count: u16,
+    /// 2-byte FIFO count from data bytes 2-3.
+    pub fifo_count: u16,
+    /// Raw value bytes following the FIFO count field (from byte 4 onwards).
+    pub values: &'a [u8],
+}
+
+/// Parsed FC2B / MEI 0x0E (Read Device Identification) response header fields.
+///
+/// All values are stored as raw bytes. Callers are responsible for converting to
+/// domain types (e.g., `ReadDeviceIdCode`, `ConformityLevel`, `ObjectId`) using `TryFrom`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadDeviceIdPduFields {
+    /// Raw MEI type byte at data offset 0. Expected: 0x0E.
+    pub mei_type_byte: u8,
+    /// Raw read device ID code byte at data offset 1.
+    pub read_device_id_code_byte: u8,
+    /// Raw conformity level byte at data offset 2.
+    pub conformity_level_byte: u8,
+    /// More-follows flag derived from data offset 3 (true when byte == 0xFF).
+    pub more_follows: bool,
+    /// Raw next object ID byte at data offset 4.
+    pub next_object_id_byte: u8,
+    /// Number of objects at data offset 5.
+    pub number_of_objects: u8,
+    /// Raw objects data payload (data[6..]), zero-padded to MAX_PDU_DATA_LEN.
+    pub objects_data: [u8; MAX_PDU_DATA_LEN],
+    /// Number of valid bytes written into `objects_data`.
+    pub payload_len: usize,
 }
 
 /// Modbus TCP Application Data Unit (ADU) Header (MBAP).
@@ -851,7 +944,130 @@ impl Pdu {
         })
     }
 
-    /// Reads the starting address from the PDU data.
+    /// Parses a single-byte payload for FC07-style responses. Data must be exactly 1 byte.
+    pub fn single_byte_payload(&self) -> Result<u8, MbusError> {
+        if self.data_len != 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(self.data[0])
+    }
+
+    /// Parses FC08-style payloads: a 2-byte sub-function code followed by an even-length
+    /// sequence of data words. Validates minimum length and even alignment.
+    pub fn sub_function_payload(&self) -> Result<SubFunctionPayload<'_>, MbusError> {
+        if self.data_len < 2 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        if (self.data_len % 2) != 0 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(SubFunctionPayload {
+            sub_function: u16::from_be_bytes([
+                self.data[PDU_SUB_FUNCTION_OFFSET_1B],
+                self.data[PDU_SUB_FUNCTION_OFFSET_2B],
+            ]),
+            payload: &self.data[2..self.data_len as usize],
+        })
+    }
+
+    /// Parses FC0B-style payloads: exactly two consecutive 16-bit values (4 bytes total).
+    pub fn u16_pair_fields(&self) -> Result<U16PairFields, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(U16PairFields {
+            first: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            second: u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        })
+    }
+
+    /// Parses FC2B-style payloads: a 1-byte MEI type followed by variable-length data.
+    /// Data must have at least 1 byte.
+    pub fn mei_type_payload(&self) -> Result<MeiTypePayload<'_>, MbusError> {
+        if self.data_len < 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(MeiTypePayload {
+            mei_type_byte: self.data[PDU_MEI_TYPE_OFFSET],
+            payload: &self.data[1..self.data_len as usize],
+        })
+    }
+
+    /// Parses FC18-style payloads: a 2-byte FIFO byte count, 2-byte FIFO count, and raw
+    /// value bytes. Data must have at least 4 bytes. Cross-field consistency validation
+    /// (byte count vs FIFO count) is left to the caller.
+    pub fn fifo_payload(&self) -> Result<FifoPayload<'_>, MbusError> {
+        if self.data_len < 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(FifoPayload {
+            fifo_byte_count: u16::from_be_bytes([
+                self.data[PDU_FIFO_BYTE_COUNT_OFFSET_1B],
+                self.data[PDU_FIFO_BYTE_COUNT_OFFSET_2B],
+            ]),
+            fifo_count: u16::from_be_bytes([
+                self.data[PDU_FIFO_COUNT_OFFSET_1B],
+                self.data[PDU_FIFO_COUNT_OFFSET_2B],
+            ]),
+            values: &self.data[PDU_FIFO_VALUES_OFFSET..self.data_len as usize],
+        })
+    }
+
+    /// Parses FC2B / MEI 0x0E (Read Device Identification) response structural fields.
+    ///
+    /// Validates the 6-byte header minimum length, walks through all declared objects
+    /// to confirm their lengths fit within the PDU, and returns raw bytes for each
+    /// header field. Callers must:
+    /// - Check `mei_type_byte == EncapsulatedInterfaceType::ReadDeviceIdentification as u8`
+    /// - Convert `read_device_id_code_byte` and `conformity_level_byte` via `TryFrom`
+    pub fn read_device_id_fields(&self) -> Result<ReadDeviceIdPduFields, MbusError> {
+        // Minimum: MEI(1) + ReadCode(1) + Conf(1) + More(1) + NextId(1) + NumObj(1)
+        if (self.data_len as usize) < PDU_MEI_OBJECTS_DATA_OFFSET {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let data = self.data.as_slice();
+        let number_of_objects = data[PDU_MEI_NUM_OBJECTS_OFFSET];
+
+        // Walk all declared objects to validate structural integrity
+        let mut offset = PDU_MEI_OBJECTS_DATA_OFFSET;
+        for _ in 0..number_of_objects as usize {
+            if offset + 2 > data.len() {
+                return Err(MbusError::InvalidPduLength);
+            }
+            let obj_len = data[offset + 1] as usize;
+            offset += 2;
+            if offset + obj_len > data.len() {
+                return Err(MbusError::InvalidPduLength);
+            }
+            offset += obj_len;
+        }
+
+        let payload_len = (self.data_len as usize) - PDU_MEI_OBJECTS_DATA_OFFSET;
+        if payload_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut objects_data = [0u8; MAX_PDU_DATA_LEN];
+        if payload_len > 0 {
+            objects_data[..payload_len].copy_from_slice(&data[PDU_MEI_OBJECTS_DATA_OFFSET..]);
+        }
+
+        Ok(ReadDeviceIdPduFields {
+            mei_type_byte: data[PDU_MEI_TYPE_OFFSET],
+            read_device_id_code_byte: data[PDU_MEI_READ_CODE_OFFSET],
+            conformity_level_byte: data[PDU_MEI_CONFORMITY_LEVEL_OFFSET],
+            more_follows: data[PDU_MEI_MORE_FOLLOWS_OFFSET] == 0xFF,
+            next_object_id_byte: data[PDU_MEI_NEXT_OBJECT_ID_OFFSET],
+            number_of_objects,
+            objects_data,
+            payload_len,
+        })
+    }
     ///
     /// # Valid for
     /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
@@ -870,6 +1086,7 @@ impl Pdu {
     /// - **Other function codes**: Each has its own unique PDU layout.
     ///
     /// Calling on unsupported frames will silently read incorrect data.
+    #[deprecated(note = "Use `read_window()` or `write_single_u16_fields()` instead")]
     pub fn address_read_frame(&self) -> Result<u16, MbusError> {
         if self.data_len < 2 {
             return Err(MbusError::InvalidPduLength);
@@ -899,6 +1116,7 @@ impl Pdu {
     /// - **Other function codes**: Each has its own unique PDU layout.
     ///
     /// Calling on unsupported frames will silently read incorrect data.
+    #[deprecated(note = "Use `read_window()` instead")]
     pub fn quantity_from_read_frame(&self) -> Result<u16, MbusError> {
         if self.data_len < 4 {
             return Err(MbusError::InvalidPduLength);

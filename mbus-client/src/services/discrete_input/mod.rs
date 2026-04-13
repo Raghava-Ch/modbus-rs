@@ -104,7 +104,7 @@ mod tests {
         let pdu = Pdu::new(FunctionCode::ReadDiscreteInputs, Vec::new(), 0);
         assert_eq!(
             ResponseParser::parse_read_discrete_inputs_response(&pdu, 1, 1).unwrap_err(),
-            MbusError::InvalidDataLen
+            MbusError::InvalidPduLength
         );
     }
 

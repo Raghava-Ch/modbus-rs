@@ -26,29 +26,20 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::GetCommEventLog {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let data = pdu.data().as_slice();
-        if data.len() < 7 {
-            return Err(MbusError::InvalidDataLen);
-        }
-        let byte_count = data[0] as usize;
-        // Byte count includes: Status(2) + EventCount(2) + MsgCount(2) + Events(N)
-        // So N = byte_count - 6
-        if byte_count < 6 {
+        let bcp = pdu.byte_count_payload()?;
+        // Byte count includes: Status(2) + EventCount(2) + MsgCount(2) + Events(N); minimum 6
+        if bcp.byte_count < 6 {
             return Err(MbusError::InvalidByteCount);
         }
-
-        if data.len() != 1 + byte_count {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let status = u16::from_be_bytes([data[1], data[2]]);
-        let event_count = u16::from_be_bytes([data[3], data[4]]);
-        let message_count = u16::from_be_bytes([data[5], data[6]]);
+        let p = bcp.payload;
+        let status = u16::from_be_bytes([p[0], p[1]]);
+        let event_count = u16::from_be_bytes([p[2], p[3]]);
+        let message_count = u16::from_be_bytes([p[4], p[5]]);
 
         let mut events = Vec::new();
-        if data.len() > 7 {
+        if p.len() > 6 {
             events
-                .extend_from_slice(&data[7..])
+                .extend_from_slice(&p[6..])
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
@@ -63,22 +54,13 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::ReportServerId {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let data = pdu.data().as_slice();
-        if data.is_empty() {
-            return Err(MbusError::InvalidDataLen);
-        }
-        let byte_count = data[0] as usize;
-        if data.len() != 1 + byte_count {
-            return Err(MbusError::InvalidByteCount);
-        }
-
+        let bcp = pdu.byte_count_payload()?;
         let mut server_data = Vec::new();
-        if data.len() > 1 {
+        if !bcp.payload.is_empty() {
             server_data
-                .extend_from_slice(&data[1..])
+                .extend_from_slice(bcp.payload)
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
-
         Ok(server_data)
     }
 
@@ -89,21 +71,14 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::EncapsulatedInterfaceTransport {
             return Err(MbusError::InvalidFunctionCode);
         }
-
-        let data = pdu.data().as_slice();
-        if data.is_empty() {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let mei_type = EncapsulatedInterfaceType::try_from(data[0])?;
-
+        let mtp = pdu.mei_type_payload()?;
+        let mei_type = EncapsulatedInterfaceType::try_from(mtp.mei_type_byte)?;
         let mut response_data = Vec::new();
-        if data.len() > 1 {
+        if !mtp.payload.is_empty() {
             response_data
-                .extend_from_slice(&data[1..])
+                .extend_from_slice(mtp.payload)
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
-
         Ok((mei_type, response_data))
     }
 
@@ -115,67 +90,22 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::EncapsulatedInterfaceTransport {
             return Err(MbusError::InvalidFunctionCode);
         }
-
-        let data = pdu.data().as_slice();
-        // Min length: MEI(1) + ReadCode(1) + Conf(1) + More(1) + NextId(1) + NumObj(1) = 6
-        if data.len() < 6 {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        if data[0] != EncapsulatedInterfaceType::ReadDeviceIdentification as u8 {
+        let fields = pdu.read_device_id_fields()?;
+        if fields.mei_type_byte != EncapsulatedInterfaceType::ReadDeviceIdentification as u8 {
             return Err(MbusError::InvalidMeiType);
         }
-
-        let read_device_id_code = ReadDeviceIdCode::try_from(data[1])?;
-        let conformity_level = ConformityLevel::try_from(data[2])?;
-        let more_follows = data[3];
-        let next_object_id = ObjectId::from(data[4]);
-        let number_of_objects = data[5];
-
+        let read_device_id_code = ReadDeviceIdCode::try_from(fields.read_device_id_code_byte)?;
+        let conformity_level = ConformityLevel::try_from(fields.conformity_level_byte)?;
         if read_device_id_code != device_id_code {
             return Err(MbusError::InvalidDeviceIdentification);
         }
-
-        // Validate the data integrity before storing it
-        let mut offset = 6;
-
-        for _ in 0..number_of_objects as usize {
-            if offset + 2 > data.len() {
-                return Err(MbusError::InvalidPduLength);
-            }
-            let _obj_id = ObjectId::from(data[offset]);
-            let obj_len = data[offset + 1] as usize;
-            offset += 2;
-
-            if offset + obj_len > data.len() {
-                return Err(MbusError::InvalidPduLength);
-            }
-            offset += obj_len;
-        }
-
-        // Initialize the fixed-size array for objects data with zeros.
-        // This buffer stores the raw PDU data following the 6-byte identification header.
-        let mut objects_data = [0u8; MAX_PDU_DATA_LEN];
-        let payload_len = data.len() - 6;
-
-        // Safety Check: Ensure the payload does not exceed our fixed-size buffer.
-        // While Modbus PDUs are limited, a malformed ADU could theoretically trigger an overflow.
-        if payload_len > MAX_PDU_DATA_LEN {
-            return Err(MbusError::BufferTooSmall);
-        }
-
-        if payload_len > 0 {
-            // Copy the variable-length objects payload into the fixed-size array.
-            objects_data[..payload_len].copy_from_slice(&data[6..]);
-        }
-
         Ok(DeviceIdentificationResponse {
             read_device_id_code,
             conformity_level,
-            more_follows: more_follows == 0xFF,
-            next_object_id,
-            objects_data,
-            number_of_objects,
+            more_follows: fields.more_follows,
+            next_object_id: ObjectId::from(fields.next_object_id_byte),
+            objects_data: fields.objects_data,
+            number_of_objects: fields.number_of_objects,
         })
     }
 
@@ -190,13 +120,7 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::ReadExceptionStatus {
             return Err(MbusError::InvalidFunctionCode);
         }
-
-        let data = pdu.data().as_slice();
-        if data.len() != 1 {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        Ok(data[0])
+        Ok(pdu.single_byte_payload()?)
     }
 
     /// Parses a Diagnostics (FC 0x08) response PDU.
@@ -210,26 +134,15 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::Diagnostics {
             return Err(MbusError::InvalidFunctionCode);
         }
-
-        let data = pdu.data().as_slice();
-        if data.len() < 2 {
-            return Err(MbusError::InvalidDataLen);
-        }
-        if !data.len().is_multiple_of(2) {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let sub_function = u16::from_be_bytes([data[0], data[1]]);
-
+        let sfp = pdu.sub_function_payload()?;
         let mut values = Vec::new();
-        for chunk in data[2..].chunks(2) {
+        for chunk in sfp.payload.chunks(2) {
             let val = u16::from_be_bytes([chunk[0], chunk[1]]);
             values
                 .push(val)
                 .map_err(|_| MbusError::BufferLenMissmatch)?;
         }
-
-        Ok((sub_function, values))
+        Ok((sfp.sub_function, values))
     }
 
     /// Parses a Get Comm Event Counter (FC 0x0B) response PDU.
@@ -240,13 +153,8 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::GetCommEventCounter {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let data = pdu.data().as_slice();
-        if data.len() != 4 {
-            return Err(MbusError::InvalidDataLen);
-        }
-        let status = u16::from_be_bytes([data[0], data[1]]);
-        let event_count = u16::from_be_bytes([data[2], data[3]]);
-        Ok((status, event_count))
+        let pair = pdu.u16_pair_fields()?;
+        Ok((pair.first, pair.second))
     }
 }
 

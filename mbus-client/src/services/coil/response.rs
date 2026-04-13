@@ -58,22 +58,14 @@ impl ResponseParser {
             return Err(MbusError::ParseError);
         }
 
-        let data_slice = pdu.data().as_slice();
+        let fields = pdu.read_window()?;
 
-        if data_slice.len() != 4 {
-            // Address (2 bytes) + Quantity (2 bytes)
-            return Err(MbusError::InvalidDataLen);
+        if fields.address != expected_address {
+            return Err(MbusError::InvalidAddress);
         }
 
-        let response_address = u16::from_be_bytes([data_slice[0], data_slice[1]]);
-        let response_quantity = u16::from_be_bytes([data_slice[2], data_slice[3]]);
-
-        if response_address != expected_address {
-            return Err(MbusError::InvalidAddress); // Mismatch in address or quantity
-        }
-
-        if response_quantity != expected_quantity {
-            return Err(MbusError::InvalidQuantity); // Mismatch in address or quantity
+        if fields.quantity != expected_quantity {
+            return Err(MbusError::InvalidQuantity);
         }
 
         Ok(())
@@ -134,25 +126,15 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data_slice = pdu.data().as_slice();
-        if data_slice.is_empty() {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let byte_count = data_slice[0] as usize;
-        // The PDU data should be: [byte_count, data_byte_1, ..., data_byte_N]
-        // So, total length of data_slice should be 1 (for byte_count) + byte_count
-        if byte_count + 1 != data_slice.len() {
-            return Err(MbusError::InvalidByteCount);
-        }
+        let bcp = pdu.byte_count_payload()?;
 
         // Calculate expected byte count: ceil(expected_quantity / 8)
         let expected_byte_count = expected_quantity.div_ceil(8) as usize;
-        if byte_count != expected_byte_count {
-            return Err(MbusError::InvalidQuantity); // Mismatch in expected byte count
+        if bcp.byte_count as usize != expected_byte_count {
+            return Err(MbusError::InvalidQuantity);
         }
 
-        let coils = Vec::from_slice(&data_slice[1..]).map_err(|_| MbusError::BufferLenMissmatch)?;
+        let coils = Vec::from_slice(bcp.payload).map_err(|_| MbusError::BufferLenMissmatch)?;
         Ok(coils)
     }
 
@@ -177,23 +159,15 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data_slice = pdu.data().as_slice();
+        let fields = pdu.write_single_u16_fields()?;
 
-        if data_slice.len() != 4 {
-            // Address (2 bytes) + Value (2 bytes)
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let response_address = u16::from_be_bytes([data_slice[0], data_slice[1]]);
-        let response_value = u16::from_be_bytes([data_slice[2], data_slice[3]]);
-
-        if response_address != expected_address {
-            return Err(MbusError::InvalidAddress); // Address mismatch
+        if fields.address != expected_address {
+            return Err(MbusError::InvalidAddress);
         }
 
         let expected_response_value = if expected_value { 0xFF00 } else { 0x0000 };
-        if response_value != expected_response_value {
-            return Err(MbusError::InvalidValue); // Value mismatch
+        if fields.value != expected_response_value {
+            return Err(MbusError::InvalidValue);
         }
 
         Ok(())

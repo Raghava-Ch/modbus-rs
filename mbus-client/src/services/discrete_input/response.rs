@@ -40,30 +40,19 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data_slice = pdu.data().as_slice();
-        // PDU must at least contain the Byte Count field
-        if data_slice.is_empty() {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        let byte_count = data_slice[0] as usize;
-        // Validate that the PDU data length matches the declared byte count (+1 for the count field itself)
-        if byte_count + 1 != data_slice.len() {
-            return Err(MbusError::InvalidByteCount);
-        }
+        let bcp = pdu.byte_count_payload()?;
 
         let expected_byte_count = expected_quantity.div_ceil(8) as usize;
         // Validate that the server returned the correct number of bytes for the requested quantity
-        if byte_count != expected_byte_count {
+        if bcp.byte_count as usize != expected_byte_count {
             return Err(MbusError::InvalidQuantity);
         }
 
         // Initialize a fixed-size array for bit-packed states to avoid dynamic allocation.
         let mut inputs = [0u8; MAX_DISCRETE_INPUT_BYTES];
 
-        // Copy the PDU data payload (excluding the byte count field) into our local array.
-        // The length is already validated against expected_byte_count above.
-        inputs[..byte_count].copy_from_slice(&data_slice[1..1 + byte_count]);
+        // Copy the payload (byte count already validated) into our local array.
+        inputs[..bcp.byte_count as usize].copy_from_slice(bcp.payload);
 
         // Construct the DiscreteInputs model which provides helper methods for bit access.
         let discrete_inputs = DiscreteInputs::new(from_address, expected_quantity)?
