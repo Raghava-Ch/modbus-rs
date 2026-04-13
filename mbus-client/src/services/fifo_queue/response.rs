@@ -34,19 +34,15 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data = pdu.data().as_slice();
         // PDU Data: FIFO Byte Count (2 bytes), FIFO Count (2 bytes), N * Register Value (2 bytes each)
-        if data.len() < 4 {
-            return Err(MbusError::InvalidPduLength);
-        }
+        let fp = pdu.fifo_payload()?;
+        let fifo_byte_count = fp.fifo_byte_count as usize;
+        let fifo_count = fp.fifo_count as usize;
 
-        let fifo_byte_count = u16::from_be_bytes([data[0], data[1]]) as usize;
-        // The total data length should be 2 (for the byte count field itself) + fifo_byte_count.
-        if data.len() != 2 + fifo_byte_count {
+        // The total values length should be fifo_byte_count - 2 (excluding the FIFO count field).
+        if fp.values.len() + 2 != fifo_byte_count {
             return Err(MbusError::InvalidAduLength);
         }
-
-        let fifo_count = u16::from_be_bytes([data[2], data[3]]) as usize;
 
         // The byte count should be 2 bytes for the FIFO count field, plus 2 bytes for each register.
         if fifo_byte_count != 2 + fifo_count * 2 {
@@ -59,7 +55,7 @@ impl ResponseParser {
 
         let mut values = [0u16; MAX_FIFO_QUEUE_COUNT_PER_PDU];
         let mut index = 0;
-        for chunk in data[4..].chunks_exact(2) {
+        for chunk in fp.values.chunks_exact(2) {
             if index >= MAX_FIFO_QUEUE_COUNT_PER_PDU {
                 return Err(MbusError::BufferLenMissmatch);
             }

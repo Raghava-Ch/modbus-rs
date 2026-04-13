@@ -120,6 +120,14 @@ struct ProbeApp {
     #[cfg(feature = "coils")]
     fc0f_calls: Arc<AtomicUsize>,
     fc10_calls: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_errors: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_errors: Arc<AtomicUsize>,
 }
 
 impl ModbusAppHandler for ProbeApp {
@@ -220,10 +228,46 @@ impl ModbusAppHandler for ProbeApp {
 }
 
 #[cfg(feature = "traffic")]
-impl TrafficNotifier for ProbeApp {}
+impl TrafficNotifier for ProbeApp {
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_rx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_tx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_rx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_tx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+}
 
 fn build_fc03_read_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let payload = [0x00, 0x00, 0x00, 0x01];
+    build_request(
+        txn_id,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &payload,
+    )
+}
+
+fn build_fc03_invalid_quantity_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+    let payload = [0x00, 0x00, 0x00, 0x00];
     build_request(
         txn_id,
         unit_id(1),
@@ -243,12 +287,8 @@ fn build_fc06_write_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
 }
 
 fn build_fc06_write_request_for_unit(txn_id: u16, wire_unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xAB, 0xCD];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleRegister,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
+        .expect("valid FC06 payload");
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }
@@ -257,12 +297,8 @@ fn build_serial_fc06_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xAB, 0xCD];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleRegister,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
+        .expect("valid serial FC06 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -277,12 +313,8 @@ fn build_serial_fc05_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xFF, 0x00];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleCoil,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, 0x0002, 0xFF00)
+        .expect("valid serial FC05 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -297,12 +329,9 @@ fn build_serial_fc0f_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x05, 0x00, 0x03, 0x01, 0x05];
-    let pdu = Pdu::new(
-        FunctionCode::WriteMultipleCoils,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    // address=0x0005, quantity=3, coil bytes=[0x05]
+    let pdu = Pdu::build_write_multiple(FunctionCode::WriteMultipleCoils, 0x0005, 3, &[0x05])
+        .expect("valid serial FC0F payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -316,12 +345,14 @@ fn build_serial_fc10_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x10, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78];
-    let pdu = Pdu::new(
+    // address=0x0010, quantity=2, register bytes=[0x12,0x34,0x56,0x78]
+    let pdu = Pdu::build_write_multiple(
         FunctionCode::WriteMultipleRegisters,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+        0x0010,
+        2,
+        &[0x12, 0x34, 0x56, 0x78],
+    )
+    .expect("valid serial FC10 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -567,6 +598,13 @@ fn failed_send_is_retried_on_next_poll() {
     server.poll();
     assert_eq!(server.pending_response_count(), 0);
 
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 1);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 1);
+    }
+
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
     assert_eq!(sent.len(), 1, "queued response should be sent on retry");
     assert_eq!(txn_id_from_adu(&sent[0]), 0x3001);
@@ -775,6 +813,13 @@ fn response_queue_full_drops_additional_failed_responses() {
             .len(),
         0
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[test]
@@ -888,6 +933,72 @@ fn strict_mode_expiry_sends_exception_responses() {
             "timeout expiry should map to ServerDeviceFailure exception code"
         );
     }
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 2);
+        assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 2);
+    }
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn traffic_callbacks_emit_for_successful_request_and_response() {
+    let request = build_fc03_read_request(0x4401);
+    let transport = ScriptedTransport {
+        recv_queue: VecDeque::from([request]),
+        sent_frames: Arc::new(Mutex::new(Vec::new())),
+        send_failures_remaining: Arc::new(AtomicUsize::new(0)),
+        connected: true,
+    };
+
+    let app = ProbeApp::default();
+    let server_resilience = ResilienceConfig::default();
+
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        server_resilience,
+    );
+
+    server.poll();
+
+    assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_tx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+    assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 0);
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn traffic_callbacks_emit_for_exception_and_send_failure() {
+    let request = build_fc03_invalid_quantity_request(0x4402);
+    let transport = ScriptedTransport {
+        recv_queue: VecDeque::from([request]),
+        sent_frames: Arc::new(Mutex::new(Vec::new())),
+        send_failures_remaining: Arc::new(AtomicUsize::new(1)),
+        connected: true,
+    };
+
+    let app = ProbeApp::default();
+    let server_resilience = ResilienceConfig::default();
+
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        server_resilience,
+    );
+
+    server.poll();
+
+    assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 1);
+    assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -1205,6 +1316,13 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
         sent.is_empty(),
         "misaddressed frames must not generate a response under back-pressure"
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 7);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 7);
+    }
 }
 
 #[test]
@@ -1267,6 +1385,13 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
         sent.is_empty(),
         "broadcast must not generate a response under back-pressure"
     );
+
+    #[cfg(feature = "traffic")]
+    {
+        assert_eq!(server.app().traffic_rx_frames.load(Ordering::SeqCst), 7);
+        assert_eq!(server.app().traffic_rx_errors.load(Ordering::SeqCst), 0);
+        assert_eq!(server.app().traffic_tx_errors.load(Ordering::SeqCst), 7);
+    }
 }
 
 #[test]

@@ -24,11 +24,14 @@ struct RegisterApp {
     mode_fc04: RegisterMode,
     mode_fc06: RegisterMode,
     mode_fc16: RegisterMode,
+    mode_mask_fc16: RegisterMode,
     fc04_calls: Arc<AtomicUsize>,
     fc06_calls: Arc<AtomicUsize>,
     fc16_calls: Arc<AtomicUsize>,
+    mask_fc16_calls: Arc<AtomicUsize>,
     fc06_last: Arc<Mutex<Option<(u16, u16)>>>,
     fc16_last: Arc<Mutex<Option<(u16, Vec<u16>)>>>,
+    mask_fc16_last: Arc<Mutex<Option<(u16, u16, u16)>>>,
 }
 
 impl ModbusAppHandler for RegisterApp {
@@ -98,6 +101,26 @@ impl ModbusAppHandler for RegisterApp {
             RegisterMode::AppError(error) => Err(error),
         }
     }
+
+    fn mask_write_register_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<(), MbusError> {
+        self.mask_fc16_calls.fetch_add(1, Ordering::SeqCst);
+        *self
+            .mask_fc16_last
+            .lock()
+            .expect("mask_fc16 mutex poisoned") = Some((address, and_mask, or_mask));
+
+        match self.mode_mask_fc16 {
+            RegisterMode::Success => Ok(()),
+            RegisterMode::AppError(error) => Err(error),
+        }
+    }
 }
 
 #[cfg(feature = "traffic")]
@@ -141,11 +164,14 @@ impl CloneForTest for RegisterApp {
             mode_fc04: self.mode_fc04,
             mode_fc06: self.mode_fc06,
             mode_fc16: self.mode_fc16,
+            mode_mask_fc16: self.mode_mask_fc16,
             fc04_calls: Arc::clone(&self.fc04_calls),
             fc06_calls: Arc::clone(&self.fc06_calls),
             fc16_calls: Arc::clone(&self.fc16_calls),
+            mask_fc16_calls: Arc::clone(&self.mask_fc16_calls),
             fc06_last: Arc::clone(&self.fc06_last),
             fc16_last: Arc::clone(&self.fc16_last),
+            mask_fc16_last: Arc::clone(&self.mask_fc16_last),
         }
     }
 }
@@ -164,16 +190,20 @@ fn make_app(
     mode_fc04: RegisterMode,
     mode_fc06: RegisterMode,
     mode_fc16: RegisterMode,
+    mode_mask_fc16: RegisterMode,
 ) -> RegisterApp {
     RegisterApp {
         mode_fc04,
         mode_fc06,
         mode_fc16,
+        mode_mask_fc16,
         fc04_calls: Arc::new(AtomicUsize::new(0)),
         fc06_calls: Arc::new(AtomicUsize::new(0)),
         fc16_calls: Arc::new(AtomicUsize::new(0)),
+        mask_fc16_calls: Arc::new(AtomicUsize::new(0)),
         fc06_last: Arc::new(Mutex::new(None)),
         fc16_last: Arc::new(Mutex::new(None)),
+        mask_fc16_last: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -189,6 +219,7 @@ fn fc04_success_returns_register_payload() {
     );
     let app = make_app(
         RegisterMode::Success,
+        RegisterMode::AppError(MbusError::InvalidFunctionCode),
         RegisterMode::AppError(MbusError::InvalidFunctionCode),
         RegisterMode::AppError(MbusError::InvalidFunctionCode),
     );
@@ -214,6 +245,7 @@ fn fc04_invalid_quantity_returns_exception_before_app_callback() {
         RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
+        RegisterMode::Success,
     );
 
     let (app, response) = run_once(request, app);
@@ -235,6 +267,7 @@ fn fc06_success_echoes_address_and_value() {
         &[0x00, 0x2A, 0x12, 0x34],
     );
     let app = make_app(
+        RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
@@ -263,6 +296,7 @@ fn fc06_app_error_returns_exception() {
         RegisterMode::Success,
         RegisterMode::AppError(MbusError::InvalidAddress),
         RegisterMode::Success,
+        RegisterMode::Success,
     );
 
     let (app, response) = run_once(request, app);
@@ -284,6 +318,7 @@ fn fc16_success_writes_values_and_echoes_window() {
         &[0x00, 0x30, 0x00, 0x02, 0x04, 0x00, 0x0A, 0x00, 0x0B],
     );
     let app = make_app(
+        RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
@@ -312,6 +347,7 @@ fn fc16_quantity_zero_returns_exception_before_app_callback() {
         RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
+        RegisterMode::Success,
     );
 
     let (app, response) = run_once(request, app);
@@ -325,7 +361,7 @@ fn fc16_quantity_zero_returns_exception_before_app_callback() {
 }
 
 #[test]
-fn unsupported_function_code_returns_illegal_function_exception() {
+fn fc16_mask_write_success_echoes_request_fields() {
     let request = build_request(
         17,
         unit_id(1),
@@ -337,6 +373,7 @@ fn unsupported_function_code_returns_illegal_function_exception() {
         RegisterMode::Success,
         RegisterMode::Success,
         RegisterMode::Success,
+        RegisterMode::Success,
     );
 
     let (app_after, response) = run_once(request, app);
@@ -344,11 +381,43 @@ fn unsupported_function_code_returns_illegal_function_exception() {
     assert_eq!(app_after.fc04_calls.load(Ordering::SeqCst), 0);
     assert_eq!(app_after.fc06_calls.load(Ordering::SeqCst), 0);
     assert_eq!(app_after.fc16_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(app_after.mask_fc16_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *app_after
+            .mask_fc16_last
+            .lock()
+            .expect("mask_fc16 mutex poisoned"),
+        Some((0x0010, 0xFF00, 0x000F))
+    );
 
     assert_eq!(response[0..2], [0x00, 0x11]);
+    assert_eq!(response[7], 0x16);
+    assert_eq!(&response[8..14], &[0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F]);
+}
+
+#[test]
+fn fc16_mask_write_app_error_returns_exception() {
+    let request = build_request(
+        18,
+        unit_id(1),
+        FunctionCode::MaskWriteRegister,
+        &[0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F],
+    );
+
+    let app = make_app(
+        RegisterMode::Success,
+        RegisterMode::Success,
+        RegisterMode::Success,
+        RegisterMode::AppError(MbusError::InvalidAddress),
+    );
+
+    let (app_after, response) = run_once(request, app);
+
+    assert_eq!(app_after.mask_fc16_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(response[0..2], [0x00, 0x12]);
     assert_eq!(response[7], 0x96);
     assert_eq!(
         decode_exception_code(response[8]),
-        ExceptionCode::IllegalFunction
+        ExceptionCode::IllegalDataAddress
     );
 }

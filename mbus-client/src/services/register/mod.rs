@@ -302,7 +302,7 @@ mod tests {
         let pdu = Pdu::new(FunctionCode::ReadWriteMultipleRegisters, Vec::new(), 0);
         assert_eq!(
             ResponseParser::parse_read_write_multiple_registers_response(&pdu, 2).unwrap_err(),
-            MbusError::InvalidDataLen
+            MbusError::InvalidPduLength
         );
     }
 
@@ -362,7 +362,7 @@ mod tests {
         assert_eq!(
             ResponseParser::parse_mask_write_register_response(&pdu, 0x0004, 0xF002, 0x0025)
                 .unwrap_err(),
-            MbusError::InvalidDataLen
+            MbusError::InvalidPduLength
         );
     }
 

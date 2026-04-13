@@ -53,28 +53,18 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::ReadFileRecord {
             return Err(MbusError::ParseError);
         }
-        let data = pdu.data().as_slice();
-        if data.is_empty() {
-            return Err(MbusError::InvalidPduLength);
-        }
-
-        let byte_count = data[0] as usize;
-        // Check if data length matches byte count + 1 (for the byte count field itself)
-        if data.len() != byte_count + 1 {
-            return Err(MbusError::InvalidPduLength);
-        }
-
+        let bcp = pdu.byte_count_payload()?;
         let mut sub_requests = Vec::new();
-        let mut i = 1;
+        let mut i = 0;
 
-        while i < data.len() {
+        while i < bcp.payload.len() {
             // Expect at least File Resp Len (1 byte) + Ref Type (1 byte) = 2 bytes
-            if i + 2 > data.len() {
+            if i + 2 > bcp.payload.len() {
                 return Err(MbusError::ParseError);
             }
 
-            let file_resp_len = data[i] as usize;
-            let ref_type = data[i + 1];
+            let file_resp_len = bcp.payload[i] as usize;
+            let ref_type = bcp.payload[i + 1];
 
             if ref_type != FILE_RECORD_REF_TYPE {
                 return Err(MbusError::ParseError);
@@ -88,12 +78,12 @@ impl ResponseParser {
 
             // Check if the sub-response fits in the buffer
             // i + 1 (len byte) + file_resp_len
-            if i + 1 + file_resp_len > data.len() {
+            if i + 1 + file_resp_len > bcp.payload.len() {
                 return Err(MbusError::ParseError);
             }
 
             // Extract data bytes: skip len byte (1) + ref type byte (1)
-            let raw_data = &data[i + 2..i + 2 + data_len]; // raw_data is the actual register data
+            let raw_data = &bcp.payload[i + 2..i + 2 + data_len]; // raw_data is the actual register data
             if !raw_data.len().is_multiple_of(2) {
                 // The length of register data must be a multiple of 2
                 return Err(MbusError::ParseError);
@@ -128,35 +118,25 @@ impl ResponseParser {
             return Err(MbusError::ParseError);
         }
 
-        let data = pdu.data().as_slice();
-        if data.is_empty() {
-            return Err(MbusError::InvalidPduLength);
-        }
-
-        // Byte Count: 1 byte indicating the length of the response data that follows
-        let byte_count = data[0] as usize;
-        if data.len() != byte_count + 1 {
-            return Err(MbusError::InvalidPduLength);
-        }
-
-        let mut i = 1;
-        while i < data.len() {
+        let bcp = pdu.byte_count_payload()?;
+        let mut i = 0;
+        while i < bcp.payload.len() {
             // Fixed header part: Ref(1) + File(2) + RecNum(2) + RecLen(2) = 7 bytes
-            if i + SUB_REQ_PARAM_BYTE_LEN > data.len() {
+            if i + SUB_REQ_PARAM_BYTE_LEN > bcp.payload.len() {
                 return Err(MbusError::InvalidPduLength);
             }
 
-            let ref_type = data[i];
+            let ref_type = bcp.payload[i];
             if ref_type != FILE_RECORD_REF_TYPE {
                 return Err(MbusError::ParseError);
             }
 
             // Record length is at offset 5 and 6 relative to the start of the sub-request
-            let record_len = u16::from_be_bytes([data[i + 5], data[i + 6]]) as usize;
+            let record_len = u16::from_be_bytes([bcp.payload[i + 5], bcp.payload[i + 6]]) as usize;
             let data_byte_len = record_len * 2;
 
             let sub_req_len = SUB_REQ_PARAM_BYTE_LEN + data_byte_len;
-            if i + sub_req_len > data.len() {
+            if i + sub_req_len > bcp.payload.len() {
                 return Err(MbusError::ParseError);
             }
 

@@ -289,12 +289,14 @@ impl<T: TrafficNotifier> AppRequirements for T {}
 ///
 /// ## Callback Mapping
 /// - FC 0x01: `read_coils_request`
+/// - FC 0x02: `read_discrete_inputs_request`
 /// - FC 0x03: `read_multiple_holding_registers_request`
 /// - FC 0x04: `read_multiple_input_registers_request`
 /// - FC 0x05: `write_single_coil_request`
 /// - FC 0x06: `write_single_register_request`
 /// - FC 0x0F: `write_multiple_coils_request`
 /// - FC 0x10: `write_multiple_registers_request`
+/// - FC 0x16: `mask_write_register_request`
 ///
 /// ## Data Semantics
 /// - Register reads write big-endian wire bytes into `out` and return the byte count written.
@@ -305,6 +307,20 @@ pub trait ModbusAppHandler: AppRequirements {
     /// Handles a `Read Coils` (FC 0x01) request.
     #[cfg(feature = "coils")]
     fn read_coils_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read Discrete Inputs` (FC 0x02) request.
+    #[cfg(feature = "discrete-inputs")]
+    fn read_discrete_inputs_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
@@ -417,6 +433,26 @@ pub trait ModbusAppHandler: AppRequirements {
         values: &[u16],
     ) -> Result<(), MbusError> {
         let _ = (txn_id, unit_id_or_slave_addr, starting_address, values);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Mask Write Register` (FC 0x16) request.
+    #[cfg(feature = "holding-registers")]
+    fn mask_write_register_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<(), MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            and_mask,
+            or_mask,
+        );
         Err(MbusError::InvalidFunctionCode)
     }
 }

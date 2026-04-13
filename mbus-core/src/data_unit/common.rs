@@ -102,6 +102,62 @@ pub const PDU_QUANTITY_OFFSET_1B: usize = 2;
 /// Offset of the low byte of the quantity/count in PDU data.
 pub const PDU_QUANTITY_OFFSET_2B: usize = PDU_QUANTITY_OFFSET_1B + 1;
 
+/// Offset of the high byte of the AND mask in FC16 PDU data.
+pub const PDU_AND_MASK_OFFSET_1B: usize = 2;
+/// Offset of the low byte of the AND mask in FC16 PDU data.
+pub const PDU_AND_MASK_OFFSET_2B: usize = PDU_AND_MASK_OFFSET_1B + 1;
+/// Offset of the high byte of the OR mask in FC16 PDU data.
+pub const PDU_OR_MASK_OFFSET_1B: usize = 4;
+/// Offset of the low byte of the OR mask in FC16 PDU data.
+pub const PDU_OR_MASK_OFFSET_2B: usize = PDU_OR_MASK_OFFSET_1B + 1;
+
+/// Offset of the byte count in FC0F/FC10/FC17 PDU data.
+pub const PDU_BYTE_COUNT_OFFSET: usize = 4;
+
+/// Offset of the write address high byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_ADDRESS_OFFSET_1B: usize = 4;
+/// Offset of the write address low byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_ADDRESS_OFFSET_2B: usize = PDU_FC17_WRITE_ADDRESS_OFFSET_1B + 1;
+/// Offset of the write quantity high byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_QUANTITY_OFFSET_1B: usize = 6;
+/// Offset of the write quantity low byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_QUANTITY_OFFSET_2B: usize = PDU_FC17_WRITE_QUANTITY_OFFSET_1B + 1;
+/// Offset of the write byte count in FC17 PDU data.
+pub const PDU_FC17_WRITE_BYTE_COUNT_OFFSET: usize = 8;
+/// Offset of the write values data in FC17 PDU data.
+pub const PDU_FC17_WRITE_VALUES_OFFSET: usize = 9;
+
+/// Offset of the high byte of the sub-function code in FC08 (Diagnostics) PDU data.
+pub const PDU_SUB_FUNCTION_OFFSET_1B: usize = 0;
+/// Offset of the low byte of the sub-function code in FC08 (Diagnostics) PDU data.
+pub const PDU_SUB_FUNCTION_OFFSET_2B: usize = 1;
+
+/// Offset of the MEI type byte in FC2B (Encapsulated Interface Transport) PDU data.
+pub const PDU_MEI_TYPE_OFFSET: usize = 0;
+/// Offset of the read device ID code byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_READ_CODE_OFFSET: usize = 1;
+/// Offset of the conformity level byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_CONFORMITY_LEVEL_OFFSET: usize = 2;
+/// Offset of the more-follows byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_MORE_FOLLOWS_OFFSET: usize = 3;
+/// Offset of the next object ID byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_NEXT_OBJECT_ID_OFFSET: usize = 4;
+/// Offset of the number-of-objects byte in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_NUM_OBJECTS_OFFSET: usize = 5;
+/// Offset of the objects data payload in a FC2B/MEI 0x0E response.
+pub const PDU_MEI_OBJECTS_DATA_OFFSET: usize = 6;
+
+/// Offset of the high byte of FIFO byte count in FC18 (Read FIFO Queue) PDU data.
+pub const PDU_FIFO_BYTE_COUNT_OFFSET_1B: usize = 0;
+/// Offset of the low byte of FIFO byte count in FC18 PDU data.
+pub const PDU_FIFO_BYTE_COUNT_OFFSET_2B: usize = 1;
+/// Offset of the high byte of FIFO count in FC18 PDU data.
+pub const PDU_FIFO_COUNT_OFFSET_1B: usize = 2;
+/// Offset of the low byte of FIFO count in FC18 PDU data.
+pub const PDU_FIFO_COUNT_OFFSET_2B: usize = 3;
+/// Offset of the FIFO values payload in FC18 PDU data.
+pub const PDU_FIFO_VALUES_OFFSET: usize = 4;
+
 /// Checks if the given function code byte indicates an exception (error bit is set).
 ///
 /// # Arguments
@@ -140,6 +196,136 @@ pub struct Pdu {
     data: heapless::Vec<u8, MAX_PDU_DATA_LEN>,
     /// The actual length of the data payload (excluding the function code).
     data_len: u8,
+}
+
+/// Parsed read-window request fields for FC01/02/03/04.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadWindow {
+    /// Starting address from request bytes 0-1.
+    pub address: u16,
+    /// Quantity/count from request bytes 2-3.
+    pub quantity: u16,
+}
+
+/// Parsed write-single request fields for FC05/FC06-style PDUs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WriteSingleU16Fields {
+    /// Target address from request bytes 0-1.
+    pub address: u16,
+    /// Raw 16-bit value from request bytes 2-3.
+    pub value: u16,
+}
+
+/// Parsed write-multiple request fields for FC0F/FC10-style PDUs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WriteMultipleFields<'a> {
+    /// Starting address from request bytes 0-1.
+    pub address: u16,
+    /// Requested quantity from request bytes 2-3.
+    pub quantity: u16,
+    /// Byte count field from request byte 4.
+    pub byte_count: u8,
+    /// Value bytes following the byte-count field.
+    pub values: &'a [u8],
+}
+
+/// Parsed FC16 mask-write request fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaskWriteRegisterFields {
+    /// Target address from request bytes 0-1.
+    pub address: u16,
+    /// AND mask from request bytes 2-3.
+    pub and_mask: u16,
+    /// OR mask from request bytes 4-5.
+    pub or_mask: u16,
+}
+
+/// Parsed byte-count prefixed payload used by read-style responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ByteCountPayload<'a> {
+    /// Byte-count prefix at payload byte 0.
+    pub byte_count: u8,
+    /// Payload bytes immediately following the byte count.
+    pub payload: &'a [u8],
+}
+
+/// Parsed FC17 read/write multiple registers request fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadWriteMultipleFields<'a> {
+    /// Read starting address from request bytes 0-1.
+    pub read_address: u16,
+    /// Quantity to read from request bytes 2-3.
+    pub read_quantity: u16,
+    /// Write starting address from request bytes 4-5.
+    pub write_address: u16,
+    /// Quantity to write from request bytes 6-7.
+    pub write_quantity: u16,
+    /// Write byte count from request byte 8.
+    pub write_byte_count: u8,
+    /// Write value bytes following the byte-count field.
+    pub write_values: &'a [u8],
+}
+
+/// Parsed sub-function + even-length payload for FC08 (Diagnostics) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubFunctionPayload<'a> {
+    /// Sub-function code from data bytes 0-1.
+    pub sub_function: u16,
+    /// Even-length payload bytes following the sub-function field.
+    pub payload: &'a [u8],
+}
+
+/// Parsed two-u16 payload for fixed-width responses like FC0B (Get Comm Event Counter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct U16PairFields {
+    /// First u16 value from data bytes 0-1.
+    pub first: u16,
+    /// Second u16 value from data bytes 2-3.
+    pub second: u16,
+}
+
+/// Parsed MEI type + data payload for FC2B (Encapsulated Interface Transport) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeiTypePayload<'a> {
+    /// Raw MEI type byte at data offset 0.
+    pub mei_type_byte: u8,
+    /// Payload bytes following the MEI type field.
+    pub payload: &'a [u8],
+}
+
+/// Parsed FIFO queue response payload for FC18 (Read FIFO Queue) responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FifoPayload<'a> {
+    /// 2-byte FIFO byte count from data bytes 0-1.
+    pub fifo_byte_count: u16,
+    /// 2-byte FIFO count from data bytes 2-3.
+    pub fifo_count: u16,
+    /// Raw value bytes following the FIFO count field (from byte 4 onwards).
+    pub values: &'a [u8],
+}
+
+/// Parsed FC2B / MEI 0x0E (Read Device Identification) response header fields.
+///
+/// All values are stored as raw bytes. Callers are responsible for converting to
+/// domain types (e.g., `ReadDeviceIdCode`, `ConformityLevel`, `ObjectId`) using `TryFrom`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadDeviceIdPduFields {
+    /// Raw MEI type byte at data offset 0. Expected: 0x0E.
+    pub mei_type_byte: u8,
+    /// Raw read device ID code byte at data offset 1.
+    pub read_device_id_code_byte: u8,
+    /// Raw conformity level byte at data offset 2.
+    pub conformity_level_byte: u8,
+    /// More-follows flag derived from data offset 3 (true when byte == 0xFF).
+    pub more_follows: bool,
+    /// Raw next object ID byte at data offset 4.
+    pub next_object_id_byte: u8,
+    /// Number of objects at data offset 5.
+    pub number_of_objects: u8,
+    /// Raw objects data payload (data[6..]), zero-padded to MAX_PDU_DATA_LEN.
+    pub objects_data: [u8; MAX_PDU_DATA_LEN],
+    /// Number of valid bytes written into `objects_data`.
+    pub payload_len: usize,
 }
 
 /// Modbus TCP Application Data Unit (ADU) Header (MBAP).
@@ -612,62 +798,473 @@ impl Pdu {
         self.error_code
     }
 
-    /// Reads the starting address from the PDU data.
+    // -------- PDU construction helpers ------------------------------------------------
+
+    /// Builds a PDU with `[address_hi, address_lo, quantity_hi, quantity_lo]` layout (4 bytes).
     ///
-    /// # Valid for
-    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
-    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
+    /// Used by FC01/02/03/04 requests and as a general address+quantity builder.
+    pub fn build_read_window(fc: FunctionCode, address: u16, quantity: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 4))
+    }
+
+    /// Builds a PDU with `[address_hi, address_lo, value_hi, value_lo]` layout (4 bytes).
     ///
-    /// # Returns
-    /// The starting address as a big-endian 16-bit value from PDU bytes 0-1.
+    /// Used by FC05 and FC06 single-write requests.
+    pub fn build_write_single_u16(fc: FunctionCode, address: u16, value: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&value.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 4))
+    }
+
+    /// Builds a PDU with `[address, quantity, byte_count, values...]` layout.
     ///
-    /// # Errors
-    /// Returns `InvalidPduLength` if `data_len < 2`.
+    /// `values` must already be the packed byte representation (coil bits or register word bytes).
+    /// `byte_count` is derived from `values.len()`.
     ///
-    /// # Warnings
-    /// **DO NOT CALL on**:
-    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no address.
-    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
-    /// - **Other function codes**: Each has its own unique PDU layout.
+    /// Used by FC0F (Write Multiple Coils) and FC10 (Write Multiple Registers) requests.
+    pub fn build_write_multiple(
+        fc: FunctionCode,
+        address: u16,
+        quantity: u16,
+        values: &[u8],
+    ) -> Result<Self, MbusError> {
+        let byte_count = values.len();
+        if byte_count > u8::MAX as usize {
+            return Err(MbusError::InvalidByteCount);
+        }
+        let data_len = 5 + byte_count;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(byte_count as u8)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(values)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[address, and_mask, or_mask]` layout (6 bytes).
     ///
-    /// Calling on unsupported frames will silently read incorrect data.
-    pub fn address_read_frame(&self) -> Result<u16, MbusError> {
+    /// Used by FC16 (Mask Write Register) requests.
+    pub fn build_mask_write_register(
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&and_mask.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&or_mask.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::MaskWriteRegister, data, 6))
+    }
+
+    /// Builds a PDU for FC17 (Read/Write Multiple Registers) requests.
+    ///
+    /// `write_values` must already be the packed byte representation of the register words.
+    /// `write_byte_count` is derived from `write_values.len()`.
+    pub fn build_read_write_multiple(
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_quantity: u16,
+        write_values: &[u8],
+    ) -> Result<Self, MbusError> {
+        let byte_count = write_values.len();
+        if byte_count > u8::MAX as usize {
+            return Err(MbusError::InvalidByteCount);
+        }
+        let data_len = 9 + byte_count;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&read_address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&read_quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&write_address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&write_quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(byte_count as u8)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(write_values)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::ReadWriteMultipleRegisters, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[sub_function_hi, sub_function_lo, word0_hi, word0_lo, ...]` layout.
+    ///
+    /// Used by FC08 (Diagnostics) requests.
+    pub fn build_sub_function(
+        fc: FunctionCode,
+        sub_function: u16,
+        words: &[u16],
+    ) -> Result<Self, MbusError> {
+        let data_len = 2 + words.len() * 2;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&sub_function.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        for &word in words {
+            data.extend_from_slice(&word.to_be_bytes())
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+        }
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[mei_type, payload...]` layout.
+    ///
+    /// Used by FC2B (Encapsulated Interface Transport) requests.
+    pub fn build_mei_type(fc: FunctionCode, mei_type: u8, payload: &[u8]) -> Result<Self, MbusError> {
+        let data_len = 1 + payload.len();
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(mei_type)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(payload)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU containing a single u16 value `[value_hi, value_lo]` (2 bytes).
+    ///
+    /// Used by FC18 (Read FIFO Queue) request (pointer address).
+    pub fn build_u16_payload(fc: FunctionCode, value: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&value.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 2))
+    }
+
+    /// Builds a PDU containing a single byte payload `[byte]` (1 byte).
+    ///
+    /// Used for exception response PDUs.
+    pub fn build_byte_payload(fc: FunctionCode, byte: u8) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(byte)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 1))
+    }
+
+    /// Builds a PDU with an empty data payload (0 bytes).
+    ///
+    /// Used by no-argument requests such as FC07, FC0B, FC0C, and FC11.
+    pub fn build_empty(fc: FunctionCode) -> Self {
+        Pdu::new(fc, heapless::Vec::new(), 0)
+    }
+
+    /// Builds a PDU with `[byte_count, payload...]` layout.
+    ///
+    /// `byte_count` is derived from `payload.len()`. Returns `InvalidByteCount`
+    /// if the payload is longer than 255 bytes.
+    ///
+    /// Used by FC01–FC04 read responses, FC11, FC14, FC15, and FC17 responses.
+    pub fn build_byte_count_payload(fc: FunctionCode, payload: &[u8]) -> Result<Self, MbusError> {
+        let byte_count = u8::try_from(payload.len()).map_err(|_| MbusError::InvalidByteCount)?;
+        let data_len = 1 + payload.len();
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(byte_count)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(payload)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    // -------- PDU parsing helpers -----------------------------------------------------
+
+    /// Reads the standard address + quantity pair from PDU bytes 0-3.
+    /// Used by multiple function codes (FC01-04 requests, FC0F/10 requests).
+    #[inline]
+    fn read_address_quantity_pair(&self) -> Result<(u16, u16), MbusError> {
+        Ok((
+            u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        ))
+    }
+
+    /// Parses a read-window request payload into typed fields.
+    ///
+    /// Expected PDU data layout: `[address_hi, address_lo, quantity_hi, quantity_lo]`.
+    pub fn read_window(&self) -> Result<ReadWindow, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let (address, quantity) = self.read_address_quantity_pair()?;
+        Ok(ReadWindow { address, quantity })
+    }
+
+    /// Parses FC05/FC06-style payloads: address + value.
+    pub fn write_single_u16_fields(&self) -> Result<WriteSingleU16Fields, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(WriteSingleU16Fields {
+            address: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            value: u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        })
+    }
+
+    /// Parses FC0F/FC10-style payloads: address + quantity + byte_count + values.
+    pub fn write_multiple_fields(&self) -> Result<WriteMultipleFields<'_>, MbusError> {
+        if self.data_len < 5 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let (address, quantity) = self.read_address_quantity_pair()?;
+        let byte_count = self.data[PDU_BYTE_COUNT_OFFSET];
+        let expected_len = 5usize
+            .checked_add(byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(WriteMultipleFields {
+            address,
+            quantity,
+            byte_count,
+            values: &self.data[5..expected_len],
+        })
+    }
+
+    /// Parses FC16 mask-write payload: address + and-mask + or-mask.
+    pub fn mask_write_register_fields(&self) -> Result<MaskWriteRegisterFields, MbusError> {
+        if self.data_len != 6 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(MaskWriteRegisterFields {
+            address: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            and_mask: u16::from_be_bytes([
+                self.data[PDU_AND_MASK_OFFSET_1B],
+                self.data[PDU_AND_MASK_OFFSET_2B],
+            ]),
+            or_mask: u16::from_be_bytes([
+                self.data[PDU_OR_MASK_OFFSET_1B],
+                self.data[PDU_OR_MASK_OFFSET_2B],
+            ]),
+        })
+    }
+
+    /// Parses byte-count prefixed payloads used by read-style responses.
+    pub fn byte_count_payload(&self) -> Result<ByteCountPayload<'_>, MbusError> {
+        if self.data_len < 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let byte_count = self.data[0];
+        let expected_len = 1usize
+            .checked_add(byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(ByteCountPayload {
+            byte_count,
+            payload: &self.data[1..expected_len],
+        })
+    }
+
+    /// Parses FC17 read/write multiple registers payload.
+    pub fn read_write_multiple_fields(&self) -> Result<ReadWriteMultipleFields<'_>, MbusError> {
+        if (self.data_len as usize) < PDU_FC17_WRITE_VALUES_OFFSET {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let (read_address, read_quantity) = self.read_address_quantity_pair()?;
+        let write_address = u16::from_be_bytes([
+            self.data[PDU_FC17_WRITE_ADDRESS_OFFSET_1B],
+            self.data[PDU_FC17_WRITE_ADDRESS_OFFSET_2B],
+        ]);
+        let write_quantity = u16::from_be_bytes([
+            self.data[PDU_FC17_WRITE_QUANTITY_OFFSET_1B],
+            self.data[PDU_FC17_WRITE_QUANTITY_OFFSET_2B],
+        ]);
+        let write_byte_count = self.data[PDU_FC17_WRITE_BYTE_COUNT_OFFSET];
+        let expected_len = PDU_FC17_WRITE_VALUES_OFFSET
+            .checked_add(write_byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(ReadWriteMultipleFields {
+            read_address,
+            read_quantity,
+            write_address,
+            write_quantity,
+            write_byte_count,
+            write_values: &self.data[PDU_FC17_WRITE_VALUES_OFFSET..expected_len],
+        })
+    }
+
+    /// Parses a single-byte payload for FC07-style responses. Data must be exactly 1 byte.
+    pub fn single_byte_payload(&self) -> Result<u8, MbusError> {
+        if self.data_len != 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(self.data[0])
+    }
+
+    /// Parses FC08-style payloads: a 2-byte sub-function code followed by an even-length
+    /// sequence of data words. Validates minimum length and even alignment.
+    pub fn sub_function_payload(&self) -> Result<SubFunctionPayload<'_>, MbusError> {
         if self.data_len < 2 {
             return Err(MbusError::InvalidPduLength);
         }
-        Ok(u16::from_be_bytes([
-            self.data[PDU_ADDRESS_OFFSET_1B],
-            self.data[PDU_ADDRESS_OFFSET_2B],
-        ]))
+        if !self.data_len.is_multiple_of(2) {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(SubFunctionPayload {
+            sub_function: u16::from_be_bytes([
+                self.data[PDU_SUB_FUNCTION_OFFSET_1B],
+                self.data[PDU_SUB_FUNCTION_OFFSET_2B],
+            ]),
+            payload: &self.data[2..self.data_len as usize],
+        })
     }
 
-    /// Reads the quantity/count from the PDU data.
-    ///
-    /// # Valid for
-    /// **Read request frames only**: FC01 (Read Coils), FC02 (Read Discrete Inputs),
-    /// FC03 (Read Holding Registers), FC04 (Read Input Registers).
-    ///
-    /// # Returns
-    /// The quantity/count as a big-endian 16-bit value from PDU bytes 2-3.
-    ///
-    /// # Errors
-    /// Returns `InvalidPduLength` if `data_len < 4`.
-    ///
-    /// # Warnings
-    /// **DO NOT CALL on**:
-    /// - **Responses**: FC03/FC04 responses have format `[ByteCount][RegisterData]` with no quantity.
-    /// - **Write requests**: FC05, FC06, FC15, FC16 have different structures.
-    /// - **Other function codes**: Each has its own unique PDU layout.
-    ///
-    /// Calling on unsupported frames will silently read incorrect data.
-    pub fn quantity_from_read_frame(&self) -> Result<u16, MbusError> {
+    /// Parses FC0B-style payloads: exactly two consecutive 16-bit values (4 bytes total).
+    pub fn u16_pair_fields(&self) -> Result<U16PairFields, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(U16PairFields {
+            first: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            second: u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        })
+    }
+
+    /// Parses FC2B-style payloads: a 1-byte MEI type followed by variable-length data.
+    /// Data must have at least 1 byte.
+    pub fn mei_type_payload(&self) -> Result<MeiTypePayload<'_>, MbusError> {
+        if self.data_len < 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(MeiTypePayload {
+            mei_type_byte: self.data[PDU_MEI_TYPE_OFFSET],
+            payload: &self.data[1..self.data_len as usize],
+        })
+    }
+
+    /// Parses FC18-style payloads: a 2-byte FIFO byte count, 2-byte FIFO count, and raw
+    /// value bytes. Data must have at least 4 bytes. Cross-field consistency validation
+    /// (byte count vs FIFO count) is left to the caller.
+    pub fn fifo_payload(&self) -> Result<FifoPayload<'_>, MbusError> {
         if self.data_len < 4 {
             return Err(MbusError::InvalidPduLength);
         }
-        Ok(u16::from_be_bytes([
-            self.data[PDU_QUANTITY_OFFSET_1B],
-            self.data[PDU_QUANTITY_OFFSET_2B],
-        ]))
+        Ok(FifoPayload {
+            fifo_byte_count: u16::from_be_bytes([
+                self.data[PDU_FIFO_BYTE_COUNT_OFFSET_1B],
+                self.data[PDU_FIFO_BYTE_COUNT_OFFSET_2B],
+            ]),
+            fifo_count: u16::from_be_bytes([
+                self.data[PDU_FIFO_COUNT_OFFSET_1B],
+                self.data[PDU_FIFO_COUNT_OFFSET_2B],
+            ]),
+            values: &self.data[PDU_FIFO_VALUES_OFFSET..self.data_len as usize],
+        })
+    }
+
+    /// Parses FC2B / MEI 0x0E (Read Device Identification) response structural fields.
+    ///
+    /// Validates the 6-byte header minimum length, walks through all declared objects
+    /// to confirm their lengths fit within the PDU, and returns raw bytes for each
+    /// header field. Callers must:
+    /// - Check `mei_type_byte == EncapsulatedInterfaceType::ReadDeviceIdentification as u8`
+    /// - Convert `read_device_id_code_byte` and `conformity_level_byte` via `TryFrom`
+    pub fn read_device_id_fields(&self) -> Result<ReadDeviceIdPduFields, MbusError> {
+        // Minimum: MEI(1) + ReadCode(1) + Conf(1) + More(1) + NextId(1) + NumObj(1)
+        if (self.data_len as usize) < PDU_MEI_OBJECTS_DATA_OFFSET {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let data = self.data.as_slice();
+        let number_of_objects = data[PDU_MEI_NUM_OBJECTS_OFFSET];
+
+        // Walk all declared objects to validate structural integrity
+        let mut offset = PDU_MEI_OBJECTS_DATA_OFFSET;
+        for _ in 0..number_of_objects as usize {
+            if offset + 2 > data.len() {
+                return Err(MbusError::InvalidPduLength);
+            }
+            let obj_len = data[offset + 1] as usize;
+            offset += 2;
+            if offset + obj_len > data.len() {
+                return Err(MbusError::InvalidPduLength);
+            }
+            offset += obj_len;
+        }
+
+        let payload_len = (self.data_len as usize) - PDU_MEI_OBJECTS_DATA_OFFSET;
+        if payload_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut objects_data = [0u8; MAX_PDU_DATA_LEN];
+        if payload_len > 0 {
+            objects_data[..payload_len].copy_from_slice(&data[PDU_MEI_OBJECTS_DATA_OFFSET..]);
+        }
+
+        Ok(ReadDeviceIdPduFields {
+            mei_type_byte: data[PDU_MEI_TYPE_OFFSET],
+            read_device_id_code_byte: data[PDU_MEI_READ_CODE_OFFSET],
+            conformity_level_byte: data[PDU_MEI_CONFORMITY_LEVEL_OFFSET],
+            more_follows: data[PDU_MEI_MORE_FOLLOWS_OFFSET] == 0xFF,
+            next_object_id_byte: data[PDU_MEI_NEXT_OBJECT_ID_OFFSET],
+            number_of_objects,
+            objects_data,
+            payload_len,
+        })
     }
 
     /// Converts the PDU into its byte representation.
@@ -1117,6 +1714,139 @@ mod tests {
         let bytes = bytes_vec.as_slice();
         let err = Pdu::from_bytes(bytes).expect_err("Should return error for too much data");
         assert_eq!(err, MbusError::InvalidPduLength);
+    }
+
+    #[test]
+    fn test_pdu_read_window_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x12, 0x34, 0x00, 0x02]).expect("valid pdu");
+        let parsed = pdu.read_window().expect("read window should parse");
+
+        assert_eq!(
+            parsed,
+            ReadWindow {
+                address: 0x1234,
+                quantity: 0x0002
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_write_single_u16_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x06, 0x01, 0x02, 0xAB, 0xCD]).expect("valid pdu");
+        let parsed = pdu
+            .write_single_u16_fields()
+            .expect("write single fields should parse");
+
+        assert_eq!(
+            parsed,
+            WriteSingleU16Fields {
+                address: 0x0102,
+                value: 0xABCD
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_write_multiple_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78])
+            .expect("valid pdu");
+        let parsed = pdu
+            .write_multiple_fields()
+            .expect("write multiple fields should parse");
+
+        assert_eq!(parsed.address, 0x0020);
+        assert_eq!(parsed.quantity, 0x0002);
+        assert_eq!(parsed.byte_count, 0x04);
+        assert_eq!(parsed.values, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_mask_write_register_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x16, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F]).expect("valid pdu");
+        let parsed = pdu
+            .mask_write_register_fields()
+            .expect("mask write fields should parse");
+
+        assert_eq!(
+            parsed,
+            MaskWriteRegisterFields {
+                address: 0x0010,
+                and_mask: 0xFF00,
+                or_mask: 0x000F
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_byte_count_payload_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x04, 0x12, 0x34, 0x56, 0x78]).expect("valid pdu");
+        let parsed = pdu
+            .byte_count_payload()
+            .expect("byte-count payload should parse");
+
+        assert_eq!(parsed.byte_count, 0x04);
+        assert_eq!(parsed.payload, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_write_multiple_fields_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x03, 0x12, 0x34]).expect("valid pdu");
+        let err = pdu
+            .write_multiple_fields()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
+    }
+
+    #[test]
+    fn test_pdu_byte_count_payload_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x03, 0x12, 0x34]).expect("valid pdu");
+        let err = pdu
+            .byte_count_payload()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[
+            0x17, 0x00, 0x10, 0x00, 0x02, 0x00, 0x20, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78,
+        ])
+        .expect("valid pdu");
+        let parsed = pdu
+            .read_write_multiple_fields()
+            .expect("read/write multiple fields should parse");
+
+        assert_eq!(parsed.read_address, 0x0010);
+        assert_eq!(parsed.read_quantity, 0x0002);
+        assert_eq!(parsed.write_address, 0x0020);
+        assert_eq!(parsed.write_quantity, 0x0002);
+        assert_eq!(parsed.write_byte_count, 0x04);
+        assert_eq!(parsed.write_values, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_rejects_short_pdu() {
+        let pdu = Pdu::from_bytes(&[0x17, 0x00, 0x10, 0x00, 0x02, 0x00]).expect("valid pdu");
+        let err = pdu
+            .read_write_multiple_fields()
+            .expect_err("PDU too short should error");
+
+        assert_eq!(err, MbusError::InvalidPduLength);
+    }
+
+    #[test]
+    fn test_pdu_read_write_multiple_fields_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[
+            0x17, 0x00, 0x10, 0x00, 0x02, 0x00, 0x20, 0x00, 0x02, 0x05, 0x12, 0x34, 0x56, 0x78,
+        ])
+        .expect("valid pdu");
+        let err = pdu
+            .read_write_multiple_fields()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
     }
 
     // --- Tests for Pdu::to_bytes ---

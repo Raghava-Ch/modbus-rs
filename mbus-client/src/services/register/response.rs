@@ -65,19 +65,13 @@ impl ResponseParser {
             return Err(MbusError::ParseError);
         }
 
-        let data = pdu.data().as_slice();
-        if data.len() != 4 {
-            return Err(MbusError::InvalidPduLength);
-        }
+        let fields = pdu.write_single_u16_fields()?;
 
-        let address = u16::from_be_bytes([data[0], data[1]]);
-        let value = u16::from_be_bytes([data[2], data[3]]);
-
-        if address != expected_address {
+        if fields.address != expected_address {
             return Err(MbusError::InvalidAddress);
         }
 
-        if value != expected_value {
+        if fields.value != expected_value {
             return Err(MbusError::InvalidValue);
         }
 
@@ -94,19 +88,13 @@ impl ResponseParser {
             return Err(MbusError::ParseError);
         }
 
-        let data = pdu.data().as_slice();
-        if data.len() != 4 {
-            return Err(MbusError::InvalidPduLength);
-        }
+        let fields = pdu.read_window()?;
 
-        let address = u16::from_be_bytes([data[0], data[1]]);
-        let quantity = u16::from_be_bytes([data[2], data[3]]);
-
-        if address != expected_address {
+        if fields.address != expected_address {
             return Err(MbusError::InvalidAddress);
         }
 
-        if quantity != expected_quantity {
+        if fields.quantity != expected_quantity {
             return Err(MbusError::InvalidQuantity);
         }
 
@@ -136,24 +124,17 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data = pdu.data().as_slice();
-        if data.len() != 6 {
-            return Err(MbusError::InvalidDataLen);
-        }
+        let fields = pdu.mask_write_register_fields()?;
 
-        let address = u16::from_be_bytes([data[0], data[1]]);
-        let and_mask = u16::from_be_bytes([data[2], data[3]]);
-        let or_mask = u16::from_be_bytes([data[4], data[5]]);
-
-        if address != expected_address {
+        if fields.address != expected_address {
             return Err(MbusError::InvalidAddress);
         }
 
-        if and_mask != expected_and_mask {
+        if fields.and_mask != expected_and_mask {
             return Err(MbusError::InvalidAndMask);
         }
 
-        if or_mask != expected_or_mask {
+        if fields.or_mask != expected_or_mask {
             return Err(MbusError::InvalidOrMask);
         }
 
@@ -170,22 +151,14 @@ impl ResponseParser {
             return Err(MbusError::InvalidFunctionCode);
         }
 
-        let data = pdu.data().as_slice();
-        if data.is_empty() {
-            return Err(MbusError::InvalidDataLen);
-        }
+        let bcp = pdu.byte_count_payload()?;
 
-        let byte_count = data[0] as usize;
-        if data.len() != 1 + byte_count {
-            return Err(MbusError::InvalidByteCount);
-        }
-
-        if byte_count != (expected_quantity * 2) as usize {
+        if bcp.byte_count as usize != (expected_quantity * 2) as usize {
             return Err(MbusError::InvalidQuantity);
         }
 
         let mut values = Vec::new();
-        for chunk in data[1..].chunks(2) {
+        for chunk in bcp.payload.chunks(2) {
             if chunk.len() == 2 {
                 let val = u16::from_be_bytes([chunk[0], chunk[1]]);
                 values
