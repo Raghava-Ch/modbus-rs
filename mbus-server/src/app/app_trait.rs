@@ -289,6 +289,7 @@ impl<T: TrafficNotifier> AppRequirements for T {}
 ///
 /// ## Callback Mapping
 /// - FC 0x01: `read_coils_request`
+/// - FC 0x02: `read_discrete_inputs_request`
 /// - FC 0x03: `read_multiple_holding_registers_request`
 /// - FC 0x04: `read_multiple_input_registers_request`
 /// - FC 0x05: `write_single_coil_request`
@@ -305,6 +306,20 @@ pub trait ModbusAppHandler: AppRequirements {
     /// Handles a `Read Coils` (FC 0x01) request.
     #[cfg(feature = "coils")]
     fn read_coils_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read Discrete Inputs` (FC 0x02) request.
+    #[cfg(feature = "discrete-inputs")]
+    fn read_discrete_inputs_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,

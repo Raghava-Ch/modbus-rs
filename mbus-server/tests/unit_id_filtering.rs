@@ -31,6 +31,14 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug)]
 struct CountingApp {
     calls: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_frames: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_rx_errors: Arc<AtomicUsize>,
+    #[cfg(feature = "traffic")]
+    traffic_tx_errors: Arc<AtomicUsize>,
 }
 
 impl ModbusAppHandler for CountingApp {
@@ -85,7 +93,33 @@ impl ModbusAppHandler for CountingApp {
 }
 
 #[cfg(feature = "traffic")]
-impl TrafficNotifier for CountingApp {}
+impl TrafficNotifier for CountingApp {
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_rx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_tx_frames.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_rx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_tx_errors.fetch_add(1, Ordering::SeqCst);
+    }
+}
 
 /// Build a TCP FC03 request frame addressed to the given `wire_unit`.
 fn build_fc03_request(
@@ -148,6 +182,14 @@ fn run_request(
     };
     let app = CountingApp {
         calls: calls.clone(),
+        #[cfg(feature = "traffic")]
+        traffic_rx_frames: Arc::new(AtomicUsize::new(0)),
+        #[cfg(feature = "traffic")]
+        traffic_tx_frames: Arc::new(AtomicUsize::new(0)),
+        #[cfg(feature = "traffic")]
+        traffic_rx_errors: Arc::new(AtomicUsize::new(0)),
+        #[cfg(feature = "traffic")]
+        traffic_tx_errors: Arc::new(AtomicUsize::new(0)),
     };
 
     let mut server = ServerServices::new(
@@ -162,6 +204,52 @@ fn run_request(
 
     let frame_count = sent_frames.lock().expect("mutex poisoned").len();
     (calls.load(Ordering::SeqCst), frame_count)
+}
+
+#[cfg(feature = "traffic")]
+fn run_request_with_traffic(
+    frame: HVec<u8, MAX_ADU_FRAME_LEN>,
+    server_unit: UnitIdOrSlaveAddr,
+) -> (usize, usize, usize, usize, usize, usize) {
+    let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let traffic_rx_frames = Arc::new(AtomicUsize::new(0));
+    let traffic_tx_frames = Arc::new(AtomicUsize::new(0));
+    let traffic_rx_errors = Arc::new(AtomicUsize::new(0));
+    let traffic_tx_errors = Arc::new(AtomicUsize::new(0));
+
+    let transport = MockTransport {
+        next_rx: Some(frame),
+        sent_frames: sent_frames.clone(),
+        connected: true,
+    };
+    let app = CountingApp {
+        calls: calls.clone(),
+        traffic_rx_frames: traffic_rx_frames.clone(),
+        traffic_tx_frames: traffic_tx_frames.clone(),
+        traffic_rx_errors: traffic_rx_errors.clone(),
+        traffic_tx_errors: traffic_tx_errors.clone(),
+    };
+
+    let mut server = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        server_unit,
+        ResilienceConfig::default(),
+    );
+    server.connect().expect("connect should succeed");
+    server.poll();
+
+    let frame_count = sent_frames.lock().expect("mutex poisoned").len();
+    (
+        calls.load(Ordering::SeqCst),
+        frame_count,
+        traffic_rx_frames.load(Ordering::SeqCst),
+        traffic_tx_frames.load(Ordering::SeqCst),
+        traffic_rx_errors.load(Ordering::SeqCst),
+        traffic_tx_errors.load(Ordering::SeqCst),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +352,14 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
         };
         let app = CountingApp {
             calls: calls.clone(),
+            #[cfg(feature = "traffic")]
+            traffic_rx_frames: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_tx_frames: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_rx_errors: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_tx_errors: Arc::new(AtomicUsize::new(0)),
         };
         let mut server = ServerServices::new(
             transport,
@@ -296,6 +392,14 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
         };
         let app = CountingApp {
             calls: calls.clone(),
+            #[cfg(feature = "traffic")]
+            traffic_rx_frames: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_tx_frames: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_rx_errors: Arc::new(AtomicUsize::new(0)),
+            #[cfg(feature = "traffic")]
+            traffic_tx_errors: Arc::new(AtomicUsize::new(0)),
         };
         let mut server = ServerServices::new(
             transport,
@@ -318,4 +422,38 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
         1,
         "app must be called exactly once for correct frame"
     );
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn traffic_callbacks_for_address_filtering_behave_as_expected() {
+    let matched = build_fc03_request(100, 1, 0, 1);
+    let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
+        run_request_with_traffic(matched, unit_id(1));
+    assert_eq!(calls, 1);
+    assert_eq!(responses, 1);
+    assert_eq!(rx_frames, 1);
+    assert_eq!(tx_frames, 1);
+    assert_eq!(rx_errors, 0);
+    assert_eq!(tx_errors, 0);
+
+    let misaddressed = build_fc03_request(101, 9, 0, 1);
+    let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
+        run_request_with_traffic(misaddressed, unit_id(1));
+    assert_eq!(calls, 0);
+    assert_eq!(responses, 0);
+    assert_eq!(rx_frames, 0);
+    assert_eq!(tx_frames, 0);
+    assert_eq!(rx_errors, 0);
+    assert_eq!(tx_errors, 0);
+
+    let broadcast = build_fc06_request(102, 0, 0, 0xABCD);
+    let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
+        run_request_with_traffic(broadcast, unit_id(1));
+    assert_eq!(calls, 0);
+    assert_eq!(responses, 0);
+    assert_eq!(rx_frames, 0);
+    assert_eq!(tx_frames, 0);
+    assert_eq!(rx_errors, 0);
+    assert_eq!(tx_errors, 0);
 }
