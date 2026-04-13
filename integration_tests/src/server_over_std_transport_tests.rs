@@ -83,6 +83,7 @@ impl AcceptedTcpTransport {
 
 impl Transport for AcceptedTcpTransport {
     type Error = TransportError;
+    const TRANSPORT_TYPE: Option<TransportType> = Some(TransportType::StdTcp);
 
     fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
         let tcp_cfg = match config {

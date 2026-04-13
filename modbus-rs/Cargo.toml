@@ -17,6 +17,7 @@ mbus-serial = { workspace = true, optional = true }
 mbus-network    = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
 mbus-async = { workspace = true, optional = true }
+mbus-server = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 
@@ -46,6 +47,7 @@ default = [
     "diagnostics",
 ]
 client = ["mbus-client"]
+server = ["dep:mbus-server"]
 serial-rtu = ["mbus-serial", "mbus-async?/serial-rtu"]
 serial-ascii = ["mbus-serial", "mbus-core/serial-ascii", "mbus-async?/serial-ascii"]
 tcp = ["mbus-network", "mbus-async?/tcp"]

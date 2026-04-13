@@ -254,13 +254,17 @@ impl ModbusMessage {
     /// A `UnitIdOrSlaveAddr` representing the destination or source device.
     pub fn unit_id_or_slave_addr(&self) -> UnitIdOrSlaveAddr {
         match self.additional_address {
-            AdditionalAddress::MbapHeader(header) => {
-                UnitIdOrSlaveAddr::try_from(header.unit_id).unwrap_or(UnitIdOrSlaveAddr::default())
-            }
-            AdditionalAddress::SlaveAddress(slave_address) => {
-                UnitIdOrSlaveAddr::try_from(slave_address.address())
-                    .unwrap_or(UnitIdOrSlaveAddr::default())
-            }
+            AdditionalAddress::MbapHeader(header) => match header.unit_id {
+                0 => UnitIdOrSlaveAddr::new_broadcast_address(),
+                unit_id => UnitIdOrSlaveAddr::try_from(unit_id)
+                    .unwrap_or(UnitIdOrSlaveAddr::default()),
+            },
+            AdditionalAddress::SlaveAddress(slave_address) => match slave_address.address() {
+                0 => UnitIdOrSlaveAddr::new_broadcast_address(),
+                address => {
+                    UnitIdOrSlaveAddr::try_from(address).unwrap_or(UnitIdOrSlaveAddr::default())
+                }
+            },
         }
     }
 

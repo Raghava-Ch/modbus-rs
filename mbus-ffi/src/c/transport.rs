@@ -84,6 +84,7 @@ pub(super) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -
 
 impl Transport for CTransport {
     type Error = MbusError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
 
     fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
         let cb = self

@@ -218,7 +218,7 @@ impl RequestPriority {
 /// # Example
 ///
 /// ```rust,ignore
-/// use mbus_server::{ResilienceConfig, TimeoutConfig};
+/// use mbus_server::{OverflowPolicy, ResilienceConfig, TimeoutConfig};
 ///
 /// let resilience = ResilienceConfig {
 ///     timeouts: TimeoutConfig {
@@ -227,10 +227,12 @@ impl RequestPriority {
 ///         response_retry_interval_ms: 25,
 ///         request_deadline_ms: 500,
 ///         strict_mode: false,
+///         overflow_policy: OverflowPolicy::DropResponse,
 ///     },
 ///     clock_fn: Some(my_clock_ms),
 ///     max_send_retries: 3,
 ///     enable_priority_queue: true,
+///     enable_broadcast_writes: false,
 /// };
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -257,6 +259,12 @@ pub struct ResilienceConfig {
     /// When `false` (default), requests are dispatched immediately upon
     /// receipt for minimal latency.
     pub enable_priority_queue: bool,
+
+    /// Enables Serial broadcast write handling without emitting any response.
+    ///
+    /// This is only honored for Serial transports. TCP and other point-to-point
+    /// transports continue to silently drop broadcast traffic.
+    pub enable_broadcast_writes: bool,
 }
 
 impl Default for ResilienceConfig {
@@ -266,6 +274,7 @@ impl Default for ResilienceConfig {
             clock_fn: None,
             max_send_retries: 3,
             enable_priority_queue: false,
+            enable_broadcast_writes: false,
         }
     }
 }

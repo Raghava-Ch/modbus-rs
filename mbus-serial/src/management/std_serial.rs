@@ -83,6 +83,8 @@ impl StdSerialTransport {
 
 impl Transport for StdSerialTransport {
     type Error = TransportError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: Option<TransportType> = None;
 
     /// Establishes a connection to the specified serial port.
     ///

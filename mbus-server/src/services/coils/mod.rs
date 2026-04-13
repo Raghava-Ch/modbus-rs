@@ -216,6 +216,52 @@ where
         self.try_send_or_queue(&response, txn_id);
     }
 
+    /// Handles a Serial broadcast FC05 request without emitting any response.
+    pub(super) fn handle_broadcast_write_single_coil_request(
+        &mut self,
+        message: &ModbusMessage,
+    ) {
+        let txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        let (address, raw_value) = match parse_write_single_request(message) {
+            Ok(values) => values,
+            Err(err) => {
+                server_log_debug!(
+                    "FC05 broadcast ignored due to invalid request: txn_id={}, error={:?}",
+                    txn_id,
+                    err
+                );
+                return;
+            }
+        };
+
+        let value = match raw_value {
+            0xFF00 => true,
+            0x0000 => false,
+            _ => {
+                server_log_debug!(
+                    "FC05 broadcast ignored due to invalid coil value: txn_id={}, raw_value=0x{:04X}",
+                    txn_id,
+                    raw_value
+                );
+                return;
+            }
+        };
+
+        if let Err(err) =
+            self.app
+                .write_single_coil_request(txn_id, unit_id_or_slave_addr, address, value)
+        {
+            server_log_debug!(
+                "FC05 broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                err
+            );
+        }
+    }
+
     /// Handles FC15 (Write Multiple Coils).
     ///
     /// Validates quantity bounds, address overflow, and packed-byte layout,
@@ -313,6 +359,71 @@ where
         };
 
         self.try_send_or_queue(&response, txn_id);
+    }
+
+    /// Handles a Serial broadcast FC15 request without emitting any response.
+    pub(super) fn handle_broadcast_write_multiple_coils_request(
+        &mut self,
+        message: &ModbusMessage,
+    ) {
+        let txn_id = message.transaction_id();
+        let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
+
+        let (address, quantity, byte_count, values) = match parse_write_multiple_request(message) {
+            Ok(values) => values,
+            Err(err) => {
+                server_log_debug!(
+                    "FC0F broadcast ignored due to invalid request: txn_id={}, error={:?}",
+                    txn_id,
+                    err
+                );
+                return;
+            }
+        };
+
+        if !(FC15_MIN_QUANTITY..=FC15_MAX_QUANTITY).contains(&quantity) {
+            server_log_debug!(
+                "FC0F broadcast ignored due to invalid quantity: txn_id={}, quantity={}",
+                txn_id,
+                quantity
+            );
+            return;
+        }
+        if address.checked_add(quantity - 1).is_none() {
+            server_log_debug!(
+                "FC0F broadcast ignored due to address overflow: txn_id={}, address={}, quantity={}",
+                txn_id,
+                address,
+                quantity
+            );
+            return;
+        }
+
+        let expected_byte_count = packed_bit_len(quantity);
+        if byte_count as usize != expected_byte_count || values.len() != expected_byte_count {
+            server_log_debug!(
+                "FC0F broadcast ignored due to invalid byte count: txn_id={}, byte_count={}, expected={}",
+                txn_id,
+                byte_count,
+                expected_byte_count
+            );
+            return;
+        }
+
+        if let Err(err) = self.app.write_multiple_coils_request(
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            values,
+        ) {
+            server_log_debug!(
+                "FC0F broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                err
+            );
+        }
     }
 }
 

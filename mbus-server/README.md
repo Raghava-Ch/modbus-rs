@@ -155,6 +155,8 @@ For `InputRegistersModel`:
 
 ## Feature gates
 
+- `server`: enables server-only runtime extensions such as opt-in Serial
+	broadcast write handling (enabled by default in `mbus-server` itself)
 - `holding-registers`: enables FC03/FC06/FC10 server handling and `HoldingRegistersModel`
 - `input-registers`: enables FC04 server handling and `InputRegistersModel`
 - `registers`: compatibility alias that enables both `holding-registers` and `input-registers`
@@ -197,7 +199,10 @@ performed but cadence is poll-driven.
 
 Important protocol note:
 - broadcast frames and misaddressed frames are never answered, even under
-	back-pressure. They are still silently discarded.
+	back-pressure.
+- when `enable_broadcast_writes = true`, supported Serial broadcast writes are
+	processed immediately with no response and no interaction with the response queue.
+- TCP broadcast remains silently discarded even when broadcast writes are enabled.
 - `RejectRequest` therefore only applies to requests actually addressed to this
 	server.
 
@@ -218,6 +223,7 @@ let resilience = ResilienceConfig {
 		clock_fn: Some(my_monotonic_ms),
 		max_send_retries: 3,
 		enable_priority_queue: true,
+		enable_broadcast_writes: true,
 };
 ```
 
@@ -228,6 +234,8 @@ This configuration means:
 - queued requests older than 500ms are expired using strict mode behaviour
 - once the response retry queue reaches 80% utilization, new addressed unicast
 	requests are rejected instead of admitting more work that may not be confirmable
+- supported Serial broadcast writes bypass response queue pressure entirely and
+	are applied without any reply
 
 ## Detailed design
 
