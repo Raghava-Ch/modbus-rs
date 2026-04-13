@@ -142,6 +142,57 @@ pub struct Pdu {
     data_len: u8,
 }
 
+/// Parsed read-window request fields for FC01/02/03/04.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadWindow {
+    /// Starting address from request bytes 0-1.
+    pub address: u16,
+    /// Quantity/count from request bytes 2-3.
+    pub quantity: u16,
+}
+
+/// Parsed write-single request fields for FC05/FC06-style PDUs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WriteSingleU16Fields {
+    /// Target address from request bytes 0-1.
+    pub address: u16,
+    /// Raw 16-bit value from request bytes 2-3.
+    pub value: u16,
+}
+
+/// Parsed write-multiple request fields for FC0F/FC10-style PDUs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WriteMultipleFields<'a> {
+    /// Starting address from request bytes 0-1.
+    pub address: u16,
+    /// Requested quantity from request bytes 2-3.
+    pub quantity: u16,
+    /// Byte count field from request byte 4.
+    pub byte_count: u8,
+    /// Value bytes following the byte-count field.
+    pub values: &'a [u8],
+}
+
+/// Parsed FC16 mask-write request fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaskWriteRegisterFields {
+    /// Target address from request bytes 0-1.
+    pub address: u16,
+    /// AND mask from request bytes 2-3.
+    pub and_mask: u16,
+    /// OR mask from request bytes 4-5.
+    pub or_mask: u16,
+}
+
+/// Parsed byte-count prefixed payload used by read-style responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ByteCountPayload<'a> {
+    /// Byte-count prefix at payload byte 0.
+    pub byte_count: u8,
+    /// Payload bytes immediately following the byte count.
+    pub payload: &'a [u8],
+}
+
 /// Modbus TCP Application Data Unit (ADU) Header (MBAP).
 #[derive(Debug, Clone, Copy)]
 pub struct MbapHeader {
@@ -610,6 +661,96 @@ impl Pdu {
     /// Accessor for the error code from the PDU.
     pub fn error_code(&self) -> Option<u8> {
         self.error_code
+    }
+
+    /// Parses a read-window request payload into typed fields.
+    ///
+    /// Expected PDU data layout: `[address_hi, address_lo, quantity_hi, quantity_lo]`.
+    pub fn read_window(&self) -> Result<ReadWindow, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(ReadWindow {
+            address: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            quantity: u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        })
+    }
+
+    /// Parses FC05/FC06-style payloads: address + value.
+    pub fn write_single_u16_fields(&self) -> Result<WriteSingleU16Fields, MbusError> {
+        if self.data_len != 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(WriteSingleU16Fields {
+            address: u16::from_be_bytes([self.data[0], self.data[1]]),
+            value: u16::from_be_bytes([self.data[2], self.data[3]]),
+        })
+    }
+
+    /// Parses FC0F/FC10-style payloads: address + quantity + byte_count + values.
+    pub fn write_multiple_fields(&self) -> Result<WriteMultipleFields<'_>, MbusError> {
+        if self.data_len < 5 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let address = u16::from_be_bytes([self.data[0], self.data[1]]);
+        let quantity = u16::from_be_bytes([self.data[2], self.data[3]]);
+        let byte_count = self.data[4];
+        let expected_len = 5usize
+            .checked_add(byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(WriteMultipleFields {
+            address,
+            quantity,
+            byte_count,
+            values: &self.data[5..expected_len],
+        })
+    }
+
+    /// Parses FC16 mask-write payload: address + and-mask + or-mask.
+    pub fn mask_write_register_fields(&self) -> Result<MaskWriteRegisterFields, MbusError> {
+        if self.data_len != 6 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(MaskWriteRegisterFields {
+            address: u16::from_be_bytes([self.data[0], self.data[1]]),
+            and_mask: u16::from_be_bytes([self.data[2], self.data[3]]),
+            or_mask: u16::from_be_bytes([self.data[4], self.data[5]]),
+        })
+    }
+
+    /// Parses byte-count prefixed payloads used by read-style responses.
+    pub fn byte_count_payload(&self) -> Result<ByteCountPayload<'_>, MbusError> {
+        if self.data_len < 1 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let byte_count = self.data[0];
+        let expected_len = 1usize
+            .checked_add(byte_count as usize)
+            .ok_or(MbusError::InvalidByteCount)?;
+        if self.data_len as usize != expected_len {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        Ok(ByteCountPayload {
+            byte_count,
+            payload: &self.data[1..expected_len],
+        })
     }
 
     /// Reads the starting address from the PDU data.
@@ -1117,6 +1258,98 @@ mod tests {
         let bytes = bytes_vec.as_slice();
         let err = Pdu::from_bytes(bytes).expect_err("Should return error for too much data");
         assert_eq!(err, MbusError::InvalidPduLength);
+    }
+
+    #[test]
+    fn test_pdu_read_window_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x12, 0x34, 0x00, 0x02]).expect("valid pdu");
+        let parsed = pdu.read_window().expect("read window should parse");
+
+        assert_eq!(
+            parsed,
+            ReadWindow {
+                address: 0x1234,
+                quantity: 0x0002
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_write_single_u16_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x06, 0x01, 0x02, 0xAB, 0xCD]).expect("valid pdu");
+        let parsed = pdu
+            .write_single_u16_fields()
+            .expect("write single fields should parse");
+
+        assert_eq!(
+            parsed,
+            WriteSingleU16Fields {
+                address: 0x0102,
+                value: 0xABCD
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_write_multiple_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78])
+            .expect("valid pdu");
+        let parsed = pdu
+            .write_multiple_fields()
+            .expect("write multiple fields should parse");
+
+        assert_eq!(parsed.address, 0x0020);
+        assert_eq!(parsed.quantity, 0x0002);
+        assert_eq!(parsed.byte_count, 0x04);
+        assert_eq!(parsed.values, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_mask_write_register_fields_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x16, 0x00, 0x10, 0xFF, 0x00, 0x00, 0x0F]).expect("valid pdu");
+        let parsed = pdu
+            .mask_write_register_fields()
+            .expect("mask write fields should parse");
+
+        assert_eq!(
+            parsed,
+            MaskWriteRegisterFields {
+                address: 0x0010,
+                and_mask: 0xFF00,
+                or_mask: 0x000F
+            }
+        );
+    }
+
+    #[test]
+    fn test_pdu_byte_count_payload_parses_expected_fields() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x04, 0x12, 0x34, 0x56, 0x78]).expect("valid pdu");
+        let parsed = pdu
+            .byte_count_payload()
+            .expect("byte-count payload should parse");
+
+        assert_eq!(parsed.byte_count, 0x04);
+        assert_eq!(parsed.payload, &[0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn test_pdu_write_multiple_fields_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x03, 0x12, 0x34]).expect("valid pdu");
+        let err = pdu
+            .write_multiple_fields()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
+    }
+
+    #[test]
+    fn test_pdu_byte_count_payload_rejects_mismatched_byte_count() {
+        let pdu = Pdu::from_bytes(&[0x03, 0x03, 0x12, 0x34]).expect("valid pdu");
+        let err = pdu
+            .byte_count_payload()
+            .expect_err("byte count mismatch should error");
+
+        assert_eq!(err, MbusError::InvalidByteCount);
     }
 
     // --- Tests for Pdu::to_bytes ---
