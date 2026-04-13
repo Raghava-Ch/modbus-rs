@@ -102,6 +102,31 @@ pub const PDU_QUANTITY_OFFSET_1B: usize = 2;
 /// Offset of the low byte of the quantity/count in PDU data.
 pub const PDU_QUANTITY_OFFSET_2B: usize = PDU_QUANTITY_OFFSET_1B + 1;
 
+/// Offset of the high byte of the AND mask in FC16 PDU data.
+pub const PDU_AND_MASK_OFFSET_1B: usize = 2;
+/// Offset of the low byte of the AND mask in FC16 PDU data.
+pub const PDU_AND_MASK_OFFSET_2B: usize = PDU_AND_MASK_OFFSET_1B + 1;
+/// Offset of the high byte of the OR mask in FC16 PDU data.
+pub const PDU_OR_MASK_OFFSET_1B: usize = 4;
+/// Offset of the low byte of the OR mask in FC16 PDU data.
+pub const PDU_OR_MASK_OFFSET_2B: usize = PDU_OR_MASK_OFFSET_1B + 1;
+
+/// Offset of the byte count in FC0F/FC10/FC17 PDU data.
+pub const PDU_BYTE_COUNT_OFFSET: usize = 4;
+
+/// Offset of the write address high byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_ADDRESS_OFFSET_1B: usize = 4;
+/// Offset of the write address low byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_ADDRESS_OFFSET_2B: usize = PDU_FC17_WRITE_ADDRESS_OFFSET_1B + 1;
+/// Offset of the write quantity high byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_QUANTITY_OFFSET_1B: usize = 6;
+/// Offset of the write quantity low byte in FC17 PDU data.
+pub const PDU_FC17_WRITE_QUANTITY_OFFSET_2B: usize = PDU_FC17_WRITE_QUANTITY_OFFSET_1B + 1;
+/// Offset of the write byte count in FC17 PDU data.
+pub const PDU_FC17_WRITE_BYTE_COUNT_OFFSET: usize = 8;
+/// Offset of the write values data in FC17 PDU data.
+pub const PDU_FC17_WRITE_VALUES_OFFSET: usize = 9;
+
 /// Checks if the given function code byte indicates an exception (error bit is set).
 ///
 /// # Arguments
@@ -680,6 +705,22 @@ impl Pdu {
         self.error_code
     }
 
+    /// Reads the standard address + quantity pair from PDU bytes 0-3.
+    /// Used by multiple function codes (FC01-04 requests, FC0F/10 requests).
+    #[inline]
+    fn read_address_quantity_pair(&self) -> Result<(u16, u16), MbusError> {
+        Ok((
+            u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
+        ))
+    }
+
     /// Parses a read-window request payload into typed fields.
     ///
     /// Expected PDU data layout: `[address_hi, address_lo, quantity_hi, quantity_lo]`.
@@ -688,16 +729,8 @@ impl Pdu {
             return Err(MbusError::InvalidPduLength);
         }
 
-        Ok(ReadWindow {
-            address: u16::from_be_bytes([
-                self.data[PDU_ADDRESS_OFFSET_1B],
-                self.data[PDU_ADDRESS_OFFSET_2B],
-            ]),
-            quantity: u16::from_be_bytes([
-                self.data[PDU_QUANTITY_OFFSET_1B],
-                self.data[PDU_QUANTITY_OFFSET_2B],
-            ]),
-        })
+        let (address, quantity) = self.read_address_quantity_pair()?;
+        Ok(ReadWindow { address, quantity })
     }
 
     /// Parses FC05/FC06-style payloads: address + value.
@@ -707,8 +740,14 @@ impl Pdu {
         }
 
         Ok(WriteSingleU16Fields {
-            address: u16::from_be_bytes([self.data[0], self.data[1]]),
-            value: u16::from_be_bytes([self.data[2], self.data[3]]),
+            address: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            value: u16::from_be_bytes([
+                self.data[PDU_QUANTITY_OFFSET_1B],
+                self.data[PDU_QUANTITY_OFFSET_2B],
+            ]),
         })
     }
 
@@ -718,9 +757,8 @@ impl Pdu {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let address = u16::from_be_bytes([self.data[0], self.data[1]]);
-        let quantity = u16::from_be_bytes([self.data[2], self.data[3]]);
-        let byte_count = self.data[4];
+        let (address, quantity) = self.read_address_quantity_pair()?;
+        let byte_count = self.data[PDU_BYTE_COUNT_OFFSET];
         let expected_len = 5usize
             .checked_add(byte_count as usize)
             .ok_or(MbusError::InvalidByteCount)?;
@@ -744,9 +782,18 @@ impl Pdu {
         }
 
         Ok(MaskWriteRegisterFields {
-            address: u16::from_be_bytes([self.data[0], self.data[1]]),
-            and_mask: u16::from_be_bytes([self.data[2], self.data[3]]),
-            or_mask: u16::from_be_bytes([self.data[4], self.data[5]]),
+            address: u16::from_be_bytes([
+                self.data[PDU_ADDRESS_OFFSET_1B],
+                self.data[PDU_ADDRESS_OFFSET_2B],
+            ]),
+            and_mask: u16::from_be_bytes([
+                self.data[PDU_AND_MASK_OFFSET_1B],
+                self.data[PDU_AND_MASK_OFFSET_2B],
+            ]),
+            or_mask: u16::from_be_bytes([
+                self.data[PDU_OR_MASK_OFFSET_1B],
+                self.data[PDU_OR_MASK_OFFSET_2B],
+            ]),
         })
     }
 
@@ -772,16 +819,21 @@ impl Pdu {
 
     /// Parses FC17 read/write multiple registers payload.
     pub fn read_write_multiple_fields(&self) -> Result<ReadWriteMultipleFields<'_>, MbusError> {
-        if self.data_len < 9 {
+        if (self.data_len as usize) < PDU_FC17_WRITE_VALUES_OFFSET {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let read_address = u16::from_be_bytes([self.data[0], self.data[1]]);
-        let read_quantity = u16::from_be_bytes([self.data[2], self.data[3]]);
-        let write_address = u16::from_be_bytes([self.data[4], self.data[5]]);
-        let write_quantity = u16::from_be_bytes([self.data[6], self.data[7]]);
-        let write_byte_count = self.data[8];
-        let expected_len = 9usize
+        let (read_address, read_quantity) = self.read_address_quantity_pair()?;
+        let write_address = u16::from_be_bytes([
+            self.data[PDU_FC17_WRITE_ADDRESS_OFFSET_1B],
+            self.data[PDU_FC17_WRITE_ADDRESS_OFFSET_2B],
+        ]);
+        let write_quantity = u16::from_be_bytes([
+            self.data[PDU_FC17_WRITE_QUANTITY_OFFSET_1B],
+            self.data[PDU_FC17_WRITE_QUANTITY_OFFSET_2B],
+        ]);
+        let write_byte_count = self.data[PDU_FC17_WRITE_BYTE_COUNT_OFFSET];
+        let expected_len = PDU_FC17_WRITE_VALUES_OFFSET
             .checked_add(write_byte_count as usize)
             .ok_or(MbusError::InvalidByteCount)?;
 
@@ -795,7 +847,7 @@ impl Pdu {
             write_address,
             write_quantity,
             write_byte_count,
-            write_values: &self.data[9..expected_len],
+            write_values: &self.data[PDU_FC17_WRITE_VALUES_OFFSET..expected_len],
         })
     }
 
