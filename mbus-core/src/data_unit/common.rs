@@ -798,6 +798,177 @@ impl Pdu {
         self.error_code
     }
 
+    // -------- PDU construction helpers ------------------------------------------------
+
+    /// Builds a PDU with `[address_hi, address_lo, quantity_hi, quantity_lo]` layout (4 bytes).
+    ///
+    /// Used by FC01/02/03/04 requests and as a general address+quantity builder.
+    pub fn build_read_window(fc: FunctionCode, address: u16, quantity: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 4))
+    }
+
+    /// Builds a PDU with `[address_hi, address_lo, value_hi, value_lo]` layout (4 bytes).
+    ///
+    /// Used by FC05 and FC06 single-write requests.
+    pub fn build_write_single_u16(fc: FunctionCode, address: u16, value: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&value.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 4))
+    }
+
+    /// Builds a PDU with `[address, quantity, byte_count, values...]` layout.
+    ///
+    /// `values` must already be the packed byte representation (coil bits or register word bytes).
+    /// `byte_count` is derived from `values.len()`.
+    ///
+    /// Used by FC0F (Write Multiple Coils) and FC10 (Write Multiple Registers) requests.
+    pub fn build_write_multiple(
+        fc: FunctionCode,
+        address: u16,
+        quantity: u16,
+        values: &[u8],
+    ) -> Result<Self, MbusError> {
+        let byte_count = values.len();
+        if byte_count > u8::MAX as usize {
+            return Err(MbusError::InvalidByteCount);
+        }
+        let data_len = 5 + byte_count;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(byte_count as u8)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(values)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[address, and_mask, or_mask]` layout (6 bytes).
+    ///
+    /// Used by FC16 (Mask Write Register) requests.
+    pub fn build_mask_write_register(
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&and_mask.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&or_mask.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::MaskWriteRegister, data, 6))
+    }
+
+    /// Builds a PDU for FC17 (Read/Write Multiple Registers) requests.
+    ///
+    /// `write_values` must already be the packed byte representation of the register words.
+    /// `write_byte_count` is derived from `write_values.len()`.
+    pub fn build_read_write_multiple(
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_quantity: u16,
+        write_values: &[u8],
+    ) -> Result<Self, MbusError> {
+        let byte_count = write_values.len();
+        if byte_count > u8::MAX as usize {
+            return Err(MbusError::InvalidByteCount);
+        }
+        let data_len = 9 + byte_count;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&read_address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&read_quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&write_address.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&write_quantity.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(byte_count as u8)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(write_values)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::ReadWriteMultipleRegisters, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[sub_function_hi, sub_function_lo, word0_hi, word0_lo, ...]` layout.
+    ///
+    /// Used by FC08 (Diagnostics) requests.
+    pub fn build_sub_function(
+        fc: FunctionCode,
+        sub_function: u16,
+        words: &[u16],
+    ) -> Result<Self, MbusError> {
+        let data_len = 2 + words.len() * 2;
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&sub_function.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        for &word in words {
+            data.extend_from_slice(&word.to_be_bytes())
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+        }
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU with `[mei_type, payload...]` layout.
+    ///
+    /// Used by FC2B (Encapsulated Interface Transport) requests.
+    pub fn build_mei_type(fc: FunctionCode, mei_type: u8, payload: &[u8]) -> Result<Self, MbusError> {
+        let data_len = 1 + payload.len();
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(mei_type)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(payload)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
+    /// Builds a PDU containing a single u16 value `[value_hi, value_lo]` (2 bytes).
+    ///
+    /// Used by FC18 (Read FIFO Queue) request (pointer address).
+    pub fn build_u16_payload(fc: FunctionCode, value: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&value.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 2))
+    }
+
+    /// Builds a PDU containing a single byte payload `[byte]` (1 byte).
+    ///
+    /// Used for exception response PDUs.
+    pub fn build_byte_payload(fc: FunctionCode, byte: u8) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(byte)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, 1))
+    }
+
+    // -------- PDU parsing helpers -----------------------------------------------------
+
     /// Reads the standard address + quantity pair from PDU bytes 0-3.
     /// Used by multiple function codes (FC01-04 requests, FC0F/10 requests).
     #[inline]
