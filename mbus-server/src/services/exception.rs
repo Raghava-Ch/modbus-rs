@@ -40,12 +40,8 @@ pub fn build_exception_adu(
         .ok_or(MbusError::InvalidFunctionCode)?;
 
     // Build PDU with exception code
-    let pdu_data = Vec::from_slice(&[exception_code as u8]).unwrap();
-    let pdu = Pdu::new(
-        exception_fc,
-        pdu_data,
-        1, // PDU length: 1 byte (exception code)
-    );
+    let pdu = Pdu::build_byte_payload(exception_fc, exception_code as u8)
+        .map_err(|_| MbusError::Unexpected)?;
 
     // Compile the ADU with the exception function code (no bit manipulation needed)
     common::compile_adu_frame(txn_id, unit_id_or_slave_addr.get(), pdu, transport_type)

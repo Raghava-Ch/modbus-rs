@@ -14,7 +14,7 @@
 use crate::services::diagnostic::{ObjectId, ReadDeviceIdCode};
 use heapless::Vec;
 use mbus_core::{
-    data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
+    data_unit::common::Pdu,
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
 };
@@ -51,23 +51,11 @@ impl ReqPduCompiler {
         if data.len() > 125 {
             return Err(MbusError::InvalidPduLength);
         }
-
-        let mut pdu_data: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        pdu_data
-            .extend_from_slice(&sub_function.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        for word in data {
-            pdu_data
-                .extend_from_slice(&word.to_be_bytes())
-                .map_err(|_| MbusError::BufferLenMissmatch)?;
-        }
-
-        Ok(Pdu::new(
+        Pdu::build_sub_function(
             FunctionCode::Diagnostics,
-            pdu_data,
-            (2 + data.len() * 2) as u8,
-        ))
+            sub_function.into(),
+            data,
+        )
     }
 
     /// Creates a Get Comm Event Counter (FC 0x0B) request PDU.
@@ -90,19 +78,11 @@ impl ReqPduCompiler {
         mei_type: EncapsulatedInterfaceType,
         data: &[u8],
     ) -> Result<Pdu, MbusError> {
-        let mut pdu_data = Vec::new();
-        pdu_data
-            .push(mei_type.into())
-            .map_err(|_| MbusError::BufferTooSmall)?;
-        pdu_data
-            .extend_from_slice(data)
-            .map_err(|_| MbusError::BufferTooSmall)?;
-
-        Ok(Pdu::new(
+        Pdu::build_mei_type(
             FunctionCode::EncapsulatedInterfaceTransport,
-            pdu_data,
-            (1 + data.len()) as u8,
-        ))
+            mei_type.into(),
+            data,
+        )
     }
 
     /// Creates a Read Device Identification (FC 0x2B / MEI 0x0E) request PDU.
@@ -114,18 +94,10 @@ impl ReqPduCompiler {
         read_device_id_code: ReadDeviceIdCode,
         object_id: ObjectId,
     ) -> Result<Pdu, MbusError> {
-        let mut data = Vec::new();
-        data.push(EncapsulatedInterfaceType::ReadDeviceIdentification as u8)
-            .map_err(|_| MbusError::BufferTooSmall)?;
-        data.push(read_device_id_code as u8)
-            .map_err(|_| MbusError::BufferTooSmall)?;
-        data.push(object_id.into())
-            .map_err(|_| MbusError::BufferTooSmall)?;
-
-        Ok(Pdu::new(
+        Pdu::build_mei_type(
             FunctionCode::EncapsulatedInterfaceTransport,
-            data,
-            3,
-        ))
+            EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
+            &[read_device_id_code as u8, object_id.into()],
+        )
     }
 }

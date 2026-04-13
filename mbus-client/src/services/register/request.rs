@@ -14,12 +14,10 @@
 //! ensuring memory safety and predictability for embedded systems.
 
 use mbus_core::{
-    data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
+    data_unit::common::Pdu,
     errors::MbusError,
     function_codes::public::FunctionCode,
 };
-
-use heapless::Vec;
 
 /// Provides operations for reading and writing Modbus registers.
 pub(super) struct ReqPduCompiler {}
@@ -42,16 +40,7 @@ impl ReqPduCompiler {
         if !(1..=125).contains(&quantity) {
             return Err(MbusError::InvalidPduLength);
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::ReadHoldingRegisters, data_vec, 4))
+        Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, address, quantity)
     }
 
     /// Creates a Modbus PDU for a Read Input Registers (FC 0x04) request.
@@ -62,16 +51,7 @@ impl ReqPduCompiler {
         if !(1..=125).contains(&quantity) {
             return Err(MbusError::InvalidPduLength);
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::ReadInputRegisters, data_vec, 4))
+        Pdu::build_read_window(FunctionCode::ReadInputRegisters, address, quantity)
     }
 
     /// Creates a Modbus PDU for a Write Single Register (FC 0x06) request.
@@ -79,15 +59,7 @@ impl ReqPduCompiler {
         address: u16,
         value: u16,
     ) -> Result<Pdu, MbusError> {
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&value.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::WriteSingleRegister, data_vec, 4))
+        Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, address, value)
     }
 
     /// Creates a Modbus PDU for a Write Multiple Registers (FC 0x10) request.
@@ -100,35 +72,17 @@ impl ReqPduCompiler {
             return Err(MbusError::InvalidPduLength);
         }
         if values.len() as u16 != quantity {
-            return Err(MbusError::InvalidPduLength); // Mismatch between quantity and values length
+            return Err(MbusError::InvalidPduLength);
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        // Add byte count (2 bytes per register)
-        let byte_count = quantity * 2;
-        data_vec
-            .push(byte_count as u8)
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        for &value in values {
-            data_vec
-                .extend_from_slice(&value.to_be_bytes())
+        // Pack register words into bytes
+        let mut packed: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }> =
+            heapless::Vec::new();
+        for &v in values {
+            packed
+                .extend_from_slice(&v.to_be_bytes())
                 .map_err(|_| MbusError::BufferLenMissmatch)?;
         }
-
-        let data_len = data_vec.len() as u8;
-        Ok(Pdu::new(
-            FunctionCode::WriteMultipleRegisters,
-            data_vec,
-            data_len,
-        ))
+        Pdu::build_write_multiple(FunctionCode::WriteMultipleRegisters, address, quantity, &packed)
     }
 
     /// Creates a Modbus PDU for a Read/Write Multiple Registers (FC 0x17) request.
@@ -141,43 +95,25 @@ impl ReqPduCompiler {
         if !(1..=125).contains(&read_quantity) {
             return Err(MbusError::InvalidPduLength);
         }
-        let write_quantity = write_values.len() as u16; // N
+        let write_quantity = write_values.len() as u16;
         if !(1..=121).contains(&write_quantity) {
-            // Corrected max quantity for write_values in FC 0x17
             return Err(MbusError::InvalidPduLength);
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&read_address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&read_quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&write_address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&write_quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        // Add byte count for write values
-        let byte_count = write_quantity * 2;
-        data_vec
-            .push(byte_count as u8)
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        for &value in write_values {
-            data_vec
-                .extend_from_slice(&value.to_be_bytes())
+        // Pack register words into bytes
+        let mut packed: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }> =
+            heapless::Vec::new();
+        for &v in write_values {
+            packed
+                .extend_from_slice(&v.to_be_bytes())
                 .map_err(|_| MbusError::BufferLenMissmatch)?;
         }
-
-        Ok(Pdu::new(
-            FunctionCode::ReadWriteMultipleRegisters,
-            data_vec,
-            9 + byte_count as u8, // 2 read_addr + 2 read_qty + 2 write_addr + 2 write_qty + 1 byte_count + N*2 bytes
-        ))
+        Pdu::build_read_write_multiple(
+            read_address,
+            read_quantity,
+            write_address,
+            write_quantity,
+            &packed,
+        )
     }
 
     /// Creates a Modbus PDU for a Mask Write Register (FC 0x16) request.
@@ -186,17 +122,6 @@ impl ReqPduCompiler {
         and_mask: u16,
         or_mask: u16,
     ) -> Result<Pdu, MbusError> {
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&and_mask.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&or_mask.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::MaskWriteRegister, data_vec, 6)) // Corrected: 2 addr + 2 and_mask + 2 or_mask
+        Pdu::build_mask_write_register(address, and_mask, or_mask)
     }
 }

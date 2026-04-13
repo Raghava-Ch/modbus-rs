@@ -8,8 +8,7 @@
 //! - Writing single or multiple coils.
 //! - Packing and unpacking coil states into bit-fields within bytes.
 
-use heapless::Vec;
-use mbus_core::data_unit::common::{MAX_PDU_DATA_LEN, Pdu};
+use mbus_core::data_unit::common::Pdu;
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::models::coil::Coils;
@@ -38,20 +37,7 @@ impl ReqPduCompiler {
         if !(1..=2000).contains(&quantity) {
             return Err(MbusError::InvalidQuantity); // Quantity out of range
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(
-            FunctionCode::ReadCoils,
-            data_vec,
-            4, // 2 bytes for address, 2 bytes for quantity
-        ))
+        Pdu::build_read_window(FunctionCode::ReadCoils, address, quantity)
     }
 
     /// Creates a Modbus PDU for a Write Single Coil (FC 0x05) request.
@@ -66,25 +52,9 @@ impl ReqPduCompiler {
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
     pub(super) fn write_single_coil_request(address: u16, value: bool) -> Result<Pdu, MbusError> {
-        macro_rules! push_be {
-            ($vec:expr, $val:expr) => {
-                $vec.extend_from_slice(&$val.to_be_bytes())
-                    .map_err(|_| MbusError::BufferLenMissmatch)
-            };
-        }
-
-        let mut data_bytes: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        push_be!(data_bytes, address)?;
-
         // Modbus protocol uses 0xFF00 for ON and 0x0000 for OFF
         let coil_value: u16 = if value { 0xFF00 } else { 0x0000 };
-        push_be!(data_bytes, coil_value)?;
-
-        Ok(Pdu::new(
-            FunctionCode::WriteSingleCoil,
-            data_bytes,
-            4, // 2 bytes for address, 2 bytes for value
-        ))
+        Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, address, coil_value)
     }
 
     /// Creates a Modbus PDU for a Write Multiple Coils (FC 0x0F) request.
@@ -113,29 +83,12 @@ impl ReqPduCompiler {
             return Err(MbusError::InvalidPduLength);
         }
 
-        let byte_count = quantity.div_ceil(8) as u8;
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .push(byte_count)
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        // Append the exact number of coil bytes needed
-        let num_coil_bytes = byte_count as usize;
-        data_vec
-            .extend_from_slice(&values.values()[..num_coil_bytes])
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(
+        let byte_count = quantity.div_ceil(8) as usize;
+        Pdu::build_write_multiple(
             FunctionCode::WriteMultipleCoils,
-            data_vec,
-            5 + byte_count, // 2 bytes addr + 2 bytes qty + 1 byte byte_count + N bytes coil data
-        ))
+            address,
+            quantity,
+            &values.values()[..byte_count],
+        )
     }
 }

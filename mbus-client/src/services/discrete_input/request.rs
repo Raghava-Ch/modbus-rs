@@ -10,9 +10,8 @@
 //!
 //! This module is designed for `no_std` environments using `heapless` collections.
 
-use heapless::Vec;
 use mbus_core::{
-    data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
+    data_unit::common::Pdu,
     errors::MbusError,
     function_codes::public::FunctionCode,
 };
@@ -37,15 +36,6 @@ impl ReqPduCompiler {
         if !(1..=2000).contains(&quantity) {
             return Err(MbusError::InvalidPduLength);
         }
-
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-        data_vec
-            .extend_from_slice(&quantity.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::ReadDiscreteInputs, data_vec, 4))
+        Pdu::build_read_window(FunctionCode::ReadDiscreteInputs, address, quantity)
     }
 }
