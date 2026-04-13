@@ -4,6 +4,8 @@ use core::cell::RefCell;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -80,6 +82,9 @@ impl ModbusAppHandler for TestApp {
         Ok(())
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for TestApp {}
 
 #[derive(Debug, Clone)]
 struct CountingMutexAccess {

@@ -92,7 +92,9 @@ pub(super) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -
 
 /// Shared helper: connect via C callback.
 fn c_connect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
-    let cb = callbacks.on_connect.ok_or(MbusError::InvalidConfiguration)?;
+    let cb = callbacks
+        .on_connect
+        .ok_or(MbusError::InvalidConfiguration)?;
     let status = unsafe { cb(callbacks.userdata) };
     status_to_result(status)
 }

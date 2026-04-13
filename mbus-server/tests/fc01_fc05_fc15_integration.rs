@@ -7,9 +7,11 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ServerServices;
-use mbus_server::ResilienceConfig;
 use mbus_server::ModbusAppHandler;
+use mbus_server::ResilienceConfig;
+use mbus_server::ServerServices;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -132,6 +134,9 @@ impl ModbusAppHandler for CoilApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for CoilApp {}
+
 fn decode_exception_code(value: u8) -> ExceptionCode {
     match value {
         0x01 => ExceptionCode::IllegalFunction,
@@ -151,7 +156,13 @@ fn run_once(request: HVec<u8, MAX_ADU_FRAME_LEN>, app: CoilApp) -> Vec<u8> {
         connected: true,
     };
 
-    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1), ResilienceConfig::default());
+    let mut server = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
     server.poll();
 
     let frames = sent_frames.lock().expect("sent_frames mutex poisoned");

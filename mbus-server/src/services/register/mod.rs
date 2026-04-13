@@ -56,8 +56,7 @@ where
             unit_id_or_slave_addr,
             message,
             FunctionCode::ReadHoldingRegisters,
-            FC03_MIN_QUANTITY,
-            FC03_MAX_QUANTITY,
+            FC03_MIN_QUANTITY..=FC03_MAX_QUANTITY,
             |app, address, quantity, out| {
                 app.read_multiple_holding_registers_request(
                     txn_id,
@@ -86,8 +85,7 @@ where
             unit_id_or_slave_addr,
             message,
             FunctionCode::ReadInputRegisters,
-            FC04_MIN_QUANTITY,
-            FC04_MAX_QUANTITY,
+            FC04_MIN_QUANTITY..=FC04_MAX_QUANTITY,
             |app, address, quantity, out| {
                 app.read_multiple_input_registers_request(
                     txn_id,
@@ -313,8 +311,7 @@ where
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         message: &ModbusMessage,
         function_code: FunctionCode,
-        min_quantity: u16,
-        max_quantity: u16,
+        quantity_range: core::ops::RangeInclusive<u16>,
         handler: F,
     ) where
         F: FnOnce(&mut APP, u16, u16, &mut [u8]) -> Result<u8, MbusError>,
@@ -332,7 +329,7 @@ where
             }
         };
 
-        if !(min_quantity..=max_quantity).contains(&quantity) {
+        if !quantity_range.contains(&quantity) {
             self.send_exception_response(
                 txn_id,
                 unit_id_or_slave_addr,

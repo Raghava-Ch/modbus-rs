@@ -1873,8 +1873,7 @@ mod tests {
 
     impl Transport for MockSerialTransport {
         type Error = MbusError;
-        const TRANSPORT_TYPE: TransportType =
-            TransportType::CustomSerial(SerialMode::Rtu);
+        const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(SerialMode::Rtu);
         const SUPPORTS_BROADCAST_WRITES: bool = true;
 
         fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
@@ -2418,8 +2417,11 @@ mod tests {
             retry_random_fn: None,
         };
 
-        let client_services =
-            ClientServices::<MockSerialTransport, MockApp, 1>::new_serial(transport, app, serial_config);
+        let client_services = ClientServices::<MockSerialTransport, MockApp, 1>::new_serial(
+            transport,
+            app,
+            serial_config,
+        );
         assert!(client_services.is_ok());
         let mut client = client_services.unwrap();
         assert!(client.connect().is_ok());

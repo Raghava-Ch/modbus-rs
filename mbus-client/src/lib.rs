@@ -31,6 +31,8 @@
 //!
 //! # use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 //! # use mbus_client::app::{CoilResponse, RequestErrorNotifier};
+//! # #[cfg(feature = "traffic")]
+//! # use mbus_client::app::TrafficNotifier;
 //! # use mbus_client::services::coil::Coils;
 //! # use mbus_client::services::ClientServices;
 //! # use heapless::Vec;
@@ -63,6 +65,8 @@
 //! # impl RequestErrorNotifier for MyDevice {
 //! #     fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 //! # }
+//! # #[cfg(feature = "traffic")]
+//! # impl TrafficNotifier for MyDevice {}
 //! # impl TimeKeeper for MyDevice {
 //! #     fn current_millis(&self) -> u64 { 0 }
 //! # }

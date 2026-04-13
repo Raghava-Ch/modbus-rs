@@ -354,8 +354,13 @@ fn spawn_server_once() -> (u16, thread::JoinHandle<()>) {
         let mut cfg = ModbusTcpConfig::new("127.0.0.1", port).expect("tcp cfg");
         cfg.response_timeout_ms = 100;
 
-        let mut server =
-            ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
+        let mut server = ServerServices::new(
+            transport,
+            seed_app(),
+            ModbusConfig::Tcp(cfg),
+            unit_id(1),
+            Default::default(),
+        );
 
         server.connect().expect("server connect");
 
@@ -380,8 +385,13 @@ fn spawn_server_for_clients(client_count: usize) -> (u16, thread::JoinHandle<()>
             let mut cfg = ModbusTcpConfig::new("127.0.0.1", port).expect("tcp cfg");
             cfg.response_timeout_ms = 100;
 
-            let mut server =
-                ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
+            let mut server = ServerServices::new(
+                transport,
+                seed_app(),
+                ModbusConfig::Tcp(cfg),
+                unit_id(1),
+                Default::default(),
+            );
 
             server.connect().expect("server connect");
 
@@ -410,8 +420,13 @@ fn spawn_server_concurrent(client_count: usize) -> (u16, thread::JoinHandle<()>)
                 let mut cfg = ModbusTcpConfig::new("127.0.0.1", port).expect("tcp cfg");
                 cfg.response_timeout_ms = 100;
 
-                let mut server =
-                    ServerServices::new(transport, seed_app(), ModbusConfig::Tcp(cfg), unit_id(1), Default::default());
+                let mut server = ServerServices::new(
+                    transport,
+                    seed_app(),
+                    ModbusConfig::Tcp(cfg),
+                    unit_id(1),
+                    Default::default(),
+                );
 
                 server.connect().expect("server connect");
 

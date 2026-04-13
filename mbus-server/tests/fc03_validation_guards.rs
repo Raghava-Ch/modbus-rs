@@ -1,13 +1,15 @@
 mod common;
 use common::{MockTransport, tcp_config, unit_id};
 use heapless::Vec as HVec;
-use mbus_core::data_unit::common::{compile_adu_frame, MAX_ADU_FRAME_LEN, Pdu};
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
-use mbus_server::ServerServices;
 use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
+use mbus_server::ServerServices;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -77,6 +79,9 @@ impl ModbusAppHandler for GuardedApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for GuardedApp {}
+
 fn build_fc03_request(
     txn_id: u16,
     unit: UnitIdOrSlaveAddr,
@@ -114,7 +119,13 @@ fn run_single_request(
     };
     let app = GuardedApp::new(app_calls.clone(), app_response_len);
 
-    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1), ResilienceConfig::default());
+    let mut server = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
     server.poll();
 
     let frames = sent_frames.lock().expect("sent_frames mutex poisoned");

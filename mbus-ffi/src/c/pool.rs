@@ -155,8 +155,7 @@ fn is_tcp_id(id: MbusClientId) -> bool {
 /// Returns `true` if `id` belongs to either Serial sub-pool (RTU or ASCII).
 #[inline(always)]
 fn is_serial_id(id: MbusClientId) -> bool {
-    id != MBUS_INVALID_CLIENT_ID
-        && (id_tag(id) == TAG_SERIAL_RTU || id_tag(id) == TAG_SERIAL_ASCII)
+    id != MBUS_INVALID_CLIENT_ID && (id_tag(id) == TAG_SERIAL_RTU || id_tag(id) == TAG_SERIAL_ASCII)
 }
 
 /// Returns `true` if `id` belongs to the Serial RTU sub-pool.
@@ -644,7 +643,10 @@ mod tests {
             slot.occupied = true;
         }
         for i in 0..MAX_TCP_CLIENTS {
-            assert!(pool.is_occupied(encode_id(TAG_TCP, i)), "slot {i} should be occupied");
+            assert!(
+                pool.is_occupied(encode_id(TAG_TCP, i)),
+                "slot {i} should be occupied"
+            );
         }
     }
 

@@ -12,7 +12,11 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{
+    ForwardingApp, ModbusAppAccess, ModbusAppHandler, ResilienceConfig, ServerServices,
+};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -107,6 +111,9 @@ impl ModbusAppHandler for DemoApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DemoApp {}
+
 // ---------------------------------------------------------------------------
 // Mutex-based access wrapper.
 // ---------------------------------------------------------------------------
@@ -134,10 +141,7 @@ impl ModbusAppAccess for MutexAccess {
 
 /// Builds a `ServerServices<MockTransport, ForwardingApp<MutexAccess>>` and runs one poll.
 /// Returns the single response frame the server emits.
-fn run_once(
-    request: HVec<u8, MAX_ADU_FRAME_LEN>,
-    state: Arc<Mutex<DemoApp>>,
-) -> Vec<u8> {
+fn run_once(request: HVec<u8, MAX_ADU_FRAME_LEN>, state: Arc<Mutex<DemoApp>>) -> Vec<u8> {
     let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
 
     let transport = MockTransport {
@@ -152,8 +156,13 @@ fn run_once(
     let fwd_app: ForwardingApp<MutexAccess> = ForwardingApp::new(access);
 
     // KEY: ServerServices<MockTransport, ForwardingApp<MutexAccess>>
-    let mut server: ServerServices<MockTransport, ForwardingApp<MutexAccess>> =
-        ServerServices::new(transport, fwd_app, tcp_config(), unit_id(1), ResilienceConfig::default());
+    let mut server: ServerServices<MockTransport, ForwardingApp<MutexAccess>> = ServerServices::new(
+        transport,
+        fwd_app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
 
     server.poll();
 

@@ -1,5 +1,5 @@
-#ifndef MBUS_FFI_H
-#define MBUS_FFI_H
+#ifndef MBUS_FFI_FEATURE_GATED_H
+#define MBUS_FFI_FEATURE_GATED_H
 
 #pragma once
 
@@ -7,10 +7,18 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#if defined(MBUS_FEATURE_COILS)
 typedef struct MbusCoils MbusCoils;
+#endif
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 typedef struct MbusDiscreteInputs MbusDiscreteInputs;
+#endif
+#if defined(MBUS_FEATURE_FIFO)
 typedef struct MbusFifoQueue MbusFifoQueue;
+#endif
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusRegisters MbusRegisters;
+#endif
 
 
 /**
@@ -335,6 +343,7 @@ typedef struct MbusTransportCallbacks {
 /**
  * Context passed to the read-coils callback.
  */
+#if defined(MBUS_FEATURE_COILS)
 typedef struct MbusReadCoilsCtx {
     /**
      * Transaction ID.
@@ -353,10 +362,12 @@ typedef struct MbusReadCoilsCtx {
      */
     void *userdata;
 } MbusReadCoilsCtx;
+#endif
 
 /**
  * Context passed to the write-single-coil callback.
  */
+#if defined(MBUS_FEATURE_COILS)
 typedef struct MbusWriteSingleCoilCtx {
     /**
      * Transaction ID.
@@ -379,10 +390,12 @@ typedef struct MbusWriteSingleCoilCtx {
      */
     void *userdata;
 } MbusWriteSingleCoilCtx;
+#endif
 
 /**
  * Context passed to the write-multiple-coils callback.
  */
+#if defined(MBUS_FEATURE_COILS)
 typedef struct MbusWriteMultipleCoilsCtx {
     /**
      * Transaction ID.
@@ -405,10 +418,12 @@ typedef struct MbusWriteMultipleCoilsCtx {
      */
     void *userdata;
 } MbusWriteMultipleCoilsCtx;
+#endif
 
 /**
  * Context passed to the read-holding-registers callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusReadHoldingRegistersCtx {
     /**
      * Transaction ID.
@@ -427,10 +442,12 @@ typedef struct MbusReadHoldingRegistersCtx {
      */
     void *userdata;
 } MbusReadHoldingRegistersCtx;
+#endif
 
 /**
  * Context passed to the read-input-registers callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusReadInputRegistersCtx {
     /**
      * Transaction ID.
@@ -449,10 +466,12 @@ typedef struct MbusReadInputRegistersCtx {
      */
     void *userdata;
 } MbusReadInputRegistersCtx;
+#endif
 
 /**
  * Context passed to the read-write-multiple-registers callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusReadWriteMultipleRegistersCtx {
     /**
      * Transaction ID.
@@ -471,10 +490,12 @@ typedef struct MbusReadWriteMultipleRegistersCtx {
      */
     void *userdata;
 } MbusReadWriteMultipleRegistersCtx;
+#endif
 
 /**
  * Context passed to the write-single-register callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusWriteSingleRegisterCtx {
     /**
      * Transaction ID.
@@ -497,10 +518,12 @@ typedef struct MbusWriteSingleRegisterCtx {
      */
     void *userdata;
 } MbusWriteSingleRegisterCtx;
+#endif
 
 /**
  * Context passed to the write-multiple-registers callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusWriteMultipleRegistersCtx {
     /**
      * Transaction ID.
@@ -523,10 +546,12 @@ typedef struct MbusWriteMultipleRegistersCtx {
      */
     void *userdata;
 } MbusWriteMultipleRegistersCtx;
+#endif
 
 /**
  * Context passed to the mask-write-register callback.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 typedef struct MbusMaskWriteRegisterCtx {
     /**
      * Transaction ID.
@@ -541,10 +566,12 @@ typedef struct MbusMaskWriteRegisterCtx {
      */
     void *userdata;
 } MbusMaskWriteRegisterCtx;
+#endif
 
 /**
  * Context passed to the read-discrete-inputs callback.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 typedef struct MbusReadDiscreteInputsCtx {
     /**
      * Transaction ID.
@@ -563,10 +590,12 @@ typedef struct MbusReadDiscreteInputsCtx {
      */
     void *userdata;
 } MbusReadDiscreteInputsCtx;
+#endif
 
 /**
  * Context passed to the read-fifo-queue callback.
  */
+#if defined(MBUS_FEATURE_FIFO)
 typedef struct MbusReadFifoQueueCtx {
     /**
      * Transaction ID.
@@ -585,6 +614,7 @@ typedef struct MbusReadFifoQueueCtx {
      */
     void *userdata;
 } MbusReadFifoQueueCtx;
+#endif
 
 /**
  * A single sub-request result returned in the `on_read_file_record` callback.
@@ -592,6 +622,7 @@ typedef struct MbusReadFifoQueueCtx {
  * `data` points into Rust-owned memory and is **valid only during the callback
  * invocation**. Copy the slice if you need to retain it.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 typedef struct MbusFileRecordResult {
     /**
      * Record number for this sub-request.
@@ -606,10 +637,12 @@ typedef struct MbusFileRecordResult {
      */
     uint16_t data_len;
 } MbusFileRecordResult;
+#endif
 
 /**
  * Context passed to the read-file-record callback.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 typedef struct MbusReadFileRecordCtx {
     /**
      * Transaction ID.
@@ -632,10 +665,12 @@ typedef struct MbusReadFileRecordCtx {
      */
     void *userdata;
 } MbusReadFileRecordCtx;
+#endif
 
 /**
  * Context passed to the write-file-record callback.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 typedef struct MbusWriteFileRecordCtx {
     /**
      * Transaction ID.
@@ -650,6 +685,7 @@ typedef struct MbusWriteFileRecordCtx {
      */
     void *userdata;
 } MbusWriteFileRecordCtx;
+#endif
 
 /**
  * Context passed to the read-exception-status callback.
@@ -676,6 +712,7 @@ typedef struct MbusReadExceptionStatusCtx {
 /**
  * Context passed to the diagnostics callback.
  */
+#if defined(MBUS_FEATURE_DIAGNOSTICS)
 typedef struct MbusDiagnosticsCtx {
     /**
      * Transaction ID.
@@ -702,6 +739,7 @@ typedef struct MbusDiagnosticsCtx {
      */
     void *userdata;
 } MbusDiagnosticsCtx;
+#endif
 
 /**
  * Context passed to the comm-event-counter callback.
@@ -885,55 +923,81 @@ typedef struct MbusCallbacks {
     /**
      * Called when a Read Coils response is received.
      */
+#if defined(MBUS_FEATURE_COILS)
     void (*on_read_coils)(const struct MbusReadCoilsCtx *ctx);
+#endif
     /**
      * Called when a Write Single Coil response is received.
      */
+#if defined(MBUS_FEATURE_COILS)
     void (*on_write_single_coil)(const struct MbusWriteSingleCoilCtx *ctx);
+#endif
     /**
      * Called when a Write Multiple Coils response is received.
      */
+#if defined(MBUS_FEATURE_COILS)
     void (*on_write_multiple_coils)(const struct MbusWriteMultipleCoilsCtx *ctx);
+#endif
     /**
      * Called when a Read Holding Registers response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_read_holding_registers)(const struct MbusReadHoldingRegistersCtx *ctx);
+#endif
     /**
      * Called when a Read Input Registers response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_read_input_registers)(const struct MbusReadInputRegistersCtx *ctx);
+#endif
     /**
      * Called when a Read/Write Multiple Registers response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_read_write_multiple_registers)(const struct MbusReadWriteMultipleRegistersCtx *ctx);
+#endif
     /**
      * Called when a Write Single Register response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_write_single_register)(const struct MbusWriteSingleRegisterCtx *ctx);
+#endif
     /**
      * Called when a Write Multiple Registers response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_write_multiple_registers)(const struct MbusWriteMultipleRegistersCtx *ctx);
+#endif
     /**
      * Called when a Mask Write Register response is received.
      */
+#if defined(MBUS_FEATURE_REGISTERS)
     void (*on_mask_write_register)(const struct MbusMaskWriteRegisterCtx *ctx);
+#endif
     /**
      * Called when a Read Discrete Inputs response is received.
      */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
     void (*on_read_discrete_inputs)(const struct MbusReadDiscreteInputsCtx *ctx);
+#endif
     /**
      * Called when a Read FIFO Queue response is received.
      */
+#if defined(MBUS_FEATURE_FIFO)
     void (*on_read_fifo_queue)(const struct MbusReadFifoQueueCtx *ctx);
+#endif
     /**
      * Called when a Read File Record response is received.
      */
+#if defined(MBUS_FEATURE_FILE_RECORD)
     void (*on_read_file_record)(const struct MbusReadFileRecordCtx *ctx);
+#endif
     /**
      * Called when a Write File Record response is received.
      */
+#if defined(MBUS_FEATURE_FILE_RECORD)
     void (*on_write_file_record)(const struct MbusWriteFileRecordCtx *ctx);
+#endif
     /**
      * Called when a Read Exception Status response is received.
      */
@@ -941,7 +1005,9 @@ typedef struct MbusCallbacks {
     /**
      * Called when a Diagnostics response is received.
      */
+#if defined(MBUS_FEATURE_DIAGNOSTICS)
     void (*on_diagnostics)(const struct MbusDiagnosticsCtx *ctx);
+#endif
     /**
      * Called when a Comm Event Counter response is received.
      */
@@ -1061,17 +1127,23 @@ const char *mbus_status_str(enum MbusStatusCode code);
 /**
  * Returns the starting address of the coils range.
  */
+#if defined(MBUS_FEATURE_COILS)
 uint16_t mbus_coils_from_address(const MbusCoils *coils);
+#endif
 
 /**
  * Returns the number of coils.
  */
+#if defined(MBUS_FEATURE_COILS)
 uint16_t mbus_coils_quantity(const MbusCoils *coils);
+#endif
 
 /**
  * Reads a single coil value by address into `out_value`.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, bool *out_value);
+#endif
 
 /**
  * Reads a single coil value by 0-based index into `out_value`.
@@ -1080,31 +1152,41 @@ enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, b
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_coils_value`], no knowledge of
  * the Modbus starting address is required.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
                                               uint16_t index,
                                               bool *out_value);
+#endif
 
 /**
  * Returns a raw pointer to the packed coil bit-values. Valid during callback only.
  */
+#if defined(MBUS_FEATURE_COILS)
 const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
+#endif
 
 /**
  * Returns the starting address of the discrete inputs range.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_inputs);
+#endif
 
 /**
  * Returns the number of discrete inputs.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs);
+#endif
 
 /**
  * Reads a single discrete input value by address into `out_value`.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discrete_inputs,
                                                uint16_t address,
                                                bool *out_value);
+#endif
 
 /**
  * Reads a single discrete input value by 0-based index into `out_value`.
@@ -1113,53 +1195,71 @@ enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discret
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_discrete_inputs_value`], no knowledge
  * of the Modbus starting address is required.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs *discrete_inputs,
                                                         uint16_t index,
                                                         bool *out_value);
+#endif
 
 /**
  * Returns a raw pointer to the discrete input bit-values. Valid during callback only.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discrete_inputs);
+#endif
 
 /**
  * Returns the FIFO pointer address.
  */
+#if defined(MBUS_FEATURE_FIFO)
 uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
+#endif
 
 /**
  * Returns the number of values in the FIFO queue.
  */
+#if defined(MBUS_FEATURE_FIFO)
 uint16_t mbus_fifo_queue_count(const MbusFifoQueue *fifo_queue);
+#endif
 
 /**
  * Reads a FIFO value by index.
  */
+#if defined(MBUS_FEATURE_FIFO)
 enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
                                           uint16_t index,
                                           uint16_t *out_value);
+#endif
 
 /**
  * Returns a raw pointer to the FIFO values. Valid during callback only.
  */
+#if defined(MBUS_FEATURE_FIFO)
 const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
+#endif
 
 /**
  * Returns the starting address of the registers range.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 uint16_t mbus_registers_from_address(const MbusRegisters *registers);
+#endif
 
 /**
  * Returns the number of registers.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 uint16_t mbus_registers_quantity(const MbusRegisters *registers);
+#endif
 
 /**
  * Reads a single register value by address into `out_value`.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
                                          uint16_t address,
                                          uint16_t *out_value);
+#endif
 
 /**
  * Reads a single register value by 0-based index into `out_value`.
@@ -1168,14 +1268,18 @@ enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
  * the Modbus starting address is required.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers,
                                                   uint16_t index,
                                                   uint16_t *out_value);
+#endif
 
 /**
  * Returns a raw pointer to the register values. Valid during callback only.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 const uint16_t *mbus_registers_values_ptr(const MbusRegisters *registers);
+#endif
 
 /**
  * Lock the global pool (used only during client creation/destruction).
@@ -1315,54 +1419,66 @@ enum MbusStatusCode mbus_tcp_reconnect(MbusClientId id);
  *
  * The response is delivered via [`MbusCallbacks::on_read_coils`].
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_tcp_read_coils(MbusClientId id,
                                         uint16_t txn_id,
                                         uint8_t unit_id,
                                         uint16_t address,
                                         uint16_t quantity);
+#endif
 
 /**
  * Queue a Read Coils (FC 0x01) request on a serial client.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_serial_read_coils(MbusClientId id,
                                            uint16_t txn_id,
                                            uint8_t unit_id,
                                            uint16_t address,
                                            uint16_t quantity);
+#endif
 
 /**
  * Queue a Read Single Coil request (reads FC 0x01 with quantity=1).
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_tcp_read_single_coil(MbusClientId id,
                                               uint16_t txn_id,
                                               uint8_t unit_id,
                                               uint16_t address);
+#endif
 
 /**
  * Queue a Read Single Coil request on a serial client.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_serial_read_single_coil(MbusClientId id,
                                                  uint16_t txn_id,
                                                  uint8_t unit_id,
                                                  uint16_t address);
+#endif
 
 /**
  * Queue a Write Single Coil (FC 0x05) request. `value`: 1 = ON, 0 = OFF.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_tcp_write_single_coil(MbusClientId id,
                                                uint16_t txn_id,
                                                uint8_t unit_id,
                                                uint16_t address,
                                                uint8_t value);
+#endif
 
 /**
  * Queue a Write Single Coil (FC 0x05) request on a serial client.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_serial_write_single_coil(MbusClientId id,
                                                   uint16_t txn_id,
                                                   uint8_t unit_id,
                                                   uint16_t address,
                                                   uint8_t value);
+#endif
 
 /**
  * Queue a Write Multiple Coils (FC 0x0F) request.
@@ -1373,12 +1489,14 @@ enum MbusStatusCode mbus_serial_write_single_coil(MbusClientId id,
  * # Safety
  * `values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_tcp_write_multiple_coils(MbusClientId id,
                                                   uint16_t txn_id,
                                                   uint8_t unit_id,
                                                   uint16_t address,
                                                   const uint8_t *values,
                                                   uint16_t quantity);
+#endif
 
 /**
  * Queue a Write Multiple Coils (FC 0x0F) request on a serial client.
@@ -1386,12 +1504,14 @@ enum MbusStatusCode mbus_tcp_write_multiple_coils(MbusClientId id,
  * # Safety
  * `values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_serial_write_multiple_coils(MbusClientId id,
                                                      uint16_t txn_id,
                                                      uint8_t unit_id,
                                                      uint16_t address,
                                                      const uint8_t *values,
                                                      uint16_t quantity);
+#endif
 
 /**
  * Queue a Diagnostics (FC 0x08) request.
@@ -1399,12 +1519,14 @@ enum MbusStatusCode mbus_serial_write_multiple_coils(MbusClientId id,
  * # Safety
  * If `data_len > 0`, `data` must be valid for that many `u16` words.
  */
+#if defined(MBUS_FEATURE_DIAGNOSTICS)
 enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
                                          uint16_t txn_id,
                                          uint8_t unit_id,
                                          uint16_t sub_fn,
                                          const uint16_t *data,
                                          uint16_t data_len);
+#endif
 
 /**
  * Queue a Diagnostics (FC 0x08) request on a serial client.
@@ -1412,12 +1534,14 @@ enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
  * # Safety
  * If `data_len > 0`, `data` must be valid for that many `u16` words.
  */
+#if defined(MBUS_FEATURE_DIAGNOSTICS)
 enum MbusStatusCode mbus_serial_diagnostics(MbusClientId id,
                                             uint16_t txn_id,
                                             uint8_t unit_id,
                                             uint16_t sub_fn,
                                             const uint16_t *data,
                                             uint16_t data_len);
+#endif
 
 /**
  * Queue a Read Device Identification (FC 0x2B/0x0E) request.
@@ -1445,54 +1569,66 @@ enum MbusStatusCode mbus_serial_read_device_identification(MbusClientId id,
  *
  * The response is delivered via [`MbusCallbacks::on_read_discrete_inputs`].
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_tcp_read_discrete_inputs(MbusClientId id,
                                                   uint16_t txn_id,
                                                   uint8_t unit_id,
                                                   uint16_t address,
                                                   uint16_t quantity);
+#endif
 
 /**
  * Queue a Read Discrete Inputs (FC 0x02) request on a serial client.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_serial_read_discrete_inputs(MbusClientId id,
                                                      uint16_t txn_id,
                                                      uint8_t unit_id,
                                                      uint16_t address,
                                                      uint16_t quantity);
+#endif
 
 /**
  * Queue a Read Single Discrete Input request (FC 0x02 with quantity=1).
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_tcp_read_single_discrete_input(MbusClientId id,
                                                         uint16_t txn_id,
                                                         uint8_t unit_id,
                                                         uint16_t address);
+#endif
 
 /**
  * Queue a Read Single Discrete Input request on a serial client.
  */
+#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_serial_read_single_discrete_input(MbusClientId id,
                                                            uint16_t txn_id,
                                                            uint8_t unit_id,
                                                            uint16_t address);
+#endif
 
 /**
  * Queue a Read FIFO Queue (FC 0x18) request.
  *
  * The response is delivered via [`MbusCallbacks::on_read_fifo_queue`].
  */
+#if defined(MBUS_FEATURE_FIFO)
 enum MbusStatusCode mbus_tcp_read_fifo_queue(MbusClientId id,
                                              uint16_t txn_id,
                                              uint8_t unit_id,
                                              uint16_t address);
+#endif
 
 /**
  * Queue a Read FIFO Queue (FC 0x18) request on a serial client.
  */
+#if defined(MBUS_FEATURE_FIFO)
 enum MbusStatusCode mbus_serial_read_fifo_queue(MbusClientId id,
                                                 uint16_t txn_id,
                                                 uint8_t unit_id,
                                                 uint16_t address);
+#endif
 
 /**
  * Queue a Read File Record (FC 0x14) request.
@@ -1500,11 +1636,13 @@ enum MbusStatusCode mbus_serial_read_fifo_queue(MbusClientId id,
  * # Safety
  * `sub_reqs` must be a valid non-null pointer to `count` items.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 enum MbusStatusCode mbus_tcp_read_file_record(MbusClientId id,
                                               uint16_t txn_id,
                                               uint8_t unit_id,
                                               const struct MbusSubRequest *sub_reqs,
                                               uint16_t count);
+#endif
 
 /**
  * Queue a Read File Record (FC 0x14) request on a serial client.
@@ -1512,11 +1650,13 @@ enum MbusStatusCode mbus_tcp_read_file_record(MbusClientId id,
  * # Safety
  * `sub_reqs` must be a valid non-null pointer to `count` items.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 enum MbusStatusCode mbus_serial_read_file_record(MbusClientId id,
                                                  uint16_t txn_id,
                                                  uint8_t unit_id,
                                                  const struct MbusSubRequest *sub_reqs,
                                                  uint16_t count);
+#endif
 
 /**
  * Queue a Write File Record (FC 0x15) request.
@@ -1525,11 +1665,13 @@ enum MbusStatusCode mbus_serial_read_file_record(MbusClientId id,
  * `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
  * `sub_reqs[i].data_len` words.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 enum MbusStatusCode mbus_tcp_write_file_record(MbusClientId id,
                                                uint16_t txn_id,
                                                uint8_t unit_id,
                                                const struct MbusSubRequest *sub_reqs,
                                                uint16_t count);
+#endif
 
 /**
  * Queue a Write File Record (FC 0x15) request on a serial client.
@@ -1538,11 +1680,13 @@ enum MbusStatusCode mbus_tcp_write_file_record(MbusClientId id,
  * `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
  * `sub_reqs[i].data_len` words.
  */
+#if defined(MBUS_FEATURE_FILE_RECORD)
 enum MbusStatusCode mbus_serial_write_file_record(MbusClientId id,
                                                   uint16_t txn_id,
                                                   uint8_t unit_id,
                                                   const struct MbusSubRequest *sub_reqs,
                                                   uint16_t count);
+#endif
 
 /**
  * Queue a Write Multiple Registers (FC 0x10) request.
@@ -1552,12 +1696,14 @@ enum MbusStatusCode mbus_serial_write_file_record(MbusClientId id,
  * # Safety
  * `values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
                                                       uint16_t txn_id,
                                                       uint8_t unit_id,
                                                       uint16_t address,
                                                       const uint16_t *values,
                                                       uint16_t quantity);
+#endif
 
 /**
  * Queue a Write Multiple Registers (FC 0x10) request on a serial client.
@@ -1565,12 +1711,14 @@ enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
  * # Safety
  * `values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
                                                          uint16_t txn_id,
                                                          uint8_t unit_id,
                                                          uint16_t address,
                                                          const uint16_t *values,
                                                          uint16_t quantity);
+#endif
 
 /**
  * Queue a Read/Write Multiple Registers (FC 0x17) request.
@@ -1580,6 +1728,7 @@ enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
  * # Safety
  * `write_values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
                                                            uint16_t txn_id,
                                                            uint8_t unit_id,
@@ -1588,6 +1737,7 @@ enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
                                                            uint16_t write_address,
                                                            const uint16_t *write_values,
                                                            uint16_t write_qty);
+#endif
 
 /**
  * Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
@@ -1595,6 +1745,7 @@ enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
  * # Safety
  * `write_values` must be a valid non-null pointer.
  */
+#if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
                                                               uint16_t txn_id,
                                                               uint8_t unit_id,
@@ -1603,5 +1754,6 @@ enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
                                                               uint16_t write_address,
                                                               const uint16_t *write_values,
                                                               uint16_t write_qty);
+#endif
 
 #endif  /* MBUS_FFI_H */
