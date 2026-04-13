@@ -287,12 +287,8 @@ fn build_fc06_write_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
 }
 
 fn build_fc06_write_request_for_unit(txn_id: u16, wire_unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xAB, 0xCD];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleRegister,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
+        .expect("valid FC06 payload");
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }
@@ -301,12 +297,8 @@ fn build_serial_fc06_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xAB, 0xCD];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleRegister,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
+        .expect("valid serial FC06 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -321,12 +313,8 @@ fn build_serial_fc05_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x02, 0xFF, 0x00];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleCoil,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, 0x0002, 0xFF00)
+        .expect("valid serial FC05 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -341,12 +329,9 @@ fn build_serial_fc0f_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x05, 0x00, 0x03, 0x01, 0x05];
-    let pdu = Pdu::new(
-        FunctionCode::WriteMultipleCoils,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    // address=0x0005, quantity=3, coil bytes=[0x05]
+    let pdu = Pdu::build_write_multiple(FunctionCode::WriteMultipleCoils, 0x0005, 3, &[0x05])
+        .expect("valid serial FC0F payload");
     compile_adu_frame(
         txn_id,
         wire_unit,
@@ -360,12 +345,14 @@ fn build_serial_fc10_write_request_for_unit(
     txn_id: u16,
     wire_unit: u8,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [0x00, 0x10, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78];
-    let pdu = Pdu::new(
+    // address=0x0010, quantity=2, register bytes=[0x12,0x34,0x56,0x78]
+    let pdu = Pdu::build_write_multiple(
         FunctionCode::WriteMultipleRegisters,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+        0x0010,
+        2,
+        &[0x12, 0x34, 0x56, 0x78],
+    )
+    .expect("valid serial FC10 payload");
     compile_adu_frame(
         txn_id,
         wire_unit,

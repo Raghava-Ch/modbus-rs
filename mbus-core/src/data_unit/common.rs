@@ -967,6 +967,33 @@ impl Pdu {
         Ok(Pdu::new(fc, data, 1))
     }
 
+    /// Builds a PDU with an empty data payload (0 bytes).
+    ///
+    /// Used by no-argument requests such as FC07, FC0B, FC0C, and FC11.
+    pub fn build_empty(fc: FunctionCode) -> Self {
+        Pdu::new(fc, heapless::Vec::new(), 0)
+    }
+
+    /// Builds a PDU with `[byte_count, payload...]` layout.
+    ///
+    /// `byte_count` is derived from `payload.len()`. Returns `InvalidByteCount`
+    /// if the payload is longer than 255 bytes.
+    ///
+    /// Used by FC01–FC04 read responses, FC11, FC14, FC15, and FC17 responses.
+    pub fn build_byte_count_payload(fc: FunctionCode, payload: &[u8]) -> Result<Self, MbusError> {
+        let byte_count = u8::try_from(payload.len()).map_err(|_| MbusError::InvalidByteCount)?;
+        let data_len = 1 + payload.len();
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.push(byte_count)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(payload)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(fc, data, data_len as u8))
+    }
+
     // -------- PDU parsing helpers -----------------------------------------------------
 
     /// Reads the standard address + quantity pair from PDU bytes 0-3.
@@ -1129,7 +1156,7 @@ impl Pdu {
         if self.data_len < 2 {
             return Err(MbusError::InvalidPduLength);
         }
-        if (self.data_len % 2) != 0 {
+        if !self.data_len.is_multiple_of(2) {
             return Err(MbusError::InvalidPduLength);
         }
         Ok(SubFunctionPayload {

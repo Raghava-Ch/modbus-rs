@@ -128,18 +128,8 @@ fn build_fc03_request(
     address: u16,
     quantity: u16,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [
-        (address >> 8) as u8,
-        address as u8,
-        (quantity >> 8) as u8,
-        quantity as u8,
-    ];
-    let pdu = Pdu::new(
-        FunctionCode::ReadHoldingRegisters,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
-    // Use raw compile_adu_frame so we can inject any wire_unit byte, including 0 (broadcast).
+    let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, address, quantity)
+        .expect("valid FC03 payload");
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }
@@ -151,17 +141,8 @@ fn build_fc06_request(
     address: u16,
     value: u16,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let payload = [
-        (address >> 8) as u8,
-        address as u8,
-        (value >> 8) as u8,
-        value as u8,
-    ];
-    let pdu = Pdu::new(
-        FunctionCode::WriteSingleRegister,
-        HVec::from_slice(&payload).expect("payload fits"),
-        payload.len() as u8,
-    );
+    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, address, value)
+        .expect("valid FC06 payload");
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }
