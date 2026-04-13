@@ -613,7 +613,12 @@ where
                 unit_id_or_slave_addr,
                 message,
             ),
-            // MaskWriteRegister => ,
+            #[cfg(feature = "holding-registers")]
+            MaskWriteRegister => self.handle_mask_write_register_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
             // ReadWriteMultipleRegisters => ,
             // ReadFifoQueue => ,
             // ReadFileRecord => ,

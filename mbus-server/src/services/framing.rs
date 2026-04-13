@@ -109,6 +109,52 @@ pub(super) fn build_echo_u16_response<TRANSPORT: Transport>(
     )
 }
 
+/// Parses FC16 (Mask Write Register) requests.
+///
+/// Payload layout: address (u16), and_mask (u16), or_mask (u16).
+#[cfg(feature = "holding-registers")]
+pub(super) fn parse_mask_write_request(
+    message: &ModbusMessage,
+) -> Result<(u16, u16, u16), MbusError> {
+    if message.pdu.data_len() != 6 {
+        return Err(MbusError::InvalidPduLength);
+    }
+    let data = message.pdu.data();
+    Ok((
+        u16::from_be_bytes([data[0], data[1]]),
+        u16::from_be_bytes([data[2], data[3]]),
+        u16::from_be_bytes([data[4], data[5]]),
+    ))
+}
+
+/// Builds an FC16 mask-write echo response containing address, and-mask, and or-mask.
+#[cfg(feature = "holding-registers")]
+pub(super) fn build_mask_write_echo_response<TRANSPORT: Transport>(
+    transport: &TRANSPORT,
+    txn_id: u16,
+    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    address: u16,
+    and_mask: u16,
+    or_mask: u16,
+) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    let mut data = Vec::<u8, MAX_PDU_DATA_LEN>::new();
+    data.extend_from_slice(&address.to_be_bytes())
+        .map_err(|_| MbusError::BufferTooSmall)?;
+    data.extend_from_slice(&and_mask.to_be_bytes())
+        .map_err(|_| MbusError::BufferTooSmall)?;
+    data.extend_from_slice(&or_mask.to_be_bytes())
+        .map_err(|_| MbusError::BufferTooSmall)?;
+
+    build_response_frame(
+        transport,
+        txn_id,
+        unit_id_or_slave_addr,
+        FunctionCode::MaskWriteRegister,
+        data,
+        6,
+    )
+}
+
 /// Compiles a complete ADU frame from a function code and PDU payload.
 fn build_response_frame<TRANSPORT: Transport>(
     _: &TRANSPORT,

@@ -11,7 +11,8 @@ use mbus_core::transport::{Transport, UnitIdOrSlaveAddr};
 use super::framing::{build_byte_count_prefixed_response, parse_read_window};
 #[cfg(feature = "holding-registers")]
 use super::framing::{
-    build_echo_u16_response, parse_write_multiple_request, parse_write_single_request,
+    build_echo_u16_response, build_mask_write_echo_response, parse_mask_write_request,
+    parse_write_multiple_request, parse_write_single_request,
 };
 use crate::app::ModbusAppHandler;
 use crate::services::{ServerServices, server_log_debug, server_log_trace};
@@ -292,6 +293,75 @@ where
                     txn_id,
                     unit_id_or_slave_addr,
                     FunctionCode::WriteMultipleRegisters,
+                    err,
+                );
+                return;
+            }
+        };
+
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
+    }
+
+    /// Handles FC16 (Mask Write Register).
+    ///
+    /// Parses address/AND-mask/OR-mask, dispatches the app callback,
+    /// and responds with the standard request echo.
+    #[cfg(feature = "holding-registers")]
+    pub(super) fn handle_mask_write_register_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        message: &ModbusMessage,
+    ) {
+        let (address, and_mask, or_mask) = match parse_mask_write_request(message) {
+            Ok(values) => values,
+            Err(err) => {
+                self.send_exception_response(
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    FunctionCode::MaskWriteRegister,
+                    err,
+                );
+                return;
+            }
+        };
+
+        if let Err(err) = self.app.mask_write_register_request(
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            and_mask,
+            or_mask,
+        ) {
+            server_log_debug!(
+                "FC16: app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                txn_id,
+                unit_id_or_slave_addr.get(),
+                err
+            );
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::MaskWriteRegister,
+                err,
+            );
+            return;
+        }
+
+        let response = match build_mask_write_echo_response(
+            &self.transport,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            and_mask,
+            or_mask,
+        ) {
+            Ok(frame) => frame,
+            Err(err) => {
+                self.send_exception_response(
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    FunctionCode::MaskWriteRegister,
                     err,
                 );
                 return;

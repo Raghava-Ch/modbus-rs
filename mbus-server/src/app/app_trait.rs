@@ -296,6 +296,7 @@ impl<T: TrafficNotifier> AppRequirements for T {}
 /// - FC 0x06: `write_single_register_request`
 /// - FC 0x0F: `write_multiple_coils_request`
 /// - FC 0x10: `write_multiple_registers_request`
+/// - FC 0x16: `mask_write_register_request`
 ///
 /// ## Data Semantics
 /// - Register reads write big-endian wire bytes into `out` and return the byte count written.
@@ -432,6 +433,26 @@ pub trait ModbusAppHandler: AppRequirements {
         values: &[u16],
     ) -> Result<(), MbusError> {
         let _ = (txn_id, unit_id_or_slave_addr, starting_address, values);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Mask Write Register` (FC 0x16) request.
+    #[cfg(feature = "holding-registers")]
+    fn mask_write_register_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<(), MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            and_mask,
+            or_mask,
+        );
         Err(MbusError::InvalidFunctionCode)
     }
 }
