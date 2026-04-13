@@ -14,6 +14,8 @@
 
 #[cfg(feature = "coils")]
 pub mod coils;
+#[cfg(feature = "discrete-inputs")]
+pub mod discrete_input;
 pub mod exception;
 pub mod framing;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
@@ -416,10 +418,18 @@ where
     /// is available) so that [`poll`](Self::poll) can retry it on subsequent
     /// calls.  An optional `send_ms` threshold from [`ResilienceConfig`]
     /// produces a debug-level log if the send duration exceeds the limit.
-    pub(super) fn try_send_or_queue(&mut self, frame: &[u8], txn_id: u16) {
+    pub(super) fn try_send_or_queue(
+        &mut self,
+        frame: &[u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) {
         let start = self.now_ms();
         match self.transport.send(frame) {
             Ok(_) => {
+                #[cfg(feature = "traffic")]
+                self.app.on_tx_frame(txn_id, unit_id_or_slave_addr);
+
                 let elapsed = self.now_ms().saturating_sub(start);
                 let threshold = self.resilience.timeouts.send_ms as u64;
                 if threshold > 0 && elapsed > threshold {
@@ -437,11 +447,17 @@ where
                     txn_id,
                     err
                 );
+                #[cfg(feature = "traffic")]
+                self.app
+                    .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed);
+
                 let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
                 if queued.extend_from_slice(frame).is_ok() {
                     let queued_at = self.now_ms();
                     if !self.response_queue.push_back(PendingResponse {
                         frame: queued,
+                        txn_id,
+                        unit_id_or_slave_addr,
                         retry_count: 0,
                         queued_at_ms: queued_at,
                     }) {
@@ -472,6 +488,9 @@ where
         function_code: FunctionCode,
         error: MbusError,
     ) {
+        #[cfg(feature = "traffic")]
+        self.app.on_rx_error(txn_id, unit_id_or_slave_addr, error);
+
         let exception_code = function_code.exception_code_for_error(&error);
 
         let response = match exception::build_exception_adu(
@@ -497,7 +516,7 @@ where
             function_code as u8,
             exception_code as u8
         );
-        self.try_send_or_queue(&response, txn_id);
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 }
 
@@ -556,6 +575,10 @@ where
             ReadCoils => {
                 self.handle_read_coils_request(wire_txn_id, unit_id_or_slave_addr, message)
             }
+            #[cfg(feature = "discrete-inputs")]
+            ReadDiscreteInputs => {
+                self.handle_read_discrete_inputs_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
             #[cfg(feature = "holding-registers")]
             ReadHoldingRegisters => self.handle_read_holding_registers_request(
                 wire_txn_id,
@@ -590,9 +613,13 @@ where
                 unit_id_or_slave_addr,
                 message,
             ),
-            // MaskWriteRegister => ,
+            #[cfg(feature = "holding-registers")]
+            MaskWriteRegister => self.handle_mask_write_register_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
             // ReadWriteMultipleRegisters => ,
-            // ReadDiscreteInputs => ,
             // ReadFifoQueue => ,
             // ReadFileRecord => ,
             // WriteFileRecord => ,
@@ -708,12 +735,23 @@ where
 
             match self.transport.send(&pending.frame) {
                 Ok(_) => {
+                    #[cfg(feature = "traffic")]
+                    self.app
+                        .on_tx_frame(pending.txn_id, pending.unit_id_or_slave_addr);
+
                     server_log_trace!(
                         "queued response sent on retry attempt {}",
                         pending.retry_count + 1
                     );
                 }
                 Err(err) => {
+                    #[cfg(feature = "traffic")]
+                    self.app.on_tx_error(
+                        pending.txn_id,
+                        pending.unit_id_or_slave_addr,
+                        MbusError::SendFailed,
+                    );
+
                     server_log_debug!(
                         "queued response retry {} failed: {:?}; requeueing",
                         pending.retry_count + 1,

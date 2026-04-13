@@ -14,42 +14,6 @@ typedef struct MbusRegisters MbusRegisters;
 
 
 /**
- * Backoff strategy selector for retry logic.
- */
-typedef enum MbusBackoffStrategy {
-    /**
-     * Retry immediately with no delay.
-     */
-    MbusBackoffImmediate = 0,
-    /**
-     * Retry after a fixed delay (`backoff_base_delay_ms`).
-     */
-    MbusBackoffFixed,
-    /**
-     * Retry with exponentially increasing delay, capped at `backoff_max_delay_ms`.
-     */
-    MbusBackoffExponential,
-    /**
-     * Retry with linearly increasing delay, capped at `backoff_max_delay_ms`.
-     */
-    MbusBackoffLinear,
-} MbusBackoffStrategy;
-
-/**
- * Serial framing mode.
- */
-typedef enum MbusSerialMode {
-    /**
-     * Modbus RTU binary framing with CRC-16.
-     */
-    MbusSerialRtu = 0,
-    /**
-     * Modbus ASCII framing with LRC.
-     */
-    MbusSerialAscii,
-} MbusSerialMode;
-
-/**
  * C-compatible status code returned by every `mbus_*` function.
  *
  * `MBUS_OK` (0) means the request was successfully queued. Actual response data
@@ -245,6 +209,42 @@ typedef enum MbusStatusCode {
      */
     MbusErrBusy,
 } MbusStatusCode;
+
+/**
+ * Serial framing mode.
+ */
+typedef enum MbusSerialMode {
+    /**
+     * Modbus RTU binary framing with CRC-16.
+     */
+    MbusSerialRtu = 0,
+    /**
+     * Modbus ASCII framing with LRC.
+     */
+    MbusSerialAscii,
+} MbusSerialMode;
+
+/**
+ * Backoff strategy selector for retry logic.
+ */
+typedef enum MbusBackoffStrategy {
+    /**
+     * Retry immediately with no delay.
+     */
+    MbusBackoffImmediate = 0,
+    /**
+     * Retry after a fixed delay (`backoff_base_delay_ms`).
+     */
+    MbusBackoffFixed,
+    /**
+     * Retry with exponentially increasing delay, capped at `backoff_max_delay_ms`.
+     */
+    MbusBackoffExponential,
+    /**
+     * Retry with linearly increasing delay, capped at `backoff_max_delay_ms`.
+     */
+    MbusBackoffLinear,
+} MbusBackoffStrategy;
 
 /**
  * Client ID type: an opaque `u16` index into one of the three sub-pools.

@@ -11,10 +11,8 @@
 //! This module is designed for `no_std` environments using `heapless` collections.
 //! The maximum number of registers in a single FIFO response is limited to 31 by the protocol.
 
-use heapless::Vec;
-
 use mbus_core::{
-    data_unit::common::{MAX_PDU_DATA_LEN, Pdu},
+    data_unit::common::Pdu,
     errors::MbusError,
     function_codes::public::FunctionCode,
 };
@@ -25,11 +23,6 @@ pub(super) struct ReqPduCompiler {}
 impl ReqPduCompiler {
     /// Creates a Modbus Read FIFO Queue request PDU.
     pub(super) fn read_fifo_queue_request(address: u16) -> Result<Pdu, MbusError> {
-        let mut data_vec: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-        data_vec
-            .extend_from_slice(&address.to_be_bytes())
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
-
-        Ok(Pdu::new(FunctionCode::ReadFifoQueue, data_vec, 2)) // Corrected: 2 addr
+        Pdu::build_u16_payload(FunctionCode::ReadFifoQueue, address)
     }
 }

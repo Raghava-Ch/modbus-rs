@@ -29,6 +29,14 @@ struct DemoApp {
     reg1: u16,
     /// Bit N = coil N (low four bits used).
     coils: u8,
+    #[cfg(feature = "traffic")]
+    traffic_rx_frames: usize,
+    #[cfg(feature = "traffic")]
+    traffic_tx_frames: usize,
+    #[cfg(feature = "traffic")]
+    traffic_rx_errors: usize,
+    #[cfg(feature = "traffic")]
+    traffic_tx_errors: usize,
 }
 
 impl ModbusAppHandler for DemoApp {
@@ -112,7 +120,33 @@ impl ModbusAppHandler for DemoApp {
 }
 
 #[cfg(feature = "traffic")]
-impl TrafficNotifier for DemoApp {}
+impl TrafficNotifier for DemoApp {
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_rx_frames += 1;
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+        self.traffic_tx_frames += 1;
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_rx_errors += 1;
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _error: MbusError,
+    ) {
+        self.traffic_tx_errors += 1;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Mutex-based access wrapper.
@@ -281,4 +315,46 @@ fn forwarding_app_shared_state_is_visible_across_separate_server_instances() {
 
     assert_eq!(read_resp[7], 0x03);
     assert_eq!(&read_resp[9..11], &[0x12, 0x34]);
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn forwarding_app_traffic_callbacks_on_success_path() {
+    let state = Arc::new(Mutex::new(DemoApp::default()));
+
+    let req = build_request(
+        40,
+        unit_id(1),
+        FunctionCode::WriteSingleRegister,
+        &[0x00, 0x00, 0x12, 0x34],
+    );
+
+    let _resp = run_once(req, Arc::clone(&state));
+    let app = state.lock().expect("state mutex poisoned");
+
+    assert_eq!(app.traffic_rx_frames, 1);
+    assert_eq!(app.traffic_tx_frames, 1);
+    assert_eq!(app.traffic_rx_errors, 0);
+    assert_eq!(app.traffic_tx_errors, 0);
+}
+
+#[cfg(feature = "traffic")]
+#[test]
+fn forwarding_app_traffic_callbacks_on_exception_path() {
+    let state = Arc::new(Mutex::new(DemoApp::default()));
+
+    let req = build_request(
+        41,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &[0x00, 0x63, 0x00, 0x01],
+    );
+
+    let _resp = run_once(req, Arc::clone(&state));
+    let app = state.lock().expect("state mutex poisoned");
+
+    assert_eq!(app.traffic_rx_frames, 1);
+    assert_eq!(app.traffic_tx_frames, 1);
+    assert_eq!(app.traffic_rx_errors, 1);
+    assert_eq!(app.traffic_tx_errors, 0);
 }

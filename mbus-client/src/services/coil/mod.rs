@@ -120,7 +120,7 @@ mod tests {
         // PDU: FC (0x01) only, no byte count or coil data
         let pdu = Pdu::new(FunctionCode::ReadCoils, Vec::new(), 0);
         let result = ResponseParser::parse_read_coils_response(&pdu, 8);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
     /// Test case: `parse_read_coils_response` returns an error for byte count mismatch.
@@ -257,7 +257,7 @@ mod tests {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
     // --- Write Multiple Coils Request Tests ---
@@ -348,6 +348,6 @@ mod tests {
         let response_bytes = [0x0F, 0x00, 0x01, 0x00]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
         let result = ResponseParser::parse_write_multiple_coils_response(&pdu, 0x0001, 10);
-        assert_eq!(result.unwrap_err(), MbusError::InvalidDataLen);
+        assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 }

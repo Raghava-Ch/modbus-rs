@@ -144,7 +144,7 @@ mod tests {
                 &pdu_short
             )
             .unwrap_err(),
-            MbusError::InvalidDataLen
+            MbusError::InvalidPduLength
         );
 
         // Case 2: Object length exceeds available data
