@@ -14,9 +14,9 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
-use mbus_server::{HoldingRegistersModel, ResilienceConfig, ServerServices, modbus_app};
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_server::{HoldingRegistersModel, ResilienceConfig, ServerServices, modbus_app};
 
 // ---------------------------------------------------------------------------
 // Register map 1 — chiller loop (addresses 0-3)

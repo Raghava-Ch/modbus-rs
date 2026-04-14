@@ -3,9 +3,9 @@
 use core::cell::RefCell;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

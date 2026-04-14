@@ -53,11 +53,110 @@ pub fn modbus_app(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
+/// Hook spec for a single-write at a known Modbus address.
+/// `on_write_N = fn_name` in the #[modbus_app(...)] attribute — where N is the decimal address.
+#[derive(Debug, Clone)]
+struct SingleWriteHook {
+    addr: u16,
+    addr_text: String,
+    hook: Ident,
+}
+
+/// Per-group write-hook configuration for writable map groups (coils / holding_registers).
+#[derive(Default, Debug)]
+struct WritableGroupConfig {
+    /// App struct field idents that belong to this group.
+    field_idents: Vec<Ident>,
+    /// Optional `on_batch_write = fn_name` for FC0F / FC10.
+    on_batch_write: Option<Ident>,
+    /// Zero or more `on_write_N = fn_name` hooks (by Modbus address).
+    single_write_hooks: Vec<SingleWriteHook>,
+}
+
 #[derive(Default)]
 struct SelectedAppFields {
-    holding_registers: Vec<Ident>,
+    holding_registers: WritableGroupConfig,
     input_registers: Vec<Ident>,
-    coils: Vec<Ident>,
+    coils: WritableGroupConfig,
+}
+
+/// Parse `group_name(field1, field2, ..., on_batch_write = fn, on_write_N = fn, ...)`.
+///
+/// Field idents are the leading bare identifiers; key-value pairs starting with
+/// `on_batch_write` or `on_write_<addr>` are hook declarations.
+fn parse_writable_group(meta: Meta, group_name: &str) -> Result<WritableGroupConfig, Error> {
+    let list = match meta {
+        Meta::List(list) if list.path.is_ident(group_name) => list,
+        other => {
+            return Err(Error::new_spanned(
+                other,
+                format!(
+                    "invalid #[modbus_app(...)] group; expected {}(field, ...)",
+                    group_name
+                ),
+            ));
+        }
+    };
+
+    let mut cfg = WritableGroupConfig::default();
+
+    list.parse_nested_meta(|nested| {
+        let key = nested
+            .path
+            .get_ident()
+            .cloned()
+            .ok_or_else(|| nested.error("expected an identifier"))?;
+
+        let key_str = key.to_string();
+
+        if key_str == "on_batch_write" {
+            // on_batch_write = fn_name
+            let batch_fn: Ident = nested.value()?.parse()?;
+            cfg.on_batch_write = Some(batch_fn);
+        } else if let Some(addr_str) = key_str.strip_prefix("on_write_") {
+            // on_write_N = fn_name  (N is a decimal Modbus address)
+            let addr: u16 = addr_str.parse().map_err(|_| {
+                nested.error(format!(
+                    "invalid address in `{}`; expected `on_write_<u16>`, e.g. `on_write_0`",
+                    key_str
+                ))
+            })?;
+            if cfg.single_write_hooks.iter().any(|h| h.addr == addr) {
+                return Err(nested.error(format!(
+                    "duplicate on_write_{} in #[modbus_app({}(...))]; each single-write address can be configured once",
+                    addr, group_name
+                )));
+            }
+            let hook_fn: Ident = nested.value()?.parse()?;
+            cfg.single_write_hooks.push(SingleWriteHook {
+                addr,
+                addr_text: addr_str.to_owned(),
+                hook: hook_fn,
+            });
+        } else {
+            // bare field ident
+            if nested.input.is_empty() || nested.input.peek(syn::Token![,]) {
+                cfg.field_idents.push(key);
+            } else {
+                return Err(nested.error(format!(
+                    "unexpected key `{key_str}` in #[modbus_app({group_name}(...))]; \
+                     valid options: field names, `on_batch_write = fn`, `on_write_N = fn`"
+                )));
+            }
+        }
+        Ok(())
+    })?;
+
+    if cfg.field_idents.is_empty() {
+        return Err(Error::new_spanned(
+            list,
+            format!(
+                "{}(...) requires at least one field ident; example: {}(my_map)",
+                group_name, group_name
+            ),
+        ));
+    }
+    Ok(cfg)
 }
 
 fn parse_group_idents(meta: Meta, group_name: &str) -> Result<Vec<Ident>, Error> {
@@ -77,7 +176,7 @@ fn parse_group_idents(meta: Meta, group_name: &str) -> Result<Vec<Ident>, Error>
     let mut out = Vec::new();
     list.parse_nested_meta(|nested| {
         let ident = nested.path.get_ident().cloned().ok_or_else(|| {
-            nested.error("expected a field identifier, e.g. holding_registers(my_map)")
+            nested.error("expected a field identifier, e.g. input_registers(my_map)")
         })?;
         out.push(ident);
         Ok(())
@@ -119,12 +218,12 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
             })?;
         match path_ident.as_str() {
             "holding_registers" => {
-                selected.holding_registers = parse_group_idents(meta, "holding_registers")?
+                selected.holding_registers = parse_writable_group(meta, "holding_registers")?
             }
             "input_registers" => {
                 selected.input_registers = parse_group_idents(meta, "input_registers")?
             }
-            "coils" => selected.coils = parse_group_idents(meta, "coils")?,
+            "coils" => selected.coils = parse_writable_group(meta, "coils")?,
             _ => {
                 return Err(Error::new_spanned(
                     meta,
@@ -141,6 +240,9 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
 struct CoilField {
     ident: Ident,
     addr: u16,
+    /// When true, a single FC05 write with no individual hook falls through to the
+    /// map-level `on_batch_write` hook (called with qty = 1) if that hook exists.
+    notify_via_batch: bool,
 }
 
 /// Simple field for `#[derive(HoldingRegistersModel)]`: always a `u16` at a fixed address.
@@ -151,6 +253,9 @@ struct RegField {
     scale: f32,
     has_scale: bool,
     unit: Option<String>,
+    /// When true, a single FC06 write with no individual hook falls through to the
+    /// map-level `on_batch_write` hook (called with qty = 1) if that hook exists.
+    notify_via_batch: bool,
 }
 
 fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, Error> {
@@ -161,6 +266,7 @@ fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, E
     let addr_min = fields.iter().map(|f| f.addr).min().unwrap_or(0);
     let addr_max = fields.iter().map(|f| f.addr).max().unwrap_or(0);
     let bit_count = addr_max.saturating_sub(addr_min) as usize + 1;
+    let has_batch_notified_fields = fields.iter().any(|f| f.notify_via_batch);
     let encode_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
@@ -176,12 +282,21 @@ fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, E
             }
         }
     });
+    let batch_notify_arms: Vec<_> = fields
+        .iter()
+        .filter(|f| f.notify_via_batch)
+        .map(|f| {
+            let addr = f.addr;
+            quote! { #addr => true, }
+        })
+        .collect();
 
     Ok(quote! {
         impl ::mbus_server::CoilMap for #struct_name {
             const ADDR_MIN: u16 = #addr_min;
             const ADDR_MAX: u16 = #addr_max;
             const BIT_COUNT: usize = #bit_count;
+            const HAS_BATCH_NOTIFIED_FIELDS: bool = #has_batch_notified_fields;
 
             fn encode(
                 &self,
@@ -266,6 +381,13 @@ fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, E
 
                 ::core::result::Result::Ok(())
             }
+
+            fn is_batch_notified(addr: u16) -> bool {
+                match addr {
+                    #(#batch_notify_arms)*
+                    _ => false,
+                }
+            }
         }
     })
 }
@@ -318,14 +440,19 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
         }
 
         let mut addr: Option<u16> = None;
+        let mut notify_via_batch = false;
         parse_coil_attr(field, |key, lit| match (key.as_str(), lit) {
             ("addr", Lit::Int(v)) => {
                 addr = Some(parse_u16(v)?);
                 Ok(())
             }
+            ("notify_via_batch", Lit::Bool(v)) => {
+                notify_via_batch = v.value;
+                Ok(())
+            }
             _ => Err(Error::new_spanned(
                 lit,
-                "unsupported #[coil(...)] key/value; expected #[coil(addr = N)] with N as a u16 literal",
+                "unsupported #[coil(...)] key/value; expected #[coil(addr = N)] or #[coil(addr = N, notify_via_batch = true)]",
             )),
         })?;
 
@@ -336,7 +463,11 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
             )
         })?;
 
-        out.push(CoilField { ident, addr });
+        out.push(CoilField {
+            ident,
+            addr,
+            notify_via_batch,
+        });
     }
 
     Ok(out)
@@ -361,7 +492,7 @@ fn parse_coil_attr(
                 .ok_or_else(|| {
                     Error::new_spanned(
                         &meta.path,
-                        "unsupported #[coil(...)] key; only `addr` is supported",
+                        "unsupported #[coil(...)] key; supported keys: `addr`, `notify_via_batch`",
                     )
                 })?;
 
@@ -441,9 +572,19 @@ fn expand_holding_registers(input: &DeriveInput) -> Result<proc_macro2::TokenStr
     let addr_min = fields.iter().map(|f| f.addr).min().unwrap();
     let addr_max = fields.iter().map(|f| f.addr).max().unwrap();
     let word_count = (addr_max as usize) - (addr_min as usize) + 1;
+    let has_batch_notified_fields = fields.iter().any(|f| f.notify_via_batch);
 
     let mut sorted_fields = fields.clone();
     sorted_fields.sort_by_key(|f| f.addr);
+
+    let hr_batch_notify_arms: Vec<_> = fields
+        .iter()
+        .filter(|f| f.notify_via_batch)
+        .map(|f| {
+            let addr = f.addr;
+            quote! { #addr => true, }
+        })
+        .collect();
 
     let getters_setters = fields.iter().map(|f| {
         let ident = &f.ident;
@@ -514,6 +655,7 @@ fn expand_holding_registers(input: &DeriveInput) -> Result<proc_macro2::TokenStr
             const ADDR_MIN: u16 = #addr_min;
             const ADDR_MAX: u16 = #addr_max;
             const WORD_COUNT: usize = #word_count;
+            const HAS_BATCH_NOTIFIED_FIELDS: bool = #has_batch_notified_fields;
 
             fn encode(
                 &self,
@@ -587,6 +729,13 @@ fn expand_holding_registers(input: &DeriveInput) -> Result<proc_macro2::TokenStr
                 }
 
                 ::core::result::Result::Ok(())
+            }
+
+            fn is_batch_notified(addr: u16) -> bool {
+                match addr {
+                    #(#hr_batch_notify_arms)*
+                    _ => false,
+                }
             }
         }
     })
@@ -860,21 +1009,70 @@ fn build_segmented_coil_read_route(fields: &[(Ident, syn::Type)]) -> proc_macro2
     route
 }
 
-fn build_write_single_route(
+// ---------------------------------------------------------------------------
+// Hook-aware write route builders
+// ---------------------------------------------------------------------------
+
+/// FC05 single-coil write with individual / batch-notify hook dispatch.
+///
+/// Policy (in order for each address):
+/// 1. Individual `on_write_N` hook present — read old value, call hook, commit if approved.
+/// 2. No individual hook but address has `notify_via_batch = true` AND `on_batch_write` present
+///    — call batch hook with qty = 1 (same signature as FC0F), commit if approved.
+/// 3. No hooks — write silently.
+fn build_write_single_coil_route_with_hooks(
     fields: &[(Ident, syn::Type)],
-    trait_path: proc_macro2::TokenStream,
+    on_batch_write: Option<&Ident>,
+    single_write_hooks: &[SingleWriteHook],
 ) -> proc_macro2::TokenStream {
     let mut route = quote! {{}};
     for (field_ident, field_ty) in fields.iter().rev() {
         let inner = route;
+
+        let hook_arms: Vec<proc_macro2::TokenStream> = single_write_hooks
+            .iter()
+            .map(|h| {
+                let addr = h.addr;
+                let hook_fn = &h.hook;
+                quote! {
+                    #addr => {
+                        let mut __old_buf = [0u8; 1];
+                        let _ = <#field_ty as ::mbus_server::CoilMap>::encode(
+                            &self.#field_ident, address, 1u16, &mut __old_buf,
+                        );
+                        let __old_val = (__old_buf[0] & 1u8) != 0u8;
+                        self.#hook_fn(address, __old_val, value)?;
+                        true
+                    }
+                }
+            })
+            .collect();
+
+        let batch_notify_block = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                if !__hook_dispatched {
+                    if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
+                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        self.#batch_fn(address, 1u16, &[__packed])?;
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         route = quote! {
-            if (<#field_ty as #trait_path>::ADDR_MIN..=<#field_ty as #trait_path>::ADDR_MAX)
+            if (<#field_ty as ::mbus_server::CoilMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
                 .contains(&address)
             {
-                <#field_ty as #trait_path>::write_single(
-                    &mut self.#field_ident,
-                    address,
-                    value,
+                let __hook_dispatched: bool = match address {
+                    #(#hook_arms)*
+                    _ => false,
+                };
+                #batch_notify_block
+                <#field_ty as ::mbus_server::CoilMap>::write_single(
+                    &mut self.#field_ident, address, value,
                 )?;
                 wrote = true;
             } else {
@@ -885,32 +1083,61 @@ fn build_write_single_route(
     route
 }
 
-fn build_write_many_register_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::TokenStream {
+/// FC06 single-register write with individual / batch-notify hook dispatch.
+fn build_write_single_register_route_with_hooks(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+    single_write_hooks: &[SingleWriteHook],
+) -> proc_macro2::TokenStream {
     let mut route = quote! {{}};
     for (field_ident, field_ty) in fields.iter().rev() {
         let inner = route;
-        let availability = build_available_take_tokens(
-            field_ty,
-            quote!(::mbus_server::HoldingRegisterMap),
-            quote!(remaining_values.len() as u16),
-        );
-        let advance_cursor = build_advance_cursor_tokens();
+
+        let hook_arms: Vec<proc_macro2::TokenStream> = single_write_hooks
+            .iter()
+            .map(|h| {
+                let addr = h.addr;
+                let hook_fn = &h.hook;
+                quote! {
+                    #addr => {
+                        let mut __old_buf = [0u8; 2];
+                        let _ = <#field_ty as ::mbus_server::HoldingRegisterMap>::encode(
+                            &self.#field_ident, address, 1u16, &mut __old_buf,
+                        );
+                        let __old_val = u16::from_be_bytes([__old_buf[0], __old_buf[1]]);
+                        self.#hook_fn(address, __old_val, value)?;
+                        true
+                    }
+                }
+            })
+            .collect();
+
+        let batch_notify_block = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                if !__hook_dispatched {
+                    if <#field_ty as ::mbus_server::HoldingRegisterMap>::is_batch_notified(address) {
+                        self.#batch_fn(address, 1u16, &[value])?;
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         route = quote! {
-            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
-                .contains(&cursor)
+            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                .contains(&address)
             {
-                #availability
-                let split = take as usize;
-
-                <#field_ty as ::mbus_server::HoldingRegisterMap>::write_many(
-                    &mut self.#field_ident,
-                    cursor,
-                    &remaining_values[..split],
+                let __hook_dispatched: bool = match address {
+                    #(#hook_arms)*
+                    _ => false,
+                };
+                #batch_notify_block
+                <#field_ty as ::mbus_server::HoldingRegisterMap>::write_single(
+                    &mut self.#field_ident, address, value,
                 )?;
-
-                #advance_cursor
-                remaining_values = &remaining_values[split..];
-                advanced = true;
+                wrote = true;
             } else {
                 #inner
             }
@@ -919,7 +1146,14 @@ fn build_write_many_register_route(fields: &[(Ident, syn::Type)]) -> proc_macro2
     route
 }
 
-fn build_write_many_coil_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::TokenStream {
+/// FC0F multiple-coils write with batch hook dispatch.
+///
+/// If `on_batch_write` is present, the hook is called with re-packed coil bits
+/// for this map's address range before the write is committed.
+fn build_write_many_coil_route_with_hooks(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+) -> proc_macro2::TokenStream {
     let mut route = quote! {{}};
     for (field_ident, field_ty) in fields.iter().rev() {
         let inner = route;
@@ -929,12 +1163,32 @@ fn build_write_many_coil_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::To
             quote!(remaining_bits),
         );
         let advance_cursor = build_advance_cursor_tokens();
+
+        let hook_prelude = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                {
+                    let __packed_len = (take as usize).div_ceil(8);
+                    let mut __packed = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                    for __bit_i in 0usize..(take as usize) {
+                        let __src_pos = bit_offset + __bit_i;
+                        let __src_byte = values[__src_pos / 8];
+                        let __src_bit = (__src_byte >> (__src_pos % 8)) & 1u8;
+                        __packed[__bit_i / 8] |= __src_bit << (__bit_i % 8);
+                    }
+                    self.#batch_fn(cursor, take, &__packed[..__packed_len])?;
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         route = quote! {
-            if (<#field_ty as ::mbus_server::CoilMap>::ADDR_MIN..=<#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
+            if (<#field_ty as ::mbus_server::CoilMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
                 .contains(&cursor)
             {
                 #availability
-
+                #hook_prelude
                 <#field_ty as ::mbus_server::CoilMap>::write_many_from_packed(
                     &mut self.#field_ident,
                     cursor,
@@ -942,10 +1196,59 @@ fn build_write_many_coil_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::To
                     values,
                     bit_offset,
                 )?;
-
                 #advance_cursor
                 remaining_bits -= take;
                 bit_offset += take as usize;
+                advanced = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+/// FC10 multiple-registers write with batch hook dispatch.
+///
+/// If `on_batch_write` is present, the hook receives the decoded u16 value slice for
+/// this map's contribution before the write is committed.
+fn build_write_many_register_route_with_hooks(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+        let availability = build_available_take_tokens(
+            field_ty,
+            quote!(::mbus_server::HoldingRegisterMap),
+            quote!(remaining_values.len() as u16),
+        );
+        let advance_cursor = build_advance_cursor_tokens();
+
+        let hook_prelude = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                self.#batch_fn(cursor, take, &remaining_values[..split])?;
+            }
+        } else {
+            quote! {}
+        };
+
+        route = quote! {
+            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                .contains(&cursor)
+            {
+                #availability
+                let split = take as usize;
+                #hook_prelude
+                <#field_ty as ::mbus_server::HoldingRegisterMap>::write_many(
+                    &mut self.#field_ident,
+                    cursor,
+                    &remaining_values[..split],
+                )?;
+                #advance_cursor
+                remaining_values = &remaining_values[split..];
                 advanced = true;
             } else {
                 #inner
@@ -1073,7 +1376,7 @@ fn expand_modbus_app_struct(
     };
 
     let hr_fields = collect_group_fields(
-        &selected_fields.holding_registers,
+        &selected_fields.holding_registers.field_idents,
         "holding_registers",
         "holding_registers",
     )?;
@@ -1082,7 +1385,7 @@ fn expand_modbus_app_struct(
         "input_registers",
         "input_registers",
     )?;
-    let coil_fields = collect_group_fields(&selected_fields.coils, "coils", "coils")?;
+    let coil_fields = collect_group_fields(&selected_fields.coils.field_idents, "coils", "coils")?;
 
     if hr_fields.is_empty() && ir_fields.is_empty() && coil_fields.is_empty() {
         return Err(Error::new_spanned(
@@ -1116,13 +1419,25 @@ fn expand_modbus_app_struct(
         build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_read_route = build_segmented_coil_read_route(&coil_fields);
 
-    let hr_write_single_route =
-        build_write_single_route(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
-    let coil_write_single_route =
-        build_write_single_route(&coil_fields, quote!(::mbus_server::CoilMap));
+    let hr_write_single_route = build_write_single_register_route_with_hooks(
+        &hr_fields,
+        selected_fields.holding_registers.on_batch_write.as_ref(),
+        &selected_fields.holding_registers.single_write_hooks,
+    );
+    let coil_write_single_route = build_write_single_coil_route_with_hooks(
+        &coil_fields,
+        selected_fields.coils.on_batch_write.as_ref(),
+        &selected_fields.coils.single_write_hooks,
+    );
 
-    let hr_write_many_route = build_write_many_register_route(&hr_fields);
-    let coil_write_many_route = build_write_many_coil_route(&coil_fields);
+    let hr_write_many_route = build_write_many_register_route_with_hooks(
+        &hr_fields,
+        selected_fields.holding_registers.on_batch_write.as_ref(),
+    );
+    let coil_write_many_route = build_write_many_coil_route_with_hooks(
+        &coil_fields,
+        selected_fields.coils.on_batch_write.as_ref(),
+    );
 
     let hr_overlap_checks =
         build_overlap_checks(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
@@ -1133,6 +1448,160 @@ fn expand_modbus_app_struct(
     let hr_order_checks = build_order_checks(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
     let ir_order_checks = build_order_checks(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_order_checks = build_order_checks(&coil_fields, quote!(::mbus_server::CoilMap));
+
+    let hr_notify_requires_batch_checks = if selected_fields
+        .holding_registers
+        .on_batch_write
+        .is_none()
+    {
+        let checks = hr_fields.iter().map(|(_, field_ty)| {
+            quote! {
+                if <#field_ty as ::mbus_server::HoldingRegisterMap>::HAS_BATCH_NOTIFIED_FIELDS {
+                    panic!(
+                        "notify_via_batch is set on a holding_registers map field, but #[modbus_app(holding_registers(...))] has no on_batch_write hook",
+                    );
+                }
+            }
+        });
+        quote! { #(#checks)* }
+    } else {
+        quote! {}
+    };
+
+    let hr_on_write_address_checks = {
+        let checks = selected_fields
+            .holding_registers
+            .single_write_hooks
+            .iter()
+            .map(|hook| {
+                let addr = hook.addr;
+                let addr_text = syn::LitStr::new(&hook.addr_text, proc_macro2::Span::call_site());
+                let hook_ident = &hook.hook;
+                let in_any_map = hr_fields.iter().map(|(_, field_ty)| {
+                    quote! {
+                        (#addr >= <#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                            && #addr <= <#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                    }
+                });
+                quote! {
+                    if !(false #(|| #in_any_map)*) {
+                        panic!(
+                            concat!(
+                                "invalid #[modbus_app(holding_registers(...))] hook: ",
+                                "on_write_",
+                                #addr_text,
+                                " = ",
+                                stringify!(#hook_ident),
+                                " targets an unmapped holding-register address",
+                            )
+                        );
+                    }
+                }
+            });
+        quote! { #(#checks)* }
+    };
+
+    let hr_hook_signature_checks = {
+        let mut checks: Vec<proc_macro2::TokenStream> = Vec::new();
+
+        if let Some(batch_hook) = selected_fields.holding_registers.on_batch_write.as_ref() {
+            checks.push(quote! {
+                let _sig_check: fn(
+                    &mut Self,
+                    u16,
+                    u16,
+                    &[u16],
+                ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#batch_hook;
+            });
+        }
+
+        for hook in &selected_fields.holding_registers.single_write_hooks {
+            let hook_ident = &hook.hook;
+            checks.push(quote! {
+                let _sig_check: fn(
+                    &mut Self,
+                    u16,
+                    u16,
+                    u16,
+                ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#hook_ident;
+            });
+        }
+
+        quote! { #(#checks)* }
+    };
+
+    let coil_notify_requires_batch_checks = if selected_fields.coils.on_batch_write.is_none() {
+        let checks = coil_fields.iter().map(|(_, field_ty)| {
+            quote! {
+                if <#field_ty as ::mbus_server::CoilMap>::HAS_BATCH_NOTIFIED_FIELDS {
+                    panic!(
+                        "notify_via_batch is set on a coils map field, but #[modbus_app(coils(...))] has no on_batch_write hook",
+                    );
+                }
+            }
+        });
+        quote! { #(#checks)* }
+    } else {
+        quote! {}
+    };
+
+    let coil_on_write_address_checks = {
+        let checks = selected_fields.coils.single_write_hooks.iter().map(|hook| {
+            let addr = hook.addr;
+            let addr_text = syn::LitStr::new(&hook.addr_text, proc_macro2::Span::call_site());
+            let hook_ident = &hook.hook;
+            let in_any_map = coil_fields.iter().map(|(_, field_ty)| {
+                quote! {
+                    (#addr >= <#field_ty as ::mbus_server::CoilMap>::ADDR_MIN
+                        && #addr <= <#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
+                }
+            });
+            quote! {
+                if !(false #(|| #in_any_map)*) {
+                    panic!(
+                        concat!(
+                            "invalid #[modbus_app(coils(...))] hook: ",
+                            "on_write_",
+                            #addr_text,
+                            " = ",
+                            stringify!(#hook_ident),
+                            " targets an unmapped coil address",
+                        )
+                    );
+                }
+            }
+        });
+        quote! { #(#checks)* }
+    };
+
+    let coil_hook_signature_checks = {
+        let mut checks: Vec<proc_macro2::TokenStream> = Vec::new();
+
+        if let Some(batch_hook) = selected_fields.coils.on_batch_write.as_ref() {
+            checks.push(quote! {
+                let _sig_check: fn(
+                    &mut Self,
+                    u16,
+                    u16,
+                    &[u8],
+                ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#batch_hook;
+            });
+        }
+
+        for hook in &selected_fields.coils.single_write_hooks {
+            let hook_ident = &hook.hook;
+            checks.push(quote! {
+                let _sig_check: fn(
+                    &mut Self,
+                    u16,
+                    bool,
+                    bool,
+                ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#hook_ident;
+            });
+        }
+
+        quote! { #(#checks)* }
+    };
 
     let force_layout_check = if generics.params.is_empty() {
         quote! {
@@ -1158,6 +1627,12 @@ fn expand_modbus_app_struct(
                 #hr_order_checks
                 #ir_order_checks
                 #coil_order_checks
+                #hr_notify_requires_batch_checks
+                #coil_notify_requires_batch_checks
+                #hr_on_write_address_checks
+                #coil_on_write_address_checks
+                #hr_hook_signature_checks
+                #coil_hook_signature_checks
             };
         }
 
@@ -1459,6 +1934,7 @@ fn parse_reg_fields(input: &DeriveInput, model_name: &str) -> Result<Vec<RegFiel
         let mut scale: f32 = 1.0;
         let mut has_scale = false;
         let mut unit: Option<String> = None;
+        let mut notify_via_batch = false;
         for attr in &field.attrs {
             if !attr.path().is_ident("reg") {
                 continue;
@@ -1488,9 +1964,13 @@ fn parse_reg_fields(input: &DeriveInput, model_name: &str) -> Result<Vec<RegFiel
                     let value: LitStr = meta.value()?.parse()?;
                     unit = Some(value.value());
                     Ok(())
+                } else if meta.path.is_ident("notify_via_batch") {
+                    let value: syn::LitBool = meta.value()?.parse()?;
+                    notify_via_batch = value.value;
+                    Ok(())
                 } else {
                     Err(meta.error(
-                        "unsupported key in #[reg(...)]; supported keys: `addr`, `scale`, `unit` (example: #[reg(addr = 10, scale = 0.1, unit = \"C\")])",
+                        "unsupported key in #[reg(...)]; supported keys: `addr`, `scale`, `unit`, `notify_via_batch` (example: #[reg(addr = 10, scale = 0.1, unit = \"C\")])",
                     ))
                 }
             })?;
@@ -1519,6 +1999,7 @@ fn parse_reg_fields(input: &DeriveInput, model_name: &str) -> Result<Vec<RegFiel
             scale,
             has_scale,
             unit,
+            notify_via_batch,
         });
     }
 

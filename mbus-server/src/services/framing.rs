@@ -35,7 +35,12 @@ pub(super) fn parse_write_multiple_request(
     message: &ModbusMessage,
 ) -> Result<(u16, u16, u8, &[u8]), MbusError> {
     let fields = message.pdu.write_multiple_fields()?;
-    Ok((fields.address, fields.quantity, fields.byte_count, fields.values))
+    Ok((
+        fields.address,
+        fields.quantity,
+        fields.byte_count,
+        fields.values,
+    ))
 }
 
 /// Builds a read-style response payload: byte_count + raw payload bytes.
@@ -103,4 +108,3 @@ pub(super) fn build_mask_write_echo_response<TRANSPORT: Transport>(
         TRANSPORT::TRANSPORT_TYPE,
     )
 }
-

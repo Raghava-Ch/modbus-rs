@@ -68,6 +68,7 @@ See [documentation/quick_start.md](documentation/quick_start.md) for a complete 
 - [RELEASE.md](RELEASE.md) — release checklist
 - [mbus-ffi/README.md](mbus-ffi/README.md) — WASM and native C binding docs
 - [modbus-rs/README.md](modbus-rs/README.md) — top-level crate API guide
+- [mbus-server/README.md](mbus-server/README.md) — server derive/macros, write hooks, and compile-time validation diagnostics
 
 ## Feature Flags
 

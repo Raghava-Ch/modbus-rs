@@ -803,7 +803,11 @@ impl Pdu {
     /// Builds a PDU with `[address_hi, address_lo, quantity_hi, quantity_lo]` layout (4 bytes).
     ///
     /// Used by FC01/02/03/04 requests and as a general address+quantity builder.
-    pub fn build_read_window(fc: FunctionCode, address: u16, quantity: u16) -> Result<Self, MbusError> {
+    pub fn build_read_window(
+        fc: FunctionCode,
+        address: u16,
+        quantity: u16,
+    ) -> Result<Self, MbusError> {
         let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
         data.extend_from_slice(&address.to_be_bytes())
             .map_err(|_| MbusError::BufferLenMissmatch)?;
@@ -815,7 +819,11 @@ impl Pdu {
     /// Builds a PDU with `[address_hi, address_lo, value_hi, value_lo]` layout (4 bytes).
     ///
     /// Used by FC05 and FC06 single-write requests.
-    pub fn build_write_single_u16(fc: FunctionCode, address: u16, value: u16) -> Result<Self, MbusError> {
+    pub fn build_write_single_u16(
+        fc: FunctionCode,
+        address: u16,
+        value: u16,
+    ) -> Result<Self, MbusError> {
         let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
         data.extend_from_slice(&address.to_be_bytes())
             .map_err(|_| MbusError::BufferLenMissmatch)?;
@@ -906,7 +914,11 @@ impl Pdu {
             .map_err(|_| MbusError::BufferLenMissmatch)?;
         data.extend_from_slice(write_values)
             .map_err(|_| MbusError::BufferLenMissmatch)?;
-        Ok(Pdu::new(FunctionCode::ReadWriteMultipleRegisters, data, data_len as u8))
+        Ok(Pdu::new(
+            FunctionCode::ReadWriteMultipleRegisters,
+            data,
+            data_len as u8,
+        ))
     }
 
     /// Builds a PDU with `[sub_function_hi, sub_function_lo, word0_hi, word0_lo, ...]` layout.
@@ -934,7 +946,11 @@ impl Pdu {
     /// Builds a PDU with `[mei_type, payload...]` layout.
     ///
     /// Used by FC2B (Encapsulated Interface Transport) requests.
-    pub fn build_mei_type(fc: FunctionCode, mei_type: u8, payload: &[u8]) -> Result<Self, MbusError> {
+    pub fn build_mei_type(
+        fc: FunctionCode,
+        mei_type: u8,
+        payload: &[u8],
+    ) -> Result<Self, MbusError> {
         let data_len = 1 + payload.len();
         if data_len > MAX_PDU_DATA_LEN {
             return Err(MbusError::BufferTooSmall);
@@ -962,8 +978,7 @@ impl Pdu {
     /// Used for exception response PDUs.
     pub fn build_byte_payload(fc: FunctionCode, byte: u8) -> Result<Self, MbusError> {
         let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
-        data.push(byte)
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(byte).map_err(|_| MbusError::BufferLenMissmatch)?;
         Ok(Pdu::new(fc, data, 1))
     }
 
@@ -1790,7 +1805,8 @@ mod tests {
 
     #[test]
     fn test_pdu_write_multiple_fields_rejects_mismatched_byte_count() {
-        let pdu = Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x03, 0x12, 0x34]).expect("valid pdu");
+        let pdu =
+            Pdu::from_bytes(&[0x10, 0x00, 0x20, 0x00, 0x02, 0x03, 0x12, 0x34]).expect("valid pdu");
         let err = pdu
             .write_multiple_fields()
             .expect_err("byte count mismatch should error");

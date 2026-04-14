@@ -12,11 +12,11 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{
     ForwardingApp, ModbusAppAccess, ModbusAppHandler, ResilienceConfig, ServerServices,
 };
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------

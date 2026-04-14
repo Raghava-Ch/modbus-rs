@@ -14,8 +14,10 @@ anyhow = "1.0.86"
 tokio = { version = "1", features = ["full"] }
 
 [features]
-default = ["coils"]
+default = ["coils", "holding-registers", "input-registers"]
 coils = []
+holding-registers = []
+input-registers = []
 traffic = ["modbus-rs/traffic"]
 
 [dev-dependencies]

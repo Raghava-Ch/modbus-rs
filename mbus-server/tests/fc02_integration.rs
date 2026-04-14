@@ -5,9 +5,9 @@ use common::{MockTransport, build_request, tcp_config, unit_id};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 
 #[derive(Debug, Default)]
 struct DiscreteInputApp;

@@ -576,9 +576,11 @@ where
                 self.handle_read_coils_request(wire_txn_id, unit_id_or_slave_addr, message)
             }
             #[cfg(feature = "discrete-inputs")]
-            ReadDiscreteInputs => {
-                self.handle_read_discrete_inputs_request(wire_txn_id, unit_id_or_slave_addr, message)
-            }
+            ReadDiscreteInputs => self.handle_read_discrete_inputs_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
             #[cfg(feature = "holding-registers")]
             ReadHoldingRegisters => self.handle_read_holding_registers_request(
                 wire_txn_id,
@@ -614,11 +616,9 @@ where
                 message,
             ),
             #[cfg(feature = "holding-registers")]
-            MaskWriteRegister => self.handle_mask_write_register_request(
-                wire_txn_id,
-                unit_id_or_slave_addr,
-                message,
-            ),
+            MaskWriteRegister => {
+                self.handle_mask_write_register_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
             // ReadWriteMultipleRegisters => ,
             // ReadFifoQueue => ,
             // ReadFileRecord => ,
