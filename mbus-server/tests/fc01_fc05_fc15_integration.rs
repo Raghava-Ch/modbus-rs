@@ -1,7 +1,7 @@
 #![cfg(feature = "coils")]
 
 mod common;
-use common::{MockTransport, build_request, tcp_config, unit_id};
+use common::{build_request, tcp_config, unit_id, MockTransport};
 use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
@@ -14,6 +14,9 @@ use mbus_server::ServerServices;
 use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+
+type Fc05Last = Arc<Mutex<Option<(u16, bool)>>>;
+type Fc15Last = Arc<Mutex<Option<(u16, u16, Vec<u8>)>>>;
 
 #[derive(Debug, Clone, Copy)]
 enum CoilMode {
@@ -29,8 +32,8 @@ struct CoilApp {
     fc01_calls: Arc<AtomicUsize>,
     fc05_calls: Arc<AtomicUsize>,
     fc15_calls: Arc<AtomicUsize>,
-    fc05_last: Arc<Mutex<Option<(u16, bool)>>>,
-    fc15_last: Arc<Mutex<Option<(u16, u16, Vec<u8>)>>>,
+    fc05_last: Fc05Last,
+    fc15_last: Fc15Last,
 }
 
 impl ModbusAppHandler for CoilApp {
@@ -175,8 +178,8 @@ struct Probe {
     fc01_calls: Arc<AtomicUsize>,
     fc05_calls: Arc<AtomicUsize>,
     fc15_calls: Arc<AtomicUsize>,
-    fc05_last: Arc<Mutex<Option<(u16, bool)>>>,
-    fc15_last: Arc<Mutex<Option<(u16, u16, Vec<u8>)>>>,
+    fc05_last: Fc05Last,
+    fc15_last: Fc15Last,
 }
 
 fn make_app(mode_fc01: CoilMode, mode_fc05: CoilMode, mode_fc15: CoilMode) -> (CoilApp, Probe) {

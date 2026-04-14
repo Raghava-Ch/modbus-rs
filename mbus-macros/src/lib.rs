@@ -36,6 +36,15 @@ pub fn derive_input_registers_model(input: TokenStream) -> TokenStream {
     }
 }
 
+#[proc_macro_derive(DiscreteInputsModel, attributes(discrete_input))]
+pub fn derive_discrete_inputs_model(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_discrete_inputs_model(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // New: modbus_app attribute macro
 // ---------------------------------------------------------------------------
@@ -78,6 +87,7 @@ struct SelectedAppFields {
     holding_registers: WritableGroupConfig,
     input_registers: Vec<Ident>,
     coils: WritableGroupConfig,
+    discrete_inputs: Vec<Ident>,
 }
 
 /// Parse `group_name(field1, field2, ..., on_batch_write = fn, on_write_N = fn, ...)`.
@@ -224,10 +234,13 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
                 selected.input_registers = parse_group_idents(meta, "input_registers")?
             }
             "coils" => selected.coils = parse_writable_group(meta, "coils")?,
+            "discrete_inputs" => {
+                selected.discrete_inputs = parse_group_idents(meta, "discrete_inputs")?
+            }
             _ => {
                 return Err(Error::new_spanned(
                     meta,
-                    "invalid #[modbus_app(...)] syntax; expected #[modbus_app(holding_registers(...), input_registers(...), coils(...))]",
+                    "invalid #[modbus_app(...)] syntax; expected #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...))]",
                 ));
             }
         }
@@ -243,6 +256,13 @@ struct CoilField {
     /// When true, a single FC05 write with no individual hook falls through to the
     /// map-level `on_batch_write` hook (called with qty = 1) if that hook exists.
     notify_via_batch: bool,
+}
+
+/// Field for `#[derive(DiscreteInputsModel)]`: a read-only `bool` at a fixed address.
+#[derive(Debug, Clone)]
+struct DiscreteInputField {
+    ident: Ident,
+    addr: u16,
 }
 
 /// Simple field for `#[derive(HoldingRegistersModel)]`: always a `u16` at a fixed address.
@@ -530,6 +550,188 @@ fn parse_f32(v: &LitFloat) -> Result<f32, Error> {
 fn parse_f32_from_int(v: &LitInt) -> Result<f32, Error> {
     v.base10_parse::<f32>()
         .map_err(|_| Error::new_spanned(v, "expected a numeric literal for scale (e.g. 1 or 0.1)"))
+}
+
+fn expand_discrete_inputs_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, Error> {
+    let struct_name = &input.ident;
+    let fields = parse_discrete_inputs_fields(input)?;
+    validate_duplicate_discrete_input_addresses(&fields)?;
+
+    let addr_min = fields.iter().map(|f| f.addr).min().unwrap_or(0);
+    let addr_max = fields.iter().map(|f| f.addr).max().unwrap_or(0);
+    let bit_count = addr_max.saturating_sub(addr_min) as usize + 1;
+
+    let encode_arms = fields.iter().map(|f| {
+        let ident = &f.ident;
+        let addr = f.addr;
+        quote! { #addr => self.#ident, }
+    });
+
+    Ok(quote! {
+        impl ::mbus_server::DiscreteInputMap for #struct_name {
+            const ADDR_MIN: u16 = #addr_min;
+            const ADDR_MAX: u16 = #addr_max;
+            const BIT_COUNT: usize = #bit_count;
+
+            fn encode(
+                &self,
+                address: u16,
+                quantity: u16,
+                out: &mut [u8],
+            ) -> ::core::result::Result<u8, ::mbus_core::errors::MbusError> {
+                if quantity == 0 {
+                    return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
+                }
+
+                let req_start = address as usize;
+                let qty = quantity as usize;
+                let req_end = req_start
+                    .checked_add(qty)
+                    .ok_or(::mbus_core::errors::MbusError::InvalidAddress)?;
+                let map_start = Self::ADDR_MIN as usize;
+                let map_end = Self::ADDR_MAX as usize + 1;
+                if req_start < map_start || req_end > map_end {
+                    return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                }
+
+                let byte_len = qty.div_ceil(8);
+                if out.len() < byte_len {
+                    return ::core::result::Result::Err(::mbus_core::errors::MbusError::BufferTooSmall);
+                }
+                out[..byte_len].fill(0);
+
+                for index in 0..qty {
+                    let cur_addr = (req_start + index) as u16;
+                    let value = match cur_addr {
+                        #(#encode_arms)*
+                        _ => return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress),
+                    };
+                    if value {
+                        out[index / 8] |= 1 << (index % 8);
+                    }
+                }
+
+                ::core::result::Result::Ok(byte_len as u8)
+            }
+        }
+    })
+}
+
+fn parse_discrete_inputs_fields(input: &DeriveInput) -> Result<Vec<DiscreteInputField>, Error> {
+    let data = match &input.data {
+        Data::Struct(data) => data,
+        _ => {
+            return Err(Error::new_spanned(
+                input,
+                "DiscreteInputsModel can only be derived for structs; use `struct MyDiscreteInputs { ... }` with named fields",
+            ));
+        }
+    };
+
+    let named = match &data.fields {
+        Fields::Named(named) => named,
+        _ => {
+            return Err(Error::new_spanned(
+                input,
+                "DiscreteInputsModel requires named fields; tuple/unit structs are not supported",
+            ));
+        }
+    };
+
+    let mut out = Vec::new();
+    for field in &named.named {
+        let ident = field.ident.clone().ok_or_else(|| {
+            Error::new_spanned(
+                field,
+                "field identifier missing; DiscreteInputsModel expects named fields",
+            )
+        })?;
+
+        let ty = &field.ty;
+        let ty_ok = match ty {
+            syn::Type::Path(p) => p
+                .path
+                .segments
+                .last()
+                .map(|seg| seg.ident == "bool")
+                .unwrap_or(false),
+            _ => false,
+        };
+        if !ty_ok {
+            return Err(Error::new_spanned(
+                ty,
+                "DiscreteInputsModel fields must be bool; change this field type to bool",
+            ));
+        }
+
+        let mut addr: Option<u16> = None;
+        parse_discrete_input_attr(field, |key, lit| match (key.as_str(), lit) {
+            ("addr", Lit::Int(v)) => {
+                addr = Some(parse_u16(v)?);
+                Ok(())
+            }
+            _ => Err(Error::new_spanned(
+                lit,
+                "unsupported #[discrete_input(...)] key/value; expected #[discrete_input(addr = N)]",
+            )),
+        })?;
+
+        let addr = addr.ok_or_else(|| {
+            Error::new_spanned(
+                field,
+                "missing required #[discrete_input(addr = N)] for DiscreteInputsModel field; example: #[discrete_input(addr = 0)]",
+            )
+        })?;
+
+        out.push(DiscreteInputField { ident, addr });
+    }
+
+    Ok(out)
+}
+
+fn parse_discrete_input_attr<F>(field: &syn::Field, mut callback: F) -> Result<(), Error>
+where
+    F: FnMut(String, &Lit) -> Result<(), Error>,
+{
+    for attr in &field.attrs {
+        if !attr.path().is_ident("discrete_input") {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            let key = meta
+                .path
+                .get_ident()
+                .ok_or_else(|| Error::new_spanned(&meta.path, "expected simple key"))?
+                .to_string();
+            meta.input.parse::<syn::Token![=]>()?;
+            let expr: Expr = meta.input.parse()?;
+            if let Expr::Lit(ExprLit { lit, .. }) = expr {
+                callback(key, &lit)
+            } else {
+                Err(Error::new_spanned(
+                    expr,
+                    "#[discrete_input(...)] values must be literals",
+                ))
+            }
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_duplicate_discrete_input_addresses(fields: &[DiscreteInputField]) -> Result<(), Error> {
+    let mut seen = std::collections::HashSet::new();
+    for field in fields {
+        if !seen.insert(field.addr) {
+            return Err(Error::new_spanned(
+                &field.ident,
+                format!(
+                    "duplicate discrete input address {}; each discrete input must have a unique address",
+                    field.addr
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_duplicate_bit_addresses(fields: &[CoilField]) -> Result<(), Error> {
@@ -1083,7 +1285,55 @@ fn build_write_single_coil_route_with_hooks(
     route
 }
 
-/// FC06 single-register write with individual / batch-notify hook dispatch.
+fn build_segmented_discrete_input_read_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+        let availability = build_available_take_tokens(
+            field_ty,
+            quote!(::mbus_server::DiscreteInputMap),
+            quote!(remaining),
+        );
+        let advance_cursor = build_advance_cursor_tokens();
+        route = quote! {
+            if (<#field_ty as ::mbus_server::DiscreteInputMap>::ADDR_MIN..=<#field_ty as ::mbus_server::DiscreteInputMap>::ADDR_MAX)
+                .contains(&cursor)
+            {
+                #availability
+                let take_bytes = byte_width(take);
+                let mut segment = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                let encoded = <#field_ty as ::mbus_server::DiscreteInputMap>::encode(
+                    &self.#field_ident,
+                    cursor,
+                    take,
+                    &mut segment[..take_bytes],
+                )?;
+
+                if encoded as usize != take_bytes {
+                    return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidByteCount);
+                }
+
+                for index in 0..take as usize {
+                    let src_byte = index / 8;
+                    let src_mask = 1u8 << (index % 8);
+                    if segment[src_byte] & src_mask != 0 {
+                        let dst_bit = bit_offset + index;
+                        out[dst_bit / 8] |= 1u8 << (dst_bit % 8);
+                    }
+                }
+
+                #advance_cursor
+                remaining -= take;
+                bit_offset += take as usize;
+                advanced = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
 fn build_write_single_register_route_with_hooks(
     fields: &[(Ident, syn::Type)],
     on_batch_write: Option<&Ident>,
@@ -1386,16 +1636,21 @@ fn expand_modbus_app_struct(
         "input_registers",
     )?;
     let coil_fields = collect_group_fields(&selected_fields.coils.field_idents, "coils", "coils")?;
+    let discrete_input_fields = collect_group_fields(
+        &selected_fields.discrete_inputs,
+        "discrete_inputs",
+        "discrete_inputs",
+    )?;
 
-    if hr_fields.is_empty() && ir_fields.is_empty() && coil_fields.is_empty() {
+    if hr_fields.is_empty() && ir_fields.is_empty() && coil_fields.is_empty() && discrete_input_fields.is_empty() {
         return Err(Error::new_spanned(
             &input.ident,
-            "no modbus_app fields selected; use #[modbus_app(holding_registers(...), input_registers(...), coils(...))] or helper field attributes",
+            "no modbus_app fields selected; use #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...))] or helper field attributes",
         ));
     }
 
     // Re-emit the original struct fields, stripping only #[holding_registers]
-    // / #[input_registers] / #[coils] helper attributes.
+    // / #[input_registers] / #[coils] / #[discrete_inputs] helper attributes.
     let struct_attrs = &input.attrs;
     let clean_fields = named_fields.named.iter().map(|field| {
         let clean_attrs: Vec<_> = field
@@ -1405,6 +1660,7 @@ fn expand_modbus_app_struct(
                 !a.path().is_ident("holding_registers")
                     && !a.path().is_ident("input_registers")
                     && !a.path().is_ident("coils")
+                    && !a.path().is_ident("discrete_inputs")
             })
             .collect();
         let fvis = &field.vis;
@@ -1418,6 +1674,7 @@ fn expand_modbus_app_struct(
     let ir_read_route =
         build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_read_route = build_segmented_coil_read_route(&coil_fields);
+    let discrete_input_read_route = build_segmented_discrete_input_read_route(&discrete_input_fields);
 
     let hr_write_single_route = build_write_single_register_route_with_hooks(
         &hr_fields,
@@ -1444,10 +1701,13 @@ fn expand_modbus_app_struct(
     let ir_overlap_checks =
         build_overlap_checks(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_overlap_checks = build_overlap_checks(&coil_fields, quote!(::mbus_server::CoilMap));
+    let discrete_input_overlap_checks =
+        build_overlap_checks(&discrete_input_fields, quote!(::mbus_server::DiscreteInputMap));
 
     let hr_order_checks = build_order_checks(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
     let ir_order_checks = build_order_checks(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_order_checks = build_order_checks(&coil_fields, quote!(::mbus_server::CoilMap));
+    let discrete_input_order_checks = build_order_checks(&discrete_input_fields, quote!(::mbus_server::DiscreteInputMap));
 
     let hr_notify_requires_batch_checks = if selected_fields
         .holding_registers
@@ -1624,9 +1884,11 @@ fn expand_modbus_app_struct(
                 #hr_overlap_checks
                 #ir_overlap_checks
                 #coil_overlap_checks
+                #discrete_input_overlap_checks
                 #hr_order_checks
                 #ir_order_checks
                 #coil_order_checks
+                #discrete_input_order_checks
                 #hr_notify_requires_batch_checks
                 #coil_notify_requires_batch_checks
                 #hr_on_write_address_checks
@@ -1673,6 +1935,45 @@ fn expand_modbus_app_struct(
                     while remaining > 0 {
                         let mut advanced = false;
                         #coil_read_route
+                        if !advanced {
+                            return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+
+                    Ok(total_bytes as u8)
+                })();
+
+                result
+            }
+
+            #[cfg(feature = "discrete-inputs")]
+            fn read_discrete_inputs_request(
+                &mut self,
+                txn_id: u16,
+                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                address: u16,
+                quantity: u16,
+                out: &mut [u8],
+            ) -> ::core::result::Result<u8, ::mbus_core::errors::MbusError> {
+                let _ = (txn_id, unit_id_or_slave_addr);
+                let result: ::core::result::Result<u8, ::mbus_core::errors::MbusError> = (|| {
+                    if quantity == 0 {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
+                    }
+
+                    let byte_width = |count: u16| -> usize { (count as usize).div_ceil(8) };
+                    let total_bytes = byte_width(quantity);
+                    if out.len() < total_bytes {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::BufferTooSmall);
+                    }
+                    out[..total_bytes].fill(0);
+
+                    let mut cursor = address;
+                    let mut remaining = quantity;
+                    let mut bit_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #discrete_input_read_route
                         if !advanced {
                             return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
                         }
@@ -2074,6 +2375,38 @@ mod tests {
 
         let err = expand_coils_model(&input).unwrap_err().to_string();
         assert!(err.contains("duplicate coil address"));
+    }
+
+    #[test]
+    fn discrete_inputs_duplicate_address_rejected() {
+        let input: DeriveInput = parse_quote! {
+            struct Model {
+                #[discrete_input(addr = 0)]
+                a: bool,
+                #[discrete_input(addr = 0)]
+                b: bool,
+            }
+        };
+
+        let err = expand_discrete_inputs_model(&input).unwrap_err().to_string();
+        assert!(err.contains("duplicate discrete input address"));
+    }
+
+    #[test]
+    fn discrete_inputs_expand_read_only_map_trait() {
+        let input: DeriveInput = parse_quote! {
+            struct Model {
+                #[discrete_input(addr = 0)]
+                a: bool,
+                #[discrete_input(addr = 1)]
+                b: bool,
+            }
+        };
+
+        let tokens = expand_discrete_inputs_model(&input).unwrap().to_string();
+        assert!(tokens.contains("impl :: mbus_server :: DiscreteInputMap"));
+        assert!(!tokens.contains("write_single"));
+        assert!(!tokens.contains("write_many"));
     }
 
     #[test]

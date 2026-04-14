@@ -6,7 +6,7 @@
 // access to [`MockTransport`] and the small helper functions below.
 
 use heapless::Vec as HVec;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, Pdu, compile_adu_frame};
+use mbus_core::data_unit::common::{compile_adu_frame, Pdu, MAX_ADU_FRAME_LEN};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,

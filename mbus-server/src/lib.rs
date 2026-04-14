@@ -19,6 +19,8 @@ pub use app::TrafficNotifier;
 pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
 #[cfg(feature = "coils")]
 pub use mbus_macros::CoilsModel;
+#[cfg(feature = "discrete-inputs")]
+pub use mbus_macros::DiscreteInputsModel;
 #[cfg(feature = "holding-registers")]
 pub use mbus_macros::HoldingRegistersModel;
 #[cfg(feature = "input-registers")]
@@ -73,6 +75,40 @@ pub trait CoilMap {
         let _ = addr;
         false
     }
+}
+
+// ---------------------------------------------------------------------------
+// DiscreteInputMap — used by #[derive(DiscreteInputsModel)] + #[modbus_app]
+// ---------------------------------------------------------------------------
+
+/// Trait implemented by user discrete input maps routed by `#[modbus_app]`.
+///
+/// Discrete inputs are read-only bit values from the Modbus protocol perspective (FC02).
+/// This trait only provides encode functionality; no write methods are exposed.
+#[cfg(feature = "discrete-inputs")]
+pub trait DiscreteInputMap {
+    /// Lowest Modbus discrete input address declared on this map.
+    const ADDR_MIN: u16;
+    /// Highest Modbus discrete input address declared on this map.
+    const ADDR_MAX: u16;
+    /// Discrete input slots from `ADDR_MIN` to `ADDR_MAX` inclusive.
+    const BIT_COUNT: usize;
+
+    /// Encodes the discrete input window `[address, address + quantity)` into packed Modbus bit bytes.
+    ///
+    /// # Parameters
+    /// - `address`: Starting discrete input address
+    /// - `quantity`: Number of discrete inputs to encode
+    /// - `out`: Output buffer for packed bit bytes
+    ///
+    /// # Returns
+    /// Byte count written on success.
+    ///
+    /// # Errors
+    /// - [`MbusError::InvalidQuantity`] if `quantity == 0`
+    /// - [`MbusError::InvalidAddress`] if the window falls outside `[ADDR_MIN, ADDR_MAX]`
+    /// - [`MbusError::BufferTooSmall`] if `out` is too small
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, MbusError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +187,8 @@ pub trait InputRegisterMap {
 pub mod prelude {
     #[cfg(feature = "coils")]
     pub use crate::CoilMap;
+    #[cfg(feature = "discrete-inputs")]
+    pub use crate::DiscreteInputMap;
     #[cfg(feature = "holding-registers")]
     pub use crate::HoldingRegisterMap;
     #[cfg(feature = "input-registers")]

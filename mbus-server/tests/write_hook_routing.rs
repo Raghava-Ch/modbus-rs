@@ -2,11 +2,11 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
 
+use mbus_server::modbus_app;
 #[cfg(feature = "coils")]
 use mbus_server::CoilsModel;
 #[cfg(feature = "holding-registers")]
 use mbus_server::HoldingRegistersModel;
-use mbus_server::modbus_app;
 
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
@@ -72,8 +72,10 @@ impl TrafficNotifier for CoilHookApp {}
 #[cfg(feature = "coils")]
 #[test]
 fn single_coil_on_write_hook_runs_before_commit_and_can_reject() {
-    let mut app = CoilHookApp::default();
-    app.reject_direct = true;
+    let mut app = CoilHookApp {
+        reject_direct: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_single_coil_request(41, unit_id(1), 0, true)
@@ -114,8 +116,10 @@ fn single_coil_notify_via_batch_uses_batch_hook_with_qty_one() {
 #[cfg(feature = "coils")]
 #[test]
 fn single_coil_notify_via_batch_rejection_aborts_commit() {
-    let mut app = CoilHookApp::default();
-    app.reject_batch = true;
+    let mut app = CoilHookApp {
+        reject_batch: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_single_coil_request(43, unit_id(1), 1, true)
@@ -133,8 +137,10 @@ fn single_coil_notify_via_batch_rejection_aborts_commit() {
 #[cfg(feature = "coils")]
 #[test]
 fn multiple_coil_batch_hook_rejection_keeps_write_atomic() {
-    let mut app = CoilHookApp::default();
-    app.reject_batch = true;
+    let mut app = CoilHookApp {
+        reject_batch: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_multiple_coils_request(44, unit_id(1), 0, 2, &[0b0000_0011])
@@ -227,8 +233,10 @@ impl TrafficNotifier for HoldingRegisterHookApp {}
 #[cfg(feature = "holding-registers")]
 #[test]
 fn single_register_on_write_hook_runs_before_commit_and_can_reject() {
-    let mut app = HoldingRegisterHookApp::default();
-    app.reject_direct = true;
+    let mut app = HoldingRegisterHookApp {
+        reject_direct: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_single_register_request(51, unit_id(1), 10, 0x1234)
@@ -269,8 +277,10 @@ fn single_register_notify_via_batch_uses_batch_hook_with_qty_one() {
 #[cfg(feature = "holding-registers")]
 #[test]
 fn single_register_notify_via_batch_rejection_aborts_commit() {
-    let mut app = HoldingRegisterHookApp::default();
-    app.reject_batch = true;
+    let mut app = HoldingRegisterHookApp {
+        reject_batch: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_single_register_request(53, unit_id(1), 11, 0x4321)
@@ -288,8 +298,10 @@ fn single_register_notify_via_batch_rejection_aborts_commit() {
 #[cfg(feature = "holding-registers")]
 #[test]
 fn multiple_register_batch_hook_rejection_keeps_write_atomic() {
-    let mut app = HoldingRegisterHookApp::default();
-    app.reject_batch = true;
+    let mut app = HoldingRegisterHookApp {
+        reject_batch: true,
+        ..Default::default()
+    };
 
     let err = app
         .write_multiple_registers_request(54, unit_id(1), 10, &[0x1111, 0x2222])

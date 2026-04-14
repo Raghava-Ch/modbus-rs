@@ -1,5 +1,5 @@
 mod common;
-use common::{MockTransport, build_request, tcp_config, unit_id};
+use common::{build_request, tcp_config, unit_id, MockTransport};
 use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
@@ -12,6 +12,10 @@ use mbus_server::ServerServices;
 use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+
+type Fc06Last = Arc<Mutex<Option<(u16, u16)>>>;
+type Fc16Last = Arc<Mutex<Option<(u16, Vec<u16>)>>>;
+type MaskFc16Last = Arc<Mutex<Option<(u16, u16, u16)>>>;
 
 #[derive(Debug, Clone, Copy)]
 enum RegisterMode {
@@ -29,9 +33,9 @@ struct RegisterApp {
     fc06_calls: Arc<AtomicUsize>,
     fc16_calls: Arc<AtomicUsize>,
     mask_fc16_calls: Arc<AtomicUsize>,
-    fc06_last: Arc<Mutex<Option<(u16, u16)>>>,
-    fc16_last: Arc<Mutex<Option<(u16, Vec<u16>)>>>,
-    mask_fc16_last: Arc<Mutex<Option<(u16, u16, u16)>>>,
+    fc06_last: Fc06Last,
+    fc16_last: Fc16Last,
+    mask_fc16_last: MaskFc16Last,
 }
 
 impl ModbusAppHandler for RegisterApp {
