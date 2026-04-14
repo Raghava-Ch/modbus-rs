@@ -26,6 +26,9 @@ pub trait CoilMap {
         values: &[u8],
         packed_bit_offset: usize,
     ) -> Result<(), errors::MbusError>;
+    fn is_batch_notified(_addr: u16) -> bool {
+        false
+    }
 }
 
 use mbus_macros::CoilsModel;

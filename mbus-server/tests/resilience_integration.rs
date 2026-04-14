@@ -11,11 +11,11 @@ use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
     SerialMode, Transport, TransportType, UnitIdOrSlaveAddr,
 };
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{
     ModbusAppHandler, OverflowPolicy, ResilienceConfig, ServerServices, TimeoutConfig,
 };
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -266,6 +266,7 @@ fn build_fc03_read_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     )
 }
 
+#[allow(dead_code)]
 fn build_fc03_invalid_quantity_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let payload = [0x00, 0x00, 0x00, 0x00];
     build_request(
@@ -956,13 +957,8 @@ fn traffic_callbacks_emit_for_successful_request_and_response() {
     let app = ProbeApp::default();
     let server_resilience = ResilienceConfig::default();
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
-        transport,
-        app,
-        tcp_config(),
-        unit_id(1),
-        server_resilience,
-    );
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
+        ServerServices::new(transport, app, tcp_config(), unit_id(1), server_resilience);
 
     server.poll();
 
@@ -986,13 +982,8 @@ fn traffic_callbacks_emit_for_exception_and_send_failure() {
     let app = ProbeApp::default();
     let server_resilience = ResilienceConfig::default();
 
-    let mut server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
-        transport,
-        app,
-        tcp_config(),
-        unit_id(1),
-        server_resilience,
-    );
+    let mut server: ServerServices<ScriptedTransport, ProbeApp> =
+        ServerServices::new(transport, app, tcp_config(), unit_id(1), server_resilience);
 
     server.poll();
 

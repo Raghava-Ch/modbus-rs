@@ -10,11 +10,7 @@
 //!
 //! This module is designed for `no_std` environments using `heapless` collections.
 
-use mbus_core::{
-    data_unit::common::Pdu,
-    errors::MbusError,
-    function_codes::public::FunctionCode,
-};
+use mbus_core::{data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode};
 
 /// Provides operations for creating and parsing Modbus discrete input request/response PDUs.
 pub(super) struct ReqPduCompiler {}

@@ -88,12 +88,8 @@ fn build_fc03_request(
     address: u16,
     quantity: u16,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
-    let pdu = Pdu::build_read_window(
-        FunctionCode::ReadHoldingRegisters,
-        address,
-        quantity,
-    )
-    .expect("valid FC03 request");
+    let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, address, quantity)
+        .expect("valid FC03 request");
 
     compile_adu_frame(txn_id, unit.get(), pdu, TransportType::StdTcp)
         .expect("request ADU should compile")

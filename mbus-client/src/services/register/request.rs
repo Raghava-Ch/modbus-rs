@@ -13,11 +13,7 @@
 //! This module is designed for `no_std` environments using `heapless` collections,
 //! ensuring memory safety and predictability for embedded systems.
 
-use mbus_core::{
-    data_unit::common::Pdu,
-    errors::MbusError,
-    function_codes::public::FunctionCode,
-};
+use mbus_core::{data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode};
 
 /// Provides operations for reading and writing Modbus registers.
 pub(super) struct ReqPduCompiler {}
@@ -82,7 +78,12 @@ impl ReqPduCompiler {
                 .extend_from_slice(&v.to_be_bytes())
                 .map_err(|_| MbusError::BufferLenMissmatch)?;
         }
-        Pdu::build_write_multiple(FunctionCode::WriteMultipleRegisters, address, quantity, &packed)
+        Pdu::build_write_multiple(
+            FunctionCode::WriteMultipleRegisters,
+            address,
+            quantity,
+            &packed,
+        )
     }
 
     /// Creates a Modbus PDU for a Read/Write Multiple Registers (FC 0x17) request.

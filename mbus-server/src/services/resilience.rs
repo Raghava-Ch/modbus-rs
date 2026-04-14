@@ -17,8 +17,7 @@
 
 use heapless::{Deque, Vec};
 use mbus_core::{
-    data_unit::common::MAX_ADU_FRAME_LEN,
-    function_codes::public::FunctionCode,
+    data_unit::common::MAX_ADU_FRAME_LEN, function_codes::public::FunctionCode,
     transport::UnitIdOrSlaveAddr,
 };
 
@@ -389,8 +388,10 @@ pub(crate) struct PendingResponse {
     /// Serialised ADU bytes to transmit.
     pub(crate) frame: Vec<u8, MAX_ADU_FRAME_LEN>,
     /// Transaction identifier associated with this response.
+    #[allow(dead_code)]
     pub(crate) txn_id: u16,
     /// Address metadata (TCP unit id or serial slave address).
+    #[allow(dead_code)]
     pub(crate) unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     /// How many send attempts have already been made.
     pub(crate) retry_count: u8,

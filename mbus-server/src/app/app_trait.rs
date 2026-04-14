@@ -51,20 +51,10 @@ pub enum TrafficDirection {
 /// care about.
 pub trait TrafficNotifier {
     /// Called when a request frame has been received and is about to be dispatched.
-    fn on_tx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-    ) {
-    }
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {}
 
     /// Called when an incoming request frame is accepted for dispatch.
-    fn on_rx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-    ) {
-    }
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {}
 
     /// Called when sending a response frame failed.
     fn on_tx_error(
@@ -446,13 +436,7 @@ pub trait ModbusAppHandler: AppRequirements {
         and_mask: u16,
         or_mask: u16,
     ) -> Result<(), MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            address,
-            and_mask,
-            or_mask,
-        );
+        let _ = (txn_id, unit_id_or_slave_addr, address, and_mask, or_mask);
         Err(MbusError::InvalidFunctionCode)
     }
 }

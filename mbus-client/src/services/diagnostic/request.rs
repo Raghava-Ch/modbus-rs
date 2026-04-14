@@ -50,11 +50,7 @@ impl ReqPduCompiler {
         if data.len() > 125 {
             return Err(MbusError::InvalidPduLength);
         }
-        Pdu::build_sub_function(
-            FunctionCode::Diagnostics,
-            sub_function.into(),
-            data,
-        )
+        Pdu::build_sub_function(FunctionCode::Diagnostics, sub_function.into(), data)
     }
 
     /// Creates a Get Comm Event Counter (FC 0x0B) request PDU.

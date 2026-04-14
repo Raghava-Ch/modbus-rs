@@ -32,6 +32,8 @@ pub use mbus_server::HoldingRegistersModel;
 pub use mbus_server::InputRegisterMap;
 #[cfg(all(feature = "server", feature = "input-registers"))]
 pub use mbus_server::InputRegistersModel;
+#[cfg(all(feature = "server", feature = "traffic"))]
+pub use mbus_server::TrafficNotifier;
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;
 #[cfg(feature = "server")]
@@ -39,8 +41,6 @@ pub use mbus_server::{
     ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy, RequestPriority,
     ResilienceConfig, ServerServices, TimeoutConfig,
 };
-#[cfg(all(feature = "server", feature = "traffic"))]
-pub use mbus_server::TrafficNotifier;
 
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};

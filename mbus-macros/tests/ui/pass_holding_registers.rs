@@ -15,10 +15,14 @@ pub trait HoldingRegisterMap {
     const ADDR_MIN: u16;
     const ADDR_MAX: u16;
     const WORD_COUNT: usize;
+    const HAS_BATCH_NOTIFIED_FIELDS: bool = false;
 
     fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError>;
     fn write_single(&mut self, address: u16, value: u16) -> Result<(), errors::MbusError>;
     fn write_many(&mut self, address: u16, values: &[u16]) -> Result<(), errors::MbusError>;
+    fn is_batch_notified(_addr: u16) -> bool {
+        false
+    }
 }
 
 use mbus_macros::HoldingRegistersModel;

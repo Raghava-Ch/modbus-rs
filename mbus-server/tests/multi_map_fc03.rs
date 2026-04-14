@@ -1,9 +1,9 @@
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
-use mbus_server::{HoldingRegistersModel, modbus_app};
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_server::{HoldingRegistersModel, modbus_app};
 
 #[derive(Debug, Default, HoldingRegistersModel)]
 struct ChillerContiguous {

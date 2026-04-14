@@ -87,6 +87,75 @@ use mbus_server::prelude::*;
 - direct `ModbusAppHandler` implementation on your app struct
 - compile-time overlap checks across all selected `holding_registers(...)` maps
 
+### Write Hooks
+
+`modbus_app` now also supports pre-write approval hooks for server-side writes.
+
+Field-level opt-in for single-write fallback to the batch hook:
+
+```rust
+#[derive(Debug, Default, CoilsModel)]
+struct Coils {
+	#[coil(addr = 0)]
+	run_enable: bool,
+	#[coil(addr = 1, notify_via_batch = true)]
+	alarm_ack: bool,
+}
+
+#[derive(Debug, Default, HoldingRegistersModel)]
+struct Holding {
+	#[reg(addr = 10)]
+	setpoint: u16,
+	#[reg(addr = 11, notify_via_batch = true)]
+	fan_speed: u16,
+}
+```
+
+Hook wiring on the app struct:
+
+```rust
+#[derive(Debug, Default)]
+#[modbus_app(
+	coils(coils, on_batch_write = on_coil_batch, on_write_0 = on_run_enable),
+	holding_registers(regs, on_batch_write = on_reg_batch, on_write_10 = on_setpoint),
+)]
+struct App {
+	coils: Coils,
+	regs: Holding,
+}
+```
+
+Hook signatures:
+
+- single coil: `fn hook(&mut self, address: u16, old: bool, new: bool) -> Result<(), MbusError>`
+- single register: `fn hook(&mut self, address: u16, old: u16, new: u16) -> Result<(), MbusError>`
+- batch coil: `fn hook(&mut self, start: u16, qty: u16, values: &[u8]) -> Result<(), MbusError>`
+- batch register: `fn hook(&mut self, start: u16, qty: u16, values: &[u16]) -> Result<(), MbusError>`
+
+Behavior:
+
+- `on_write_N` runs before a single FC05 / FC06 write commits.
+- `on_batch_write` runs before an FC0F / FC10 write commits.
+- if a field has `notify_via_batch = true`, a single write with no `on_write_N` hook will call the batch hook with `qty = 1`.
+- returning `Err(...)` rejects the write and leaves the model unchanged.
+
+Validation errors (compile time):
+
+- `notify_via_batch` used on a field but no `on_batch_write` configured for that group:
+	add `on_batch_write = my_hook` to the matching `coils(...)` or `holding_registers(...)` group.
+- duplicate `on_write_N` in the same group:
+	keep only one hook binding per address.
+- `on_write_N` targets an address outside selected map ranges:
+	use an address covered by the selected maps or update `#[modbus_app(...)]` map selection.
+- configured hook signature does not match expected form:
+	ensure signatures are exactly:
+	single coil `fn(&mut self, address: u16, old: bool, new: bool) -> Result<(), MbusError>`
+	single register `fn(&mut self, address: u16, old: u16, new: u16) -> Result<(), MbusError>`
+	batch coil `fn(&mut self, start: u16, qty: u16, values: &[u8]) -> Result<(), MbusError>`
+	batch register `fn(&mut self, start: u16, qty: u16, values: &[u16]) -> Result<(), MbusError>`
+
+See `examples/write_hooks.rs` for a runnable end-to-end example.
+
 ### Forwarding wrapper for runtime-owned app state
 
 `modbus_app` implements `ModbusAppHandler` on your concrete app model. In real deployments,
