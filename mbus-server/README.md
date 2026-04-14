@@ -8,6 +8,7 @@ Phase 1 is focused on derive-driven model declarations for:
 - coils
 - holding registers
 - input registers
+- discrete inputs
 
 The stack remains the owner of protocol memory. User code declares typed models and derives mapping metadata.
 
@@ -17,6 +18,7 @@ The stack remains the owner of protocol memory. User code declares typed models 
 - `CoilsModel`
 - `HoldingRegistersModel`
 - `InputRegistersModel`
+- `DiscreteInputsModel`
 - `modbus_app`
 
 ### Coils example
@@ -33,6 +35,22 @@ struct Coils {
 }
 ```
 
+### Discrete inputs example
+
+```rust
+use mbus_server::DiscreteInputsModel;
+
+#[derive(Debug, Clone, Default, DiscreteInputsModel)]
+struct SystemInputs {
+	#[discrete_input(addr = 0)]
+	power_ok: bool,
+	#[discrete_input(addr = 1)]
+	emergency_stop: bool,
+	#[discrete_input(addr = 2)]
+	door_closed: bool,
+}
+```
+
 ### Holding registers + app routing example
 
 ```rust
@@ -46,10 +64,15 @@ struct ChillerRegs {
 	return_temp: u16,
 }
 
+```rust
 #[derive(Debug, Default)]
-#[modbus_app(holding_registers(chiller))]
+#[modbus_app(
+	holding_registers(chiller),
+	discrete_inputs(system_inputs)
+)]
 struct App {
 	chiller: ChillerRegs,
+	system_inputs: SystemInputs,
 }
 ```
 
@@ -73,6 +96,11 @@ struct App {
 - per-field setter methods (`set_field_name(u16)`) for local model updates
 - `InputRegisterMap` implementation with FC04 `encode()` support only
 - no register write trait methods (no `write_single` / `write_many`)
+
+`DiscreteInputsModel` generates:
+- `DiscreteInputMap` implementation with FC02 `encode()` support
+- read-only bit-packed encoding (LSB-first per Modbus spec)
+- no write trait methods (discrete inputs are read-only from Modbus perspective)
 
 ### Ergonomic encode() calls
 
@@ -221,6 +249,17 @@ For `InputRegistersModel`:
 - field type must be `u16` (wire-ready register word)
 - `scale` optional numeric literal (generates `*_scaled` helper methods)
 - `unit` optional string literal (generates `*_unit` helper method)
+
+For `DiscreteInputsModel`:
+- `addr` required via `#[discrete_input(addr = N)]`
+- field type must be `bool`
+- read-only from Modbus protocol perspective (FC02 only)
+</text>
+
+<old_text line=186>
+- `holding-registers`: enables FC03/FC06/FC10 server handling and `HoldingRegistersModel`
+- `input-registers`: enables FC04 server handling and `InputRegistersModel`
+- `registers`: compatibility alias that enables both `holding-registers` and `input-registers`
 
 ## Feature gates
 
