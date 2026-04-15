@@ -8,6 +8,8 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 
 struct DiagnosticsExtApp;
@@ -25,6 +27,9 @@ impl ModbusAppHandler for DiagnosticsExtApp {
         Ok((id.len() as u8, 0xFF))
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DiagnosticsExtApp {}
 
 fn run_once_serial(request: HVec<u8, MAX_ADU_FRAME_LEN>, app: DiagnosticsExtApp) -> Vec<u8> {
     let sent_frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));

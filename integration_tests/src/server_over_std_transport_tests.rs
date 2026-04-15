@@ -54,6 +54,9 @@ struct DemoServer {
     coils: CoilBank,
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for DemoServer {}
+
 #[derive(Debug)]
 struct AcceptedTcpTransport {
     stream: TcpStream,

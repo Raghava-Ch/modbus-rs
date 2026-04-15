@@ -1,6 +1,8 @@
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{modbus_app, CoilsModel, HoldingRegistersModel};
 
 #[derive(Default, CoilsModel)]
@@ -29,6 +31,9 @@ struct HvacApp {
     holding: HvacHolding,
     coils: HvacCoils,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for HvacApp {}
 
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")
@@ -97,6 +102,9 @@ fn request_gap_returns_invalid_address() {
     struct GapApp {
         regs: GapRegs,
     }
+
+    #[cfg(feature = "traffic")]
+    impl mbus_server::TrafficNotifier for GapApp {}
 
     let mut app = GapApp::default();
     app.regs.set_a(1);

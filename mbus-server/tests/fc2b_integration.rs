@@ -8,6 +8,8 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,9 @@ impl ModbusAppHandler for DeviceIdApp {
         Ok((written as u8, conformity, false, 0x00))
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DeviceIdApp {}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -141,7 +146,12 @@ fn decode_exception(value: u8) -> ExceptionCode {
 #[test]
 fn fc2b_basic_read_serial_returns_all_basic_objects() {
     let pdu_data = fc2b_pdu_bytes(0x01, 0x00);
-    let request = build_serial_request(1, unit_id(1), FunctionCode::EncapsulatedInterfaceTransport, &pdu_data);
+    let request = build_serial_request(
+        1,
+        unit_id(1),
+        FunctionCode::EncapsulatedInterfaceTransport,
+        &pdu_data,
+    );
 
     let response = run_once_serial(request);
 
@@ -149,7 +159,10 @@ fn fc2b_basic_read_serial_returns_all_basic_objects() {
     assert_eq!(response[1], 0x2B, "FC byte");
     assert_eq!(response[2], 0x0E, "MEI type");
     assert_eq!(response[3], 0x01, "read device id code echoed");
-    assert_eq!(response[4], 0x81, "conformity level BasicStreamAndIndividual");
+    assert_eq!(
+        response[4], 0x81,
+        "conformity level BasicStreamAndIndividual"
+    );
     assert_eq!(response[5], 0x00, "more_follows = false");
     assert_eq!(response[6], 0x00, "next_object_id");
     assert_eq!(response[7], 3, "number of objects");
@@ -177,7 +190,12 @@ fn fc2b_basic_read_serial_returns_all_basic_objects() {
 #[test]
 fn fc2b_basic_read_tcp_works() {
     let pdu_data = fc2b_pdu_bytes(0x01, 0x00);
-    let request = build_request(2, unit_id(1), FunctionCode::EncapsulatedInterfaceTransport, &pdu_data);
+    let request = build_request(
+        2,
+        unit_id(1),
+        FunctionCode::EncapsulatedInterfaceTransport,
+        &pdu_data,
+    );
 
     let response = run_once_tcp(request);
 
@@ -196,7 +214,12 @@ fn fc2b_basic_read_tcp_works() {
 fn fc2b_specific_access_returns_single_object() {
     // Request object 0x01 (ProductCode) specifically
     let pdu_data = fc2b_pdu_bytes(0x04, 0x01);
-    let request = build_serial_request(3, unit_id(1), FunctionCode::EncapsulatedInterfaceTransport, &pdu_data);
+    let request = build_serial_request(
+        3,
+        unit_id(1),
+        FunctionCode::EncapsulatedInterfaceTransport,
+        &pdu_data,
+    );
 
     let response = run_once_serial(request);
 
@@ -214,7 +237,12 @@ fn fc2b_specific_access_returns_single_object() {
 fn fc2b_unknown_mei_type_returns_exception() {
     // Use MEI type 0x0D (CANopen) which we don't handle
     let pdu_data = [0x0D, 0x01, 0x00];
-    let request = build_serial_request(4, unit_id(1), FunctionCode::EncapsulatedInterfaceTransport, &pdu_data);
+    let request = build_serial_request(
+        4,
+        unit_id(1),
+        FunctionCode::EncapsulatedInterfaceTransport,
+        &pdu_data,
+    );
 
     let response = run_once_serial(request);
 

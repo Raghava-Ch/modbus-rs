@@ -64,7 +64,7 @@ impl ModbusAppHandler for MyApp {
 }
 ```
 
-See `examples/full_featured_server.rs` for every function code in one place.
+See `examples/full_server.rs` for every function code in one place.
 
 ## Derive Macros
 
@@ -236,7 +236,7 @@ ResilienceConfig { enable_broadcast_writes: true, ..Default::default() }
 Supported FCs: 0x05, 0x0F, 0x06, 0x10.  The server **never** sends a response for
 broadcast writes.  `unit_id_or_slave_addr.is_broadcast()` returns `true` in callbacks.
 
-See `examples/broadcast_writes.rs`.
+See `examples/broadcast.rs`.
 
 ## Feature Flags
 

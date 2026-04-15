@@ -102,9 +102,7 @@ where
         let start_object_id = request_data[1];
 
         // Validate the code byte (0x01–0x04 are the only legal values)
-        if mbus_core::models::diagnostic::ReadDeviceIdCode::try_from(read_device_id_code)
-            .is_err()
-        {
+        if mbus_core::models::diagnostic::ReadDeviceIdCode::try_from(read_device_id_code).is_err() {
             server_log_debug!(
                 "FC2B/0x0E: invalid device ID code {:#04x}: txn_id={}",
                 read_device_id_code,
@@ -121,31 +119,30 @@ where
 
         let mut out = [0u8; MAX_DEVICE_ID_OBJECTS_LEN];
 
-        let (bytes_written, conformity_level, more_follows, next_object_id) = match self
-            .app
-            .read_device_identification_request(
+        let (bytes_written, conformity_level, more_follows, next_object_id) =
+            match self.app.read_device_identification_request(
                 txn_id,
                 unit_id_or_slave_addr,
                 read_device_id_code,
                 start_object_id,
                 &mut out,
             ) {
-            Ok(v) => v,
-            Err(err) => {
-                server_log_debug!(
-                    "FC2B/0x0E: app callback failed: txn_id={}, error={:?}",
-                    txn_id,
-                    err
-                );
-                self.send_exception_response(
-                    txn_id,
-                    unit_id_or_slave_addr,
-                    FunctionCode::EncapsulatedInterfaceTransport,
-                    err,
-                );
-                return;
-            }
-        };
+                Ok(v) => v,
+                Err(err) => {
+                    server_log_debug!(
+                        "FC2B/0x0E: app callback failed: txn_id={}, error={:?}",
+                        txn_id,
+                        err
+                    );
+                    self.send_exception_response(
+                        txn_id,
+                        unit_id_or_slave_addr,
+                        FunctionCode::EncapsulatedInterfaceTransport,
+                        err,
+                    );
+                    return;
+                }
+            };
 
         let response = match build_fc2b_read_device_id_response(
             &self.transport,

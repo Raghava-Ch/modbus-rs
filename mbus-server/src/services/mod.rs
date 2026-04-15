@@ -462,57 +462,84 @@ where
     ) {
         let start = self.now_ms();
         match self.transport.send(frame) {
-            Ok(_) => {
-                #[cfg(feature = "diagnostics-stats")]
-                self.stats.increment_server_message_count();
+            Ok(_) => self.handle_send_success(txn_id, unit_id_or_slave_addr, start),
+            Err(err) => self.handle_send_failure(frame, txn_id, unit_id_or_slave_addr, err),
+        }
+    }
 
-                #[cfg(feature = "traffic")]
-                self.app.on_tx_frame(txn_id, unit_id_or_slave_addr);
+    fn handle_send_success(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        start_ms: u64,
+    ) {
+        let _ = unit_id_or_slave_addr;
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_server_message_count();
 
-                let elapsed = self.now_ms().saturating_sub(start);
-                let threshold = self.resilience.timeouts.send_ms as u64;
-                if threshold > 0 && elapsed > threshold {
-                    server_log_debug!(
-                        "txn_id={}: send took {}ms (threshold={}ms)",
-                        txn_id,
-                        elapsed,
-                        threshold
-                    );
-                }
+        #[cfg(feature = "traffic")]
+        self.app.on_tx_frame(txn_id, unit_id_or_slave_addr);
+
+        let elapsed = self.now_ms().saturating_sub(start_ms);
+        let threshold = self.resilience.timeouts.send_ms as u64;
+        if threshold > 0 && elapsed > threshold {
+            server_log_debug!(
+                "txn_id={}: send took {}ms (threshold={}ms)",
+                txn_id,
+                elapsed,
+                threshold
+            );
+        }
+    }
+
+    fn handle_send_failure(
+        &mut self,
+        frame: &[u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        err: <TRANSPORT as Transport>::Error,
+    ) {
+        server_log_debug!(
+            "txn_id={}: transport send failed ({:?}); queuing for retry",
+            txn_id,
+            err
+        );
+
+        #[cfg(feature = "traffic")]
+        self.app
+            .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed);
+
+        self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
+        self.update_peak_response_queue_size();
+    }
+
+    fn queue_response_for_retry(
+        &mut self,
+        frame: &[u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) {
+        let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+        if queued.extend_from_slice(frame).is_ok() {
+            let queued_at = self.now_ms();
+            if !self.response_queue.push_back(PendingResponse {
+                frame: queued,
+                txn_id,
+                unit_id_or_slave_addr,
+                retry_count: 0,
+                queued_at_ms: queued_at,
+            }) {
+                server_log_debug!("txn_id={}: response queue full; dropping response", txn_id);
+                self.dropped_response_count = self.dropped_response_count.saturating_add(1);
             }
-            Err(err) => {
-                server_log_debug!(
-                    "txn_id={}: transport send failed ({:?}); queuing for retry",
-                    txn_id,
-                    err
-                );
-                #[cfg(feature = "traffic")]
-                self.app
-                    .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed);
+        }
+    }
 
-                let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-                if queued.extend_from_slice(frame).is_ok() {
-                    let queued_at = self.now_ms();
-                    if !self.response_queue.push_back(PendingResponse {
-                        frame: queued,
-                        txn_id,
-                        unit_id_or_slave_addr,
-                        retry_count: 0,
-                        queued_at_ms: queued_at,
-                    }) {
-                        server_log_debug!(
-                            "txn_id={}: response queue full; dropping response",
-                            txn_id
-                        );
-                        self.dropped_response_count = self.dropped_response_count.saturating_add(1);
-                    }
-                }
-                // Track peak queue utilization after queueing attempt
-                let current_size = self.response_queue.len();
-                if current_size > self.peak_response_queue_size {
-                    self.peak_response_queue_size = current_size;
-                }
-            }
+    fn update_peak_response_queue_size(&mut self) {
+        // Track peak queue utilization after queueing attempt
+        let current_size = self.response_queue.len();
+        if current_size > self.peak_response_queue_size {
+            self.peak_response_queue_size = current_size;
         }
     }
 
@@ -532,8 +559,13 @@ where
 
         let exception_code = function_code.exception_code_for_error(&error);
 
-        self.app
-            .on_exception(txn_id, unit_id_or_slave_addr, function_code, exception_code, error);
+        self.app.on_exception(
+            txn_id,
+            unit_id_or_slave_addr,
+            function_code,
+            exception_code,
+            error,
+        );
 
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_exception_error_count();
@@ -726,12 +758,11 @@ where
                 self.handle_report_server_id_request(wire_txn_id, unit_id_or_slave_addr, message)
             }
             #[cfg(feature = "diagnostics")]
-            EncapsulatedInterfaceTransport => self
-                .handle_encapsulated_interface_transport_request(
-                    wire_txn_id,
-                    unit_id_or_slave_addr,
-                    message,
-                ),
+            EncapsulatedInterfaceTransport => self.handle_encapsulated_interface_transport_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
             _ => self.send_exception_response(
                 wire_txn_id,
                 unit_id_or_slave_addr,
@@ -774,29 +805,38 @@ where
 
         // Steps 4 & 5 — only relevant when the priority queue is active.
         if self.resilience.enable_priority_queue {
-            // Expire requests that have waited too long.
-            let deadline = self.resilience.timeouts.request_deadline_ms;
-            if deadline > 0 {
-                let now = self.now_ms();
-                if self.resilience.timeouts.strict_mode {
-                    let expired = self.request_queue.take_expired(now, deadline);
-                    if !expired.is_empty() {
-                        server_log_debug!("{} stale request(s) expired from queue", expired.len());
-                        for pending in expired {
-                            self.handle_expired_request_strict(pending);
-                        }
-                    }
-                } else {
-                    let expired = self.request_queue.expire_stale(now, deadline);
-                    if expired > 0 {
-                        server_log_debug!("{} stale request(s) expired from queue", expired);
-                    }
-                }
-            }
+            self.expire_stale_queued_requests();
 
             // Dispatch all queued requests in priority order.
             while let Some(pending) = self.request_queue.pop_highest_priority() {
                 self.dispatch_pending_request(pending);
+            }
+        }
+    }
+
+    /// Expires queued requests that have exceeded the configured request deadline.
+    ///
+    /// In strict mode, expired requests are converted to timeout exception
+    /// responses. Otherwise, they are silently discarded.
+    fn expire_stale_queued_requests(&mut self) {
+        let deadline = self.resilience.timeouts.request_deadline_ms;
+        if deadline == 0 {
+            return;
+        }
+
+        let now = self.now_ms();
+        if self.resilience.timeouts.strict_mode {
+            let expired = self.request_queue.take_expired(now, deadline);
+            if !expired.is_empty() {
+                server_log_debug!("{} stale request(s) expired from queue", expired.len());
+                for pending in expired {
+                    self.handle_expired_request_strict(pending);
+                }
+            }
+        } else {
+            let expired = self.request_queue.expire_stale(now, deadline);
+            if expired > 0 {
+                server_log_debug!("{} stale request(s) expired from queue", expired);
             }
         }
     }
@@ -814,63 +854,100 @@ where
         let has_clock = self.resilience.clock_fn.is_some();
         let pending_count = self.response_queue.len();
         for _ in 0..pending_count {
-            let mut pending = match self.response_queue.pop_front() {
+            let pending = match self.response_queue.pop_front() {
                 Some(p) => p,
                 None => break,
             };
-            if pending.retry_count >= self.resilience.max_send_retries {
-                server_log_debug!(
-                    "dropping queued response after {} retry attempt(s)",
-                    pending.retry_count
-                );
+            if self.should_drop_exhausted_response_retry(&pending) {
                 continue;
             }
 
-            if retry_interval_ms > 0 && has_clock {
-                let elapsed = self.now_ms().saturating_sub(pending.queued_at_ms);
-                if elapsed < retry_interval_ms {
-                    let _ = self.response_queue.push_back(pending);
-                    // Preserve FIFO order: if the head is not due yet, later
-                    // items should wait as well.
-                    break;
-                }
+            if self.should_delay_response_retry(&pending, retry_interval_ms, has_clock) {
+                let _ = self.response_queue.push_back(pending);
+                // Preserve FIFO order: if the head is not due yet, later
+                // items should wait as well.
+                break;
             }
 
-            match self.transport.send(&pending.frame) {
-                Ok(_) => {
-                    #[cfg(feature = "diagnostics-stats")]
-                    self.stats.increment_server_message_count();
-
-                    #[cfg(feature = "traffic")]
-                    self.app
-                        .on_tx_frame(pending.txn_id, pending.unit_id_or_slave_addr);
-
-                    server_log_trace!(
-                        "queued response sent on retry attempt {}",
-                        pending.retry_count + 1
-                    );
-                }
-                Err(err) => {
-                    #[cfg(feature = "traffic")]
-                    self.app.on_tx_error(
-                        pending.txn_id,
-                        pending.unit_id_or_slave_addr,
-                        MbusError::SendFailed,
-                    );
-
-                    server_log_debug!(
-                        "queued response retry {} failed: {:?}; requeueing",
-                        pending.retry_count + 1,
-                        err
-                    );
-                    pending.retry_count += 1;
-                    pending.queued_at_ms = self.now_ms();
-                    let _ = self.response_queue.push_back(pending);
-                    // Do not try more this poll; let the transport recover.
-                    break;
-                }
+            if !self.try_send_queued_response(pending) {
+                // Do not try more this poll; let the transport recover.
+                break;
             }
         }
+    }
+
+    fn should_drop_exhausted_response_retry(&self, pending: &PendingResponse) -> bool {
+        if pending.retry_count >= self.resilience.max_send_retries {
+            server_log_debug!(
+                "dropping queued response after {} retry attempt(s)",
+                pending.retry_count
+            );
+            true
+        } else {
+            false
+        }
+    }
+
+    fn should_delay_response_retry(
+        &self,
+        pending: &PendingResponse,
+        retry_interval_ms: u64,
+        has_clock: bool,
+    ) -> bool {
+        if retry_interval_ms == 0 || !has_clock {
+            return false;
+        }
+        let elapsed = self.now_ms().saturating_sub(pending.queued_at_ms);
+        elapsed < retry_interval_ms
+    }
+
+    fn try_send_queued_response(&mut self, pending: PendingResponse) -> bool {
+        match self.transport.send(&pending.frame) {
+            Ok(_) => {
+                self.on_queued_response_retry_success(&pending);
+                true
+            }
+            Err(err) => {
+                self.on_queued_response_retry_failure(pending, err);
+                false
+            }
+        }
+    }
+
+    fn on_queued_response_retry_success(&mut self, pending: &PendingResponse) {
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_server_message_count();
+
+        #[cfg(feature = "traffic")]
+        self.app
+            .on_tx_frame(pending.txn_id, pending.unit_id_or_slave_addr);
+
+        server_log_trace!(
+            "queued response sent on retry attempt {}",
+            pending.retry_count + 1
+        );
+    }
+
+    fn on_queued_response_retry_failure(
+        &mut self,
+        mut pending: PendingResponse,
+        err: <TRANSPORT as Transport>::Error,
+    ) {
+        #[cfg(feature = "traffic")]
+        self.app.on_tx_error(
+            pending.txn_id,
+            pending.unit_id_or_slave_addr,
+            MbusError::SendFailed,
+        );
+
+        server_log_debug!(
+            "queued response retry {} failed: {:?}; requeueing",
+            pending.retry_count + 1,
+            err
+        );
+        pending.retry_count += 1;
+        pending.queued_at_ms = self.now_ms();
+        let _ = self.response_queue.push_back(pending);
     }
 
     /// Dispatches a request that was previously placed into the priority queue.
@@ -1052,19 +1129,19 @@ where
     }
 
     fn ingest_frame(&mut self) -> Result<usize, MbusError> {
-        let frame = self.rxed_frame.as_slice();
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
 
         server_log_trace!(
             "attempting frame ingest: transport_type={:?}, buffer_len={}",
             transport_type,
-            frame.len()
+            self.rxed_frame.len()
         );
 
-        let expected_length = match derive_length_from_bytes(frame, transport_type) {
-            Some(len) => len,
-            None => return Err(MbusError::BufferTooSmall),
-        };
+        let expected_length =
+            match derive_length_from_bytes(self.rxed_frame.as_slice(), transport_type) {
+                Some(len) => len,
+                None => return Err(MbusError::BufferTooSmall),
+            };
 
         server_log_trace!("derived expected frame length={}", expected_length);
 
@@ -1081,20 +1158,7 @@ where
             return Err(MbusError::BufferTooSmall);
         }
 
-        let message = match common::decompile_adu_frame(&frame[..expected_length], transport_type) {
-            Ok(value) => value,
-            Err(err) => {
-                server_log_debug!(
-                    "decompile_adu_frame failed for {} bytes: {:?}",
-                    expected_length,
-                    err
-                );
-                return Err(err);
-            }
-        };
-
-        #[cfg(feature = "diagnostics-stats")]
-        self.stats.increment_message_count();
+        let message = self.parse_inbound_frame_body(expected_length)?;
 
         use TransportType::*;
         let message = match TRANSPORT::TRANSPORT_TYPE {
@@ -1129,66 +1193,115 @@ where
         #[cfg(feature = "diagnostics")]
         self.record_comm_event(0x04);
 
-        if self.resilience.enable_priority_queue {
-            // Check if back-pressure should be applied
-            if self.should_apply_back_pressure() {
-                server_log_debug!(
-                    "txn_id={}: request rejected due to response queue back-pressure (utilization >= 80%)",
-                    message.transaction_id()
-                );
-                self.rejected_request_count = self.rejected_request_count.saturating_add(1);
-                self.send_exception_response(
-                    message.transaction_id(),
-                    message.unit_id_or_slave_addr(),
-                    message.pdu.function_code(),
-                    MbusError::TooManyRequests,
-                );
-                return Ok(expected_length);
-            }
+        self.enqueue_or_dispatch_inbound(&message, expected_length);
 
-            // Route to priority queue for ordered dispatch.
-            let priority = RequestPriority::from_function_code(message.pdu.function_code());
-            let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-            let _ = raw_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
-            let received_at = self.now_ms();
-            if !self.request_queue.push(PendingRequest {
-                frame: raw_frame,
-                priority,
-                received_at_ms: received_at,
-            }) {
+        server_log_trace!("frame ingest complete for {} bytes", expected_length);
+        Ok(expected_length)
+    }
+
+    /// Decompiles the raw ADU bytes and updates the diagnostics message counter.
+    ///
+    /// Returns the parsed [`ModbusMessage`] before transport-specific address
+    /// normalisation is applied.  The caller is responsible for reframing the
+    /// address once it has the concrete transport type in scope.
+    fn parse_inbound_frame_body(
+        &mut self,
+        expected_length: usize,
+    ) -> Result<ModbusMessage, MbusError> {
+        let transport_type = TRANSPORT::TRANSPORT_TYPE;
+        let message =
+            match common::decompile_adu_frame(&self.rxed_frame[..expected_length], transport_type) {
+            Ok(value) => value,
+            Err(err) => {
                 server_log_debug!(
-                    "request queue full; dispatching immediately (priority={:?})",
-                    priority
+                    "decompile_adu_frame failed for {} bytes: {:?}",
+                    expected_length,
+                    err
                 );
-                let start = self.now_ms();
-                self.dispatch_request(&message);
-                let elapsed = self.now_ms().saturating_sub(start);
-                let threshold = self.resilience.timeouts.app_callback_ms as u64;
-                if threshold > 0 && elapsed > threshold {
-                    server_log_debug!(
-                        "app callback took {}ms (threshold={}ms) [queue-full fallback]",
-                        elapsed,
-                        threshold
-                    );
-                }
+                return Err(err);
             }
+        };
+
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_message_count();
+
+        Ok(message)
+    }
+
+    /// Routes an already-validated inbound message to the priority queue or
+    /// dispatches it immediately on the hot path.
+    fn enqueue_or_dispatch_inbound(&mut self, message: &ModbusMessage, expected_length: usize) {
+        if self.resilience.enable_priority_queue {
+            self.try_enqueue_request(message, expected_length);
         } else {
-            // Hot path: dispatch immediately.
+            self.dispatch_immediately(message);
+        }
+    }
+
+    /// Attempts to enqueue a validated inbound message into the priority queue.
+    ///
+    /// Applies back-pressure rejection when the queue is overloaded, and falls
+    /// back to an immediate dispatch if the queue is full.  The
+    /// `Vec<u8, MAX_ADU_FRAME_LEN>` raw-frame copy lives on this method's stack
+    /// frame rather than on `ingest_frame`'s, reducing the peak stack depth of
+    /// the receive path.
+    fn try_enqueue_request(&mut self, message: &ModbusMessage, expected_length: usize) {
+        if self.should_apply_back_pressure() {
+            server_log_debug!(
+                "txn_id={}: request rejected due to response queue back-pressure (utilization >= 80%)",
+                message.transaction_id()
+            );
+            self.rejected_request_count = self.rejected_request_count.saturating_add(1);
+            self.send_exception_response(
+                message.transaction_id(),
+                message.unit_id_or_slave_addr(),
+                message.pdu.function_code(),
+                MbusError::TooManyRequests,
+            );
+            return;
+        }
+
+        let priority = RequestPriority::from_function_code(message.pdu.function_code());
+        let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+        let _ = raw_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
+        let received_at = self.now_ms();
+        if !self.request_queue.push(PendingRequest {
+            frame: raw_frame,
+            priority,
+            received_at_ms: received_at,
+        }) {
+            server_log_debug!(
+                "request queue full; dispatching immediately (priority={:?})",
+                priority
+            );
             let start = self.now_ms();
-            self.dispatch_request(&message);
+            self.dispatch_request(message);
             let elapsed = self.now_ms().saturating_sub(start);
             let threshold = self.resilience.timeouts.app_callback_ms as u64;
             if threshold > 0 && elapsed > threshold {
                 server_log_debug!(
-                    "app callback took {}ms (threshold={}ms)",
+                    "app callback took {}ms (threshold={}ms) [queue-full fallback]",
                     elapsed,
                     threshold
                 );
             }
         }
+    }
 
-        server_log_trace!("frame ingest complete for {} bytes", expected_length);
-        Ok(expected_length)
+    /// Hot-path dispatch: sends the response immediately and logs if the app
+    /// callback exceeds the configured threshold.
+    fn dispatch_immediately(&mut self, message: &ModbusMessage) {
+        let start = self.now_ms();
+        self.dispatch_request(message);
+        let elapsed = self.now_ms().saturating_sub(start);
+        let threshold = self.resilience.timeouts.app_callback_ms as u64;
+        if threshold > 0 && elapsed > threshold {
+            server_log_debug!(
+                "app callback took {}ms (threshold={}ms)",
+                elapsed,
+                threshold
+            );
+        }
     }
 
     /// Re-frames a parsed `ModbusMessage` from raw bytes into the correct

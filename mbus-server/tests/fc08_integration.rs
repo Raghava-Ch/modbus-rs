@@ -1,22 +1,25 @@
 mod common;
-use common::{MockSerialTransport, build_serial_request, serial_rtu_config, unit_id};
+use common::{build_serial_request, serial_rtu_config, unit_id};
 use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-use mbus_core::errors::{ExceptionCode, MbusError};
+use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::{DiagnosticSubFunction, FunctionCode};
-use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_core::transport::{
+    ModbusConfig, SerialMode, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
+};
 use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Success(u16),
-    AppError(MbusError),
 }
 
 struct Fc08App {
@@ -40,12 +43,11 @@ impl ModbusAppHandler for Fc08App {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _sub_function: DiagnosticSubFunction,
-        data: u16,
+        _data: u16,
     ) -> Result<u16, MbusError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         match self.mode {
             Mode::Success(v) => Ok(v),
-            Mode::AppError(err) => Err(err),
         }
     }
 }
@@ -53,40 +55,94 @@ impl ModbusAppHandler for Fc08App {
 #[cfg(feature = "traffic")]
 impl mbus_server::TrafficNotifier for Fc08App {}
 
-fn run_once_serial(
-    request: HVec<u8, MAX_ADU_FRAME_LEN>,
-    app: Fc08App,
-) -> (Vec<u8>, ServerServices<MockSerialTransport, Fc08App, 8>) {
-    let sent_frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let transport = MockSerialTransport {
-        next_rx: Some(request),
-        sent_frames: std::sync::Arc::clone(&sent_frames),
+#[derive(Debug)]
+struct QueueSerialTransport {
+    rx_queue: Arc<Mutex<VecDeque<HVec<u8, MAX_ADU_FRAME_LEN>>>>,
+    sent_frames: Arc<Mutex<Vec<Vec<u8>>>>,
+    connected: bool,
+}
+
+impl Transport for QueueSerialTransport {
+    type Error = TransportError;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(SerialMode::Rtu);
+
+    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+        self.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&mut self) -> Result<(), Self::Error> {
+        self.connected = false;
+        Ok(())
+    }
+
+    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+        self.sent_frames
+            .lock()
+            .expect("sent_frames mutex poisoned")
+            .push(adu.to_vec());
+        Ok(())
+    }
+
+    fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+        self.rx_queue
+            .lock()
+            .expect("rx_queue mutex poisoned")
+            .pop_front()
+            .ok_or(TransportError::Timeout)
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+}
+
+type TestServer = ServerServices<QueueSerialTransport, Fc08App, 8>;
+type SharedRxQueue = Arc<Mutex<VecDeque<HVec<u8, MAX_ADU_FRAME_LEN>>>>;
+type SharedSentFrames = Arc<Mutex<Vec<Vec<u8>>>>;
+
+fn make_server(app: Fc08App) -> (TestServer, SharedRxQueue, SharedSentFrames) {
+    let rx_queue = Arc::new(Mutex::new(VecDeque::new()));
+    let sent_frames = Arc::new(Mutex::new(Vec::new()));
+    let transport = QueueSerialTransport {
+        rx_queue: Arc::clone(&rx_queue),
+        sent_frames: Arc::clone(&sent_frames),
         connected: true,
     };
-    let mut server = ServerServices::new(
+
+    let server = ServerServices::new(
         transport,
         app,
         serial_rtu_config(),
         unit_id(1),
         ResilienceConfig::default(),
     );
-    server.poll();
-    let response = sent_frames
-        .lock()
-        .expect("sent frames mutex")
-        .first()
-        .cloned()
-        .expect("server should send exactly one response");
-    (response, server)
+
+    (server, rx_queue, sent_frames)
 }
 
-fn decode_exception(value: u8) -> ExceptionCode {
-    match value {
-        0x01 => ExceptionCode::IllegalFunction,
-        0x02 => ExceptionCode::IllegalDataAddress,
-        0x03 => ExceptionCode::IllegalDataValue,
-        0x04 => ExceptionCode::ServerDeviceFailure,
-        _ => panic!("unexpected exception code: {value:#04x}"),
+fn send_request(
+    server: &mut TestServer,
+    rx_queue: &SharedRxQueue,
+    sent_frames: &SharedSentFrames,
+    request: HVec<u8, MAX_ADU_FRAME_LEN>,
+) -> Option<Vec<u8>> {
+    let before = sent_frames
+        .lock()
+        .expect("sent_frames mutex poisoned")
+        .len();
+    rx_queue
+        .lock()
+        .expect("rx_queue mutex poisoned")
+        .push_back(request);
+
+    server.poll();
+
+    let sent_frames = sent_frames.lock().expect("sent_frames mutex poisoned");
+    if sent_frames.len() > before {
+        sent_frames.last().cloned()
+    } else {
+        None
     }
 }
 
@@ -102,17 +158,15 @@ fn fc08_0x0001_restart_communications_returns_echo() {
 
     let req = build_serial_request(1, unit_id(1), FunctionCode::Diagnostics, request.as_slice());
     let (app, calls) = make_app(Mode::Success(0xABCD)); // app is not called for 0x0001
+    let (mut server, rx_queue, sent_frames) = make_server(app);
 
-    let (response, server) = run_once_serial(req, app);
+    let response = send_request(&mut server, &rx_queue, &sent_frames, req)
+        .expect("0x0001 should produce a response");
 
     assert_eq!(
         calls.load(Ordering::SeqCst),
         0,
         "app should not be called for 0x0001"
-    );
-    assert!(
-        !server.listen_only_mode,
-        "listen-only mode should be cleared"
     );
     assert_eq!(response[1], 0x08, "FC byte");
     // Response echoes sub-function (0x0001) and data (0x0000)
@@ -129,29 +183,18 @@ fn fc08_0x0004_force_listen_only_mode_no_response() {
 
     let req = build_serial_request(1, unit_id(1), FunctionCode::Diagnostics, request.as_slice());
     let (app, calls) = make_app(Mode::Success(0x1234));
+    let (mut server, rx_queue, sent_frames) = make_server(app);
 
-    let transport = MockSerialTransport {
-        next_rx: Some(req),
-        sent_frames: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-        connected: true,
-    };
-    let mut server = ServerServices::new(
-        transport,
-        app,
-        serial_rtu_config(),
-        unit_id(1),
-        ResilienceConfig::default(),
-    );
-    server.poll();
+    let response = send_request(&mut server, &rx_queue, &sent_frames, req);
 
     assert_eq!(
         calls.load(Ordering::SeqCst),
         0,
         "app should not be called for 0x0004"
     );
-    assert!(server.listen_only_mode, "listen-only mode should be set");
+    assert!(response.is_none(), "0x0004 should not send a response");
     assert_eq!(
-        server.transport.sent_frames.lock().unwrap().len(),
+        sent_frames.lock().unwrap().len(),
         0,
         "no response should be sent for 0x0004 per Modbus spec"
     );
@@ -159,6 +202,9 @@ fn fc08_0x0004_force_listen_only_mode_no_response() {
 
 #[test]
 fn fc08_listen_only_mode_gates_other_functions() {
+    let (app, calls) = make_app(Mode::Success(0));
+    let (mut server, rx_queue, sent_frames) = make_server(app);
+
     // 1. Enter listen-only mode
     let mut request_enter = HVec::<u8, MAX_ADU_FRAME_LEN>::new();
     request_enter.extend_from_slice(&[0x00, 0x04]).unwrap();
@@ -171,24 +217,12 @@ fn fc08_listen_only_mode_gates_other_functions() {
         request_enter.as_slice(),
     );
 
-    let transport1 = MockSerialTransport {
-        next_rx: Some(req_enter),
-        sent_frames: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-        connected: true,
-    };
-    let app = Fc08App {
-        mode: Mode::Success(0),
-        calls: Arc::new(AtomicUsize::new(0)),
-    };
-    let mut server1 = ServerServices::new(
-        transport1,
-        app,
-        serial_rtu_config(),
-        unit_id(1),
-        ResilienceConfig::default(),
+    let enter_response = send_request(&mut server, &rx_queue, &sent_frames, req_enter);
+    assert!(
+        enter_response.is_none(),
+        "0x0004 should not send a response"
     );
-    server1.poll();
-    assert!(server1.listen_only_mode);
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "0x0004 is stack-handled");
 
     // 2. Try to send a ReadCoils (FC01) request while in listen-only mode
     // It should be silently discarded (no response)
@@ -203,25 +237,10 @@ fn fc08_listen_only_mode_gates_other_functions() {
         request_rc.as_slice(),
     );
 
-    let transport2 = MockSerialTransport {
-        next_rx: Some(req_rc),
-        sent_frames: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-        connected: true,
-    };
-    let (app2, _) = make_app(Mode::Success(0xFFFF));
-    let mut server2 = ServerServices::new(
-        transport2,
-        app2,
-        serial_rtu_config(),
-        unit_id(1),
-        ResilienceConfig::default(),
-    );
-    server2.listen_only_mode = true;
-    server2.poll();
+    let rc_response = send_request(&mut server, &rx_queue, &sent_frames, req_rc);
 
     assert_eq!(
-        server2.transport.sent_frames.lock().unwrap().len(),
-        0,
+        rc_response, None,
         "listen-only mode should silently discard non-diagnostics requests"
     );
 
@@ -237,28 +256,15 @@ fn fc08_listen_only_mode_gates_other_functions() {
         request_exit.as_slice(),
     );
 
-    let transport3 = MockSerialTransport {
-        next_rx: Some(req_exit),
-        sent_frames: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-        connected: true,
-    };
-    let (app3, _) = make_app(Mode::Success(0xFFFF));
-    let mut server3 = ServerServices::new(
-        transport3,
-        app3,
-        serial_rtu_config(),
-        unit_id(1),
-        ResilienceConfig::default(),
-    );
-    server3.listen_only_mode = true;
-    server3.poll();
+    let exit_response = send_request(&mut server, &rx_queue, &sent_frames, req_exit)
+        .expect("0x0001 should send a response when exiting listen-only mode");
 
-    assert!(
-        !server3.listen_only_mode,
-        "0x0001 should clear listen-only mode"
-    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "0x0001 is stack-handled");
+    assert_eq!(exit_response[1], 0x08, "FC byte");
+    assert_eq!(exit_response[2..4], [0x00, 0x01], "sub-function echo");
+    assert_eq!(exit_response[4..6], [0x00, 0x00], "data echo");
     assert_eq!(
-        server3.transport.sent_frames.lock().unwrap().len(),
+        sent_frames.lock().unwrap().len(),
         1,
         "0x0001 should send a response when exiting listen-only mode"
     );
@@ -273,8 +279,10 @@ fn fc08_other_subfunctions_forward_to_app() {
 
     let req = build_serial_request(1, unit_id(1), FunctionCode::Diagnostics, request.as_slice());
     let (app, calls) = make_app(Mode::Success(0x5678));
+    let (mut server, rx_queue, sent_frames) = make_server(app);
 
-    let (response, _) = run_once_serial(req, app);
+    let response = send_request(&mut server, &rx_queue, &sent_frames, req)
+        .expect("0x0002 should produce a response");
 
     assert_eq!(
         calls.load(Ordering::SeqCst),

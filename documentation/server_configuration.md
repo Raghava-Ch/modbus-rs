@@ -117,7 +117,7 @@ Supported FCs: 0x05, 0x06, 0x0F, 0x10, 0x15.
 - Back-pressure (`OverflowPolicy::RejectRequest`) does **not** apply to broadcast
   writes — they bypass the response queue entirely.
 
-See `examples/broadcast_writes.rs`.
+See `examples/broadcast.rs`.
 
 ## `ServerServices` Queue Depth API
 

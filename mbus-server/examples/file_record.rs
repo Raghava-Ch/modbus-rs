@@ -8,6 +8,8 @@
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 struct FileStore {
     file1: [u16; 32],
@@ -81,6 +83,9 @@ impl ModbusAppHandler for FileStore {
         Ok(())
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for FileStore {}
 
 fn main() {
     let mut app = FileStore::new();
