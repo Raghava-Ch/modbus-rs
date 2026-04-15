@@ -7,6 +7,8 @@ use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{
     CoilsModel, HoldingRegistersModel, ResilienceConfig, ServerServices, modbus_app,
 };
@@ -43,6 +45,9 @@ struct DispatchHookApp {
     coil_batch_calls: u16,
     reg_batch_calls: u16,
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DispatchHookApp {}
 
 impl DispatchHookApp {
     fn on_direct_coil(&mut self, _address: u16, _old: bool, _new: bool) -> Result<(), MbusError> {

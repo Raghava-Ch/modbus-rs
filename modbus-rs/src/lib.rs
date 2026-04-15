@@ -32,8 +32,6 @@ pub use mbus_server::HoldingRegistersModel;
 pub use mbus_server::InputRegisterMap;
 #[cfg(all(feature = "server", feature = "input-registers"))]
 pub use mbus_server::InputRegistersModel;
-#[cfg(all(feature = "server", feature = "traffic"))]
-pub use mbus_server::TrafficNotifier;
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;
 #[cfg(feature = "server")]

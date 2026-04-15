@@ -8,6 +8,8 @@
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 struct DiagnosticsApp {
     exception_status: u8,
@@ -41,6 +43,9 @@ impl ModbusAppHandler for DiagnosticsApp {
         Ok((server_id.len() as u8, 0xFF))
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DiagnosticsApp {}
 
 fn main() {
     let mut app = DiagnosticsApp::new();

@@ -65,87 +65,93 @@ traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
 
 [[example]]
 name = "modbus_rs_client_async_tcp"
-path = "examples/modbus-rs/client/async/async_tcp_example.rs"
+path = "examples/client/network-tcp/async/tcp.rs"
 required-features = ["async"]
 
 [[example]]
 name = "modbus_rs_client_async_serial_rtu"
-path = "examples/modbus-rs/client/async/async_serial_rtu_example.rs"
+path = "examples/client/serial-rtu/async/rtu.rs"
 required-features = ["async", "serial-rtu"]
 
 [[example]]
 name = "modbus_rs_client_traffic_sync_tcp"
-path = "examples/modbus-rs/client/traffic/traffic_sync_example.rs"
+path = "examples/client/network-tcp/sync/traffic.rs"
 required-features = ["traffic", "client", "tcp", "coils"]
 
 [[example]]
 name = "modbus_rs_client_traffic_async_tcp"
-path = "examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs"
+path = "examples/client/network-tcp/async/traffic.rs"
 required-features = ["async", "traffic", "tcp", "coils"]
 
 [[example]]
 name = "modbus_rs_client_tcp_coils"
-path = "examples/modbus-rs/client/tcp/coils_example.rs"
+path = "examples/client/network-tcp/sync/coils.rs"
 
 [[example]]
 name = "modbus_rs_client_tcp_registers"
-path = "examples/modbus-rs/client/tcp/registers_example.rs"
+path = "examples/client/network-tcp/sync/registers.rs"
 
 [[example]]
 name = "modbus_rs_client_tcp_discrete_inputs"
-path = "examples/modbus-rs/client/tcp/discrete_inputs_example.rs"
+path = "examples/client/network-tcp/sync/discrete_inputs.rs"
 
 [[example]]
 name = "modbus_rs_client_tcp_device_id"
-path = "examples/modbus-rs/client/tcp/device_id_example.rs"
+path = "examples/client/network-tcp/sync/device_id.rs"
 
 [[example]]
 name = "modbus_rs_client_tcp_backoff_jitter"
-path = "examples/modbus-rs/client/tcp/tcp_backoff_jitter_example.rs"
+path = "examples/client/network-tcp/sync/backoff_jitter.rs"
 
 [[example]]
 name = "modbus_rs_client_tcp_logging"
-path = "examples/modbus-rs/client/tcp/logging_example.rs"
+path = "examples/client/network-tcp/sync/logging.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_rtu_coils"
-path = "examples/modbus-rs/client/serial/coils_serial_example.rs"
+path = "examples/client/serial-rtu/sync/coils.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_rtu_registers"
-path = "examples/modbus-rs/client/serial/registers_serial_example.rs"
+path = "examples/client/serial-rtu/sync/registers.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_rtu_discrete_inputs"
-path = "examples/modbus-rs/client/serial/discrete_inputs_serial_example.rs"
+path = "examples/client/serial-rtu/sync/discrete_inputs.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_rtu_device_id"
-path = "examples/modbus-rs/client/serial/device_id_serial_example.rs"
+path = "examples/client/serial-rtu/sync/device_id.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_rtu_backoff_jitter"
-path = "examples/modbus-rs/client/serial/serial_rtu_backoff_jitter_example.rs"
+path = "examples/client/serial-rtu/sync/backoff_jitter.rs"
 
 [[example]]
 name = "modbus_rs_client_serial_ascii_coils"
-path = "examples/modbus-rs/client/serial/ascii_serial_example.rs"
-
-[[example]]
-name = "modbus_rs_client_showcase_feature_facades"
-path = "examples/modbus-rs/client/showcase/feature_facades_showcase.rs"
-
-[[example]]
-name = "modbus_rs_server_showcase_coils_registers"
-path = "examples/mbus-server/server/showcase_coils_registers.rs"
-required-features = ["coils", "holding-registers", "input-registers"]
+path = "examples/client/serial-ascii/sync/coils.rs"
 
 [[example]]
 name = "modbus_rs_server_tcp_demo"
-path = "examples/mbus-server/server/tcp_demo.rs"
+path = "examples/server/network-tcp/sync/demo.rs"
 required-features = ["coils", "holding-registers", "input-registers"]
 
 [[example]]
 name = "modbus_rs_server_std_transport_client_demo"
-path = "examples/mbus-server/server/std_transport_client_demo.rs"
+path = "examples/server/network-tcp/sync/shared_state.rs"
 required-features = ["tcp", "coils", "holding-registers", "input-registers"]
+
+[[example]]
+name = "modbus_rs_server_serial_rtu_demo"
+path = "examples/server/serial-rtu/sync/demo.rs"
+required-features = ["serial-rtu", "coils", "holding-registers", "input-registers"]
+
+[[example]]
+name = "modbus_rs_server_serial_rtu_manual_no_macros"
+path = "examples/server/serial-rtu/sync/manual_app_no_macros.rs"
+required-features = ["serial-rtu", "coils", "holding-registers", "input-registers"]
+
+[[example]]
+name = "modbus_rs_server_serial_ascii_demo"
+path = "examples/server/serial-ascii/sync/demo.rs"
+required-features = ["serial-ascii", "coils", "holding-registers", "input-registers"]

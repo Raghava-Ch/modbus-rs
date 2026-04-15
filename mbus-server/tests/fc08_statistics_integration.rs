@@ -10,6 +10,8 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -29,6 +31,9 @@ impl ModbusAppHandler for StatsApp {
         Err(MbusError::InvalidFunctionCode)
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for StatsApp {}
 
 #[derive(Debug)]
 struct QueueSerialTransport {

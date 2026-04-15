@@ -1843,12 +1843,17 @@ mod tests {
 
     /// Test case: `Pdu::from_bytes` with a PDU that has no data bytes (only FC).
     ///
-    /// According to the implementation, a PDU must be at least 2 bytes.
+    /// Function-code-only PDUs are valid for zero-argument operations such as
+    /// `ReportServerId` (FC11).
     #[test]
-    fn test_pdu_from_bytes_invalid_no_data() {
+    fn test_pdu_from_bytes_valid_no_data() {
         let bytes = [0x11];
-        let err = Pdu::from_bytes(&bytes).expect_err("Should return error for PDU with only FC");
-        assert_eq!(err, MbusError::InvalidPduLength);
+        let pdu = Pdu::from_bytes(&bytes).expect("Should parse a function-code-only PDU");
+
+        assert_eq!(pdu.function_code, FunctionCode::ReportServerId);
+        assert_eq!(pdu.data_len, 0);
+        assert!(pdu.data.is_empty());
+        assert_eq!(pdu.error_code, None);
     }
 
     /// Test case: `Pdu::from_bytes` with a valid `Read Coils` request PDU.
