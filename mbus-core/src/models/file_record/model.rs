@@ -29,6 +29,34 @@ pub const SUB_REQ_PARAM_BYTE_LEN: usize = 6 + 1;
 /// The reference type for file record requests (0x06).
 pub const FILE_RECORD_REF_TYPE: u8 = 0x06;
 
+/// Parsed read sub-request from FC14 PDU data.
+///
+/// Represents a single object within a Read File Record (FC 0x14) request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileRecordReadSubRequest {
+    /// The file number to be read (0x0001 to 0xFFFF).
+    pub file_number: u16,
+    /// The starting record number within the file (0x0000 to 0x270F).
+    pub record_number: u16,
+    /// The length of the record in number of 16-bit registers.
+    pub record_length: u16,
+}
+
+/// Parsed write sub-request from FC15 PDU data.
+///
+/// Represents a single object within a Write File Record (FC 0x15) request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileRecordWriteSubRequest<'a> {
+    /// The file number to be written (0x0001 to 0xFFFF).
+    pub file_number: u16,
+    /// The starting record number within the file (0x0000 to 0x270F).
+    pub record_number: u16,
+    /// The length of the record in number of 16-bit registers.
+    pub record_length: u16,
+    /// The raw bytes of the record data to be written.
+    pub record_data_bytes: &'a [u8],
+}
+
 /// A trait for converting Modbus PDU data structures into a byte vector.
 ///
 /// This is specifically used for file record sub-requests to serialize their parameters

@@ -13,6 +13,8 @@ extern crate self as mbus_server;
 
 pub mod app;
 pub mod services;
+#[cfg(feature = "diagnostics-stats")]
+pub mod statistics;
 
 #[cfg(feature = "traffic")]
 pub use app::TrafficNotifier;
@@ -30,6 +32,8 @@ pub use services::ServerServices;
 pub use services::resilience::{
     ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig,
 };
+#[cfg(feature = "diagnostics-stats")]
+pub use statistics::ServerStatistics;
 
 #[cfg(feature = "coils")]
 pub use mbus_core::models::coil::*;

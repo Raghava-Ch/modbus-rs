@@ -242,7 +242,10 @@ fn main() -> Result<(), MbusError> {
     let status_resp = run_request(status_req);
     let status_adu = common::decompile_adu_frame(status_resp.as_slice(), TransportType::StdTcp)?;
     println!("=== System Status (addr 0-7) ===");
-    println!("  function code        : {:?}", status_adu.pdu.function_code());
+    println!(
+        "  function code        : {:?}",
+        status_adu.pdu.function_code()
+    );
     let status_data = status_adu.pdu.data();
     println!("  raw bytes            : {:02X?}", status_data.as_slice());
 
@@ -267,9 +270,15 @@ fn main() -> Result<(), MbusError> {
     let alerts_resp = run_request(alerts_req);
     let alerts_adu = common::decompile_adu_frame(alerts_resp.as_slice(), TransportType::StdTcp)?;
     println!("=== Sensor Alerts (addr 100-107) ===");
-    println!("  function code           : {:?}", alerts_adu.pdu.function_code());
+    println!(
+        "  function code           : {:?}",
+        alerts_adu.pdu.function_code()
+    );
     let alerts_data = alerts_adu.pdu.data();
-    println!("  raw bytes               : {:02X?}", alerts_data.as_slice());
+    println!(
+        "  raw bytes               : {:02X?}",
+        alerts_data.as_slice()
+    );
 
     // Decode the bit-packed response (skip byte count prefix)
     let alert_bits = decode_bits(&alerts_data.as_slice()[1..], 8);

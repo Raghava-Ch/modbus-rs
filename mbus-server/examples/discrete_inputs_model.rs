@@ -4,8 +4,8 @@
 //! cargo run -p mbus-server --example discrete_inputs_model
 
 use mbus_core::errors::MbusError;
-use mbus_server::prelude::*;
 use mbus_server::DiscreteInputsModel;
+use mbus_server::prelude::*;
 
 #[derive(Debug, Clone, Default, DiscreteInputsModel)]
 struct PanelInputs {

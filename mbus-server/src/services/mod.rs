@@ -14,16 +14,24 @@
 
 #[cfg(feature = "coils")]
 pub mod coils;
+#[cfg(feature = "diagnostics")]
+pub mod device_info;
+#[cfg(feature = "diagnostics")]
+pub mod diagnostics;
 #[cfg(feature = "discrete-inputs")]
 pub mod discrete_input;
 pub mod exception;
+#[cfg(feature = "fifo")]
+pub mod fifo;
+#[cfg(feature = "file-record")]
+pub mod file_record;
 pub mod framing;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;
 pub mod resilience;
 
 use crate::app::ModbusAppHandler;
-use heapless::Vec;
+use heapless::{Deque, Vec};
 use mbus_core::{
     data_unit::common::{
         self, AdditionalAddress, MAX_ADU_FRAME_LEN, ModbusMessage, SlaveAddress,
@@ -116,6 +124,22 @@ pub struct ServerServices<TRANSPORT, APP, const QUEUE_DEPTH: usize = 8> {
     pub(super) rejected_request_count: u32,
     /// Peak observed utilization of the response retry queue (as a count).
     pub(super) peak_response_queue_size: usize,
+    /// Listen-only mode flag: when true, server silently discards all requests
+    /// except FC08 (Diagnostics) with sub-function 0x0001 (Restart Communications).
+    /// Set by FC08 sub-function 0x0004 (Force Listen Only Mode), cleared by 0x0001.
+    pub(super) listen_only_mode: bool,
+    /// FC0B communication event counter.
+    #[cfg(feature = "diagnostics")]
+    pub(super) comm_event_counter: u16,
+    /// FC0C communication message count.
+    #[cfg(feature = "diagnostics")]
+    pub(super) comm_message_count: u16,
+    /// Circular event log used by FC0C (max 64 events).
+    #[cfg(feature = "diagnostics")]
+    pub(super) comm_event_log: Deque<u8, 64>,
+    /// Optional server statistics tracking (feature-gated).
+    #[cfg(feature = "diagnostics-stats")]
+    pub stats: crate::statistics::ServerStatistics,
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +210,15 @@ where
             dropped_response_count: 0,
             rejected_request_count: 0,
             peak_response_queue_size: 0,
+            listen_only_mode: false,
+            #[cfg(feature = "diagnostics")]
+            comm_event_counter: 0,
+            #[cfg(feature = "diagnostics")]
+            comm_message_count: 0,
+            #[cfg(feature = "diagnostics")]
+            comm_event_log: Deque::new(),
+            #[cfg(feature = "diagnostics-stats")]
+            stats: crate::statistics::ServerStatistics::new(),
         }
     }
 
@@ -333,6 +366,9 @@ where
     }
 
     fn dispatch_broadcast_write_no_response(&mut self, message: &ModbusMessage) {
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_no_response_count();
+
         server_log_trace!(
             "dispatching serial broadcast write with no response: txn_id={}, fc=0x{:02X}",
             message.transaction_id(),
@@ -427,6 +463,9 @@ where
         let start = self.now_ms();
         match self.transport.send(frame) {
             Ok(_) => {
+                #[cfg(feature = "diagnostics-stats")]
+                self.stats.increment_server_message_count();
+
                 #[cfg(feature = "traffic")]
                 self.app.on_tx_frame(txn_id, unit_id_or_slave_addr);
 
@@ -493,6 +532,12 @@ where
 
         let exception_code = function_code.exception_code_for_error(&error);
 
+        self.app
+            .on_exception(txn_id, unit_id_or_slave_addr, function_code, exception_code, error);
+
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_exception_error_count();
+
         let response = match exception::build_exception_adu(
             txn_id,
             unit_id_or_slave_addr,
@@ -536,6 +581,25 @@ where
 
         if self.should_handle_broadcast_write(message) {
             self.dispatch_broadcast_write_no_response(message);
+            return;
+        }
+
+        // -----------------------------------------------------------------------
+        // Listen-only mode gate (Modbus spec behavior for FC08 sub-function 0x0004)
+        //
+        // When listen-only mode is active, the server must silently discard all
+        // requests except FC08 (Diagnostics) with sub-function 0x0001 (Restart
+        // Communications Option). No exception response is sent.
+        // -----------------------------------------------------------------------
+        if self.listen_only_mode && function_code != FunctionCode::Diagnostics {
+            #[cfg(feature = "diagnostics-stats")]
+            self.stats.increment_no_response_count();
+
+            server_log_trace!(
+                "listen-only mode active; silently discarding non-diagnostics request: txn_id={}, fc=0x{:02X}",
+                wire_txn_id,
+                function_code as u8,
+            );
             return;
         }
 
@@ -619,16 +683,55 @@ where
             MaskWriteRegister => {
                 self.handle_mask_write_register_request(wire_txn_id, unit_id_or_slave_addr, message)
             }
-            // ReadWriteMultipleRegisters => ,
-            // ReadFifoQueue => ,
-            // ReadFileRecord => ,
-            // WriteFileRecord => ,
-            // ReadExceptionStatus => ,
-            // Diagnostics => ,
-            // GetCommEventCounter => ,
-            // GetCommEventLog => ,
-            // ReportServerId => ,
-            // EncapsulatedInterfaceTransport => ,
+            #[cfg(feature = "holding-registers")]
+            ReadWriteMultipleRegisters => self.handle_read_write_multiple_registers_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
+            #[cfg(feature = "fifo")]
+            ReadFifoQueue => {
+                self.handle_read_fifo_queue_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "file-record")]
+            ReadFileRecord => {
+                self.handle_read_file_record_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "file-record")]
+            WriteFileRecord => {
+                self.handle_write_file_record_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "diagnostics")]
+            ReadExceptionStatus => self.handle_read_exception_status_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
+            #[cfg(feature = "diagnostics")]
+            Diagnostics => {
+                self.handle_diagnostics_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "diagnostics")]
+            GetCommEventCounter => self.handle_get_comm_event_counter_request(
+                wire_txn_id,
+                unit_id_or_slave_addr,
+                message,
+            ),
+            #[cfg(feature = "diagnostics")]
+            GetCommEventLog => {
+                self.handle_get_comm_event_log_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "diagnostics")]
+            ReportServerId => {
+                self.handle_report_server_id_request(wire_txn_id, unit_id_or_slave_addr, message)
+            }
+            #[cfg(feature = "diagnostics")]
+            EncapsulatedInterfaceTransport => self
+                .handle_encapsulated_interface_transport_request(
+                    wire_txn_id,
+                    unit_id_or_slave_addr,
+                    message,
+                ),
             _ => self.send_exception_response(
                 wire_txn_id,
                 unit_id_or_slave_addr,
@@ -735,6 +838,9 @@ where
 
             match self.transport.send(&pending.frame) {
                 Ok(_) => {
+                    #[cfg(feature = "diagnostics-stats")]
+                    self.stats.increment_server_message_count();
+
                     #[cfg(feature = "traffic")]
                     self.app
                         .on_tx_frame(pending.txn_id, pending.unit_id_or_slave_addr);
@@ -891,6 +997,9 @@ where
     }
 
     fn handle_parse_error(&mut self, err: MbusError) {
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_comm_error_count();
+
         server_log_debug!(
             "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
             err,
@@ -928,6 +1037,17 @@ where
                 frame.len()
             );
             self.rxed_frame.clear();
+        }
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn record_comm_event(&mut self, event_code: u8) {
+        self.comm_event_counter = self.comm_event_counter.saturating_add(1);
+        self.comm_message_count = self.comm_message_count.saturating_add(1);
+
+        if self.comm_event_log.push_back(event_code).is_err() {
+            let _ = self.comm_event_log.pop_front();
+            let _ = self.comm_event_log.push_back(event_code);
         }
     }
 
@@ -973,6 +1093,9 @@ where
             }
         };
 
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_message_count();
+
         use TransportType::*;
         let message = match TRANSPORT::TRANSPORT_TYPE {
             StdTcp | CustomTcp => {
@@ -1002,6 +1125,9 @@ where
         if self.should_drop_for_address(&message) {
             return Ok(expected_length);
         }
+
+        #[cfg(feature = "diagnostics")]
+        self.record_comm_event(0x04);
 
         if self.resilience.enable_priority_queue {
             // Check if back-pressure should be applied
