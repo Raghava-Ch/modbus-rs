@@ -12,7 +12,7 @@ use super::framing::{build_byte_count_prefixed_response, parse_read_window};
 #[cfg(feature = "holding-registers")]
 use super::framing::{
     build_echo_u16_response, build_mask_write_echo_response, parse_mask_write_request,
-    parse_write_multiple_request, parse_write_single_request,
+    parse_read_write_multiple_request, parse_write_multiple_request, parse_write_single_request,
 };
 use crate::app::ModbusAppHandler;
 use crate::services::{ServerServices, server_log_debug, server_log_trace};
@@ -35,6 +35,18 @@ const FC16_MIN_QUANTITY: u16 = 1;
 /// FC16 register count upper bound (inclusive).
 #[cfg(feature = "holding-registers")]
 const FC16_MAX_QUANTITY: u16 = 123;
+/// FC17 read quantity lower bound (inclusive).
+#[cfg(feature = "holding-registers")]
+const FC17_READ_MIN_QUANTITY: u16 = 1;
+/// FC17 read quantity upper bound (inclusive).
+#[cfg(feature = "holding-registers")]
+const FC17_READ_MAX_QUANTITY: u16 = 125;
+/// FC17 write register count lower bound (inclusive).
+#[cfg(feature = "holding-registers")]
+const FC17_WRITE_MIN_QUANTITY: u16 = 1;
+/// FC17 write register count upper bound (inclusive).
+#[cfg(feature = "holding-registers")]
+const FC17_WRITE_MAX_QUANTITY: u16 = 121;
 
 impl<TRANSPORT, APP, const QUEUE_DEPTH: usize> ServerServices<TRANSPORT, APP, QUEUE_DEPTH>
 where
@@ -537,5 +549,158 @@ where
                 err
             );
         }
+    }
+
+    /// Handles FC17 (Read/Write Multiple Registers).
+    ///
+    /// Validates the read window (1–125) and write window (1–121). Per Modbus spec, the write
+    /// executes before the read. The combined app callback receives both the write payload and
+    /// the read window; the implementation must perform the write, then fill `out` with the
+    /// read data and return the byte count.
+    #[cfg(feature = "holding-registers")]
+    pub(super) fn handle_read_write_multiple_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        message: &ModbusMessage,
+    ) {
+        let fields = match parse_read_write_multiple_request(message) {
+            Ok(f) => f,
+            Err(err) => {
+                self.send_exception_response(
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    FunctionCode::ReadWriteMultipleRegisters,
+                    err,
+                );
+                return;
+            }
+        };
+
+        if !(FC17_READ_MIN_QUANTITY..=FC17_READ_MAX_QUANTITY).contains(&fields.read_quantity) {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidQuantity,
+            );
+            return;
+        }
+
+        if !(FC17_WRITE_MIN_QUANTITY..=FC17_WRITE_MAX_QUANTITY).contains(&fields.write_quantity) {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidQuantity,
+            );
+            return;
+        }
+
+        if fields
+            .read_address
+            .checked_add(fields.read_quantity - 1)
+            .is_none()
+        {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidAddress,
+            );
+            return;
+        }
+
+        if fields
+            .write_address
+            .checked_add(fields.write_quantity - 1)
+            .is_none()
+        {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidAddress,
+            );
+            return;
+        }
+
+        let expected_write_byte_count = fields.write_quantity as usize * 2;
+        if fields.write_byte_count as usize != expected_write_byte_count
+            || fields.write_values.len() != expected_write_byte_count
+        {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidByteCount,
+            );
+            return;
+        }
+
+        let mut write_registers = [0u16; FC17_WRITE_MAX_QUANTITY as usize];
+        for (index, chunk) in fields.write_values.chunks_exact(2).enumerate() {
+            write_registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        }
+
+        let mut buf = [0u8; MAX_PDU_DATA_LEN];
+        let length = match self.app.read_write_multiple_registers_request(
+            txn_id,
+            unit_id_or_slave_addr,
+            fields.read_address,
+            fields.read_quantity,
+            fields.write_address,
+            &write_registers[..fields.write_quantity as usize],
+            &mut buf,
+        ) {
+            Ok(n) => n,
+            Err(err) => {
+                server_log_debug!(
+                    "FC17: app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
+                    txn_id,
+                    unit_id_or_slave_addr.get(),
+                    err
+                );
+                self.send_exception_response(
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    FunctionCode::ReadWriteMultipleRegisters,
+                    err,
+                );
+                return;
+            }
+        };
+
+        let expected_read_len = fields.read_quantity as usize * 2;
+        if length as usize > buf.len() || length as usize != expected_read_len {
+            self.send_exception_response(
+                txn_id,
+                unit_id_or_slave_addr,
+                FunctionCode::ReadWriteMultipleRegisters,
+                MbusError::InvalidByteCount,
+            );
+            return;
+        }
+
+        let response = match build_byte_count_prefixed_response(
+            &self.transport,
+            txn_id,
+            unit_id_or_slave_addr,
+            FunctionCode::ReadWriteMultipleRegisters,
+            &buf[..length as usize],
+        ) {
+            Ok(frame) => frame,
+            Err(err) => {
+                self.send_exception_response(
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    FunctionCode::ReadWriteMultipleRegisters,
+                    err,
+                );
+                return;
+            }
+        };
+
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
     }
 }

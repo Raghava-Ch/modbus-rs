@@ -1285,7 +1285,9 @@ fn build_write_single_coil_route_with_hooks(
     route
 }
 
-fn build_segmented_discrete_input_read_route(fields: &[(Ident, syn::Type)]) -> proc_macro2::TokenStream {
+fn build_segmented_discrete_input_read_route(
+    fields: &[(Ident, syn::Type)],
+) -> proc_macro2::TokenStream {
     let mut route = quote! {{}};
     for (field_ident, field_ty) in fields.iter().rev() {
         let inner = route;
@@ -1642,7 +1644,11 @@ fn expand_modbus_app_struct(
         "discrete_inputs",
     )?;
 
-    if hr_fields.is_empty() && ir_fields.is_empty() && coil_fields.is_empty() && discrete_input_fields.is_empty() {
+    if hr_fields.is_empty()
+        && ir_fields.is_empty()
+        && coil_fields.is_empty()
+        && discrete_input_fields.is_empty()
+    {
         return Err(Error::new_spanned(
             &input.ident,
             "no modbus_app fields selected; use #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...))] or helper field attributes",
@@ -1674,7 +1680,8 @@ fn expand_modbus_app_struct(
     let ir_read_route =
         build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_read_route = build_segmented_coil_read_route(&coil_fields);
-    let discrete_input_read_route = build_segmented_discrete_input_read_route(&discrete_input_fields);
+    let discrete_input_read_route =
+        build_segmented_discrete_input_read_route(&discrete_input_fields);
 
     let hr_write_single_route = build_write_single_register_route_with_hooks(
         &hr_fields,
@@ -1701,13 +1708,18 @@ fn expand_modbus_app_struct(
     let ir_overlap_checks =
         build_overlap_checks(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_overlap_checks = build_overlap_checks(&coil_fields, quote!(::mbus_server::CoilMap));
-    let discrete_input_overlap_checks =
-        build_overlap_checks(&discrete_input_fields, quote!(::mbus_server::DiscreteInputMap));
+    let discrete_input_overlap_checks = build_overlap_checks(
+        &discrete_input_fields,
+        quote!(::mbus_server::DiscreteInputMap),
+    );
 
     let hr_order_checks = build_order_checks(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
     let ir_order_checks = build_order_checks(&ir_fields, quote!(::mbus_server::InputRegisterMap));
     let coil_order_checks = build_order_checks(&coil_fields, quote!(::mbus_server::CoilMap));
-    let discrete_input_order_checks = build_order_checks(&discrete_input_fields, quote!(::mbus_server::DiscreteInputMap));
+    let discrete_input_order_checks = build_order_checks(
+        &discrete_input_fields,
+        quote!(::mbus_server::DiscreteInputMap),
+    );
 
     let hr_notify_requires_batch_checks = if selected_fields
         .holding_registers
@@ -2388,7 +2400,9 @@ mod tests {
             }
         };
 
-        let err = expand_discrete_inputs_model(&input).unwrap_err().to_string();
+        let err = expand_discrete_inputs_model(&input)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("duplicate discrete input address"));
     }
 

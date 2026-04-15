@@ -376,21 +376,28 @@ impl FunctionCode {
     pub fn exception_code_for_error(&self, error: &MbusError) -> ExceptionCode {
         match error {
             // Protocol/address errors
-            MbusError::InvalidAddress | MbusError::InvalidOffset | MbusError::InvalidDataLen => {
+            MbusError::InvalidAddress | MbusError::InvalidOffset => {
                 ExceptionCode::IllegalDataAddress
             }
+            // Data length and parsing errors — the data field itself is malformed
+            MbusError::InvalidDataLen
+            | MbusError::ParseError
+            | MbusError::BasicParseError
+            | MbusError::InvalidPduLength => ExceptionCode::IllegalDataAddress,
             // Quantity/value errors
-            MbusError::InvalidQuantity | MbusError::InvalidValue | MbusError::InvalidByteCount => {
-                ExceptionCode::IllegalDataValue
-            }
-            // Parsing errors (malformed request)
-            MbusError::ParseError | MbusError::BasicParseError | MbusError::InvalidPduLength => {
-                ExceptionCode::IllegalDataAddress
-            }
-            // Function code errors
-            MbusError::InvalidFunctionCode | MbusError::UnsupportedFunction(_) => {
-                ExceptionCode::IllegalFunction
-            }
+            MbusError::InvalidQuantity
+            | MbusError::InvalidValue
+            | MbusError::InvalidByteCount
+            | MbusError::InvalidAndMask
+            | MbusError::InvalidOrMask
+            | MbusError::InvalidDeviceIdCode => ExceptionCode::IllegalDataValue,
+            // Function code errors — also includes illegal sub-function / MEI types
+            MbusError::InvalidFunctionCode
+            | MbusError::UnsupportedFunction(_)
+            | MbusError::ReservedSubFunction(_)
+            | MbusError::InvalidMeiType
+            | MbusError::BroadcastNotAllowed
+            | MbusError::InvalidBroadcastAddress => ExceptionCode::IllegalFunction,
             // Default: all other errors map to server device failure
             _ => ExceptionCode::ServerDeviceFailure,
         }

@@ -21,7 +21,11 @@
 //! - `txn_id` is always the original id supplied by the caller, including Serial modes where
 //!   transaction ids are not transmitted on the wire.
 
-use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
+use mbus_core::{
+    errors::{ExceptionCode, MbusError},
+    function_codes::public::FunctionCode,
+    transport::UnitIdOrSlaveAddr,
+};
 
 #[cfg(feature = "coils")]
 use crate::Coils;
@@ -287,6 +291,8 @@ impl<T: TrafficNotifier> AppRequirements for T {}
 /// - FC 0x0F: `write_multiple_coils_request`
 /// - FC 0x10: `write_multiple_registers_request`
 /// - FC 0x16: `mask_write_register_request`
+/// - FC 0x17: `read_write_multiple_registers_request`
+/// - FC 0x07: `read_exception_status_request`
 ///
 /// ## Data Semantics
 /// - Register reads write big-endian wire bytes into `out` and return the byte count written.
@@ -294,6 +300,28 @@ impl<T: TrafficNotifier> AppRequirements for T {}
 /// - Coil reads write packed Modbus coil bytes into `out` and return the packed byte count.
 /// - Multi-write coil requests pass the original packed request bytes plus the validated quantity.
 pub trait ModbusAppHandler: AppRequirements {
+    /// Called whenever the server sends a Modbus exception response to the master.
+    ///
+    /// Override this to log, count, or react to any exception the server sends,
+    /// regardless of which function code triggered it.  The default implementation
+    /// is a no-op, so you only need to implement this when you want the behaviour.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_or_slave_addr`: The address from the request frame.
+    /// - `function_code`: The function code that caused the exception.
+    /// - `exception_code`: The Modbus exception code being sent (0x01–0x04).
+    /// - `error`: The internal error that triggered the exception.
+    fn on_exception(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _function_code: FunctionCode,
+        _exception_code: ExceptionCode,
+        _error: MbusError,
+    ) {
+    }
+
     /// Handles a `Read Coils` (FC 0x01) request.
     #[cfg(feature = "coils")]
     fn read_coils_request(
@@ -437,6 +465,249 @@ pub trait ModbusAppHandler: AppRequirements {
         or_mask: u16,
     ) -> Result<(), MbusError> {
         let _ = (txn_id, unit_id_or_slave_addr, address, and_mask, or_mask);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read/Write Multiple Registers` (FC 0x17) request.
+    ///
+    /// Per Modbus spec, the write operation executes **before** the read.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_or_slave_addr`: Unit ID (TCP) or slave address (Serial).
+    /// - `read_address`: Starting address of the read window.
+    /// - `read_quantity`: Number of registers to read (1–125).
+    /// - `write_address`: Starting address of the write window.
+    /// - `write_values`: Decoded big-endian register values to write (1–121 entries).
+    /// - `out`: Mutable byte buffer to write the read response data into.
+    ///
+    /// # Returns
+    /// - `Ok(n)` — `n` bytes written into `out` (must equal `read_quantity * 2`).
+    /// - `Err(MbusError)` — the server emits a function-specific exception response.
+    #[cfg(feature = "holding-registers")]
+    #[allow(clippy::too_many_arguments)]
+    fn read_write_multiple_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_values: &[u16],
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            read_address,
+            read_quantity,
+            write_address,
+            write_values,
+            out,
+        );
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read FIFO Queue` (FC 0x18) request.
+    ///
+    /// The application writes the FIFO data into `out`:
+    /// - `out[0..1]`: `fifo_count` as a big-endian `u16` (number of entries in the queue).
+    /// - `out[2..2 + fifo_count * 2]`: Register values, each 2 bytes big-endian.
+    ///
+    /// The returned byte count must equal `2 + fifo_count * 2`.
+    /// The server validates `fifo_count ≤ 31` per the Modbus specification.
+    ///
+    /// # Parameters
+    /// - `txn_id`: Transaction ID of the original request.
+    /// - `unit_id_or_slave_addr`: Unit ID (TCP) or slave address (Serial).
+    /// - `pointer_address`: The FIFO pointer address from the FC 0x18 request.
+    /// - `out`: Mutable byte buffer; write `fifo_count(2) + values` starting at index 0.
+    ///
+    /// # Returns
+    /// - `Ok(n)` — `n` bytes written into `out` (must equal `2 + fifo_count * 2`).
+    /// - `Err(MbusError)` — the server emits a function-specific exception response.
+    #[cfg(feature = "fifo")]
+    fn read_fifo_queue_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        pointer_address: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, pointer_address, out);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read File Record` (FC 0x14) sub-request.
+    ///
+    /// The server invokes this once per parsed sub-request in the incoming FC14 frame.
+    /// The implementation must encode `record_length` big-endian register words into `out`
+    /// and return the exact number of bytes written (`record_length * 2`).
+    #[cfg(feature = "file-record")]
+    fn read_file_record_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        record_length: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            file_number,
+            record_number,
+            record_length,
+            out,
+        );
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Write File Record` (FC 0x15) sub-request.
+    ///
+    /// The server invokes this once per parsed sub-request in the incoming FC15 frame.
+    /// On success the protocol layer echoes the original request payload as mandated by Modbus.
+    #[cfg(feature = "file-record")]
+    fn write_file_record_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        record_length: u16,
+        record_data: &[u16],
+    ) -> Result<(), MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            file_number,
+            record_number,
+            record_length,
+            record_data,
+        );
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read Exception Status` (FC 0x07) request.
+    ///
+    /// The app returns a single status byte where each bit is device-specific.
+    #[cfg(feature = "diagnostics")]
+    fn read_exception_status_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<u8, MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Diagnostics` (FC 0x08) request.
+    ///
+    /// Called for each sub-function code. The app receives the sub-function and
+    /// 2-byte data word and returns a 2-byte result. The stack handles the
+    /// listen-only mode gating (0x0004 Force Listen Only Mode, 0x0001 Restart).
+    ///
+    /// # Parameters
+    /// - `sub_function`: The parsed diagnostic sub-function code
+    /// - `data`: The 2-byte input data (interpretation is sub-function-specific)
+    ///
+    /// # Return
+    /// - `Ok(u16)`: The 2-byte response data to echo/return
+    /// - `Err(MbusError)`: Converted to an exception response
+    #[cfg(feature = "diagnostics")]
+    fn diagnostics_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        sub_function: mbus_core::function_codes::public::DiagnosticSubFunction,
+        data: u16,
+    ) -> Result<u16, MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, sub_function, data);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Get Comm Event Counter` (FC 0x0B) request.
+    ///
+    /// Return tuple layout: `(status_word, event_count)`.
+    ///
+    /// By default the server stack provides a built-in implementation. Return
+    /// `Err(MbusError::InvalidFunctionCode)` to keep using stack defaults.
+    #[cfg(feature = "diagnostics")]
+    fn get_comm_event_counter_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(u16, u16), MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Get Comm Event Log` (FC 0x0C) request.
+    ///
+    /// Fill `out_events` with event bytes and return
+    /// `(status_word, event_count, message_count, event_len)`.
+    ///
+    /// By default the server stack provides a built-in implementation. Return
+    /// `Err(MbusError::InvalidFunctionCode)` to keep using stack defaults.
+    #[cfg(feature = "diagnostics")]
+    fn get_comm_event_log_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        out_events: &mut [u8],
+    ) -> Result<(u16, u16, u16, u8), MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, out_events);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Report Server ID` (FC 0x11) request.
+    ///
+    /// Fill `out_server_id` with vendor-defined bytes and return
+    /// `(server_id_len, run_indicator_status)`.
+    #[cfg(feature = "diagnostics")]
+    fn report_server_id_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        out_server_id: &mut [u8],
+    ) -> Result<(u8, u8), MbusError> {
+        let _ = (txn_id, unit_id_or_slave_addr, out_server_id);
+        Err(MbusError::InvalidFunctionCode)
+    }
+
+    /// Handles a `Read Device Identification` (FC 0x2B / MEI 0x0E) request.
+    ///
+    /// The application fills `out` with `[object_id(1), value_len(1), value(N)...]` triples
+    /// for each object starting at `start_object_id`, in ascending ID order.
+    ///
+    /// # Parameters
+    /// - `read_device_id_code`: 0x01=Basic, 0x02=Regular, 0x03=Extended, 0x04=Specific
+    /// - `start_object_id`: First object ID to return (resume point for streaming)
+    /// - `out`: Buffer (max 246 bytes) — write `[id, len, value…]` triples here
+    ///
+    /// # Returns
+    /// `(bytes_written, conformity_level, more_follows, next_object_id)`:
+    /// - `bytes_written`: number of bytes written into `out`
+    /// - `conformity_level`: device conformity level byte (e.g. 0x81 Basic+Individual, 0x82 Regular+Individual)
+    /// - `more_follows`: `true` if the client should issue a follow-up request for remaining objects
+    /// - `next_object_id`: starting object ID for the follow-up request (only used when `more_follows` is true)
+    #[cfg(feature = "diagnostics")]
+    fn read_device_identification_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        read_device_id_code: u8,
+        start_object_id: u8,
+        out: &mut [u8],
+    ) -> Result<(u8, u8, bool, u8), MbusError> {
+        let _ = (
+            txn_id,
+            unit_id_or_slave_addr,
+            read_device_id_code,
+            start_object_id,
+            out,
+        );
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -655,9 +926,185 @@ where
             )
         })
     }
-}
 
-// /// Defines callbacks for handling requests to Modbus discrete input-related requests.
+    #[cfg(feature = "holding-registers")]
+    #[allow(clippy::too_many_arguments)]
+    fn read_write_multiple_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_values: &[u16],
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.read_write_multiple_registers_request(
+                txn_id,
+                unit_id_or_slave_addr,
+                read_address,
+                read_quantity,
+                write_address,
+                write_values,
+                out,
+            )
+        })
+    }
+
+    #[cfg(feature = "fifo")]
+    fn read_fifo_queue_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        pointer_address: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.read_fifo_queue_request(txn_id, unit_id_or_slave_addr, pointer_address, out)
+        })
+    }
+
+    #[cfg(feature = "file-record")]
+    fn read_file_record_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        record_length: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.read_file_record_request(
+                txn_id,
+                unit_id_or_slave_addr,
+                file_number,
+                record_number,
+                record_length,
+                out,
+            )
+        })
+    }
+
+    #[cfg(feature = "file-record")]
+    fn write_file_record_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        record_length: u16,
+        record_data: &[u16],
+    ) -> Result<(), MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.write_file_record_request(
+                txn_id,
+                unit_id_or_slave_addr,
+                file_number,
+                record_number,
+                record_length,
+                record_data,
+            )
+        })
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn read_exception_status_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<u8, MbusError> {
+        self.inner
+            .with_app_mut(|app| app.read_exception_status_request(txn_id, unit_id_or_slave_addr))
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn diagnostics_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        sub_function: mbus_core::function_codes::public::DiagnosticSubFunction,
+        data: u16,
+    ) -> Result<u16, MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.diagnostics_request(txn_id, unit_id_or_slave_addr, sub_function, data)
+        })
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn get_comm_event_counter_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(u16, u16), MbusError> {
+        self.inner
+            .with_app_mut(|app| app.get_comm_event_counter_request(txn_id, unit_id_or_slave_addr))
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn get_comm_event_log_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        out_events: &mut [u8],
+    ) -> Result<(u16, u16, u16, u8), MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.get_comm_event_log_request(txn_id, unit_id_or_slave_addr, out_events)
+        })
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn report_server_id_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        out_server_id: &mut [u8],
+    ) -> Result<(u8, u8), MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.report_server_id_request(txn_id, unit_id_or_slave_addr, out_server_id)
+        })
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn read_device_identification_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        read_device_id_code: u8,
+        start_object_id: u8,
+        out: &mut [u8],
+    ) -> Result<(u8, u8, bool, u8), MbusError> {
+        self.inner.with_app_mut(|app| {
+            app.read_device_identification_request(
+                txn_id,
+                unit_id_or_slave_addr,
+                read_device_id_code,
+                start_object_id,
+                out,
+            )
+        })
+    }
+
+    fn on_exception(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        function_code: FunctionCode,
+        exception_code: ExceptionCode,
+        error: MbusError,
+    ) {
+        self.inner.with_app_mut(|app| {
+            app.on_exception(
+                txn_id,
+                unit_id_or_slave_addr,
+                function_code,
+                exception_code,
+                error,
+            )
+        })
+    }
+}
 // ///
 // /// Implementors of this trait can process the data received from a Modbus server
 // /// and update their application state accordingly.

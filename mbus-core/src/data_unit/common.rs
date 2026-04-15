@@ -1009,6 +1009,41 @@ impl Pdu {
         Ok(Pdu::new(fc, data, data_len as u8))
     }
 
+    /// Builds a PDU for FC08 (Diagnostics) responses.
+    ///
+    /// Response layout: `[sub_function_hi, sub_function_lo, result_hi, result_lo]` (4 bytes).
+    /// Echoes the sub-function code with a result word.
+    #[cfg(feature = "diagnostics")]
+    pub fn build_diagnostics(sub_function: u16, result: u16) -> Result<Self, MbusError> {
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&sub_function.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(&result.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::Diagnostics, data, 4))
+    }
+
+    /// Builds a PDU for FC18 (Read FIFO Queue) responses.
+    ///
+    /// Response layout: `[byte_count_hi, byte_count_lo, payload...]` where byte_count is u16.
+    /// `app_payload` is the application data: `[fifo_count_hi, fifo_count_lo, values...]`.
+    /// Returns `InvalidByteCount` if payload exceeds 65535 bytes.
+    #[cfg(feature = "fifo")]
+    pub fn build_fifo_payload(app_payload: &[u8]) -> Result<Self, MbusError> {
+        let byte_count =
+            u16::try_from(app_payload.len()).map_err(|_| MbusError::InvalidByteCount)?;
+        let data_len = 2 + app_payload.len();
+        if data_len > MAX_PDU_DATA_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        let mut data: heapless::Vec<u8, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+        data.extend_from_slice(&byte_count.to_be_bytes())
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.extend_from_slice(app_payload)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        Ok(Pdu::new(FunctionCode::ReadFifoQueue, data, data_len as u8))
+    }
+
     // -------- PDU parsing helpers -----------------------------------------------------
 
     /// Reads the standard address + quantity pair from PDU bytes 0-3.
@@ -1232,6 +1267,190 @@ impl Pdu {
         })
     }
 
+    /// Parses FC18 (Read FIFO Queue) request: a single 2-byte FIFO pointer address.
+    /// Used to extract the pointer address from read FIFO queue requests.
+    #[cfg(feature = "fifo")]
+    pub fn fifo_pointer(&self) -> Result<u16, MbusError> {
+        if self.data_len != 2 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        Ok(u16::from_be_bytes([
+            self.data[PDU_ADDRESS_OFFSET_1B],
+            self.data[PDU_ADDRESS_OFFSET_2B],
+        ]))
+    }
+
+    /// Parses FC08 (Diagnostics) request/response: sub-function code + data word.
+    /// Returns (sub_function, data_word).
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics_fields(&self) -> Result<(u16, u16), MbusError> {
+        if self.data_len < 4 {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let sub_function = u16::from_be_bytes([
+            self.data[PDU_SUB_FUNCTION_OFFSET_1B],
+            self.data[PDU_SUB_FUNCTION_OFFSET_2B],
+        ]);
+        let data_word = u16::from_be_bytes([self.data[2], self.data[3]]);
+        Ok((sub_function, data_word))
+    }
+
+    /// Parses FC14 (Read File Record) requests into validated sub-requests.
+    ///
+    /// Request PDU data layout:
+    /// - byte_count (1)
+    /// - repeated sub-requests (7 bytes each):
+    ///   - reference_type (1) = 0x06
+    ///   - file_number (2)
+    ///   - record_number (2)
+    ///   - record_length (2)
+    #[cfg(feature = "file-record")]
+    pub fn file_record_read_sub_requests(
+        &self,
+    ) -> Result<
+        heapless::Vec<
+            crate::models::file_record::FileRecordReadSubRequest,
+            { crate::models::file_record::MAX_SUB_REQUESTS_PER_PDU },
+        >,
+        MbusError,
+    > {
+        use crate::models::file_record::{FILE_RECORD_REF_TYPE, FileRecordReadSubRequest};
+
+        const FILE_RECORD_READ_SUB_REQUEST_LEN: usize = 7;
+        const FILE_RECORD_MAX_REQUEST_BYTE_COUNT: usize = 245;
+
+        let data_len = self.data_len as usize;
+        if data_len < 1 + FILE_RECORD_READ_SUB_REQUEST_LEN {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let data = self.data.as_slice();
+        let byte_count = data[0] as usize;
+        if byte_count != data_len - 1 {
+            return Err(MbusError::InvalidByteCount);
+        }
+        if byte_count > FILE_RECORD_MAX_REQUEST_BYTE_COUNT {
+            return Err(MbusError::InvalidByteCount);
+        }
+        if !byte_count.is_multiple_of(FILE_RECORD_READ_SUB_REQUEST_LEN) {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        let mut out: heapless::Vec<
+            FileRecordReadSubRequest,
+            { crate::models::file_record::MAX_SUB_REQUESTS_PER_PDU },
+        > = heapless::Vec::new();
+        let mut index = 1usize;
+        while index < data_len {
+            if data[index] != FILE_RECORD_REF_TYPE {
+                return Err(MbusError::InvalidValue);
+            }
+            let file_number = u16::from_be_bytes([data[index + 1], data[index + 2]]);
+            let record_number = u16::from_be_bytes([data[index + 3], data[index + 4]]);
+            let record_length = u16::from_be_bytes([data[index + 5], data[index + 6]]);
+            if record_length == 0 {
+                return Err(MbusError::InvalidQuantity);
+            }
+
+            out.push(FileRecordReadSubRequest {
+                file_number,
+                record_number,
+                record_length,
+            })
+            .map_err(|_| MbusError::TooManyFileReadSubRequests)?;
+
+            index += FILE_RECORD_READ_SUB_REQUEST_LEN;
+        }
+
+        Ok(out)
+    }
+
+    /// Parses FC15 (Write File Record) requests into validated sub-requests.
+    ///
+    /// Request PDU data layout:
+    /// - byte_count (1)
+    /// - repeated sub-requests:
+    ///   - reference_type (1) = 0x06
+    ///   - file_number (2)
+    ///   - record_number (2)
+    ///   - record_length (2)
+    ///   - record_data (record_length * 2)
+    #[cfg(feature = "file-record")]
+    pub fn file_record_write_sub_requests<'a>(
+        &'a self,
+    ) -> Result<
+        heapless::Vec<
+            crate::models::file_record::FileRecordWriteSubRequest<'a>,
+            { crate::models::file_record::MAX_SUB_REQUESTS_PER_PDU },
+        >,
+        MbusError,
+    > {
+        use crate::models::file_record::{FILE_RECORD_REF_TYPE, FileRecordWriteSubRequest};
+
+        const FILE_RECORD_WRITE_SUB_REQUEST_HEADER_LEN: usize = 7;
+        const FILE_RECORD_MAX_REQUEST_BYTE_COUNT: usize = 245;
+
+        let data_len = self.data_len as usize;
+        if data_len < 1 + FILE_RECORD_WRITE_SUB_REQUEST_HEADER_LEN + 2 {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        let data = self.data.as_slice();
+        let byte_count = data[0] as usize;
+        if byte_count != data_len - 1 {
+            return Err(MbusError::InvalidByteCount);
+        }
+        if byte_count > FILE_RECORD_MAX_REQUEST_BYTE_COUNT {
+            return Err(MbusError::InvalidByteCount);
+        }
+
+        let mut out: heapless::Vec<
+            FileRecordWriteSubRequest,
+            { crate::models::file_record::MAX_SUB_REQUESTS_PER_PDU },
+        > = heapless::Vec::new();
+        let mut index = 1usize;
+        while index < data_len {
+            if index + FILE_RECORD_WRITE_SUB_REQUEST_HEADER_LEN > data_len {
+                return Err(MbusError::InvalidPduLength);
+            }
+            if data[index] != FILE_RECORD_REF_TYPE {
+                return Err(MbusError::InvalidValue);
+            }
+
+            let file_number = u16::from_be_bytes([data[index + 1], data[index + 2]]);
+            let record_number = u16::from_be_bytes([data[index + 3], data[index + 4]]);
+            let record_length = u16::from_be_bytes([data[index + 5], data[index + 6]]);
+            if record_length == 0 {
+                return Err(MbusError::InvalidQuantity);
+            }
+
+            let data_bytes_len = record_length as usize * 2;
+            let end_index = index
+                .checked_add(FILE_RECORD_WRITE_SUB_REQUEST_HEADER_LEN + data_bytes_len)
+                .ok_or(MbusError::InvalidByteCount)?;
+            if end_index > data_len {
+                return Err(MbusError::InvalidByteCount);
+            }
+
+            out.push(FileRecordWriteSubRequest {
+                file_number,
+                record_number,
+                record_length,
+                record_data_bytes: &data
+                    [index + FILE_RECORD_WRITE_SUB_REQUEST_HEADER_LEN..end_index],
+            })
+            .map_err(|_| MbusError::TooManyFileReadSubRequests)?;
+
+            index = end_index;
+        }
+
+        if out.is_empty() {
+            return Err(MbusError::InvalidPduLength);
+        }
+
+        Ok(out)
+    }
+
     /// Parses FC2B / MEI 0x0E (Read Device Identification) response structural fields.
     ///
     /// Validates the 6-byte header minimum length, walks through all declared objects
@@ -1316,11 +1535,14 @@ impl Pdu {
     /// # Returns
     /// `Ok(Pdu)` if the bytes represent a valid PDU, or an `MbusError` otherwise.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MbusError> {
-        if bytes.is_empty() || bytes.len() < 2 {
+        if bytes.is_empty() {
             return Err(MbusError::InvalidPduLength);
         }
 
         let error_code = if is_exception_code(bytes[0]) {
+            if bytes.len() < 2 {
+                return Err(MbusError::InvalidPduLength);
+            }
             Some(bytes[1]) // The second byte is the exception code for error responses
         } else {
             None

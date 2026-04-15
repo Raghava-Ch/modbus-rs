@@ -1,5 +1,5 @@
 mod common;
-use common::{build_request, tcp_config, unit_id, MockTransport};
+use common::{MockTransport, build_request, tcp_config, unit_id};
 use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};

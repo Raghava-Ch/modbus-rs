@@ -68,7 +68,7 @@ See [documentation/quick_start.md](documentation/quick_start.md) for a complete 
 - [RELEASE.md](RELEASE.md) — release checklist
 - [mbus-ffi/README.md](mbus-ffi/README.md) — WASM and native C binding docs
 - [modbus-rs/README.md](modbus-rs/README.md) — top-level crate API guide
-- [mbus-server/README.md](mbus-server/README.md) — server derive/macros, write hooks, and compile-time validation diagnostics
+- [mbus-server/README.md](mbus-server/README.md) — server derive/macros, write hooks, compile-time validation diagnostics, and server-only feature flags such as `diagnostics-stats`
 - [mbus-server/examples/discrete_inputs_model.rs](mbus-server/examples/discrete_inputs_model.rs) — minimal `DiscreteInputsModel` usage example
 
 ## Feature Flags
@@ -98,6 +98,9 @@ Default: `client`, `serial-rtu`, `tcp`, and all function-group flags are enabled
 
 Note: WASM/browser APIs and native C bindings are provided by `mbus-ffi` directly.
 `modbus-rs` does not expose a top-level `wasm` feature and does not re-export WASM or C binding APIs.
+
+Note: server-only features such as `diagnostics-stats` live on the `mbus-server` crate,
+not on the top-level `modbus-rs` crate.
 
 See [documentation/feature_flags.md](documentation/feature_flags.md) for valid combinations and build examples.
 

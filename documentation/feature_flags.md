@@ -129,6 +129,63 @@ These features gate model modules and related types.
 
 This optimization reduces stack usage for builds that do not include ASCII transport.
 
+## Server Crate (`mbus-server`)
+
+`mbus-server` has its own feature flags because it can be consumed directly without the
+top-level `modbus-rs` crate.
+
+Defined features:
+
+- `coils`
+- `holding-registers`
+- `input-registers`
+- `registers` (alias for `holding-registers` + `input-registers`)
+- `discrete-inputs`
+- `fifo`
+- `file-record`
+- `diagnostics`
+- `diagnostics-stats`
+- `traffic`
+- `logging`
+- `serial-ascii`
+
+Notes:
+
+- `diagnostics-stats` depends on `diagnostics`.
+- `diagnostics-stats` is server-only; it is not exposed by the top-level `modbus-rs` crate.
+- when enabled, FC08 counter/reporting sub-functions are handled by the server stack and backed by `ServerStatistics`
+
+### `diagnostics-stats` behavior
+
+With `diagnostics-stats` enabled, the server tracks protocol-level runtime counters for:
+
+- valid message ingest
+- communication/parse errors
+- exception responses
+- successful transmitted responses
+- intentional no-response paths
+- character overrun state
+
+These counters are reported through FC08 diagnostics sub-functions such as:
+
+- `0x000B` Return Bus Message Count
+- `0x000C` Return Bus Communication Error Count
+- `0x000D` Return Bus Exception Error Count
+- `0x000E` Return Server Message Count
+- `0x000F` Return Server No Response Count
+- `0x0010` Return Server NAK Count
+- `0x0011` Return Server Busy Count
+- `0x0012` Return Bus Character Overrun Count
+- `0x000A` Clear Counters and Diagnostic Register
+- `0x0014` Clear Overrun Counter and Flag
+
+Example:
+
+```toml
+[dependencies]
+mbus-server = { version = "0.2.0", features = ["diagnostics-stats"] }
+```
+
 ## Common Usage Patterns
 
 ### 1) Full default stack
