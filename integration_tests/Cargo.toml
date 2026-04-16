@@ -18,6 +18,7 @@ default = ["coils", "holding-registers", "input-registers"]
 coils = []
 holding-registers = []
 input-registers = []
-traffic = ["modbus-rs/traffic"]
+discrete-inputs = []
+traffic = ["modbus-rs/traffic", "mbus-server/traffic"]
 
 [dev-dependencies]

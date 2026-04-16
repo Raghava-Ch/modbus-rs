@@ -8,8 +8,7 @@ use modbus_rs::{
 };
 use std::env;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 // --- Client Application Implementation ---
 #[derive(Debug, Default)]
@@ -177,9 +176,8 @@ fn main() -> Result<()> {
         .registers()
         .write_single_register(1, target_unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     // 2. Read Holding Registers
@@ -188,9 +186,8 @@ fn main() -> Result<()> {
         .registers()
         .read_holding_registers(2, target_unit_id, 10, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     // 3. Read Input Registers
@@ -199,9 +196,8 @@ fn main() -> Result<()> {
         .registers()
         .read_input_registers(3, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     Ok(())

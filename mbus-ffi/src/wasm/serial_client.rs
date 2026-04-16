@@ -173,14 +173,27 @@ impl WasmSerialModbusClient {
         let inner = Rc::new(RefCell::new(inner_client));
         let weak = Rc::downgrade(&inner);
         let tick_ms = tick_interval_ms as u64;
+        let idle_ms = core::cmp::max(50, tick_ms.saturating_mul(5));
 
         spawn_local(async move {
             loop {
                 match weak.upgrade() {
-                    Some(rc) => rc.borrow_mut().poll(),
+                    Some(rc) => {
+                        let should_poll = {
+                            let client = rc.borrow();
+                            client.is_connected() && client.has_pending_requests()
+                        };
+
+                        if should_poll {
+                            rc.borrow_mut().poll();
+                            sleep(Duration::from_millis(tick_ms)).await;
+                        } else {
+                            sleep(Duration::from_millis(idle_ms)).await;
+                        }
+                        continue;
+                    }
                     None => break,
                 }
-                sleep(Duration::from_millis(tick_ms)).await;
             }
         });
 
@@ -195,6 +208,12 @@ impl WasmSerialModbusClient {
     /// Returns `true` when the serial port is open and the transport considers itself connected.
     pub fn is_connected(&self) -> bool {
         self.inner.borrow().is_connected()
+    }
+
+    /// Returns `true` if there are in-flight Modbus requests waiting for
+    /// response/timeout resolution.
+    pub fn has_pending_requests(&self) -> bool {
+        self.inner.borrow().has_pending_requests()
     }
 
     /// Drop all pending in-flight requests and attempt to reopen the serial port.

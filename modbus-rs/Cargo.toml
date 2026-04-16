@@ -12,9 +12,9 @@ categories = ["embedded", "no-std"]
 description = "Feature-gated, low-footprint Modbus client stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
 
 [dependencies]
-mbus-core   = { workspace = true }
+mbus-core = { workspace = true }
 mbus-serial = { workspace = true, optional = true }
-mbus-network    = { workspace = true, optional = true }
+mbus-network = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
 mbus-async = { workspace = true, optional = true }
 mbus-server = { workspace = true, optional = true }
@@ -49,7 +49,11 @@ default = [
 client = ["mbus-client"]
 server = ["dep:mbus-server"]
 serial-rtu = ["mbus-serial", "mbus-async?/serial-rtu"]
-serial-ascii = ["mbus-serial", "mbus-core/serial-ascii", "mbus-async?/serial-ascii"]
+serial-ascii = [
+    "mbus-serial",
+    "mbus-core/serial-ascii",
+    "mbus-async?/serial-ascii",
+]
 tcp = ["mbus-network", "mbus-async?/tcp"]
 coils = ["mbus-core/coils", "mbus-async?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
@@ -59,9 +63,29 @@ discrete-inputs = ["mbus-core/discrete-inputs", "mbus-async?/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
 file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
-logging = ["mbus-network?/logging", "mbus-serial?/logging", "mbus-client?/logging"]
+logging = [
+    "mbus-network?/logging",
+    "mbus-serial?/logging",
+    "mbus-client?/logging",
+]
 async = ["dep:mbus-async"]
 traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
+
+# Convenience feature for no_std / embedded targets.
+# Enables the client state machine and all protocol model features.
+# Does NOT pull in any transport (tcp, serial-rtu, serial-ascii) or async,
+# so it compiles on targets without std.
+# Pair with your own Transport implementation.
+no-std = [
+    "client",
+    "coils",
+    "holding-registers",
+    "input-registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
 
 [[example]]
 name = "modbus_rs_client_async_tcp"
@@ -144,14 +168,29 @@ required-features = ["tcp", "coils", "holding-registers", "input-registers"]
 [[example]]
 name = "modbus_rs_server_serial_rtu_demo"
 path = "examples/server/serial-rtu/sync/demo.rs"
-required-features = ["serial-rtu", "coils", "holding-registers", "input-registers"]
+required-features = [
+    "serial-rtu",
+    "coils",
+    "holding-registers",
+    "input-registers",
+]
 
 [[example]]
 name = "modbus_rs_server_serial_rtu_manual_no_macros"
 path = "examples/server/serial-rtu/sync/manual_app_no_macros.rs"
-required-features = ["serial-rtu", "coils", "holding-registers", "input-registers"]
+required-features = [
+    "serial-rtu",
+    "coils",
+    "holding-registers",
+    "input-registers",
+]
 
 [[example]]
 name = "modbus_rs_server_serial_ascii_demo"
 path = "examples/server/serial-ascii/sync/demo.rs"
-required-features = ["serial-ascii", "coils", "holding-registers", "input-registers"]
+required-features = [
+    "serial-ascii",
+    "coils",
+    "holding-registers",
+    "input-registers",
+]

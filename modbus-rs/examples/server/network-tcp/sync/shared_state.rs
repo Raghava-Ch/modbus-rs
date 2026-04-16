@@ -46,6 +46,9 @@ struct HvacServerApp {
     coils: HvacCoils,
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for HvacServerApp {}
+
 #[derive(Clone)]
 struct SharedHvacApp {
     // Runtime-owned shared state. The protocol stack does not depend on this

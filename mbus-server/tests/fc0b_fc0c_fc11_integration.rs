@@ -151,3 +151,31 @@ fn fc0b_over_tcp_returns_illegal_function_exception() {
         ExceptionCode::IllegalFunction
     );
 }
+
+#[test]
+fn fc0c_over_tcp_returns_illegal_function_exception() {
+    let request = build_request(5, unit_id(1), FunctionCode::GetCommEventLog, &[]);
+
+    let response = run_once_tcp(request, DiagnosticsExtApp);
+
+    // FC 0x0C | 0x80 = 0x8C
+    assert_eq!(response[7], 0x8C, "exception FC byte");
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalFunction
+    );
+}
+
+#[test]
+fn fc11_over_tcp_returns_illegal_function_exception() {
+    let request = build_request(6, unit_id(1), FunctionCode::ReportServerId, &[]);
+
+    let response = run_once_tcp(request, DiagnosticsExtApp);
+
+    // FC 0x11 | 0x80 = 0x91
+    assert_eq!(response[7], 0x91, "exception FC byte");
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalFunction
+    );
+}

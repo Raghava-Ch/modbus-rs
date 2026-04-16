@@ -47,6 +47,9 @@ struct DemoServer {
     coils: CoilBank,
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for DemoServer {}
+
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")
 }

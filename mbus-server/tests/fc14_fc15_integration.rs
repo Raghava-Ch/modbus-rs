@@ -9,8 +9,6 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

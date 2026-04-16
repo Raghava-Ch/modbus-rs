@@ -1,3 +1,18 @@
+// When none of the std-requiring features are enabled this crate is no_std compatible.
+// The doc build is excluded so rustdoc can use std freely for link resolution.
+#![cfg_attr(
+    not(any(
+        doc,
+        feature = "tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii",
+        feature = "async",
+        feature = "logging",
+        feature = "server",
+    )),
+    no_std
+)]
+
 pub use heapless;
 
 pub use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};

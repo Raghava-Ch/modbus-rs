@@ -223,9 +223,8 @@ fn main() -> Result<()> {
         .write_single_register(1, unit_id, 10, 1234)
         .map_err(|e| anyhow::anyhow!(e))?;
     // Process response
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // 2. Read Single Holding Register
@@ -235,9 +234,8 @@ fn main() -> Result<()> {
         .registers()
         .read_single_holding_register(2, unit_id, 10)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // 3. Write Multiple Registers
@@ -248,9 +246,8 @@ fn main() -> Result<()> {
         .registers()
         .write_multiple_registers(3, unit_id, 20, 5, &values)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // 4. Read Holding Registers
@@ -260,9 +257,8 @@ fn main() -> Result<()> {
         .registers()
         .read_holding_registers(4, unit_id, 20, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // 5. Read Input Registers
@@ -272,9 +268,8 @@ fn main() -> Result<()> {
         .registers()
         .read_input_registers(5, unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     // 6. Read/Write Multiple Registers
@@ -285,9 +280,8 @@ fn main() -> Result<()> {
         .registers()
         .read_write_multiple_registers(6, unit_id, 20, 2, 30, &write_vals)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
     println!("\n--- Example Completed ---");

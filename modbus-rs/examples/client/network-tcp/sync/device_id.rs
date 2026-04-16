@@ -170,7 +170,9 @@ fn main() -> Result<()> {
         .diagnostic()
         .read_device_identification(1, unit_id, ReadDeviceIdCode::Basic, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    while client.has_pending_requests() {
+        client.poll();
+    }
 
     // 2. Read Regular Device Identification (Stream Access)
     // Retrieves optional objects: VendorUrl, ProductName, ModelName, UserApplicationName
@@ -179,7 +181,9 @@ fn main() -> Result<()> {
         .diagnostic()
         .read_device_identification(2, unit_id, ReadDeviceIdCode::Regular, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    while client.has_pending_requests() {
+        client.poll();
+    }
 
     // 3. Read Extended Device Identification (Stream Access)
     // Retrieves extended/private objects (0x80 - 0xFF)
@@ -188,7 +192,9 @@ fn main() -> Result<()> {
         .diagnostic()
         .read_device_identification(3, unit_id, ReadDeviceIdCode::Extended, ObjectId::from(0x80))
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    while client.has_pending_requests() {
+        client.poll();
+    }
 
     // 4. Read Specific Object (Individual Access)
     // Retrieves a single specific object, e.g., VendorName (0x00)
@@ -197,7 +203,9 @@ fn main() -> Result<()> {
         .diagnostic()
         .read_device_identification(4, unit_id, ReadDeviceIdCode::Specific, ObjectId::from(0x00))
         .map_err(|e| anyhow::anyhow!(e))?;
-    client.poll();
+    while client.has_pending_requests() {
+        client.poll();
+    }
 
     println!("\n--- Example Completed ---");
     Ok(())

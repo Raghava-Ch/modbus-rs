@@ -118,9 +118,8 @@ fn main() -> Result<()> {
 
     // In a real-world scenario, you would call poll() in a loop.
     // For this example, we poll a few times to allow for network latency.
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -148,9 +147,8 @@ fn main() -> Result<()> {
         )
         .map_err(|e| anyhow::anyhow!("Failed to send write single coil: {:?}", e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -168,9 +166,8 @@ fn main() -> Result<()> {
         .read_single_coil(txn_id_read_single + 1, unit_id, write_single_address)
         .map_err(|e| anyhow::anyhow!("Failed to send verification read: {:?}", e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -202,9 +199,8 @@ fn main() -> Result<()> {
         )
         .map_err(|e| anyhow::anyhow!("Failed to send read multiple coils: {:?}", e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -254,9 +250,8 @@ fn main() -> Result<()> {
         )
         .map_err(|e| anyhow::anyhow!("Failed to send write multiple coils: {:?}", e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -285,9 +280,8 @@ fn main() -> Result<()> {
         )
         .map_err(|e| anyhow::anyhow!("Failed to send verification read multi: {:?}", e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
@@ -326,9 +320,8 @@ fn main() -> Result<()> {
         Ok::<(), anyhow::Error>(())
     })?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     {
