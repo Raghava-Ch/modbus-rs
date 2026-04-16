@@ -118,6 +118,20 @@ pub extern "C" fn mbus_tcp_poll(id: MbusClientId) {
     let _ = with_tcp_client(id, |inner| inner.poll());
 }
 
+/// Returns `1` if the client has in-flight requests awaiting response/timeout,
+/// `0` otherwise.
+#[unsafe(no_mangle)]
+pub extern "C" fn mbus_tcp_has_pending_requests(id: MbusClientId) -> u8 {
+    with_tcp_client(id, |inner| {
+        if inner.has_pending_requests() {
+            1
+        } else {
+            0
+        }
+    })
+    .unwrap_or(0)
+}
+
 // ── Reconnect helper ──────────────────────────────────────────────────────────
 
 /// Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.

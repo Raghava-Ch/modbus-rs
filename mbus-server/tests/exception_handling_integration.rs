@@ -8,9 +8,10 @@
 //! - Unknown FC → `IllegalFunction` exception, `on_exception` still fires.
 
 mod common;
-use common::{MockTransport, build_request, tcp_config, unit_id};
+use common::{MockSerialTransport, MockTransport, build_request, serial_rtu_config, tcp_config, unit_id};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::transport::checksum::crc16;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
@@ -290,5 +291,41 @@ fn existing_mapping_unexpected_still_server_device_failure() {
     assert_eq!(
         fc.exception_code_for_error(&MbusError::Unexpected),
         ExceptionCode::ServerDeviceFailure
+    );
+}
+
+/// On a serial transport, an unrecognised function code must NOT produce any
+/// response.  The server byte-drop resyncs (correct Modbus RTU behaviour) and
+/// the test asserts the sent-frames buffer stays empty.
+#[test]
+fn unknown_fc_over_serial_silently_resyncs_with_no_response() {
+    // Build a minimal RTU frame: [unit_id=1, fc=0x41, CRC16(2 bytes)]
+    // FC 0x41 is not in the FunctionCode enum so the parser returns UnsupportedFunction.
+    let body: [u8; 2] = [0x01, 0x41];
+    let checksum = crc16(&body);
+    let mut frame = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>::new();
+    frame.extend_from_slice(&body).expect("body fits");
+    frame.push((checksum & 0xFF) as u8).expect("crc lo fits");
+    frame.push((checksum >> 8) as u8).expect("crc hi fits");
+
+    let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let transport = MockSerialTransport {
+        next_rx: Some(frame),
+        sent_frames: Arc::clone(&sent_frames),
+        connected: true,
+    };
+    let mut server = ServerServices::new(
+        transport,
+        ExceptionSpyApp::default(),
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
+    server.poll();
+
+    let sent = sent_frames.lock().expect("sent_frames mutex");
+    assert!(
+        sent.is_empty(),
+        "serial server must not respond to an unrecognised function code; got {sent:?}"
     );
 }

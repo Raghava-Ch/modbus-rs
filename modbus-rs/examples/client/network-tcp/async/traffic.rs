@@ -1,9 +1,14 @@
 use anyhow::Result;
 use modbus_rs::mbus_async::AsyncTcpClient;
+use modbus_rs::ModbusTcpConfig;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+    let mut tcp_config = ModbusTcpConfig::new("192.168.55.200", 502)?;
+    tcp_config.response_timeout_ms = 2000;
+
+    let client = AsyncTcpClient::new_with_config(tcp_config, Duration::from_millis(20))?;
 
     client.set_traffic_handler(|evt| {
         if let Some(err) = evt.error {

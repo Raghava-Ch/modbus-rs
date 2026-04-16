@@ -254,5 +254,7 @@ async fn main() -> anyhow::Result<()> {
 
 ## License
 
-Licensed under the repository root `LICENSE`.
+This crate is licensed under **GPL-3.0-only** — see the repository root [LICENSE](../LICENSE).
+
+If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 

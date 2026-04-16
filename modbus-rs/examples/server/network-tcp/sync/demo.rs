@@ -8,7 +8,7 @@ use mbus_core::transport::{
 };
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
-    ResilienceConfig, ServerServices, modbus_app,
+    ModbusAppHandler, ResilienceConfig, ServerServices, modbus_app,
 };
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -17,11 +17,28 @@ use std::thread;
 use std::time::Duration;
 
 #[derive(Debug, Default, HoldingRegistersModel)]
+#[reg(allow_gaps)]
 struct HoldingRegs {
     #[reg(addr = 0)]
     setpoint: u16,
     #[reg(addr = 1)]
     mode: u16,
+    #[reg(addr = 10)]
+    reg_10: u16,
+    #[reg(addr = 20)]
+    reg_20: u16,
+    #[reg(addr = 21)]
+    reg_21: u16,
+    #[reg(addr = 22)]
+    reg_22: u16,
+    #[reg(addr = 23)]
+    reg_23: u16,
+    #[reg(addr = 24)]
+    reg_24: u16,
+    #[reg(addr = 30)]
+    reg_30: u16,
+    #[reg(addr = 31)]
+    reg_31: u16,
 }
 
 #[derive(Debug, Default, InputRegistersModel)]
@@ -30,6 +47,12 @@ struct InputRegs {
     temperature_raw: u16,
     #[reg(addr = 1)]
     pressure_raw: u16,
+    #[reg(addr = 2)]
+    flow_raw: u16,
+    #[reg(addr = 3)]
+    level_raw: u16,
+    #[reg(addr = 4)]
+    vibration_raw: u16,
 }
 
 #[derive(Debug, Default, CoilsModel)]
@@ -42,6 +65,14 @@ struct CoilBank {
     alarm_ack: bool,
     #[coil(addr = 3)]
     remote_mode: bool,
+    #[coil(addr = 4)]
+    valve_a_open: bool,
+    #[coil(addr = 5)]
+    valve_b_open: bool,
+    #[coil(addr = 6)]
+    fan_enable: bool,
+    #[coil(addr = 7)]
+    heater_enable: bool,
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +82,179 @@ struct DemoServer {
     input: InputRegs,
     coils: CoilBank,
 }
+
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for DemoServer {}
+
+/// Compatibility wrapper that reuses the macro-generated handlers from
+/// `DemoServer` and adds FC17 (`Read/Write Multiple Registers`) support.
+#[derive(Debug, Default)]
+struct DemoServerCompat {
+    inner: DemoServer,
+}
+
+impl ModbusAppHandler for DemoServerCompat {
+    #[cfg(feature = "coils")]
+    fn read_coils_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        <DemoServer as ModbusAppHandler>::read_coils_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            out,
+        )
+    }
+
+    #[cfg(feature = "holding-registers")]
+    fn read_multiple_holding_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        <DemoServer as ModbusAppHandler>::read_multiple_holding_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            out,
+        )
+    }
+
+    #[cfg(feature = "input-registers")]
+    fn read_multiple_input_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        <DemoServer as ModbusAppHandler>::read_multiple_input_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            out,
+        )
+    }
+
+    #[cfg(feature = "coils")]
+    fn write_single_coil_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) -> Result<(), MbusError> {
+        <DemoServer as ModbusAppHandler>::write_single_coil_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            value,
+        )
+    }
+
+    #[cfg(feature = "holding-registers")]
+    fn write_single_register_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: u16,
+    ) -> Result<(), MbusError> {
+        <DemoServer as ModbusAppHandler>::write_single_register_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            value,
+        )
+    }
+
+    #[cfg(feature = "coils")]
+    fn write_multiple_coils_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        starting_address: u16,
+        quantity: u16,
+        values: &[u8],
+    ) -> Result<(), MbusError> {
+        <DemoServer as ModbusAppHandler>::write_multiple_coils_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            starting_address,
+            quantity,
+            values,
+        )
+    }
+
+    #[cfg(feature = "holding-registers")]
+    fn write_multiple_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        starting_address: u16,
+        values: &[u16],
+    ) -> Result<(), MbusError> {
+        <DemoServer as ModbusAppHandler>::write_multiple_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            starting_address,
+            values,
+        )
+    }
+
+    #[cfg(feature = "holding-registers")]
+    #[allow(clippy::too_many_arguments)]
+    fn read_write_multiple_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        read_address: u16,
+        read_quantity: u16,
+        write_address: u16,
+        write_values: &[u16],
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        // Modbus FC17 semantics: perform write first, then return read window.
+        <DemoServer as ModbusAppHandler>::write_multiple_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            write_address,
+            write_values,
+        )?;
+
+        <DemoServer as ModbusAppHandler>::read_multiple_holding_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            read_address,
+            read_quantity,
+            out,
+        )
+    }
+}
+
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for DemoServerCompat {}
 
 #[derive(Debug)]
 struct AcceptedTcpTransport {
@@ -168,21 +372,36 @@ fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")
 }
 
-fn seed_app() -> DemoServer {
+fn seed_app() -> DemoServerCompat {
     let mut app = DemoServer::default();
 
     app.input.set_temperature_raw(245);
     app.input.set_pressure_raw(1013);
+    app.input.set_flow_raw(87);
+    app.input.set_level_raw(640);
+    app.input.set_vibration_raw(12);
 
     app.holding.set_setpoint(900);
     app.holding.set_mode(2);
+    app.holding.set_reg_10(1110);
+    app.holding.set_reg_20(2000);
+    app.holding.set_reg_21(2001);
+    app.holding.set_reg_22(2002);
+    app.holding.set_reg_23(2003);
+    app.holding.set_reg_24(2004);
+    app.holding.set_reg_30(3000);
+    app.holding.set_reg_31(3001);
 
     app.coils.run_enable = true;
     app.coils.pump_enable = true;
     app.coils.alarm_ack = false;
     app.coils.remote_mode = true;
+    app.coils.valve_a_open = false;
+    app.coils.valve_b_open = true;
+    app.coils.fan_enable = false;
+    app.coils.heater_enable = true;
 
-    app
+    DemoServerCompat { inner: app }
 }
 
 /// Per-worker app holder that uses interior mutability instead of OS locks.
@@ -191,11 +410,11 @@ fn seed_app() -> DemoServer {
 /// app is not shared across threads. Each worker owns one instance.
 #[derive(Debug)]
 struct OwnedWorkerApp {
-    app: RefCell<DemoServer>,
+    app: RefCell<DemoServerCompat>,
 }
 
 impl OwnedWorkerApp {
-    fn new(app: DemoServer) -> Self {
+    fn new(app: DemoServerCompat) -> Self {
         Self {
             app: RefCell::new(app),
         }
@@ -203,7 +422,7 @@ impl OwnedWorkerApp {
 }
 
 impl ModbusAppAccess for OwnedWorkerApp {
-    type App = DemoServer;
+    type App = DemoServerCompat;
 
     fn with_app_mut<R, F>(&self, f: F) -> R
     where
@@ -277,8 +496,10 @@ fn main() -> Result<()> {
 
     println!("Modbus TCP demo server listening on {bind}");
     println!("Unit id: {}", unit.get());
-    println!("Supported now: FC01, FC03, FC04, FC05, FC06, FC0F, FC10");
-    println!("Try from client tool: read holding 0..1, read inputs 0..1, read coils 0..3");
+    println!("Supported now: FC01, FC03, FC04, FC05, FC06, FC0F, FC10, FC17");
+    println!(
+        "Try from client tool: read holding 10 / 20..24, read inputs 0..4, read coils 0..7"
+    );
 
     let next_worker_id = AtomicUsize::new(1);
 

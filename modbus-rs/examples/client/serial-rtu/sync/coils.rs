@@ -8,8 +8,7 @@ use modbus_rs::{
 };
 use std::env;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 // --- Client Application Implementation ---
 #[derive(Debug, Default)]
@@ -148,9 +147,8 @@ fn main() -> Result<()> {
         .coils()
         .write_single_coil(1, target_unit_id, 0, true)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     // 2. Read Coils
@@ -159,9 +157,8 @@ fn main() -> Result<()> {
         .coils()
         .read_multiple_coils(2, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     // 3. Write Multiple Coils
@@ -176,9 +173,8 @@ fn main() -> Result<()> {
         .coils()
         .write_multiple_coils(3, target_unit_id, 10, &multi_coils)
         .map_err(|e| anyhow::anyhow!(e))?;
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     Ok(())

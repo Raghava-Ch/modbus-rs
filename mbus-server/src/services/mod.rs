@@ -1158,7 +1158,33 @@ where
             return Err(MbusError::BufferTooSmall);
         }
 
-        let message = self.parse_inbound_frame_body(expected_length)?;
+        let message = match self.parse_inbound_frame_body(expected_length) {
+            Ok(msg) => msg,
+            // For TCP transports with a fully-received frame, an unrecognised
+            // function code should elicit an Illegal Function exception (per the
+            // Modbus spec) rather than silently resyncing byte-by-byte.
+            Err(MbusError::UnsupportedFunction(fc_byte)) => {
+                use TransportType::*;
+                if expected_length >= 8
+                    && matches!(TRANSPORT::TRANSPORT_TYPE, StdTcp | CustomTcp)
+                {
+                    let txn_hi = self.rxed_frame[0];
+                    let txn_lo = self.rxed_frame[1];
+                    let unit_id = self.rxed_frame[6];
+                    // MBAP(6) + PDU(2): txn(2) proto(2) len=3(2) unit(1) | exc_fc(1) exc_code(1)
+                    let exc_frame: [u8; 9] = [
+                        txn_hi, txn_lo, 0x00, 0x00, 0x00, 0x03,
+                        unit_id,
+                        fc_byte | 0x80,
+                        0x01, // Illegal Function
+                    ];
+                    let _ = self.transport.send(&exc_frame);
+                    return Ok(expected_length);
+                }
+                return Err(MbusError::UnsupportedFunction(fc_byte));
+            }
+            Err(err) => return Err(err),
+        };
 
         use TransportType::*;
         let message = match TRANSPORT::TRANSPORT_TYPE {
@@ -1209,8 +1235,10 @@ where
         expected_length: usize,
     ) -> Result<ModbusMessage, MbusError> {
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
-        let message =
-            match common::decompile_adu_frame(&self.rxed_frame[..expected_length], transport_type) {
+        let message = match common::decompile_adu_frame(
+            &self.rxed_frame[..expected_length],
+            transport_type,
+        ) {
             Ok(value) => value,
             Err(err) => {
                 server_log_debug!(

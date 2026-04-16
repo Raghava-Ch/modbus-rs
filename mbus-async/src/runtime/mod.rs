@@ -145,6 +145,9 @@ enum WorkerCommand {
     Connect {
         sender: PendingSender,
     },
+    HasPendingRequests {
+        sender: PendingSender,
+    },
     #[cfg(feature = "coils")]
     ReadMultipleCoils {
         txn_id: u16,
@@ -302,6 +305,7 @@ enum WorkerCommand {
 
 enum WorkerResponse {
     Ack,
+    HasPendingRequests(bool),
     #[cfg(feature = "coils")]
     Coils(Coils),
     #[cfg(feature = "registers")]
@@ -828,6 +832,11 @@ fn handle_command<TRANSPORT, const N: usize>(
         WorkerCommand::Connect { sender } => {
             let _ = sender.send(client.connect().map(|_| WorkerResponse::Ack));
         }
+        WorkerCommand::HasPendingRequests { sender } => {
+            let _ = sender.send(Ok(WorkerResponse::HasPendingRequests(
+                client.has_pending_requests(),
+            )));
+        }
         #[cfg(feature = "coils")]
         WorkerCommand::ReadMultipleCoils {
             txn_id,
@@ -1107,33 +1116,39 @@ fn run_worker<TRANSPORT, const N: usize>(
     TRANSPORT: Transport,
 {
     loop {
-        // Wait briefly for work first so we do not poll the transport before
-        // any request has been registered (important for deterministic tests
-        // with preloaded mock responses).
-        match receiver.recv_timeout(poll_interval) {
-            Ok(WorkerCommand::Shutdown) => return,
-            Ok(command) => {
-                handle_command(&mut client, &pending, command);
-                loop {
-                    match receiver.try_recv() {
-                        Ok(WorkerCommand::Shutdown) => return,
-                        Ok(command) => handle_command(&mut client, &pending, command),
-                        Err(mpsc::TryRecvError::Empty) => break,
-                        Err(mpsc::TryRecvError::Disconnected) => return,
-                    }
-                }
+        // Drain all queued commands first so newly enqueued requests are
+        // visible before we decide whether to poll or sleep.
+        loop {
+            match receiver.try_recv() {
+                Ok(WorkerCommand::Shutdown) => return,
+                Ok(command) => handle_command(&mut client, &pending, command),
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => return,
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
 
-        let has_pending = pending
-            .lock()
-            .map(|store| !store.is_empty())
-            .unwrap_or(false);
+        let should_poll = client.is_connected() && client.has_pending_requests();
 
-        if client.is_connected() && has_pending {
+        if should_poll {
             client.poll();
+
+            // Active mode: sleep up to `poll_interval`, but wake early when a
+            // new command arrives.
+            match receiver.recv_timeout(poll_interval) {
+                Ok(WorkerCommand::Shutdown) => return,
+                Ok(command) => handle_command(&mut client, &pending, command),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+            }
+
+            continue;
+        }
+
+        // Idle mode: block until a command arrives (event-driven wakeup).
+        match receiver.recv() {
+            Ok(WorkerCommand::Shutdown) => return,
+            Ok(command) => handle_command(&mut client, &pending, command),
+            Err(_) => return,
         }
     }
 }

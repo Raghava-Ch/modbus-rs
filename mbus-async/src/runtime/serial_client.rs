@@ -215,9 +215,9 @@ impl AsyncSerialClient {
 
         #[cfg(feature = "traffic")]
         {
-            return Ok(Self {
+            Ok(Self {
                 core: AsyncClientCore::new(sender, traffic_handler),
-            });
+            })
         }
 
         #[cfg(not(feature = "traffic"))]

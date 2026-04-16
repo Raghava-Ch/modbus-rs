@@ -6,8 +6,10 @@
 //! ## Tick loop
 //! The constructor spawns a non-blocking async loop via `wasm_bindgen_futures::spawn_local`.
 //! It sleeps for `tick_interval_ms` milliseconds between each `poll()` call using
-//! `gloo_timers::future::sleep`. The loop exits automatically when the `Rc` is dropped
-//! (i.e. when the JS `WasmModbusClient` instance goes out of scope or is GC'd).
+//! `gloo_timers::future::sleep` while requests are in flight. When there are no
+//! pending requests it switches to an idle wait. The loop exits automatically when
+//! the `Rc` is dropped (i.e. when the JS `WasmModbusClient` instance goes out of
+//! scope or is GC'd).
 //!
 //! ## Promise model
 //! Each request method creates a JS `Promise`, stores the (resolve, reject) pair keyed by
@@ -100,14 +102,27 @@ impl WasmModbusClient {
         // lets the `WasmModbusClient` be garbage collected.
         let weak = Rc::downgrade(&inner);
         let tick_ms = tick_interval_ms as u64;
+        let idle_ms = core::cmp::max(50, tick_ms.saturating_mul(5));
 
         spawn_local(async move {
             loop {
                 match weak.upgrade() {
-                    Some(rc) => rc.borrow_mut().poll(),
+                    Some(rc) => {
+                        let should_poll = {
+                            let client = rc.borrow();
+                            client.is_connected() && client.has_pending_requests()
+                        };
+
+                        if should_poll {
+                            rc.borrow_mut().poll();
+                            sleep(Duration::from_millis(tick_ms)).await;
+                        } else {
+                            sleep(Duration::from_millis(idle_ms)).await;
+                        }
+                        continue;
+                    }
                     None => break, // client dropped → stop the loop
                 }
-                sleep(Duration::from_millis(tick_ms)).await;
             }
         });
 
@@ -125,6 +140,12 @@ impl WasmModbusClient {
     /// considers itself connected.
     pub fn is_connected(&self) -> bool {
         self.inner.borrow().is_connected()
+    }
+
+    /// Returns `true` if there are in-flight Modbus requests waiting for
+    /// response/timeout resolution.
+    pub fn has_pending_requests(&self) -> bool {
+        self.inner.borrow().has_pending_requests()
     }
 
     /// Drop all pending in-flight requests and attempt to reconnect the WebSocket.

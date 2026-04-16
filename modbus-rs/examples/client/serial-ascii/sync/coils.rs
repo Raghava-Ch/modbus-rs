@@ -8,8 +8,7 @@ use modbus_rs::{
 };
 use std::env;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 // --- Client Application Implementation ---
 #[derive(Debug, Default)]
@@ -155,9 +154,8 @@ fn main() -> Result<()> {
         .read_multiple_coils(1, target_unit_id, 0, 5)
         .map_err(|e| anyhow::anyhow!(e))?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
-        sleep(Duration::from_millis(200));
     }
 
     Ok(())

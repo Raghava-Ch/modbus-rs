@@ -197,7 +197,7 @@
         log("Client not initialized.");
         return;
       }
-      log(`is_connected = ${client.is_connected()}`);
+      log(`is_connected = ${client.is_connected()}, has_pending_requests = ${client.has_pending_requests()}`);
     });
 
     document.getElementById("btnRunAll").addEventListener("click", async () => {

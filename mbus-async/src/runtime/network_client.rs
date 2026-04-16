@@ -79,6 +79,23 @@ impl AsyncTcpClient<9> {
     ) -> Result<Self, AsyncError> {
         Self::new_with_pipeline_and_poll_interval(host, port, poll_interval)
     }
+
+    /// Creates an async TCP client with a fully custom [`ModbusTcpConfig`] and
+    /// a custom `poll_interval`, using the default pipeline depth of 9.
+    ///
+    /// Use this when you need to override fields such as `response_timeout_ms`,
+    /// `retry_attempts`, or backoff strategy.
+    ///
+    /// Call [`AsyncClientCore::connect`] on the returned client before sending
+    /// requests.
+    #[cfg(feature = "tcp")]
+    pub fn new_with_config(
+        tcp_config: ModbusTcpConfig,
+        poll_interval: Duration,
+    ) -> Result<Self, AsyncError> {
+        let transport = StdTcpTransport::new();
+        Self::from_transport_config(transport, ModbusConfig::Tcp(tcp_config), poll_interval)
+    }
 }
 
 // ── Configurable-pipeline constructors ───────────────────────────────────────
@@ -139,6 +156,24 @@ impl<const N: usize> AsyncTcpClient<N> {
         Self::from_transport_config(transport, config, poll_interval)
     }
 
+    /// Creates an async TCP client with a fully custom [`ModbusTcpConfig`] and
+    /// a custom `poll_interval`.
+    ///
+    /// Use this when you need to override fields such as `response_timeout_ms`,
+    /// `retry_attempts`, or backoff strategy beyond what the convenience
+    /// constructors expose.
+    ///
+    /// Call [`AsyncClientCore::connect`] on the returned client before sending
+    /// requests.
+    #[cfg(feature = "tcp")]
+    pub fn new_with_config_and_pipeline(
+        tcp_config: ModbusTcpConfig,
+        poll_interval: Duration,
+    ) -> Result<Self, AsyncError> {
+        let transport = StdTcpTransport::new();
+        Self::from_transport_config(transport, ModbusConfig::Tcp(tcp_config), poll_interval)
+    }
+
     /// Internal constructor: wires `transport` + `config` into a
     /// `ClientServices` instance, spawns the worker thread, and wraps the
     /// resulting channel in an [`AsyncClientCore`].
@@ -171,9 +206,9 @@ impl<const N: usize> AsyncTcpClient<N> {
 
         #[cfg(feature = "traffic")]
         {
-            return Ok(Self {
+            Ok(Self {
                 core: AsyncClientCore::new(sender, traffic_handler),
-            });
+            })
         }
 
         #[cfg(not(feature = "traffic"))]

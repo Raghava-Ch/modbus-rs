@@ -10,8 +10,6 @@ use mbus_core::transport::{
 use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;

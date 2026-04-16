@@ -168,7 +168,7 @@ pub unsafe extern "C" fn mbus_tcp_write_multiple_coils(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let byte_count = ((quantity + 7) / 8) as usize;
+        let byte_count = quantity.div_ceil(8) as usize;
         let value_slice = unsafe { core::slice::from_raw_parts(values, byte_count) };
 
         let coils = match Coils::new(address, quantity) {
@@ -210,7 +210,7 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_coils(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let byte_count = ((quantity + 7) / 8) as usize;
+        let byte_count = quantity.div_ceil(8) as usize;
         let value_slice = unsafe { core::slice::from_raw_parts(values, byte_count) };
 
         let coils = match Coils::new(address, quantity) {

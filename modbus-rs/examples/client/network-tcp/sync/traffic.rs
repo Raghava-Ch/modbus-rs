@@ -135,7 +135,7 @@ impl CoilResponse for TrafficApp {
 fn main() -> Result<()> {
     let transport = StdTcpTransport::new();
     let app = TrafficApp::default();
-    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502)?);
+    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.55.200", 502)?);
 
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
     client.connect()?;
@@ -143,7 +143,7 @@ fn main() -> Result<()> {
     let unit = UnitIdOrSlaveAddr::new(1)?;
     client.coils().read_multiple_coils(1, unit, 0, 8)?;
 
-    for _ in 0..5 {
+    while client.has_pending_requests() {
         client.poll();
     }
 

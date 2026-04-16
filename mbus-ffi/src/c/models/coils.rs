@@ -20,6 +20,9 @@ impl MbusCoils {
 #[cfg(feature = "coils")]
 #[unsafe(no_mangle)]
 /// Returns the starting address of the coils range.
+///
+/// # Safety
+/// `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
 pub unsafe extern "C" fn mbus_coils_from_address(coils: *const MbusCoils) -> u16 {
     if coils.is_null() {
         return 0;
@@ -30,6 +33,9 @@ pub unsafe extern "C" fn mbus_coils_from_address(coils: *const MbusCoils) -> u16
 #[cfg(feature = "coils")]
 #[unsafe(no_mangle)]
 /// Returns the number of coils.
+///
+/// # Safety
+/// `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
 pub unsafe extern "C" fn mbus_coils_quantity(coils: *const MbusCoils) -> u16 {
     if coils.is_null() {
         return 0;
@@ -40,6 +46,10 @@ pub unsafe extern "C" fn mbus_coils_quantity(coils: *const MbusCoils) -> u16 {
 #[cfg(feature = "coils")]
 #[unsafe(no_mangle)]
 /// Reads a single coil value by address into `out_value`.
+///
+/// # Safety
+/// `coils` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_coils_value(
     coils: *const MbusCoils,
     address: u16,
@@ -65,6 +75,10 @@ pub unsafe extern "C" fn mbus_coils_value(
 /// `index` must be less than [`mbus_coils_quantity`]; otherwise returns
 /// `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_coils_value`], no knowledge of
 /// the Modbus starting address is required.
+///
+/// # Safety
+/// `coils` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_coils_value_at_index(
     coils: *const MbusCoils,
     index: u16,
@@ -87,6 +101,9 @@ pub unsafe extern "C" fn mbus_coils_value_at_index(
 #[cfg(feature = "coils")]
 #[unsafe(no_mangle)]
 /// Returns a raw pointer to the packed coil bit-values. Valid during callback only.
+///
+/// # Safety
+/// `coils` must either be null (returns a null pointer) or point to a valid `MbusCoils`.
 pub unsafe extern "C" fn mbus_coils_values_ptr(coils: *const MbusCoils) -> *const u8 {
     if coils.is_null() {
         return core::ptr::null();

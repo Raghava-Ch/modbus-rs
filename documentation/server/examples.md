@@ -1,0 +1,102 @@
+# Server Examples Reference
+
+All server examples with descriptions and run commands.
+
+---
+
+## TCP Server Examples
+
+### TCP Demo Server
+
+Demonstrates a TCP Modbus server with derive-model based app wiring.
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_tcp_demo
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/sync/demo.rs](../../modbus-rs/examples/server/network-tcp/sync/demo.rs)
+
+---
+
+### TCP Shared-State Demo
+
+Demonstrates a TCP server app using shared state patterns.
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/sync/shared_state.rs](../../modbus-rs/examples/server/network-tcp/sync/shared_state.rs)
+
+---
+
+## Serial RTU Server Examples
+
+### Serial RTU Demo
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_serial_rtu_demo
+```
+
+**Source:** [modbus-rs/examples/server/serial-rtu/sync/demo.rs](../../modbus-rs/examples/server/serial-rtu/sync/demo.rs)
+
+---
+
+### Serial RTU Manual App (No Macros)
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_serial_rtu_manual_no_macros
+```
+
+**Source:** [modbus-rs/examples/server/serial-rtu/sync/manual_app_no_macros.rs](../../modbus-rs/examples/server/serial-rtu/sync/manual_app_no_macros.rs)
+
+---
+
+## Serial ASCII Server Examples
+
+### Serial ASCII Demo
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_serial_ascii_demo \
+	--features serial-ascii,coils,holding-registers,input-registers
+```
+
+**Source:** [modbus-rs/examples/server/serial-ascii/sync/demo.rs](../../modbus-rs/examples/server/serial-ascii/sync/demo.rs)
+
+---
+
+## Testing with Client Examples
+
+Run a server in one terminal:
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_tcp_demo
+```
+
+And test with a client in another:
+
+```bash
+# Read coils (CLI host/port aware)
+cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter -- 127.0.0.1 5502 1
+
+# Read/write registers
+cargo run -p modbus-rs --example modbus_rs_client_tcp_registers -- 127.0.0.1 5502 1
+```
+
+Expected server startup output includes:
+
+```text
+Modbus TCP demo server listening on 127.0.0.1:5502
+Unit id: 1
+Supported now: FC01, FC03, FC04, FC05, FC06, FC0F, FC10, FC17
+```
+
+Note: `modbus_rs_client_tcp_coils` is currently hardcoded to a fixed host/port and does not use CLI host/port args.
+
+---
+
+## See Also
+
+- [Building Applications](building_applications.md) — Full development guide
+- [Feature Flags](feature_flags.md) — Customize your build
+- [Macros](macros.md) — Derive macro reference
