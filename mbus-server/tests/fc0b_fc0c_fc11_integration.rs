@@ -10,12 +10,26 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 
 struct DiagnosticsExtApp;
 
-impl ModbusAppHandler for DiagnosticsExtApp {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for DiagnosticsExtApp {}
+impl ServerCoilHandler for DiagnosticsExtApp {}
+impl ServerDiscreteInputHandler for DiagnosticsExtApp {}
+impl ServerHoldingRegisterHandler for DiagnosticsExtApp {}
+impl ServerInputRegisterHandler for DiagnosticsExtApp {}
+impl ServerFifoHandler for DiagnosticsExtApp {}
+impl ServerFileRecordHandler for DiagnosticsExtApp {}
+impl ServerDiagnosticsHandler for DiagnosticsExtApp {
     fn report_server_id_request(
         &mut self,
         _txn_id: u16,

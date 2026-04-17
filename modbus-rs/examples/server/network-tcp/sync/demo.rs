@@ -8,8 +8,12 @@ use mbus_core::transport::{
 };
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
-    ModbusAppHandler, ResilienceConfig, ServerServices, modbus_app,
+    ResilienceConfig, ServerServices, modbus_app,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerExceptionHandler;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -93,8 +97,9 @@ struct DemoServerCompat {
     inner: DemoServer,
 }
 
-impl ModbusAppHandler for DemoServerCompat {
-    #[cfg(feature = "coils")]
+impl ServerExceptionHandler for DemoServerCompat {}
+
+impl ServerCoilHandler for DemoServerCompat {
     fn read_coils_request(
         &mut self,
         txn_id: u16,
@@ -103,7 +108,7 @@ impl ModbusAppHandler for DemoServerCompat {
         quantity: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        <DemoServer as ModbusAppHandler>::read_coils_request(
+        <DemoServer as ServerCoilHandler>::read_coils_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -113,45 +118,6 @@ impl ModbusAppHandler for DemoServerCompat {
         )
     }
 
-    #[cfg(feature = "holding-registers")]
-    fn read_multiple_holding_registers_request(
-        &mut self,
-        txn_id: u16,
-        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        quantity: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        <DemoServer as ModbusAppHandler>::read_multiple_holding_registers_request(
-            &mut self.inner,
-            txn_id,
-            unit_id_or_slave_addr,
-            address,
-            quantity,
-            out,
-        )
-    }
-
-    #[cfg(feature = "input-registers")]
-    fn read_multiple_input_registers_request(
-        &mut self,
-        txn_id: u16,
-        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        quantity: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        <DemoServer as ModbusAppHandler>::read_multiple_input_registers_request(
-            &mut self.inner,
-            txn_id,
-            unit_id_or_slave_addr,
-            address,
-            quantity,
-            out,
-        )
-    }
-
-    #[cfg(feature = "coils")]
     fn write_single_coil_request(
         &mut self,
         txn_id: u16,
@@ -159,7 +125,7 @@ impl ModbusAppHandler for DemoServerCompat {
         address: u16,
         value: bool,
     ) -> Result<(), MbusError> {
-        <DemoServer as ModbusAppHandler>::write_single_coil_request(
+        <DemoServer as ServerCoilHandler>::write_single_coil_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -168,24 +134,6 @@ impl ModbusAppHandler for DemoServerCompat {
         )
     }
 
-    #[cfg(feature = "holding-registers")]
-    fn write_single_register_request(
-        &mut self,
-        txn_id: u16,
-        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        value: u16,
-    ) -> Result<(), MbusError> {
-        <DemoServer as ModbusAppHandler>::write_single_register_request(
-            &mut self.inner,
-            txn_id,
-            unit_id_or_slave_addr,
-            address,
-            value,
-        )
-    }
-
-    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         txn_id: u16,
@@ -194,7 +142,7 @@ impl ModbusAppHandler for DemoServerCompat {
         quantity: u16,
         values: &[u8],
     ) -> Result<(), MbusError> {
-        <DemoServer as ModbusAppHandler>::write_multiple_coils_request(
+        <DemoServer as ServerCoilHandler>::write_multiple_coils_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -203,8 +151,45 @@ impl ModbusAppHandler for DemoServerCompat {
             values,
         )
     }
+}
 
-    #[cfg(feature = "holding-registers")]
+impl mbus_server::ServerDiscreteInputHandler for DemoServerCompat {}
+
+impl ServerHoldingRegisterHandler for DemoServerCompat {
+    fn read_multiple_holding_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        <DemoServer as ServerHoldingRegisterHandler>::read_multiple_holding_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            out,
+        )
+    }
+
+    fn write_single_register_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: u16,
+    ) -> Result<(), MbusError> {
+        <DemoServer as ServerHoldingRegisterHandler>::write_single_register_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            value,
+        )
+    }
+
     fn write_multiple_registers_request(
         &mut self,
         txn_id: u16,
@@ -212,7 +197,7 @@ impl ModbusAppHandler for DemoServerCompat {
         starting_address: u16,
         values: &[u16],
     ) -> Result<(), MbusError> {
-        <DemoServer as ModbusAppHandler>::write_multiple_registers_request(
+        <DemoServer as ServerHoldingRegisterHandler>::write_multiple_registers_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -221,7 +206,6 @@ impl ModbusAppHandler for DemoServerCompat {
         )
     }
 
-    #[cfg(feature = "holding-registers")]
     #[allow(clippy::too_many_arguments)]
     fn read_write_multiple_registers_request(
         &mut self,
@@ -234,7 +218,7 @@ impl ModbusAppHandler for DemoServerCompat {
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
         // Modbus FC17 semantics: perform write first, then return read window.
-        <DemoServer as ModbusAppHandler>::write_multiple_registers_request(
+        <DemoServer as ServerHoldingRegisterHandler>::write_multiple_registers_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -242,7 +226,7 @@ impl ModbusAppHandler for DemoServerCompat {
             write_values,
         )?;
 
-        <DemoServer as ModbusAppHandler>::read_multiple_holding_registers_request(
+        <DemoServer as ServerHoldingRegisterHandler>::read_multiple_holding_registers_request(
             &mut self.inner,
             txn_id,
             unit_id_or_slave_addr,
@@ -252,6 +236,30 @@ impl ModbusAppHandler for DemoServerCompat {
         )
     }
 }
+
+impl ServerInputRegisterHandler for DemoServerCompat {
+    fn read_multiple_input_registers_request(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        <DemoServer as ServerInputRegisterHandler>::read_multiple_input_registers_request(
+            &mut self.inner,
+            txn_id,
+            unit_id_or_slave_addr,
+            address,
+            quantity,
+            out,
+        )
+    }
+}
+
+impl mbus_server::ServerFifoHandler for DemoServerCompat {}
+impl mbus_server::ServerFileRecordHandler for DemoServerCompat {}
+impl mbus_server::ServerDiagnosticsHandler for DemoServerCompat {}
 
 #[cfg(feature = "traffic")]
 impl mbus_server::TrafficNotifier for DemoServerCompat {}

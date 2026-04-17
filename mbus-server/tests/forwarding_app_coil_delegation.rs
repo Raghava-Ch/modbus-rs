@@ -5,7 +5,15 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+use mbus_server::{ForwardingApp, ModbusAppAccess};
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -16,7 +24,21 @@ struct CoilApp {
     fail_fc05: Option<MbusError>,
 }
 
-impl ModbusAppHandler for CoilApp {
+impl ServerExceptionHandler for CoilApp {}
+
+impl ServerDiscreteInputHandler for CoilApp {}
+
+impl ServerHoldingRegisterHandler for CoilApp {}
+
+impl ServerInputRegisterHandler for CoilApp {}
+
+impl ServerFifoHandler for CoilApp {}
+
+impl ServerFileRecordHandler for CoilApp {}
+
+impl ServerDiagnosticsHandler for CoilApp {}
+
+impl ServerCoilHandler for CoilApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,

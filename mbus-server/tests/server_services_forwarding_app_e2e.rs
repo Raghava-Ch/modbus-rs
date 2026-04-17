@@ -15,8 +15,15 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 use mbus_server::{
-    ForwardingApp, ModbusAppAccess, ModbusAppHandler, ResilienceConfig, ServerServices,
+    ForwardingApp, ModbusAppAccess, ResilienceConfig, ServerExceptionHandler, ServerServices,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -39,7 +46,19 @@ struct DemoApp {
     traffic_tx_errors: usize,
 }
 
-impl ModbusAppHandler for DemoApp {
+impl ServerExceptionHandler for DemoApp {}
+
+impl ServerDiscreteInputHandler for DemoApp {}
+
+impl ServerInputRegisterHandler for DemoApp {}
+
+impl ServerFifoHandler for DemoApp {}
+
+impl ServerFileRecordHandler for DemoApp {}
+
+impl ServerDiagnosticsHandler for DemoApp {}
+
+impl ServerHoldingRegisterHandler for DemoApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -84,7 +103,9 @@ impl ModbusAppHandler for DemoApp {
             _ => Err(MbusError::InvalidAddress),
         }
     }
+}
 
+impl ServerCoilHandler for DemoApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
@@ -121,11 +142,21 @@ impl ModbusAppHandler for DemoApp {
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for DemoApp {
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_rx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_rx_frames += 1;
     }
 
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_tx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_tx_frames += 1;
     }
 
@@ -134,6 +165,7 @@ impl TrafficNotifier for DemoApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_rx_errors += 1;
     }
@@ -143,6 +175,7 @@ impl TrafficNotifier for DemoApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_tx_errors += 1;
     }

@@ -21,19 +21,14 @@ pub mod app {
     use crate::errors::MbusError;
     use crate::transport::UnitIdOrSlaveAddr;
 
-    pub trait ModbusAppHandler {
-        fn read_multiple_holding_registers_request(
-            &mut self,
-            _txn_id: u16,
-            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-            _address: u16,
-            _quantity: u16,
-            _out: &mut [u8],
-        ) -> Result<u8, MbusError> {
-            Err(MbusError::InvalidAddress)
-        }
+    pub trait ServerExceptionHandler {}
 
-        fn read_multiple_input_registers_request(
+    pub trait ServerCoilHandler {}
+
+    pub trait ServerDiscreteInputHandler {}
+
+    pub trait ServerHoldingRegisterHandler {
+        fn read_multiple_holding_registers_request(
             &mut self,
             _txn_id: u16,
             _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
@@ -64,6 +59,23 @@ pub mod app {
             Err(MbusError::InvalidAddress)
         }
     }
+
+    pub trait ServerInputRegisterHandler {
+        fn read_multiple_input_registers_request(
+            &mut self,
+            _txn_id: u16,
+            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+            _address: u16,
+            _quantity: u16,
+            _out: &mut [u8],
+        ) -> Result<u8, MbusError> {
+            Err(MbusError::InvalidAddress)
+        }
+    }
+
+    pub trait ServerFifoHandler {}
+    pub trait ServerFileRecordHandler {}
+    pub trait ServerDiagnosticsHandler {}
 }
 
 pub trait HoldingRegisterMap {

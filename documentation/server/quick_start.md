@@ -17,14 +17,14 @@ Get your first Modbus server running in 5 minutes.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", features = ["server"] }
+modbus-rs = { version = "0.6.0", features = ["server"] }
 ```
 
 ### Minimal TCP Server (Coils + Registers Only)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
     "server",
     "tcp",
     "coils",
@@ -74,7 +74,35 @@ struct MyApp {
 }
 
 #[cfg(feature = "traffic")]
-impl modbus_rs::TrafficNotifier for MyApp {}
+impl modbus_rs::TrafficNotifier for MyApp {
+    fn on_rx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("RX frame ({} bytes)", frame.len());
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("TX frame ({} bytes)", frame.len());
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _uid: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
+    ) {
+        println!("RX error {:?} on frame ({} bytes)", error, frame.len());
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _uid: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
+    ) {
+        println!("TX error {:?} on frame ({} bytes)", error, frame.len());
+    }
+}
 
 impl MyApp {
     fn new() -> Self {
@@ -118,8 +146,8 @@ fn main() -> Result<(), MbusError> {
 ```rust
 use modbus_rs::{
     ServerServices, MbusError, ModbusConfig, ModbusTcpConfig,
-    StdTcpTransport, ModbusAppHandler, UnitIdOrSlaveAddr,
-    Coils, Registers,
+    StdTcpTransport, ServerCoilHandler, ServerHoldingRegisterHandler,
+    ServerExceptionHandler, UnitIdOrSlaveAddr, Coils, Registers,
 };
 
 struct MyApp {
@@ -127,7 +155,9 @@ struct MyApp {
     registers: [u16; 10],
 }
 
-impl ModbusAppHandler for MyApp {
+impl ServerExceptionHandler for MyApp {}
+
+impl ServerCoilHandler for MyApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
@@ -143,23 +173,6 @@ impl ModbusAppHandler for MyApp {
         }
         
         Ok(Coils::from_values(start_address, &self.coils[start..start + qty]))
-    }
-    
-    fn read_multiple_holding_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        start_address: u16,
-        quantity: u16,
-    ) -> Result<Registers, MbusError> {
-        let start = start_address as usize;
-        let qty = quantity as usize;
-        
-        if start + qty > self.registers.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        
-        Ok(Registers::from_values(start_address, &self.registers[start..start + qty]))
     }
     
     fn write_single_coil_request(
@@ -178,8 +191,25 @@ impl ModbusAppHandler for MyApp {
         self.coils[addr] = value;
         Ok(())
     }
-    
-    // ... implement other callbacks
+}
+
+impl ServerHoldingRegisterHandler for MyApp {
+    fn read_multiple_holding_registers_request(
+        &mut self,
+        _txn_id: u16,
+        _uid: UnitIdOrSlaveAddr,
+        start_address: u16,
+        quantity: u16,
+    ) -> Result<Registers, MbusError> {
+        let start = start_address as usize;
+        let qty = quantity as usize;
+        
+        if start + qty > self.registers.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        
+        Ok(Registers::from_values(start_address, &self.registers[start..start + qty]))
+    }
 }
 
 fn main() -> Result<(), MbusError> {

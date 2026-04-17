@@ -188,7 +188,8 @@ Higher priority requests are dispatched first, reducing I/O latency for critical
 │  struct App { coils: MyCoils }                          │
 │                    │                                    │
 │                    ▼                                    │
-│  Generated: impl ModbusAppHandler for App               │
+│  Generated: impl ServerCoilHandler for App              │
+│  + impl ServerExceptionHandler, etc.                    │
 │  - read_coils_request() { self.coils.encode(...) }      │
 │  - write_single_coil_request() { self.coils.decode(..) }│
 │  - on_write_X() hooks routed to App methods             │

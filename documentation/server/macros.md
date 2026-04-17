@@ -216,14 +216,24 @@ Each argument inside a group must be the field name(s) of the corresponding data
 
 ### Generated Implementation
 
+The macro generates separate trait impls for each enabled group. `ModbusAppHandler`
+is automatically satisfied via a blanket impl when all required traits are implemented.
+
 ```rust
-impl ModbusAppHandler for App {
+impl ServerExceptionHandler for App { /* default no-op */ }
+
+impl ServerCoilHandler for App {
     fn read_coils_request(...) -> Result<Coils, MbusError>;
     fn write_single_coil_request(...) -> Result<(), MbusError>;
     fn write_multiple_coils_request(...) -> Result<(), MbusError>;
-    fn read_multiple_holding_registers_request(...) -> Result<Registers, MbusError>;
-    // ... all applicable callbacks
 }
+
+impl ServerHoldingRegisterHandler for App {
+    fn read_multiple_holding_registers_request(...) -> Result<Registers, MbusError>;
+    // ... write_single_register, write_multiple_registers, etc.
+}
+
+// ... additional trait impls for each group passed to #[modbus_app(...)]
 ```
 
 ---

@@ -5,7 +5,14 @@ use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
@@ -28,18 +35,21 @@ impl GuardedApp {
     }
 }
 
-impl ModbusAppHandler for GuardedApp {
-    fn read_multiple_input_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _quantity: u16,
-        _out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
+impl ServerExceptionHandler for GuardedApp {}
 
+impl ServerCoilHandler for GuardedApp {}
+
+impl ServerDiscreteInputHandler for GuardedApp {}
+
+impl ServerInputRegisterHandler for GuardedApp {}
+
+impl ServerFifoHandler for GuardedApp {}
+
+impl ServerFileRecordHandler for GuardedApp {}
+
+impl ServerDiagnosticsHandler for GuardedApp {}
+
+impl ServerHoldingRegisterHandler for GuardedApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -56,26 +66,6 @@ impl ModbusAppHandler for GuardedApp {
             }
         }
         Ok(self.response_len)
-    }
-
-    fn write_single_register_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _value: u16,
-    ) -> Result<(), MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
-
-    fn write_multiple_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _starting_address: u16,
-        _values: &[u16],
-    ) -> Result<(), MbusError> {
-        Err(MbusError::InvalidFunctionCode)
     }
 }
 

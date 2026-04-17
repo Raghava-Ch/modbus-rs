@@ -7,9 +7,16 @@ use mbus_core::function_codes::public::{DiagnosticSubFunction, FunctionCode};
 use mbus_core::transport::{
     ModbusConfig, SerialMode, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
-use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -34,8 +41,14 @@ fn make_app(mode: Mode) -> (Fc08App, Arc<AtomicUsize>) {
     (app, calls)
 }
 
-impl ModbusAppHandler for Fc08App {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for Fc08App {}
+impl ServerCoilHandler for Fc08App {}
+impl ServerDiscreteInputHandler for Fc08App {}
+impl ServerHoldingRegisterHandler for Fc08App {}
+impl ServerInputRegisterHandler for Fc08App {}
+impl ServerFifoHandler for Fc08App {}
+impl ServerFileRecordHandler for Fc08App {}
+impl ServerDiagnosticsHandler for Fc08App {
     fn diagnostics_request(
         &mut self,
         _txn_id: u16,
