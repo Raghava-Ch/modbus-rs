@@ -41,6 +41,7 @@ mbus-macros = { version = "0.6.0", path = "./mbus-macros" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
+anyhow = { version = "1.0" }
 log = { version = "0.4.29", default-features = false }
 
 # Macro dependencies

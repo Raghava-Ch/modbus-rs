@@ -35,6 +35,7 @@ pub use mbus_macros::HoldingRegistersModel;
 #[cfg(feature = "input-registers")]
 pub use mbus_macros::InputRegistersModel;
 pub use mbus_macros::modbus_app;
+pub use mbus_macros::async_modbus_app;
 pub use services::ServerServices;
 pub use services::resilience::{
     ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig,
