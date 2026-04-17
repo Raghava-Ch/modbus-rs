@@ -7,7 +7,14 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 
@@ -23,7 +30,21 @@ impl DiagnosticsApp {
     }
 }
 
-impl ModbusAppHandler for DiagnosticsApp {
+impl ServerExceptionHandler for DiagnosticsApp {}
+
+impl ServerCoilHandler for DiagnosticsApp {}
+
+impl ServerDiscreteInputHandler for DiagnosticsApp {}
+
+impl ServerHoldingRegisterHandler for DiagnosticsApp {}
+
+impl ServerInputRegisterHandler for DiagnosticsApp {}
+
+impl ServerFifoHandler for DiagnosticsApp {}
+
+impl ServerFileRecordHandler for DiagnosticsApp {}
+
+impl ServerDiagnosticsHandler for DiagnosticsApp {
     fn read_exception_status_request(
         &mut self,
         _txn_id: u16,

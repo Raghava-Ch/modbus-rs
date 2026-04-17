@@ -15,7 +15,15 @@ use mbus_core::transport::checksum::crc16;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -28,7 +36,7 @@ struct ExceptionSpyApp {
     holding0: u16,
 }
 
-impl ModbusAppHandler for ExceptionSpyApp {
+impl ServerExceptionHandler for ExceptionSpyApp {
     fn on_exception(
         &mut self,
         _txn_id: u16,
@@ -42,8 +50,10 @@ impl ModbusAppHandler for ExceptionSpyApp {
             .expect("poisoned")
             .push((function_code, exception_code, error));
     }
-
-    #[cfg(feature = "holding-registers")]
+}
+impl ServerCoilHandler for ExceptionSpyApp {}
+impl ServerDiscreteInputHandler for ExceptionSpyApp {}
+impl ServerHoldingRegisterHandler for ExceptionSpyApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -61,6 +71,10 @@ impl ModbusAppHandler for ExceptionSpyApp {
         Ok(2)
     }
 }
+impl ServerInputRegisterHandler for ExceptionSpyApp {}
+impl ServerFifoHandler for ExceptionSpyApp {}
+impl ServerFileRecordHandler for ExceptionSpyApp {}
+impl ServerDiagnosticsHandler for ExceptionSpyApp {}
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for ExceptionSpyApp {}

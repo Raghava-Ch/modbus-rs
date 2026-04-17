@@ -10,7 +10,14 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 
@@ -42,8 +49,21 @@ const CONFORMITY: u8 = 0x82;
 
 struct MyDevice;
 
-impl ModbusAppHandler for MyDevice {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for MyDevice {}
+
+impl ServerCoilHandler for MyDevice {}
+
+impl ServerDiscreteInputHandler for MyDevice {}
+
+impl ServerHoldingRegisterHandler for MyDevice {}
+
+impl ServerInputRegisterHandler for MyDevice {}
+
+impl ServerFifoHandler for MyDevice {}
+
+impl ServerFileRecordHandler for MyDevice {}
+
+impl ServerDiagnosticsHandler for MyDevice {
     fn read_device_identification_request(
         &mut self,
         _txn_id: u16,

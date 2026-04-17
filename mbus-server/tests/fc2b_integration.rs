@@ -10,7 +10,15 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 
 // ---------------------------------------------------------------------------
 // App stub
@@ -18,8 +26,14 @@ use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
 
 struct DeviceIdApp;
 
-impl ModbusAppHandler for DeviceIdApp {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for DeviceIdApp {}
+impl ServerCoilHandler for DeviceIdApp {}
+impl ServerDiscreteInputHandler for DeviceIdApp {}
+impl ServerHoldingRegisterHandler for DeviceIdApp {}
+impl ServerInputRegisterHandler for DeviceIdApp {}
+impl ServerFifoHandler for DeviceIdApp {}
+impl ServerFileRecordHandler for DeviceIdApp {}
+impl ServerDiagnosticsHandler for DeviceIdApp {
     fn read_device_identification_request(
         &mut self,
         _txn_id: u16,

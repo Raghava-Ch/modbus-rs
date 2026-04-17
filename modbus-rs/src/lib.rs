@@ -52,8 +52,22 @@ pub use mbus_server::modbus_app;
 #[cfg(feature = "server")]
 pub use mbus_server::{
     ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy, RequestPriority,
-    ResilienceConfig, ServerServices, TimeoutConfig,
+    ResilienceConfig, ServerExceptionHandler, ServerServices, TimeoutConfig,
 };
+#[cfg(feature = "server")]
+pub use mbus_server::ServerCoilHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerDiagnosticsHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerDiscreteInputHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerFifoHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerFileRecordHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerHoldingRegisterHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerInputRegisterHandler;
 
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};

@@ -1,6 +1,6 @@
 [package]
 name = "modbus-rs"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license.workspace = true
@@ -25,7 +25,7 @@ heapless = { workspace = true }
 anyhow = "1.0.102"
 env_logger = "0.11"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-mbus-server = { version = "0.2.0", path = "../mbus-server" }
+mbus-server = { version = "0.6.0", path = "../mbus-server" }
 
 [build-dependencies]
 

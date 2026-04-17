@@ -18,7 +18,14 @@ pub mod statistics;
 
 #[cfg(feature = "traffic")]
 pub use app::TrafficNotifier;
-pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ServerExceptionHandler};
+pub use app::ServerCoilHandler;
+pub use app::ServerDiagnosticsHandler;
+pub use app::ServerDiscreteInputHandler;
+pub use app::ServerFifoHandler;
+pub use app::ServerFileRecordHandler;
+pub use app::ServerHoldingRegisterHandler;
+pub use app::ServerInputRegisterHandler;
 #[cfg(feature = "coils")]
 pub use mbus_macros::CoilsModel;
 #[cfg(feature = "discrete-inputs")]

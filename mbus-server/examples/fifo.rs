@@ -11,7 +11,14 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 
@@ -37,7 +44,17 @@ impl FifoServer {
     }
 }
 
-impl ModbusAppHandler for FifoServer {
+impl ServerExceptionHandler for FifoServer {}
+
+impl ServerCoilHandler for FifoServer {}
+
+impl ServerDiscreteInputHandler for FifoServer {}
+
+impl ServerHoldingRegisterHandler for FifoServer {}
+
+impl ServerInputRegisterHandler for FifoServer {}
+
+impl ServerFifoHandler for FifoServer {
     /// FC 0x18 — return the queue contents for the given pointer address.
     ///
     /// The server writes into `out`:
@@ -68,6 +85,10 @@ impl ModbusAppHandler for FifoServer {
         Ok(2 + count as u8 * 2)
     }
 }
+
+impl ServerFileRecordHandler for FifoServer {}
+
+impl ServerDiagnosticsHandler for FifoServer {}
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for FifoServer {}

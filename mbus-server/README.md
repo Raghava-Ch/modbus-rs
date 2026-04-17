@@ -35,6 +35,43 @@ struct App {
 // FC03 read_holding_registers is now auto-implemented
 ```
 
+### Optional Traffic Callbacks (`traffic` feature)
+
+```rust
+use mbus_core::{MbusError, UnitIdOrSlaveAddr};
+use mbus_server::app::TrafficNotifier;
+
+impl TrafficNotifier for App {
+    fn on_rx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("RX {} bytes", frame.len());
+    }
+
+    fn on_tx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("TX {} bytes", frame.len());
+    }
+
+    fn on_rx_error(
+        &mut self,
+        _txn_id: u16,
+        _uid: UnitIdOrSlaveAddr,
+        err: MbusError,
+        frame: &[u8],
+    ) {
+        println!("RX error {:?} on {} bytes", err, frame.len());
+    }
+
+    fn on_tx_error(
+        &mut self,
+        _txn_id: u16,
+        _uid: UnitIdOrSlaveAddr,
+        err: MbusError,
+        frame: &[u8],
+    ) {
+        println!("TX error {:?} on {} bytes", err, frame.len());
+    }
+}
+```
+
 ## Documentation
 
 📖 **[Full Documentation](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/server)**

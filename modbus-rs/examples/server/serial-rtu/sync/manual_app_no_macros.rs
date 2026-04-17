@@ -3,7 +3,12 @@ use mbus_core::errors::ExceptionCode;
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ResilienceConfig;
+use mbus_server::ServerServices;
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
     ModbusSerialConfig, Parity, SerialMode, StdRtuTransport, UnitIdOrSlaveAddr,
@@ -105,7 +110,7 @@ impl ManualServerApp {
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for ManualServerApp {}
 
-impl ModbusAppHandler for ManualServerApp {
+impl ServerExceptionHandler for ManualServerApp {
     fn on_exception(
         &mut self,
         txn_id: u16,
@@ -123,8 +128,9 @@ impl ModbusAppHandler for ManualServerApp {
             error
         );
     }
+}
 
-    #[cfg(feature = "coils")]
+impl ServerCoilHandler for ManualServerApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
@@ -136,31 +142,6 @@ impl ModbusAppHandler for ManualServerApp {
         self.encode_coils(address, quantity, out)
     }
 
-    #[cfg(feature = "holding-registers")]
-    fn read_multiple_holding_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        quantity: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Self::encode_registers(&self.holding, address, quantity, out)
-    }
-
-    #[cfg(feature = "input-registers")]
-    fn read_multiple_input_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        quantity: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Self::encode_registers(&self.input, address, quantity, out)
-    }
-
-    #[cfg(feature = "coils")]
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
@@ -173,7 +154,6 @@ impl ModbusAppHandler for ManualServerApp {
         Ok(())
     }
 
-    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         _txn_id: u16,
@@ -194,8 +174,22 @@ impl ModbusAppHandler for ManualServerApp {
         }
         Ok(())
     }
+}
 
-    #[cfg(feature = "holding-registers")]
+impl mbus_server::ServerDiscreteInputHandler for ManualServerApp {}
+
+impl ServerHoldingRegisterHandler for ManualServerApp {
+    fn read_multiple_holding_registers_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        Self::encode_registers(&self.holding, address, quantity, out)
+    }
+
     fn write_single_register_request(
         &mut self,
         _txn_id: u16,
@@ -208,7 +202,6 @@ impl ModbusAppHandler for ManualServerApp {
         Ok(())
     }
 
-    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -226,6 +219,23 @@ impl ModbusAppHandler for ManualServerApp {
         Ok(())
     }
 }
+
+impl ServerInputRegisterHandler for ManualServerApp {
+    fn read_multiple_input_registers_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        Self::encode_registers(&self.input, address, quantity, out)
+    }
+}
+
+impl mbus_server::ServerFifoHandler for ManualServerApp {}
+impl mbus_server::ServerFileRecordHandler for ManualServerApp {}
+impl mbus_server::ServerDiagnosticsHandler for ManualServerApp {}
 
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")

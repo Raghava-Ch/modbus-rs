@@ -28,7 +28,14 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 
@@ -46,10 +53,11 @@ struct ControllerApp {
     broadcast_writes_received: u32,
 }
 
-impl ModbusAppHandler for ControllerApp {
+impl ServerExceptionHandler for ControllerApp {}
+
+impl ServerCoilHandler for ControllerApp {
     // ── Coil writes ────────────────────────────────────────────────────────
 
-    #[cfg(feature = "coils")]
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
@@ -68,7 +76,6 @@ impl ModbusAppHandler for ControllerApp {
         }
     }
 
-    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         _txn_id: u16,
@@ -91,10 +98,13 @@ impl ModbusAppHandler for ControllerApp {
         }
         Ok(())
     }
+}
 
+impl ServerDiscreteInputHandler for ControllerApp {}
+
+impl ServerHoldingRegisterHandler for ControllerApp {
     // ── Register writes ────────────────────────────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn write_single_register_request(
         &mut self,
         _txn_id: u16,
@@ -113,7 +123,6 @@ impl ModbusAppHandler for ControllerApp {
         }
     }
 
-    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -134,6 +143,14 @@ impl ModbusAppHandler for ControllerApp {
         Ok(())
     }
 }
+
+impl ServerInputRegisterHandler for ControllerApp {}
+
+impl ServerFifoHandler for ControllerApp {}
+
+impl ServerFileRecordHandler for ControllerApp {}
+
+impl ServerDiagnosticsHandler for ControllerApp {}
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for ControllerApp {}

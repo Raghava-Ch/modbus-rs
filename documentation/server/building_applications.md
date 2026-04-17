@@ -20,7 +20,7 @@ Complete guide to building production-ready Modbus server applications.
 A Modbus server application consists of:
 
 1. **Transport** — The communication layer (TCP, Serial RTU, Serial ASCII)
-2. **App** — Your struct implementing `ModbusAppHandler` or using `#[modbus_app]`
+2. **App** — Your struct implementing the split server traits or using `#[modbus_app]`
 3. **ServerServices** — The orchestrator managing requests and responses
 4. **Config** — Transport and protocol parameters
 
@@ -28,7 +28,8 @@ A Modbus server application consists of:
 ```rust
 use modbus_rs::{
     ServerServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport,
-    ModbusAppHandler, MbusError, UnitIdOrSlaveAddr, Coils, Registers,
+    ServerCoilHandler, ServerHoldingRegisterHandler, ServerExceptionHandler,
+    MbusError, UnitIdOrSlaveAddr, Coils, Registers,
 };
 
 // Application with in-memory data
@@ -37,8 +38,14 @@ struct App {
     holding_registers: [u16; 100],
 }
 
-impl ModbusAppHandler for App {
-    // Implement callbacks for each function code...
+impl ServerExceptionHandler for App {}
+
+impl ServerCoilHandler for App {
+    // Implement coil callbacks (FC01, FC05, FC0F)...
+}
+
+impl ServerHoldingRegisterHandler for App {
+    // Implement register callbacks (FC03, FC06, FC10)...
 }
 
 fn main() -> Result<(), MbusError> {
@@ -131,10 +138,13 @@ struct App {
 
 ### Manual Callback Implementation
 
-For full control, implement `ModbusAppHandler` directly:
+For full control, implement the split traits directly. `ModbusAppHandler` is
+automatically satisfied via a blanket impl when all required traits are implemented.
 
 ```rust
-impl ModbusAppHandler for App {
+impl ServerExceptionHandler for App {}
+
+impl ServerCoilHandler for App {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
@@ -173,9 +183,9 @@ impl ModbusAppHandler for App {
         self.coils[addr] = value;
         Ok(())
     }
-    
-    // Implement other callbacks...
 }
+
+// Implement other traits as needed (ServerHoldingRegisterHandler, etc.)
 ```
 
 ---

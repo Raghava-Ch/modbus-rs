@@ -19,7 +19,14 @@ use mbus_core::transport::{
 };
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{ResilienceConfig, ServerExceptionHandler, ServerServices};
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -75,8 +82,19 @@ struct BroadcastApp {
     calls: Arc<AtomicUsize>,
 }
 
-impl ModbusAppHandler for BroadcastApp {
-    #[cfg(feature = "coils")]
+impl ServerExceptionHandler for BroadcastApp {}
+
+impl ServerDiscreteInputHandler for BroadcastApp {}
+
+impl ServerInputRegisterHandler for BroadcastApp {}
+
+impl ServerFifoHandler for BroadcastApp {}
+
+impl ServerFileRecordHandler for BroadcastApp {}
+
+impl ServerDiagnosticsHandler for BroadcastApp {}
+
+impl ServerCoilHandler for BroadcastApp {
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
@@ -88,7 +106,6 @@ impl ModbusAppHandler for BroadcastApp {
         Ok(())
     }
 
-    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         _txn_id: u16,
@@ -100,8 +117,9 @@ impl ModbusAppHandler for BroadcastApp {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+}
 
-    #[cfg(feature = "holding-registers")]
+impl ServerHoldingRegisterHandler for BroadcastApp {
     fn write_single_register_request(
         &mut self,
         _txn_id: u16,
@@ -113,7 +131,6 @@ impl ModbusAppHandler for BroadcastApp {
         Ok(())
     }
 
-    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,

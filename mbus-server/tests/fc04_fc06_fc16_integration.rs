@@ -5,7 +5,14 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
@@ -38,7 +45,19 @@ struct RegisterApp {
     mask_fc16_last: MaskFc16Last,
 }
 
-impl ModbusAppHandler for RegisterApp {
+impl ServerExceptionHandler for RegisterApp {}
+
+impl ServerCoilHandler for RegisterApp {}
+
+impl ServerDiscreteInputHandler for RegisterApp {}
+
+impl ServerFifoHandler for RegisterApp {}
+
+impl ServerFileRecordHandler for RegisterApp {}
+
+impl ServerDiagnosticsHandler for RegisterApp {}
+
+impl ServerInputRegisterHandler for RegisterApp {
     fn read_multiple_input_registers_request(
         &mut self,
         _txn_id: u16,
@@ -61,7 +80,9 @@ impl ModbusAppHandler for RegisterApp {
             RegisterMode::AppError(error) => Err(error),
         }
     }
+}
 
+impl ServerHoldingRegisterHandler for RegisterApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,

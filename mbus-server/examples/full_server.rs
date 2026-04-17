@@ -42,7 +42,14 @@
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::{DiagnosticSubFunction, FunctionCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 
@@ -133,13 +140,30 @@ impl FullApp {
 }
 
 // ---------------------------------------------------------------------------
-// ModbusAppHandler implementation
+// Split trait implementations
 // ---------------------------------------------------------------------------
 
-impl ModbusAppHandler for FullApp {
+impl ServerExceptionHandler for FullApp {
+    fn on_exception(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        function_code: FunctionCode,
+        exception_code: ExceptionCode,
+        _error: MbusError,
+    ) {
+        self.exception_count += 1;
+        println!(
+            "  [on_exception] FC={function_code:?} → {exception_code:?} \
+             (total exceptions so far: {})",
+            self.exception_count
+        );
+    }
+}
+
+impl ServerCoilHandler for FullApp {
     // ── FC01: Read Coils ──────────────────────────────────────────────────
 
-    #[cfg(feature = "coils")]
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
@@ -168,9 +192,49 @@ impl ModbusAppHandler for FullApp {
         Ok(byte_count as u8)
     }
 
+    // ── FC05: Write Single Coil ───────────────────────────────────────────
+
+    fn write_single_coil_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        value: bool,
+    ) -> Result<(), MbusError> {
+        let idx = address as usize;
+        if idx >= self.coils.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        self.coils[idx] = value;
+        Ok(())
+    }
+
+    // ── FC0F: Write Multiple Coils ────────────────────────────────────────
+
+    fn write_multiple_coils_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        starting_address: u16,
+        quantity: u16,
+        packed_values: &[u8],
+    ) -> Result<(), MbusError> {
+        let start = starting_address as usize;
+        if start + quantity as usize > self.coils.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        for bit_pos in 0..(quantity as usize) {
+            let byte_idx = bit_pos / 8;
+            let bit_idx = bit_pos % 8;
+            self.coils[start + bit_pos] = (packed_values[byte_idx] >> bit_idx) & 1 != 0;
+        }
+        Ok(())
+    }
+}
+
+impl ServerDiscreteInputHandler for FullApp {
     // ── FC02: Read Discrete Inputs ───────────────────────────────────────
 
-    #[cfg(feature = "discrete-inputs")]
     fn read_discrete_inputs_request(
         &mut self,
         _txn_id: u16,
@@ -198,10 +262,11 @@ impl ModbusAppHandler for FullApp {
         }
         Ok(byte_count as u8)
     }
+}
 
+impl ServerHoldingRegisterHandler for FullApp {
     // ── FC03: Read Holding Registers ─────────────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -222,50 +287,8 @@ impl ModbusAppHandler for FullApp {
         Ok((quantity * 2) as u8)
     }
 
-    // ── FC04: Read Input Registers ───────────────────────────────────────
-
-    #[cfg(feature = "input-registers")]
-    fn read_multiple_input_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        quantity: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        let start = address as usize;
-        let end = start + quantity as usize;
-        if end > self.input_regs.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        for (i, &v) in self.input_regs[start..end].iter().enumerate() {
-            out[i * 2] = (v >> 8) as u8;
-            out[i * 2 + 1] = v as u8;
-        }
-        Ok((quantity * 2) as u8)
-    }
-
-    // ── FC05: Write Single Coil ───────────────────────────────────────────
-
-    #[cfg(feature = "coils")]
-    fn write_single_coil_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        address: u16,
-        value: bool,
-    ) -> Result<(), MbusError> {
-        let idx = address as usize;
-        if idx >= self.coils.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        self.coils[idx] = value;
-        Ok(())
-    }
-
     // ── FC06: Write Single Register ──────────────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn write_single_register_request(
         &mut self,
         _txn_id: u16,
@@ -281,84 +304,8 @@ impl ModbusAppHandler for FullApp {
         Ok(())
     }
 
-    // ── FC07: Read Exception Status ──────────────────────────────────────
-
-    #[cfg(feature = "diagnostics")]
-    fn read_exception_status_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-    ) -> Result<u8, MbusError> {
-        Ok(self.exception_status)
-    }
-
-    // ── FC08: Diagnostics (loopback only; stack handles counter sub-fns) ──
-
-    #[cfg(feature = "diagnostics")]
-    fn diagnostics_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        sub_function: DiagnosticSubFunction,
-        data: u16,
-    ) -> Result<u16, MbusError> {
-        match sub_function {
-            DiagnosticSubFunction::ReturnQueryData => Ok(data), // loopback
-            _ => Err(MbusError::ReservedSubFunction(sub_function as u16)),
-        }
-    }
-
-    // ── FC0B: Get Comm Event Counter ──────────────────────────────────────
-
-    #[cfg(feature = "diagnostics")]
-    fn get_comm_event_counter_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-    ) -> Result<(u16, u16), MbusError> {
-        // status word bit-15 = 1 → ready; event_count delegated to stack
-        Ok((0x0000, 0x0000))
-    }
-
-    // ── FC0C: Get Comm Event Log ──────────────────────────────────────────
-
-    #[cfg(feature = "diagnostics")]
-    fn get_comm_event_log_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _out_events: &mut [u8],
-    ) -> Result<(u16, u16, u16, u8), MbusError> {
-        // (status, event_count, message_count, event_bytes_written)
-        Ok((0x0000, 0, 0, 0))
-    }
-
-    // ── FC0F: Write Multiple Coils ────────────────────────────────────────
-
-    #[cfg(feature = "coils")]
-    fn write_multiple_coils_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        starting_address: u16,
-        quantity: u16,
-        packed_values: &[u8],
-    ) -> Result<(), MbusError> {
-        let start = starting_address as usize;
-        if start + quantity as usize > self.coils.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        for bit_pos in 0..(quantity as usize) {
-            let byte_idx = bit_pos / 8;
-            let bit_idx = bit_pos % 8;
-            self.coils[start + bit_pos] = (packed_values[byte_idx] >> bit_idx) & 1 != 0;
-        }
-        Ok(())
-    }
-
     // ── FC10: Write Multiple Registers ───────────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -374,75 +321,8 @@ impl ModbusAppHandler for FullApp {
         Ok(())
     }
 
-    // ── FC11: Report Server ID ────────────────────────────────────────────
-
-    #[cfg(feature = "diagnostics")]
-    fn report_server_id_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        out_server_id: &mut [u8],
-    ) -> Result<(u8, u8), MbusError> {
-        let id = b"FullFeaturedServer-v2";
-        let n = id.len().min(out_server_id.len());
-        out_server_id[..n].copy_from_slice(&id[..n]);
-        Ok((n as u8, self.run_indicator))
-    }
-
-    // ── FC14: Read File Record ────────────────────────────────────────────
-
-    #[cfg(feature = "file-record")]
-    fn read_file_record_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        file_number: u16,
-        record_number: u16,
-        record_length: u16,
-        out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        if file_number != 1 {
-            return Err(MbusError::InvalidAddress);
-        }
-        let start = record_number as usize;
-        let len = record_length as usize;
-        if start.saturating_add(len) > self.file_store.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        for i in 0..len {
-            let v = self.file_store[start + i];
-            out[i * 2] = (v >> 8) as u8;
-            out[i * 2 + 1] = v as u8;
-        }
-        Ok((len * 2) as u8)
-    }
-
-    // ── FC15: Write File Record ───────────────────────────────────────────
-
-    #[cfg(feature = "file-record")]
-    fn write_file_record_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        file_number: u16,
-        record_number: u16,
-        _record_length: u16,
-        values: &[u16],
-    ) -> Result<(), MbusError> {
-        if file_number != 1 {
-            return Err(MbusError::InvalidAddress);
-        }
-        let start = record_number as usize;
-        if start.saturating_add(values.len()) > self.file_store.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        self.file_store[start..start + values.len()].copy_from_slice(values);
-        Ok(())
-    }
-
     // ── FC16: Mask Write Register ─────────────────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn mask_write_register_request(
         &mut self,
         _txn_id: u16,
@@ -463,7 +343,6 @@ impl ModbusAppHandler for FullApp {
 
     // ── FC17: Read/Write Multiple Registers ──────────────────────────────
 
-    #[cfg(feature = "holding-registers")]
     fn read_write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -493,10 +372,35 @@ impl ModbusAppHandler for FullApp {
         }
         Ok((read_quantity * 2) as u8)
     }
+}
 
+impl ServerInputRegisterHandler for FullApp {
+    // ── FC04: Read Input Registers ───────────────────────────────────────
+
+    fn read_multiple_input_registers_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        let start = address as usize;
+        let end = start + quantity as usize;
+        if end > self.input_regs.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        for (i, &v) in self.input_regs[start..end].iter().enumerate() {
+            out[i * 2] = (v >> 8) as u8;
+            out[i * 2 + 1] = v as u8;
+        }
+        Ok((quantity * 2) as u8)
+    }
+}
+
+impl ServerFifoHandler for FullApp {
     // ── FC18: Read FIFO Queue ─────────────────────────────────────────────
 
-    #[cfg(feature = "fifo")]
     fn read_fifo_queue_request(
         &mut self,
         _txn_id: u16,
@@ -516,10 +420,124 @@ impl ModbusAppHandler for FullApp {
         }
         Ok(2 + (count * 2) as u8)
     }
+}
+
+impl ServerFileRecordHandler for FullApp {
+    // ── FC14: Read File Record ────────────────────────────────────────────
+
+    fn read_file_record_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        record_length: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        if file_number != 1 {
+            return Err(MbusError::InvalidAddress);
+        }
+        let start = record_number as usize;
+        let len = record_length as usize;
+        if start.saturating_add(len) > self.file_store.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        for i in 0..len {
+            let v = self.file_store[start + i];
+            out[i * 2] = (v >> 8) as u8;
+            out[i * 2 + 1] = v as u8;
+        }
+        Ok((len * 2) as u8)
+    }
+
+    // ── FC15: Write File Record ───────────────────────────────────────────
+
+    fn write_file_record_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        file_number: u16,
+        record_number: u16,
+        _record_length: u16,
+        values: &[u16],
+    ) -> Result<(), MbusError> {
+        if file_number != 1 {
+            return Err(MbusError::InvalidAddress);
+        }
+        let start = record_number as usize;
+        if start.saturating_add(values.len()) > self.file_store.len() {
+            return Err(MbusError::InvalidAddress);
+        }
+        self.file_store[start..start + values.len()].copy_from_slice(values);
+        Ok(())
+    }
+}
+
+impl ServerDiagnosticsHandler for FullApp {
+    // ── FC07: Read Exception Status ──────────────────────────────────────
+
+    fn read_exception_status_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<u8, MbusError> {
+        Ok(self.exception_status)
+    }
+
+    // ── FC08: Diagnostics (loopback only; stack handles counter sub-fns) ──
+
+    fn diagnostics_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        sub_function: DiagnosticSubFunction,
+        data: u16,
+    ) -> Result<u16, MbusError> {
+        match sub_function {
+            DiagnosticSubFunction::ReturnQueryData => Ok(data), // loopback
+            _ => Err(MbusError::ReservedSubFunction(sub_function as u16)),
+        }
+    }
+
+    // ── FC0B: Get Comm Event Counter ──────────────────────────────────────
+
+    fn get_comm_event_counter_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    ) -> Result<(u16, u16), MbusError> {
+        // status word bit-15 = 1 → ready; event_count delegated to stack
+        Ok((0x0000, 0x0000))
+    }
+
+    // ── FC0C: Get Comm Event Log ──────────────────────────────────────────
+
+    fn get_comm_event_log_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _out_events: &mut [u8],
+    ) -> Result<(u16, u16, u16, u8), MbusError> {
+        // (status, event_count, message_count, event_bytes_written)
+        Ok((0x0000, 0, 0, 0))
+    }
+
+    // ── FC11: Report Server ID ────────────────────────────────────────────
+
+    fn report_server_id_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        out_server_id: &mut [u8],
+    ) -> Result<(u8, u8), MbusError> {
+        let id = b"FullFeaturedServer-v2";
+        let n = id.len().min(out_server_id.len());
+        out_server_id[..n].copy_from_slice(&id[..n]);
+        Ok((n as u8, self.run_indicator))
+    }
 
     // ── FC2B / MEI 0x0E: Read Device Identification ───────────────────────
 
-    #[cfg(feature = "diagnostics")]
     fn read_device_identification_request(
         &mut self,
         _txn_id: u16,
@@ -565,24 +583,6 @@ impl ModbusAppHandler for FullApp {
             written += needed;
         }
         Ok((written as u8, CONFORMITY_LEVEL, more_follows, next_id))
-    }
-
-    // ── on_exception: observe every exception the server sends ───────────
-
-    fn on_exception(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        function_code: FunctionCode,
-        exception_code: ExceptionCode,
-        _error: MbusError,
-    ) {
-        self.exception_count += 1;
-        println!(
-            "  [on_exception] FC={function_code:?} → {exception_code:?} \
-             (total exceptions so far: {})",
-            self.exception_count
-        );
     }
 }
 

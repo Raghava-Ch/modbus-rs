@@ -1913,13 +1913,14 @@ fn expand_modbus_app_struct(
         #force_layout_check
 
         // -----------------------------------------------------------------------
-        // ModbusAppHandler impl directly on the application struct.
+        // Split trait impls for the application struct.
         // The response buffer is stack-allocated by ServerServices::dispatch_request;
         // no permanent per-struct RAM is consumed.
         // -----------------------------------------------------------------------
 
-        impl #generics ::mbus_server::app::ModbusAppHandler for #struct_name #generics #where_clause {
-            #[cfg(feature = "coils")]
+        impl #generics ::mbus_server::app::ServerExceptionHandler for #struct_name #generics #where_clause {}
+
+        impl #generics ::mbus_server::app::ServerCoilHandler for #struct_name #generics #where_clause {
             fn read_coils_request(
                 &mut self,
                 txn_id: u16,
@@ -1958,7 +1959,57 @@ fn expand_modbus_app_struct(
                 result
             }
 
-            #[cfg(feature = "discrete-inputs")]
+            fn write_single_coil_request(
+                &mut self,
+                txn_id: u16,
+                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                address: u16,
+                value: bool,
+            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
+                let _ = (txn_id, unit_id_or_slave_addr);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let mut wrote = false;
+                    #coil_write_single_route
+                    if !wrote {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                    }
+                    Ok(())
+                })();
+
+                result
+            }
+
+            fn write_multiple_coils_request(
+                &mut self,
+                txn_id: u16,
+                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                starting_address: u16,
+                quantity: u16,
+                values: &[u8],
+            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
+                let _ = (txn_id, unit_id_or_slave_addr);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    if quantity == 0 {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
+                    }
+                    let mut cursor = starting_address;
+                    let mut remaining_bits = quantity;
+                    let mut bit_offset = 0usize;
+                    while remaining_bits > 0 {
+                        let mut advanced = false;
+                        #coil_write_many_route
+                        if !advanced {
+                            return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    Ok(())
+                })();
+
+                result
+            }
+        }
+
+        impl #generics ::mbus_server::app::ServerDiscreteInputHandler for #struct_name #generics #where_clause {
             fn read_discrete_inputs_request(
                 &mut self,
                 txn_id: u16,
@@ -1996,8 +2047,9 @@ fn expand_modbus_app_struct(
 
                 result
             }
+        }
 
-            #[cfg(feature = "holding-registers")]
+        impl #generics ::mbus_server::app::ServerHoldingRegisterHandler for #struct_name #generics #where_clause {
             fn read_multiple_holding_registers_request(
                 &mut self,
                 txn_id: u16,
@@ -2037,7 +2089,56 @@ fn expand_modbus_app_struct(
                 result
             }
 
-            #[cfg(feature = "input-registers")]
+            fn write_single_register_request(
+                &mut self,
+                txn_id: u16,
+                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                address: u16,
+                value: u16,
+            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
+                let _ = (txn_id, unit_id_or_slave_addr);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let mut wrote = false;
+                    #hr_write_single_route
+                    if !wrote {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                    }
+                    Ok(())
+                })();
+
+                result
+            }
+
+            fn write_multiple_registers_request(
+                &mut self,
+                txn_id: u16,
+                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                starting_address: u16,
+                values: &[u16],
+            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
+                let _ = (txn_id, unit_id_or_slave_addr);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    if values.is_empty() {
+                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
+                    }
+
+                    let mut cursor = starting_address;
+                    let mut remaining_values = values;
+                    while !remaining_values.is_empty() {
+                        let mut advanced = false;
+                        #hr_write_many_route
+                        if !advanced {
+                            return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    Ok(())
+                })();
+
+                result
+            }
+        }
+
+        impl #generics ::mbus_server::app::ServerInputRegisterHandler for #struct_name #generics #where_clause {
             fn read_multiple_input_registers_request(
                 &mut self,
                 txn_id: u16,
@@ -2074,108 +2175,16 @@ fn expand_modbus_app_struct(
 
                 result
             }
-
-            #[cfg(feature = "coils")]
-            fn write_single_coil_request(
-                &mut self,
-                txn_id: u16,
-                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
-                address: u16,
-                value: bool,
-            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
-                let _ = (txn_id, unit_id_or_slave_addr);
-                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
-                    let mut wrote = false;
-                    #coil_write_single_route
-                    if !wrote {
-                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
-                    }
-                    Ok(())
-                })();
-
-                result
-            }
-
-            #[cfg(feature = "holding-registers")]
-            fn write_single_register_request(
-                &mut self,
-                txn_id: u16,
-                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
-                address: u16,
-                value: u16,
-            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
-                let _ = (txn_id, unit_id_or_slave_addr);
-                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
-                    let mut wrote = false;
-                    #hr_write_single_route
-                    if !wrote {
-                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
-                    }
-                    Ok(())
-                })();
-
-                result
-            }
-
-            #[cfg(feature = "coils")]
-            fn write_multiple_coils_request(
-                &mut self,
-                txn_id: u16,
-                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
-                starting_address: u16,
-                quantity: u16,
-                values: &[u8],
-            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
-                let _ = (txn_id, unit_id_or_slave_addr);
-                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
-                    if quantity == 0 {
-                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
-                    }
-                    let mut cursor = starting_address;
-                    let mut remaining_bits = quantity;
-                    let mut bit_offset = 0usize;
-                    while remaining_bits > 0 {
-                        let mut advanced = false;
-                        #coil_write_many_route
-                        if !advanced {
-                            return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
-                        }
-                    }
-                    Ok(())
-                })();
-
-                result
-            }
-
-            #[cfg(feature = "holding-registers")]
-            fn write_multiple_registers_request(
-                &mut self,
-                txn_id: u16,
-                unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
-                starting_address: u16,
-                values: &[u16],
-            ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
-                let _ = (txn_id, unit_id_or_slave_addr);
-                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
-                    if values.is_empty() {
-                        return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidQuantity);
-                    }
-
-                    let mut cursor = starting_address;
-                    let mut remaining_values = values;
-                    while !remaining_values.is_empty() {
-                        let mut advanced = false;
-                        #hr_write_many_route
-                        if !advanced {
-                            return ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress);
-                        }
-                    }
-                    Ok(())
-                })();
-
-                result
-            }
         }
+
+        // Empty impls for split traits not covered by the macro's
+        // model-driven generation above.
+
+        impl #generics ::mbus_server::app::ServerFifoHandler for #struct_name #generics #where_clause {}
+
+        impl #generics ::mbus_server::app::ServerFileRecordHandler for #struct_name #generics #where_clause {}
+
+        impl #generics ::mbus_server::app::ServerDiagnosticsHandler for #struct_name #generics #where_clause {}
     })
 }
 

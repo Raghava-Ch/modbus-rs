@@ -1,6 +1,7 @@
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerHoldingRegisterHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 use mbus_server::{modbus_app, CoilsModel, HoldingRegistersModel};

@@ -462,13 +462,14 @@ where
     ) {
         let start = self.now_ms();
         match self.transport.send(frame) {
-            Ok(_) => self.handle_send_success(txn_id, unit_id_or_slave_addr, start),
+            Ok(_) => self.handle_send_success(frame, txn_id, unit_id_or_slave_addr, start),
             Err(err) => self.handle_send_failure(frame, txn_id, unit_id_or_slave_addr, err),
         }
     }
 
     fn handle_send_success(
         &mut self,
+        _frame: &[u8],
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         start_ms: u64,
@@ -478,7 +479,7 @@ where
         self.stats.increment_server_message_count();
 
         #[cfg(feature = "traffic")]
-        self.app.on_tx_frame(txn_id, unit_id_or_slave_addr);
+        self.app.on_tx_frame(txn_id, unit_id_or_slave_addr, _frame);
 
         let elapsed = self.now_ms().saturating_sub(start_ms);
         let threshold = self.resilience.timeouts.send_ms as u64;
@@ -507,7 +508,7 @@ where
 
         #[cfg(feature = "traffic")]
         self.app
-            .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed);
+            .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed, frame);
 
         self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
         self.update_peak_response_queue_size();
@@ -555,7 +556,59 @@ where
         error: MbusError,
     ) {
         #[cfg(feature = "traffic")]
-        self.app.on_rx_error(txn_id, unit_id_or_slave_addr, error);
+        self.app
+            .on_rx_error(txn_id, unit_id_or_slave_addr, error, self.rxed_frame.as_slice());
+
+        let exception_code = function_code.exception_code_for_error(&error);
+
+        self.app.on_exception(
+            txn_id,
+            unit_id_or_slave_addr,
+            function_code,
+            exception_code,
+            error,
+        );
+
+        #[cfg(feature = "diagnostics-stats")]
+        self.stats.increment_exception_error_count();
+
+        let response = match exception::build_exception_adu(
+            txn_id,
+            unit_id_or_slave_addr,
+            function_code,
+            exception_code,
+            TRANSPORT::TRANSPORT_TYPE,
+        ) {
+            Ok(adu) => adu,
+            Err(err) => {
+                server_log_debug!(
+                    "FC{:02X}: failed to build exception ADU: {:?}",
+                    function_code as u8,
+                    err
+                );
+                return;
+            }
+        };
+
+        server_log_trace!(
+            "FC{:02X}: sending exception response with code 0x{:02X}",
+            function_code as u8,
+            exception_code as u8
+        );
+        self.try_send_or_queue(&response, txn_id, unit_id_or_slave_addr);
+    }
+
+    pub(super) fn send_exception_response_for_frame(
+        &mut self,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        function_code: FunctionCode,
+        error: MbusError,
+        _request_frame: &[u8],
+    ) {
+        #[cfg(feature = "traffic")]
+        self.app
+            .on_rx_error(txn_id, unit_id_or_slave_addr, error, _request_frame);
 
         let exception_code = function_code.exception_code_for_error(&error);
 
@@ -607,6 +660,16 @@ where
     APP: ModbusAppHandler,
 {
     pub(super) fn dispatch_request(&mut self, message: &ModbusMessage) {
+        let mut request_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+        let _ = request_frame.extend_from_slice(self.rxed_frame.as_slice());
+        self.dispatch_request_for_frame(message, request_frame.as_slice());
+    }
+
+    pub(super) fn dispatch_request_for_frame(
+        &mut self,
+        message: &ModbusMessage,
+        request_frame: &[u8],
+    ) {
         let wire_txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
         let function_code = message.pdu.function_code();
@@ -657,10 +720,11 @@ where
         }
 
         #[cfg(feature = "traffic")]
-        self.app.on_rx_frame(wire_txn_id, unit_id_or_slave_addr);
+        self.app
+            .on_rx_frame(wire_txn_id, unit_id_or_slave_addr, request_frame);
 
         server_log_trace!(
-            "dispatching response: txn_id={}, unit_id_or_slave_addr={}",
+            "dispatching request: txn_id={}, unit_id_or_slave_addr={}",
             wire_txn_id,
             unit_id_or_slave_addr.get(),
         );
@@ -763,11 +827,12 @@ where
                 unit_id_or_slave_addr,
                 message,
             ),
-            _ => self.send_exception_response(
+            _ => self.send_exception_response_for_frame(
                 wire_txn_id,
                 unit_id_or_slave_addr,
                 function_code,
                 MbusError::InvalidFunctionCode,
+                request_frame,
             ),
         }
     }
@@ -919,8 +984,11 @@ where
         self.stats.increment_server_message_count();
 
         #[cfg(feature = "traffic")]
-        self.app
-            .on_tx_frame(pending.txn_id, pending.unit_id_or_slave_addr);
+        self.app.on_tx_frame(
+            pending.txn_id,
+            pending.unit_id_or_slave_addr,
+            pending.frame.as_slice(),
+        );
 
         server_log_trace!(
             "queued response sent on retry attempt {}",
@@ -938,6 +1006,7 @@ where
             pending.txn_id,
             pending.unit_id_or_slave_addr,
             MbusError::SendFailed,
+            pending.frame.as_slice(),
         );
 
         server_log_debug!(
@@ -981,7 +1050,7 @@ where
         };
 
         let start = self.now_ms();
-        self.dispatch_request(&message);
+        self.dispatch_request_for_frame(&message, pending.frame.as_slice());
         let elapsed = self.now_ms().saturating_sub(start);
         let threshold = self.resilience.timeouts.app_callback_ms as u64;
         if threshold > 0 && elapsed > threshold {
@@ -1027,11 +1096,12 @@ where
         let txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
         let function_code = message.pdu.function_code();
-        self.send_exception_response(
+        self.send_exception_response_for_frame(
             txn_id,
             unit_id_or_slave_addr,
             function_code,
             MbusError::Timeout,
+            pending.frame.as_slice(),
         );
     }
 
@@ -1280,11 +1350,14 @@ where
                 message.transaction_id()
             );
             self.rejected_request_count = self.rejected_request_count.saturating_add(1);
-            self.send_exception_response(
+            let mut request_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+            let _ = request_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
+            self.send_exception_response_for_frame(
                 message.transaction_id(),
                 message.unit_id_or_slave_addr(),
                 message.pdu.function_code(),
                 MbusError::TooManyRequests,
+                request_frame.as_slice(),
             );
             return;
         }
@@ -1294,7 +1367,7 @@ where
         let _ = raw_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
         let received_at = self.now_ms();
         if !self.request_queue.push(PendingRequest {
-            frame: raw_frame,
+            frame: raw_frame.clone(),
             priority,
             received_at_ms: received_at,
         }) {
@@ -1303,7 +1376,7 @@ where
                 priority
             );
             let start = self.now_ms();
-            self.dispatch_request(message);
+            self.dispatch_request_for_frame(message, raw_frame.as_slice());
             let elapsed = self.now_ms().saturating_sub(start);
             let threshold = self.resilience.timeouts.app_callback_ms as u64;
             if threshold > 0 && elapsed > threshold {

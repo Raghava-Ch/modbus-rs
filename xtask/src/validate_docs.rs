@@ -516,10 +516,9 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
 
             let rel = block.file.strip_prefix(root).unwrap_or(&block.file);
             print!(
-                "  [{}:{:>3}] {}_dv_{:03}… ",
+                "  [{}:{:>3}] _dv_{:03}… ",
                 rel.display(),
                 block.line,
-                "",
                 i,
             );
             std::io::stdout().flush().ok();

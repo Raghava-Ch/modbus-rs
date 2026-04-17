@@ -17,14 +17,14 @@ Get your first Modbus client running in 5 minutes.
 
 ```toml
 [dependencies]
-modbus-rs = "0.5.0"
+modbus-rs = "0.6.0"
 ```
 
 ### Minimal TCP Client (Coils Only)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
     "client",
     "tcp",
     "coils"
@@ -35,7 +35,7 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
     "client",
     "serial-rtu",
     "registers"
