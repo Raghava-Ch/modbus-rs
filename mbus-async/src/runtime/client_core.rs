@@ -38,19 +38,21 @@ pub struct AsyncClientCore {
     sender: Sender<WorkerCommand>,
     next_txn_id: AtomicU16,
     #[cfg(feature = "traffic")]
-    traffic_handler: TrafficHandlerStore,
+    traffic_rx: watch::Receiver<Option<TrafficEvent>>,
 }
 
 impl AsyncClientCore {
     /// Creates a new core handle from the sending half of an already-spawned
     /// worker channel.  The transaction counter starts at 1.
     #[cfg(feature = "traffic")]
-    pub(super) fn new(sender: Sender<WorkerCommand>, traffic_handler: TrafficHandlerStore) -> Self {
+    pub(super) fn new(
+        sender: Sender<WorkerCommand>,
+        traffic_rx: watch::Receiver<Option<TrafficEvent>>,
+    ) -> Self {
         Self {
             sender,
             next_txn_id: AtomicU16::new(1),
-            #[cfg(feature = "traffic")]
-            traffic_handler,
+            traffic_rx,
         }
     }
 
@@ -121,25 +123,13 @@ impl AsyncClientCore {
     }
 
     #[cfg(feature = "traffic")]
-    /// Registers (or replaces) a dedicated traffic-dispatcher callback.
+    /// Returns a [`watch::Receiver`] that yields the latest [`TrafficEvent`]
+    /// emitted by the worker thread.
     ///
-    /// The callback is invoked from a dedicated dispatcher thread and should
-    /// remain lightweight and non-blocking.
-    pub fn set_traffic_handler<F>(&self, handler: F)
-    where
-        F: FnMut(&TrafficEvent) + Send + 'static,
-    {
-        if let Ok(mut slot) = self.traffic_handler.lock() {
-            *slot = Some(Box::new(handler));
-        }
-    }
-
-    #[cfg(feature = "traffic")]
-    /// Removes any previously registered traffic callback.
-    pub fn clear_traffic_handler(&self) {
-        if let Ok(mut slot) = self.traffic_handler.lock() {
-            *slot = None;
-        }
+    /// Each call clones the receiver so multiple subscribers can independently
+    /// track traffic without interfering with each other.
+    pub fn traffic_watch(&self) -> watch::Receiver<Option<TrafficEvent>> {
+        self.traffic_rx.clone()
     }
 
     // ── Coil methods ─────────────────────────────────────────────────────

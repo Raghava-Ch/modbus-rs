@@ -13,8 +13,6 @@
 //! - [`run_worker`] drives polling and response routing.
 
 use std::collections::HashMap;
-#[cfg(feature = "traffic")]
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, mpsc};
@@ -66,6 +64,8 @@ use mbus_serial::StdRtuTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use mbus_serial::StdSerialTransport;
 use tokio::sync::oneshot;
+#[cfg(feature = "traffic")]
+use tokio::sync::watch;
 
 #[cfg(feature = "diagnostics")]
 /// Diagnostics response payload returned by FC 08.
@@ -119,11 +119,7 @@ impl std::error::Error for AsyncError {
 type PendingSender = oneshot::Sender<Result<WorkerResponse, MbusError>>;
 type PendingStore = Arc<Mutex<HashMap<u16, PendingSender>>>;
 #[cfg(feature = "traffic")]
-type TrafficHandler = Box<dyn FnMut(&TrafficEvent) + Send + 'static>;
-#[cfg(feature = "traffic")]
-type TrafficHandlerStore = Arc<Mutex<Option<TrafficHandler>>>;
-#[cfg(feature = "traffic")]
-type TrafficSender = Sender<TrafficEvent>;
+type TrafficWatch = watch::Sender<Option<TrafficEvent>>;
 
 #[cfg(feature = "traffic")]
 /// Async traffic event emitted from the worker thread.
@@ -350,7 +346,7 @@ enum WorkerResponse {
 struct AsyncApp {
     pending: PendingStore,
     #[cfg(feature = "traffic")]
-    traffic_sender: TrafficSender,
+    traffic_watch: TrafficWatch,
 }
 
 impl AsyncApp {
@@ -387,7 +383,7 @@ impl AsyncApp {
             error,
         };
 
-        let _ = self.traffic_sender.send(event);
+        let _ = self.traffic_watch.send(Some(event));
     }
 }
 
@@ -473,17 +469,6 @@ impl TrafficNotifier for AsyncApp {
             Some(error),
             frame_bytes,
         );
-    }
-}
-
-#[cfg(feature = "traffic")]
-fn run_traffic_dispatcher(receiver: Receiver<TrafficEvent>, traffic_handler: TrafficHandlerStore) {
-    while let Ok(event) = receiver.recv() {
-        if let Ok(mut handler_slot) = traffic_handler.lock()
-            && let Some(handler) = handler_slot.as_mut()
-        {
-            let _ = catch_unwind(AssertUnwindSafe(|| handler(&event)));
-        }
     }
 }
 
@@ -1168,21 +1153,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_async_app_emits_traffic_event_to_channel() {
+    fn test_async_app_emits_traffic_event_via_watch() {
         let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (traffic_sender, traffic_receiver) = mpsc::channel();
+        let (traffic_watch, mut traffic_rx) = watch::channel(None);
 
         let mut app = AsyncApp {
             pending,
-            traffic_sender,
+            traffic_watch,
         };
 
         let unit = UnitIdOrSlaveAddr::new(1).unwrap();
         app.on_tx_frame(42, unit, &[0xAA, 0x55]);
 
-        let event = traffic_receiver
-            .recv_timeout(Duration::from_millis(100))
-            .unwrap();
+        assert!(traffic_rx.has_changed().unwrap());
+        let event = traffic_rx.borrow_and_update().clone().unwrap();
         assert_eq!(event.direction, TrafficDirection::Tx);
         assert_eq!(event.txn_id, 42);
         assert_eq!(event.unit_id_slave_addr, unit);
@@ -1191,21 +1175,20 @@ mod tests {
     }
 
     #[test]
-    fn test_async_app_emits_traffic_error_event_to_channel() {
+    fn test_async_app_emits_traffic_error_event_via_watch() {
         let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (traffic_sender, traffic_receiver) = mpsc::channel();
+        let (traffic_watch, mut traffic_rx) = watch::channel(None);
 
         let mut app = AsyncApp {
             pending,
-            traffic_sender,
+            traffic_watch,
         };
 
         let unit = UnitIdOrSlaveAddr::new(1).unwrap();
         app.on_rx_error(77, unit, MbusError::ChecksumError, &[0xAB]);
 
-        let event = traffic_receiver
-            .recv_timeout(Duration::from_millis(100))
-            .unwrap();
+        assert!(traffic_rx.has_changed().unwrap());
+        let event = traffic_rx.borrow_and_update().clone().unwrap();
         assert_eq!(event.direction, TrafficDirection::Rx);
         assert_eq!(event.txn_id, 77);
         assert_eq!(event.unit_id_slave_addr, unit);
@@ -1214,15 +1197,29 @@ mod tests {
     }
 
     #[test]
-    fn test_async_client_core_set_and_clear_traffic_handler() {
+    fn test_async_client_core_traffic_watch_returns_receiver() {
         let (sender, _receiver) = mpsc::channel();
-        let traffic_handler: TrafficHandlerStore = Arc::new(Mutex::new(None));
-        let core = AsyncClientCore::new(sender, traffic_handler.clone());
+        let (traffic_watch, traffic_rx) = watch::channel::<Option<TrafficEvent>>(None);
+        let core = AsyncClientCore::new(sender, traffic_rx);
 
-        core.set_traffic_handler(|_evt| {});
-        assert!(traffic_handler.lock().unwrap().is_some());
+        // Subscribing returns a fresh receiver that observes updates.
+        let mut sub = core.traffic_watch();
+        drop(core);
+        // After the core (and its internal Receiver) is dropped, the watch
+        // sender held by AsyncApp still drives the channel; here we just
+        // verify the subscription is valid by checking the current value.
+        assert!(sub.borrow_and_update().is_none());
 
-        core.clear_traffic_handler();
-        assert!(traffic_handler.lock().unwrap().is_none());
+        // Simulate an emission from the worker side.
+        let unit = UnitIdOrSlaveAddr::new(1).unwrap();
+        let _ = traffic_watch.send(Some(TrafficEvent {
+            direction: TrafficDirection::Tx,
+            txn_id: 1,
+            unit_id_slave_addr: unit,
+            frame: vec![0x01],
+            error: None,
+        }));
+
+        assert!(sub.has_changed().unwrap());
     }
 }

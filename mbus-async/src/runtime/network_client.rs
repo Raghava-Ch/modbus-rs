@@ -185,29 +185,22 @@ impl<const N: usize> AsyncTcpClient<N> {
     ) -> Result<Self, AsyncError> {
         let pending = Arc::new(Mutex::new(HashMap::new()));
         #[cfg(feature = "traffic")]
-        let traffic_handler = Arc::new(Mutex::new(None));
-        #[cfg(feature = "traffic")]
-        let (traffic_sender, traffic_receiver) = mpsc::channel();
+        let (traffic_watch, traffic_rx) = watch::channel(None);
         let app = AsyncApp {
             pending: pending.clone(),
             #[cfg(feature = "traffic")]
-            traffic_sender,
+            traffic_watch,
         };
 
         let client = ClientServices::<_, _, N>::new(transport, app, config)?;
         let (sender, receiver) = mpsc::channel();
 
         thread::spawn(move || run_worker(client, pending, receiver, poll_interval));
-        #[cfg(feature = "traffic")]
-        {
-            let dispatcher_handler = traffic_handler.clone();
-            thread::spawn(move || run_traffic_dispatcher(traffic_receiver, dispatcher_handler));
-        }
 
         #[cfg(feature = "traffic")]
         {
             Ok(Self {
-                core: AsyncClientCore::new(sender, traffic_handler),
+                core: AsyncClientCore::new(sender, traffic_rx),
             })
         }
 

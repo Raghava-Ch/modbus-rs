@@ -10,24 +10,29 @@ async fn main() -> Result<()> {
 
     let client = AsyncTcpClient::new_with_config(tcp_config, Duration::from_millis(20))?;
 
-    client.set_traffic_handler(|evt| {
-        if let Some(err) = evt.error {
-            println!(
-                "[{:?}] txn={} unit={} error={:?} bytes={:02X?}",
-                evt.direction,
-                evt.txn_id,
-                evt.unit_id_slave_addr.get(),
-                err,
-                evt.frame
-            );
-        } else {
-            println!(
-                "[{:?}] txn={} unit={} bytes={:02X?}",
-                evt.direction,
-                evt.txn_id,
-                evt.unit_id_slave_addr.get(),
-                evt.frame
-            );
+    let mut traffic_rx = client.traffic_watch();
+    tokio::spawn(async move {
+        while traffic_rx.changed().await.is_ok() {
+            if let Some(evt) = traffic_rx.borrow_and_update().clone() {
+                if let Some(err) = evt.error {
+                    println!(
+                        "[{:?}] txn={} unit={} error={:?} bytes={:02X?}",
+                        evt.direction,
+                        evt.txn_id,
+                        evt.unit_id_slave_addr.get(),
+                        err,
+                        evt.frame
+                    );
+                } else {
+                    println!(
+                        "[{:?}] txn={} unit={} bytes={:02X?}",
+                        evt.direction,
+                        evt.txn_id,
+                        evt.unit_id_slave_addr.get(),
+                        evt.frame
+                    );
+                }
+            }
         }
     });
 
