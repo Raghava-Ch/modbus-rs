@@ -5,7 +5,15 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ForwardingApp, ModbusAppAccess, ModbusAppHandler};
+use mbus_server::{ForwardingApp, ModbusAppAccess};
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -16,7 +24,21 @@ struct TestApp {
     fail_fc06: Option<MbusError>,
 }
 
-impl ModbusAppHandler for TestApp {
+impl ServerExceptionHandler for TestApp {}
+
+impl ServerCoilHandler for TestApp {}
+
+impl ServerDiscreteInputHandler for TestApp {}
+
+impl ServerInputRegisterHandler for TestApp {}
+
+impl ServerFifoHandler for TestApp {}
+
+impl ServerFileRecordHandler for TestApp {}
+
+impl ServerDiagnosticsHandler for TestApp {}
+
+impl ServerHoldingRegisterHandler for TestApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,

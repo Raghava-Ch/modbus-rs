@@ -5,11 +5,16 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -61,7 +66,12 @@ fn make_app(mode: Mode) -> (Fc18App, Fc18Handles) {
     (app, handles)
 }
 
-impl ModbusAppHandler for Fc18App {
+impl ServerExceptionHandler for Fc18App {}
+impl ServerCoilHandler for Fc18App {}
+impl ServerDiscreteInputHandler for Fc18App {}
+impl ServerHoldingRegisterHandler for Fc18App {}
+impl ServerInputRegisterHandler for Fc18App {}
+impl ServerFifoHandler for Fc18App {
     fn read_fifo_queue_request(
         &mut self,
         _txn_id: u16,
@@ -106,6 +116,8 @@ impl ModbusAppHandler for Fc18App {
         }
     }
 }
+impl ServerFileRecordHandler for Fc18App {}
+impl ServerDiagnosticsHandler for Fc18App {}
 
 #[cfg(feature = "traffic")]
 impl mbus_server::TrafficNotifier for Fc18App {}

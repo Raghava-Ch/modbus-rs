@@ -107,6 +107,19 @@ impl AsyncClientCore {
         }
     }
 
+    /// Returns `true` when the underlying sync client still has in-flight
+    /// requests waiting for response/timeout resolution.
+    pub async fn has_pending_requests(&self) -> Result<bool, AsyncError> {
+        let response = self
+            .request_with(|sender| WorkerCommand::HasPendingRequests { sender })
+            .await?;
+
+        match response {
+            WorkerResponse::HasPendingRequests(value) => Ok(value),
+            _ => Err(AsyncError::UnexpectedResponseType),
+        }
+    }
+
     #[cfg(feature = "traffic")]
     /// Registers (or replaces) a dedicated traffic-dispatcher callback.
     ///

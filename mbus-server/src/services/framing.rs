@@ -333,6 +333,7 @@ pub(super) fn parse_fc2b_request(
 /// exactly as written by the application callback. The number of objects is computed by
 /// walking the triples so the caller does not need to count them separately.
 #[cfg(feature = "diagnostics")]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_fc2b_read_device_id_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,

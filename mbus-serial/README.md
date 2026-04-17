@@ -43,7 +43,7 @@ from:
 
 ```toml
 [dependencies]
-modbus-rs = "0.5.0"
+modbus-rs = "0.6.0"
 ```
 
 ### 2) Create serial config and transport
@@ -115,7 +115,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-serial = { version = "0.5.0", features = ["logging"] }
+mbus-serial = { version = "0.6.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -140,6 +140,8 @@ Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
+
+This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 
 ## Contact
 

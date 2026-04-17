@@ -25,6 +25,9 @@ impl MbusFifoQueue {
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 /// Returns the FIFO pointer address.
+///
+/// # Safety
+/// `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
 pub unsafe extern "C" fn mbus_fifo_queue_ptr_address(fifo_queue: *const MbusFifoQueue) -> u16 {
     if fifo_queue.is_null() {
         return 0;
@@ -35,6 +38,9 @@ pub unsafe extern "C" fn mbus_fifo_queue_ptr_address(fifo_queue: *const MbusFifo
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 /// Returns the number of values in the FIFO queue.
+///
+/// # Safety
+/// `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
 pub unsafe extern "C" fn mbus_fifo_queue_count(fifo_queue: *const MbusFifoQueue) -> u16 {
     if fifo_queue.is_null() {
         return 0;
@@ -45,6 +51,10 @@ pub unsafe extern "C" fn mbus_fifo_queue_count(fifo_queue: *const MbusFifoQueue)
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 /// Reads a FIFO value by index.
+///
+/// # Safety
+/// `fifo_queue` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_fifo_queue_value(
     fifo_queue: *const MbusFifoQueue,
     index: u16,
@@ -67,6 +77,9 @@ pub unsafe extern "C" fn mbus_fifo_queue_value(
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 /// Returns a raw pointer to the FIFO values. Valid during callback only.
+///
+/// # Safety
+/// `fifo_queue` must either be null (returns a null pointer) or point to a valid `MbusFifoQueue`.
 pub unsafe extern "C" fn mbus_fifo_queue_values_ptr(
     fifo_queue: *const MbusFifoQueue,
 ) -> *const u16 {

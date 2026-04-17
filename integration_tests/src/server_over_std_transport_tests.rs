@@ -54,6 +54,9 @@ struct DemoServer {
     coils: CoilBank,
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_server::TrafficNotifier for DemoServer {}
+
 #[derive(Debug)]
 struct AcceptedTcpTransport {
     stream: TcpStream,
@@ -667,11 +670,11 @@ fn server_unknown_function_returns_illegal_function_exception() {
         .set_read_timeout(Some(Duration::from_millis(500)))
         .expect("set raw client read timeout");
 
-    // Use FC02 (Read Discrete Inputs): valid frame shape, but this server runtime does not
-    // implement FC02 dispatch yet, so it must return Illegal Function.
+    // Use FC 0x41 (user-defined / undefined): this function code will never be
+    // implemented by the stack, so it must always return Illegal Function.
     // MBAP: txn=0x1234, proto=0, len=0x0006 (unit + fc + addr_hi + addr_lo + qty_hi + qty_lo)
     let req = [
-        0x12, 0x34, 0x00, 0x00, 0x00, 0x06, 0x01, 0x02, 0x00, 0x00, 0x00, 0x01,
+        0x12, 0x34, 0x00, 0x00, 0x00, 0x06, 0x01, 0x41, 0x00, 0x00, 0x00, 0x01,
     ];
     stream.write_all(&req).expect("write FC02 request");
 
@@ -701,7 +704,7 @@ fn server_unknown_function_returns_illegal_function_exception() {
     assert_eq!(rsp[2], 0x00);
     assert_eq!(rsp[3], 0x00);
     assert_eq!(rsp[6], 0x01);
-    assert_eq!(rsp[7], 0x82); // FC02 + exception bit
+    assert_eq!(rsp[7], 0xC1); // FC 0x41 + exception bit
     assert_eq!(rsp[8], 0x01); // Illegal Function
 
     drop(stream);

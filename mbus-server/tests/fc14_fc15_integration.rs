@@ -6,11 +6,16 @@ use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::models::file_record::FILE_RECORD_REF_TYPE;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -71,7 +76,13 @@ fn make_app(mode: Mode) -> (FileRecordApp, Handles) {
     (app, handles)
 }
 
-impl ModbusAppHandler for FileRecordApp {
+impl ServerExceptionHandler for FileRecordApp {}
+impl ServerCoilHandler for FileRecordApp {}
+impl ServerDiscreteInputHandler for FileRecordApp {}
+impl ServerHoldingRegisterHandler for FileRecordApp {}
+impl ServerInputRegisterHandler for FileRecordApp {}
+impl ServerFifoHandler for FileRecordApp {}
+impl ServerFileRecordHandler for FileRecordApp {
     fn read_file_record_request(
         &mut self,
         _txn_id: u16,
@@ -150,6 +161,7 @@ impl ModbusAppHandler for FileRecordApp {
         Ok(())
     }
 }
+impl ServerDiagnosticsHandler for FileRecordApp {}
 
 #[cfg(feature = "traffic")]
 impl mbus_server::TrafficNotifier for FileRecordApp {}

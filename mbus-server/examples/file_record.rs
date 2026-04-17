@@ -7,7 +7,16 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 
 struct FileStore {
     file1: [u16; 32],
@@ -23,7 +32,19 @@ impl FileStore {
     }
 }
 
-impl ModbusAppHandler for FileStore {
+impl ServerExceptionHandler for FileStore {}
+
+impl ServerCoilHandler for FileStore {}
+
+impl ServerDiscreteInputHandler for FileStore {}
+
+impl ServerHoldingRegisterHandler for FileStore {}
+
+impl ServerInputRegisterHandler for FileStore {}
+
+impl ServerFifoHandler for FileStore {}
+
+impl ServerFileRecordHandler for FileStore {
     fn read_file_record_request(
         &mut self,
         _txn_id: u16,
@@ -81,6 +102,11 @@ impl ModbusAppHandler for FileStore {
         Ok(())
     }
 }
+
+impl ServerDiagnosticsHandler for FileStore {}
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for FileStore {}
 
 fn main() {
     let mut app = FileStore::new();

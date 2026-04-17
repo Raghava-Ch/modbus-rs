@@ -178,7 +178,7 @@
         log("Client not initialized. Click Connect first.");
         return;
       }
-      log(`is_connected = ${client.is_connected()}`);
+      log(`is_connected = ${client.is_connected()}, has_pending_requests = ${client.has_pending_requests()}`);
     });
 
     // ── Raw WebSocket connectivity test (bypasses WASM entirely) ──────────

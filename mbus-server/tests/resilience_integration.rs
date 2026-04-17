@@ -14,8 +14,15 @@ use mbus_core::transport::{
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 use mbus_server::{
-    ModbusAppHandler, OverflowPolicy, ResilienceConfig, ServerServices, TimeoutConfig,
+    OverflowPolicy, ResilienceConfig, ServerExceptionHandler, ServerHoldingRegisterHandler,
+    ServerServices, TimeoutConfig,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -130,7 +137,17 @@ struct ProbeApp {
     traffic_tx_errors: Arc<AtomicUsize>,
 }
 
-impl ModbusAppHandler for ProbeApp {
+impl ServerExceptionHandler for ProbeApp {}
+
+impl ServerDiscreteInputHandler for ProbeApp {}
+
+impl ServerFifoHandler for ProbeApp {}
+
+impl ServerFileRecordHandler for ProbeApp {}
+
+impl ServerDiagnosticsHandler for ProbeApp {}
+
+impl ServerInputRegisterHandler for ProbeApp {
     fn read_multiple_input_registers_request(
         &mut self,
         _txn_id: u16,
@@ -141,7 +158,9 @@ impl ModbusAppHandler for ProbeApp {
     ) -> Result<u8, MbusError> {
         Err(MbusError::InvalidFunctionCode)
     }
+}
 
+impl ServerHoldingRegisterHandler for ProbeApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -178,39 +197,6 @@ impl ModbusAppHandler for ProbeApp {
         Ok(())
     }
 
-    #[cfg(feature = "coils")]
-    fn write_single_coil_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _value: bool,
-    ) -> Result<(), MbusError> {
-        self.fc05_calls.fetch_add(1, Ordering::SeqCst);
-        self.call_order
-            .lock()
-            .expect("call_order mutex poisoned")
-            .push(5);
-        Ok(())
-    }
-
-    #[cfg(feature = "coils")]
-    fn write_multiple_coils_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _starting_address: u16,
-        _quantity: u16,
-        _values: &[u8],
-    ) -> Result<(), MbusError> {
-        self.fc0f_calls.fetch_add(1, Ordering::SeqCst);
-        self.call_order
-            .lock()
-            .expect("call_order mutex poisoned")
-            .push(15);
-        Ok(())
-    }
-
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -227,13 +213,56 @@ impl ModbusAppHandler for ProbeApp {
     }
 }
 
+impl ServerCoilHandler for ProbeApp {
+    fn write_single_coil_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _address: u16,
+        _value: bool,
+    ) -> Result<(), MbusError> {
+        self.fc05_calls.fetch_add(1, Ordering::SeqCst);
+        self.call_order
+            .lock()
+            .expect("call_order mutex poisoned")
+            .push(5);
+        Ok(())
+    }
+
+    fn write_multiple_coils_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _starting_address: u16,
+        _quantity: u16,
+        _values: &[u8],
+    ) -> Result<(), MbusError> {
+        self.fc0f_calls.fetch_add(1, Ordering::SeqCst);
+        self.call_order
+            .lock()
+            .expect("call_order mutex poisoned")
+            .push(15);
+        Ok(())
+    }
+}
+
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for ProbeApp {
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_rx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_rx_frames.fetch_add(1, Ordering::SeqCst);
     }
 
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_tx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_tx_frames.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -242,6 +271,7 @@ impl TrafficNotifier for ProbeApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_rx_errors.fetch_add(1, Ordering::SeqCst);
     }
@@ -251,6 +281,7 @@ impl TrafficNotifier for ProbeApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_tx_errors.fetch_add(1, Ordering::SeqCst);
     }

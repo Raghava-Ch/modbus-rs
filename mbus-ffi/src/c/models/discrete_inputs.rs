@@ -25,6 +25,9 @@ impl MbusDiscreteInputs {
 #[cfg(feature = "discrete-inputs")]
 #[unsafe(no_mangle)]
 /// Returns the starting address of the discrete inputs range.
+///
+/// # Safety
+/// `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
 pub unsafe extern "C" fn mbus_discrete_inputs_from_address(
     discrete_inputs: *const MbusDiscreteInputs,
 ) -> u16 {
@@ -37,6 +40,9 @@ pub unsafe extern "C" fn mbus_discrete_inputs_from_address(
 #[cfg(feature = "discrete-inputs")]
 #[unsafe(no_mangle)]
 /// Returns the number of discrete inputs.
+///
+/// # Safety
+/// `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
 pub unsafe extern "C" fn mbus_discrete_inputs_quantity(
     discrete_inputs: *const MbusDiscreteInputs,
 ) -> u16 {
@@ -49,6 +55,10 @@ pub unsafe extern "C" fn mbus_discrete_inputs_quantity(
 #[cfg(feature = "discrete-inputs")]
 #[unsafe(no_mangle)]
 /// Reads a single discrete input value by address into `out_value`.
+///
+/// # Safety
+/// `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_discrete_inputs_value(
     discrete_inputs: *const MbusDiscreteInputs,
     address: u16,
@@ -74,6 +84,10 @@ pub unsafe extern "C" fn mbus_discrete_inputs_value(
 /// `index` must be less than [`mbus_discrete_inputs_quantity`]; otherwise returns
 /// `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_discrete_inputs_value`], no knowledge
 /// of the Modbus starting address is required.
+///
+/// # Safety
+/// `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_discrete_inputs_value_at_index(
     discrete_inputs: *const MbusDiscreteInputs,
     index: u16,
@@ -96,6 +110,10 @@ pub unsafe extern "C" fn mbus_discrete_inputs_value_at_index(
 #[cfg(feature = "discrete-inputs")]
 #[unsafe(no_mangle)]
 /// Returns a raw pointer to the discrete input bit-values. Valid during callback only.
+///
+/// # Safety
+/// `discrete_inputs` must either be null (returns a null pointer) or point to a valid
+/// `MbusDiscreteInputs`.
 pub unsafe extern "C" fn mbus_discrete_inputs_values_ptr(
     discrete_inputs: *const MbusDiscreteInputs,
 ) -> *const u8 {

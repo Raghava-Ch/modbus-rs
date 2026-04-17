@@ -6,53 +6,6 @@ An async facade for the `modbus-rs` client stack.
 `.await` API. You get familiar `async/await` ergonomics without replacing the battle-tested
 synchronous protocol core.
 
-## Design
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Your async code                                                │
-│  client.read_holding_registers(1, 0, 10).await?                 │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │ WorkerCommand (mpsc)
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Worker thread (std::thread)                                    │
-│  - receives WorkerCommand                                       │
-│  - calls ClientServices::<_, _, N> sync API                     │
-│  - polls state machine in a tight loop                          │
-│  - fires oneshot channel when response arrives                  │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │ Tokio oneshot resolved
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Your async code resumes with the typed result                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-Each call gets a unique transaction id. Multiple concurrent calls can be in flight
-simultaneously.
-
-TCP uses a compile-time pipeline depth const generic on `AsyncTcpClient<const N: usize = 9>`.
-The default is `9` via `AsyncTcpClient::new(...)`, and you can override it at compile time via
-`AsyncTcpClient::<N>::new_with_pipeline(...)`.
-
-Serial remains request/reply oriented and defaults to `1` in-flight request.
-
-## Features
-
-| Feature | Default | Enables |
-|---|---|---|
-| `tcp` | ✓ | `AsyncTcpClient` via `mbus-network` |
-| `serial-rtu` | | `AsyncSerialClient` with RTU framing |
-| `serial-ascii` | | `AsyncSerialClient` with ASCII framing |
-| `coils` | ✓ | Coil read/write methods |
-| `registers` | ✓ | Register read/write/mask methods |
-| `discrete-inputs` | ✓ | Discrete input read methods |
-| `fifo` | ✓ | FIFO queue read methods |
-| `file-record` | ✓ | File record read/write methods |
-| `diagnostics` | ✓ | Device identification, diagnostics, event log, etc. |
-| `traffic` | | Dedicated-thread raw TX/RX frame callback API |
-
 ## TCP Quick Start
 
 Add to `Cargo.toml`:
@@ -130,6 +83,54 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+## Design
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Your async code                                                │
+│  client.read_holding_registers(1, 0, 10).await?                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ WorkerCommand (mpsc)
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Worker thread (std::thread)                                    │
+│  - receives WorkerCommand                                       │
+│  - calls ClientServices::<_, _, N> sync API                     │
+│  - polls state machine in a tight loop                          │
+│  - fires oneshot channel when response arrives                  │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ Tokio oneshot resolved
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Your async code resumes with the typed result                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Each call gets a unique transaction id. Multiple concurrent calls can be in flight
+simultaneously.
+
+TCP uses a compile-time pipeline depth const generic on `AsyncTcpClient<const N: usize = 9>`.
+The default is `9` via `AsyncTcpClient::new(...)`, and you can override it at compile time via
+`AsyncTcpClient::<N>::new_with_pipeline(...)`.
+
+Serial remains request/reply oriented and defaults to `1` in-flight request.
+
+## Features
+
+| Feature | Default | Enables |
+|---|---|---|
+| `tcp` | ✓ | `AsyncTcpClient` via `mbus-network` |
+| `serial-rtu` | ✓ | `AsyncSerialClient` with RTU framing |
+| `serial-ascii` | ✓ | `AsyncSerialClient` with ASCII framing |
+| `coils` | ✓ | Coil read/write methods |
+| `registers` | ✓ | Register read/write/mask methods |
+| `discrete-inputs` | ✓ | Discrete input read methods |
+| `fifo` | ✓ | FIFO queue read methods |
+| `file-record` | ✓ | File record read/write methods |
+| `diagnostics` | ✓ | Device identification, diagnostics, event log, etc. |
+| `traffic` | | Dedicated-thread raw TX/RX frame callback API |
+
+
 ## Available Methods
 
 ### `AsyncTcpClient` and `AsyncSerialClient`
@@ -172,6 +173,24 @@ Both clients expose an identical async API:
 | `AsyncSerialClient::new_ascii_with_poll_interval(config, interval)` | ASCII |
 
 Each constructor validates that `ModbusSerialConfig::mode` matches the constructor's expected mode, returning `AsyncError::Mbus(MbusError::InvalidConfiguration)` on mismatch.
+
+### TCP-specific constructors
+
+Default pipeline (`AsyncTcpClient<9>`) constructors:
+
+| Constructor | Pipeline | Poll Interval |
+|---|---|---|
+| `AsyncTcpClient::new(host, port)` | `9` | default (`20ms`) |
+| `AsyncTcpClient::new_with_poll_interval(host, port, interval)` | `9` | custom |
+| `AsyncTcpClient::new_with_config(tcp_config, interval)` | `9` | custom |
+
+Custom pipeline (`AsyncTcpClient<N>`) constructors:
+
+| Constructor | Pipeline | Poll Interval |
+|---|---|---|
+| `AsyncTcpClient::<N>::new_with_pipeline(host, port)` | `N` | default (`20ms`) |
+| `AsyncTcpClient::<N>::new_with_pipeline_and_poll_interval(host, port, interval)` | `N` | custom |
+| `AsyncTcpClient::<N>::new_with_config_and_pipeline(tcp_config, interval)` | `N` | custom |
 
 ## Error Handling
 
@@ -254,5 +273,7 @@ async fn main() -> anyhow::Result<()> {
 
 ## License
 
-Licensed under the repository root `LICENSE`.
+This crate is licensed under **GPL-3.0-only** — see the repository root [LICENSE](../LICENSE).
+
+If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 

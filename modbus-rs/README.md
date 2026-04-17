@@ -11,6 +11,7 @@ binary size.
 ## Basic Async Usage Example
 
 ```rust,no_run
+use anyhow::Result;
 use modbus_rs::Coils;
 use modbus_rs::mbus_async::AsyncTcpClient;
 
@@ -30,6 +31,8 @@ async fn main() -> Result<()> {
 
     let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, true).await?;
     println!("Wrote coil[{}] = {}", wr_addr, wr_val);
+
+	Ok(())
 }
 ```
 
@@ -69,15 +72,33 @@ Depending on enabled features, this crate re-exports:
 
 ## Feature Flags
 
-Top-level features:
+### std vs no_std
+
+The default feature set is **std-friendly** — it enables transports and the client state machine out of the box for desktop/server use.
+
+For **embedded / no_std** targets, disable defaults and use the `no-std` convenience feature:
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.6.0", default-features = false, features = ["no-std"] }
+```
+
+This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
+
+Features that **require std**: `tcp`, `serial-rtu`, `serial-ascii`, `async`, `logging`.  
+Features that are **no_std compatible**: `client`, `coils`, `registers`, `holding-registers`, `input-registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`.
+
+---
+
+### Top-level features
 
 - `client`: enables `mbus-client`
 - `server`: enables `mbus-server` re-exports including `ServerServices`,
   resilience configuration, and derive-based server helpers
-- `serial-rtu`: enables `mbus-serial` for RTU transport use cases
-- `serial-ascii`: enables `mbus-serial` for ASCII transport use cases
-- `tcp`: enables `mbus-network`
-- `async`: enables `mbus-async` async facade re-export (`modbus_rs::mbus_async`)
+- `serial-rtu`: enables `mbus-serial` for RTU transport use cases _(requires std)_
+- `serial-ascii`: enables `mbus-serial` for ASCII transport use cases _(requires std)_
+- `tcp`: enables `mbus-network` _(requires std)_
+- `async`: enables `mbus-async` async facade re-export (`modbus_rs::mbus_async`) _(requires std)_
 - `coils`
 - `registers`
 - `holding-registers` (alias of `registers`; useful when matching server-side naming)
@@ -87,21 +108,20 @@ Top-level features:
 - `file-record`
 - `diagnostics`
 - `traffic`: enables raw TX/RX frame observability hooks for sync and async clients
-- `logging`: enables `log` facade diagnostics in `mbus-network` and `mbus-serial`
+- `logging`: enables `log` facade diagnostics in `mbus-network` and `mbus-serial` _(requires std)_
+- `no-std`: convenience bundle — `client` + all FC models, no transports
 
 Default behavior:
 
 - `default` enables `client`, `serial-rtu`, `tcp`, and all function-group features.
-- `server` is opt-in at the top-level facade.
-- `serial-ascii` and `async` are opt-in.
-- `serial-ascii`, `async`, and `traffic` are opt-in.
-- `async` is opt-in and must be enabled explicitly when using `.await` APIs.
+- `server`, `serial-ascii`, `async`, and `traffic` are opt-in.
+- `no-std` is opt-in; use it with `default-features = false` on embedded targets.
 
 Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -116,7 +136,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
 	"async",
 	"tcp",
 	"coils"
@@ -145,7 +165,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
 	"client",
 	"tcp",
 	"coils",
@@ -165,7 +185,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.6.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -175,14 +195,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.5.0"
+modbus-rs = "0.6.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = [
+modbus-rs = { version = "0.6.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
@@ -193,7 +213,7 @@ modbus-rs = { version = "0.5.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.5.0", default-features = false, features = ["client", "tcp", "coils"] }
+modbus-rs = { version = "0.6.0", default-features = false, features = ["client", "tcp", "coils"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:
@@ -258,20 +278,23 @@ impl Transport for MockTransport {
 struct App;
 
 impl RequestErrorNotifier for App {
-	fn request_failed(&self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
+	fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 }
 
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
-	fn read_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-	fn read_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-	fn write_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-	fn write_multiple_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+	fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
+	fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+	fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+	fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
 impl TimeKeeper for App {
 	fn current_millis(&self) -> u64 { 0 }
 }
+
+#[cfg(feature = "traffic")]
+impl modbus_rs::TrafficNotifier for App {}
 
 fn main() -> Result<(), MbusError> {
 	let transport = MockTransport;
@@ -323,13 +346,14 @@ cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-feature
 cargo run -p modbus-rs --example modbus_rs_client_tcp_registers --no-default-features --features client,tcp,registers
 cargo run -p modbus-rs --example modbus_rs_client_tcp_discrete_inputs --no-default-features --features client,tcp,discrete-inputs
 cargo run -p modbus-rs --example modbus_rs_client_tcp_device_id --no-default-features --features client,tcp,diagnostics
-cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+# Source-only showcase example (not currently exposed as a Cargo example target):
+# cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
 cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter --no-default-features --features client,tcp,coils
 cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
 cargo run -p modbus-rs --example modbus_rs_client_traffic_sync_tcp --no-default-features --features client,tcp,coils,traffic
 
 # Async
-cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,tcp,coils,registers,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,client,tcp,coils,registers,discrete-inputs
 cargo run -p modbus-rs --example modbus_rs_client_traffic_async_tcp --no-default-features --features async,tcp,coils,traffic
 
 # Serial RTU
@@ -391,6 +415,8 @@ Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
+
+This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 
 ## Disclaimer
 

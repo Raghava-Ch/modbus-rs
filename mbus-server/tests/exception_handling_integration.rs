@@ -8,11 +8,22 @@
 //! - Unknown FC → `IllegalFunction` exception, `on_exception` still fires.
 
 mod common;
-use common::{MockTransport, build_request, tcp_config, unit_id};
+use common::{MockSerialTransport, MockTransport, build_request, serial_rtu_config, tcp_config, unit_id};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::transport::checksum::crc16;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
@@ -25,7 +36,7 @@ struct ExceptionSpyApp {
     holding0: u16,
 }
 
-impl ModbusAppHandler for ExceptionSpyApp {
+impl ServerExceptionHandler for ExceptionSpyApp {
     fn on_exception(
         &mut self,
         _txn_id: u16,
@@ -39,8 +50,10 @@ impl ModbusAppHandler for ExceptionSpyApp {
             .expect("poisoned")
             .push((function_code, exception_code, error));
     }
-
-    #[cfg(feature = "holding-registers")]
+}
+impl ServerCoilHandler for ExceptionSpyApp {}
+impl ServerDiscreteInputHandler for ExceptionSpyApp {}
+impl ServerHoldingRegisterHandler for ExceptionSpyApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -58,14 +71,25 @@ impl ModbusAppHandler for ExceptionSpyApp {
         Ok(2)
     }
 }
+impl ServerInputRegisterHandler for ExceptionSpyApp {}
+impl ServerFifoHandler for ExceptionSpyApp {}
+impl ServerFileRecordHandler for ExceptionSpyApp {}
+impl ServerDiagnosticsHandler for ExceptionSpyApp {}
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for ExceptionSpyApp {}
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn run_once(request: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>, app: ExceptionSpyApp)
-    -> (Vec<Vec<u8>>, Arc<Mutex<Vec<(FunctionCode, ExceptionCode, MbusError)>>>)
-{
+fn run_once(
+    request: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>,
+    app: ExceptionSpyApp,
+) -> (
+    Vec<Vec<u8>>,
+    Arc<Mutex<Vec<(FunctionCode, ExceptionCode, MbusError)>>>,
+) {
     let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
     let exceptions = Arc::clone(&app.exceptions);
     let transport = MockTransport {
@@ -100,7 +124,12 @@ fn make_app() -> ExceptionSpyApp {
 #[test]
 fn unknown_fc_fires_on_exception_with_illegal_function() {
     // FC 0x41 is not implemented
-    let request = build_request(1, unit_id(1), FunctionCode::ReadHoldingRegisters, &[0x00, 0x00, 0x00, 0x01]);
+    let request = build_request(
+        1,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &[0x00, 0x00, 0x00, 0x01],
+    );
     // Repurpose: use an unknown FC by crafting raw bytes - instead just trigger
     // InvalidAddress path from a known FC to observe the callback.
     let app = make_app();
@@ -111,10 +140,19 @@ fn unknown_fc_fires_on_exception_with_illegal_function() {
         sent_frames: Arc::clone(&sent_frames),
         connected: true,
     };
-    let mut server = ServerServices::new(transport, app, tcp_config(), unit_id(1), ResilienceConfig::default());
+    let mut server = ServerServices::new(
+        transport,
+        app,
+        tcp_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
     server.poll();
     // address=0 is valid so no exception here — try invalid address
-    assert!(exceptions.lock().unwrap().is_empty(), "no exception for valid request");
+    assert!(
+        exceptions.lock().unwrap().is_empty(),
+        "no exception for valid request"
+    );
 }
 
 /// App returning InvalidAddress fires on_exception with IllegalDataAddress.
@@ -122,13 +160,22 @@ fn unknown_fc_fires_on_exception_with_illegal_function() {
 #[test]
 fn app_invalid_address_fires_on_exception_illegal_data_address() {
     // address=99 is not address 0 in our test app
-    let request = build_request(1, unit_id(1), FunctionCode::ReadHoldingRegisters, &[0x00, 0x63, 0x00, 0x01]);
+    let request = build_request(
+        1,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &[0x00, 0x63, 0x00, 0x01],
+    );
     let app = make_app();
     let (frames, exceptions) = run_once(request, app);
 
     assert_eq!(frames.len(), 1, "exception response must be sent");
     let exc_list = exceptions.lock().unwrap();
-    assert_eq!(exc_list.len(), 1, "on_exception must be called exactly once");
+    assert_eq!(
+        exc_list.len(),
+        1,
+        "on_exception must be called exactly once"
+    );
     let (fc, code, err) = exc_list[0];
     assert_eq!(fc, FunctionCode::ReadHoldingRegisters);
     assert_eq!(code, ExceptionCode::IllegalDataAddress);
@@ -140,10 +187,18 @@ fn app_invalid_address_fires_on_exception_illegal_data_address() {
 #[test]
 fn no_on_exception_for_successful_request() {
     // address=0 succeeds in our test app
-    let request = build_request(2, unit_id(1), FunctionCode::ReadHoldingRegisters, &[0x00, 0x00, 0x00, 0x01]);
+    let request = build_request(
+        2,
+        unit_id(1),
+        FunctionCode::ReadHoldingRegisters,
+        &[0x00, 0x00, 0x00, 0x01],
+    );
     let app = make_app();
     let (_frames, exceptions) = run_once(request, app);
-    assert!(exceptions.lock().unwrap().is_empty(), "on_exception must not fire for success");
+    assert!(
+        exceptions.lock().unwrap().is_empty(),
+        "on_exception must not fire for success"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -250,5 +305,41 @@ fn existing_mapping_unexpected_still_server_device_failure() {
     assert_eq!(
         fc.exception_code_for_error(&MbusError::Unexpected),
         ExceptionCode::ServerDeviceFailure
+    );
+}
+
+/// On a serial transport, an unrecognised function code must NOT produce any
+/// response.  The server byte-drop resyncs (correct Modbus RTU behaviour) and
+/// the test asserts the sent-frames buffer stays empty.
+#[test]
+fn unknown_fc_over_serial_silently_resyncs_with_no_response() {
+    // Build a minimal RTU frame: [unit_id=1, fc=0x41, CRC16(2 bytes)]
+    // FC 0x41 is not in the FunctionCode enum so the parser returns UnsupportedFunction.
+    let body: [u8; 2] = [0x01, 0x41];
+    let checksum = crc16(&body);
+    let mut frame = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>::new();
+    frame.extend_from_slice(&body).expect("body fits");
+    frame.push((checksum & 0xFF) as u8).expect("crc lo fits");
+    frame.push((checksum >> 8) as u8).expect("crc hi fits");
+
+    let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+    let transport = MockSerialTransport {
+        next_rx: Some(frame),
+        sent_frames: Arc::clone(&sent_frames),
+        connected: true,
+    };
+    let mut server = ServerServices::new(
+        transport,
+        ExceptionSpyApp::default(),
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig::default(),
+    );
+    server.poll();
+
+    let sent = sent_frames.lock().expect("sent_frames mutex");
+    assert!(
+        sent.is_empty(),
+        "serial server must not respond to an unrecognised function code; got {sent:?}"
     );
 }

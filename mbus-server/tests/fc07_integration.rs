@@ -8,11 +8,16 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::ModbusAppHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -43,7 +48,14 @@ fn make_app(mode: Mode) -> (Fc07App, Handles) {
     (app, handles)
 }
 
-impl ModbusAppHandler for Fc07App {
+impl ServerExceptionHandler for Fc07App {}
+impl ServerCoilHandler for Fc07App {}
+impl ServerDiscreteInputHandler for Fc07App {}
+impl ServerHoldingRegisterHandler for Fc07App {}
+impl ServerInputRegisterHandler for Fc07App {}
+impl ServerFifoHandler for Fc07App {}
+impl ServerFileRecordHandler for Fc07App {}
+impl ServerDiagnosticsHandler for Fc07App {
     fn read_exception_status_request(
         &mut self,
         _txn_id: u16,
