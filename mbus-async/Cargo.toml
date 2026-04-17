@@ -16,7 +16,14 @@ mbus-core = { workspace = true }
 mbus-client = { workspace = true }
 mbus-network = { workspace = true, optional = true }
 mbus-serial = { workspace = true, optional = true }
+heapless = { workspace = true }
 tokio = { version = "1", features = ["sync"] }
+log = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+mbus-server = { version = "0.6.0", path = "../mbus-server" }
+anyhow = "1.0"
 
 [features]
 default = ["tcp", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"]
@@ -30,4 +37,12 @@ discrete-inputs = ["mbus-core/discrete-inputs", "mbus-client/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-client/fifo"]
 file-record = ["mbus-core/file-record", "mbus-client/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-client/diagnostics"]
+diagnostics-stats = ["diagnostics"]
+logging = ["dep:log"]
 traffic = ["mbus-client/traffic"]
+server-tcp = ["dep:mbus-network", "mbus-network/async", "tokio/net", "tokio/rt"]
+server-serial = ["dep:mbus-serial", "mbus-serial/async"]
+
+[[example]]
+name = "async_server_tcp"
+required-features = ["server-tcp", "coils", "registers"]

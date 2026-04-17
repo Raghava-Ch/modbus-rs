@@ -50,6 +50,8 @@ pub use mbus_server::InputRegistersModel;
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;
 #[cfg(feature = "server")]
+pub use mbus_server::async_modbus_app;
+#[cfg(feature = "server")]
 pub use mbus_server::{
     ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy, RequestPriority,
     ResilienceConfig, ServerExceptionHandler, ServerServices, TimeoutConfig,

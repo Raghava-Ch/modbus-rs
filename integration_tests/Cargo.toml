@@ -5,20 +5,49 @@ edition = "2021"
 publish = false
 
 [dependencies]
-modbus-rs = { version = "0.6.0", path = "../modbus-rs", features = ["async", "serial-ascii"] }
+modbus-rs = { version = "0.6.0", path = "../modbus-rs", features = [
+    "async",
+    "serial-ascii",
+] }
 mbus-core = { version = "0.6.0", path = "../mbus-core" }
 mbus-server = { version = "0.6.0", path = "../mbus-server" }
+mbus-async = { version = "0.6.0", path = "../mbus-async", optional = true }
+mbus-macros = { version = "0.6.0", path = "../mbus-macros", optional = true }
 
-heapless = "0.8.0"
-anyhow = "1.0.86"
+heapless = { workspace = true }
+anyhow = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 
 [features]
 default = ["coils", "holding-registers", "input-registers"]
 coils = []
-holding-registers = []
+registers = []
+holding-registers = ["registers"]
 input-registers = []
 discrete-inputs = []
+fifo = []
+file-record = []
+diagnostics = []
+diagnostics-stats = ["diagnostics"]
 traffic = ["modbus-rs/traffic", "mbus-server/traffic"]
+async-server = [
+    "dep:mbus-async",
+    "dep:mbus-macros",
+    "mbus-async/server-tcp",
+    "mbus-async/coils",
+    "mbus-async/registers",
+    "registers",
+    "mbus-async/discrete-inputs",
+    "mbus-async/fifo",
+    "mbus-async/file-record",
+    "mbus-async/diagnostics",
+    "mbus-async/diagnostics-stats",
+    "diagnostics-stats",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
+async-traffic = ["async-server", "traffic", "mbus-async/traffic"]
 
 [dev-dependencies]
