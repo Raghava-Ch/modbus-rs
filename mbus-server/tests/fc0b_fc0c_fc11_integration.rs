@@ -8,12 +8,28 @@ use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 
 struct DiagnosticsExtApp;
 
-impl ModbusAppHandler for DiagnosticsExtApp {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for DiagnosticsExtApp {}
+impl ServerCoilHandler for DiagnosticsExtApp {}
+impl ServerDiscreteInputHandler for DiagnosticsExtApp {}
+impl ServerHoldingRegisterHandler for DiagnosticsExtApp {}
+impl ServerInputRegisterHandler for DiagnosticsExtApp {}
+impl ServerFifoHandler for DiagnosticsExtApp {}
+impl ServerFileRecordHandler for DiagnosticsExtApp {}
+impl ServerDiagnosticsHandler for DiagnosticsExtApp {
     fn report_server_id_request(
         &mut self,
         _txn_id: u16,
@@ -25,6 +41,9 @@ impl ModbusAppHandler for DiagnosticsExtApp {
         Ok((id.len() as u8, 0xFF))
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for DiagnosticsExtApp {}
 
 fn run_once_serial(request: HVec<u8, MAX_ADU_FRAME_LEN>, app: DiagnosticsExtApp) -> Vec<u8> {
     let sent_frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -141,6 +160,34 @@ fn fc0b_over_tcp_returns_illegal_function_exception() {
 
     // TCP ADU: [0..1]=txn_id, [2..3]=proto, [4..5]=len, [6]=unit_id, [7]=FC, [8]=exception_code
     assert_eq!(response[7], 0x8B, "exception FC byte");
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalFunction
+    );
+}
+
+#[test]
+fn fc0c_over_tcp_returns_illegal_function_exception() {
+    let request = build_request(5, unit_id(1), FunctionCode::GetCommEventLog, &[]);
+
+    let response = run_once_tcp(request, DiagnosticsExtApp);
+
+    // FC 0x0C | 0x80 = 0x8C
+    assert_eq!(response[7], 0x8C, "exception FC byte");
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalFunction
+    );
+}
+
+#[test]
+fn fc11_over_tcp_returns_illegal_function_exception() {
+    let request = build_request(6, unit_id(1), FunctionCode::ReportServerId, &[]);
+
+    let response = run_once_tcp(request, DiagnosticsExtApp);
+
+    // FC 0x11 | 0x80 = 0x91
+    assert_eq!(response[7], 0x91, "exception FC byte");
     assert_eq!(
         decode_exception(response[8]),
         ExceptionCode::IllegalFunction

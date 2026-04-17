@@ -7,12 +7,22 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 
 #[derive(Debug, Default)]
 struct DiscreteInputApp;
 
-impl ModbusAppHandler for DiscreteInputApp {
+impl ServerExceptionHandler for DiscreteInputApp {}
+
+impl ServerDiscreteInputHandler for DiscreteInputApp {
     fn read_discrete_inputs_request(
         &mut self,
         _txn_id: u16,
@@ -31,49 +41,19 @@ impl ModbusAppHandler for DiscreteInputApp {
         out[0] = 0b0000_1001;
         Ok(1)
     }
-
-    fn read_multiple_input_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _quantity: u16,
-        _out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
-
-    fn read_multiple_holding_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _quantity: u16,
-        _out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
-
-    fn write_single_register_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _value: u16,
-    ) -> Result<(), MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
-
-    fn write_multiple_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _starting_address: u16,
-        _values: &[u16],
-    ) -> Result<(), MbusError> {
-        Err(MbusError::InvalidFunctionCode)
-    }
 }
+
+impl ServerCoilHandler for DiscreteInputApp {}
+
+impl ServerHoldingRegisterHandler for DiscreteInputApp {}
+
+impl ServerInputRegisterHandler for DiscreteInputApp {}
+
+impl ServerFifoHandler for DiscreteInputApp {}
+
+impl ServerFileRecordHandler for DiscreteInputApp {}
+
+impl ServerDiagnosticsHandler for DiscreteInputApp {}
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for DiscreteInputApp {}

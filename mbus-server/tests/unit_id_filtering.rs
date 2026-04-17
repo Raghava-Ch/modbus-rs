@@ -15,7 +15,14 @@ use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
-use mbus_server::ModbusAppHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
@@ -41,7 +48,32 @@ struct CountingApp {
     traffic_tx_errors: Arc<AtomicUsize>,
 }
 
-impl ModbusAppHandler for CountingApp {
+impl ServerExceptionHandler for CountingApp {}
+
+impl ServerCoilHandler for CountingApp {}
+
+impl ServerDiscreteInputHandler for CountingApp {}
+
+impl ServerFifoHandler for CountingApp {}
+
+impl ServerFileRecordHandler for CountingApp {}
+
+impl ServerDiagnosticsHandler for CountingApp {}
+
+impl ServerInputRegisterHandler for CountingApp {
+    fn read_multiple_input_registers_request(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _address: u16,
+        _quantity: u16,
+        _out: &mut [u8],
+    ) -> Result<u8, MbusError> {
+        Err(MbusError::InvalidFunctionCode)
+    }
+}
+
+impl ServerHoldingRegisterHandler for CountingApp {
     fn read_multiple_holding_registers_request(
         &mut self,
         _txn_id: u16,
@@ -57,17 +89,6 @@ impl ModbusAppHandler for CountingApp {
             *b = 0x00;
         }
         Ok((quantity * 2) as u8)
-    }
-
-    fn read_multiple_input_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _quantity: u16,
-        _out: &mut [u8],
-    ) -> Result<u8, MbusError> {
-        Err(MbusError::InvalidFunctionCode)
     }
 
     fn write_single_register_request(
@@ -94,11 +115,21 @@ impl ModbusAppHandler for CountingApp {
 
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for CountingApp {
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_rx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_rx_frames.fetch_add(1, Ordering::SeqCst);
     }
 
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_or_slave_addr: UnitIdOrSlaveAddr) {
+    fn on_tx_frame(
+        &mut self,
+        _txn_id: u16,
+        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        _frame: &[u8],
+    ) {
         self.traffic_tx_frames.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -107,6 +138,7 @@ impl TrafficNotifier for CountingApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_rx_errors.fetch_add(1, Ordering::SeqCst);
     }
@@ -116,6 +148,7 @@ impl TrafficNotifier for CountingApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _error: MbusError,
+        _frame: &[u8],
     ) {
         self.traffic_tx_errors.fetch_add(1, Ordering::SeqCst);
     }

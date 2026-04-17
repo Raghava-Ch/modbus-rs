@@ -1,103 +1,59 @@
 # mbus-client
 
-`mbus-client` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
+Modbus client state machine for Rust — poll-driven, no_std compatible, zero heap allocation.
 
-It provides the client-side Modbus request/response engine, built on top of shared
-protocol and transport abstractions from `mbus-core`.
+[![crates.io](https://img.shields.io/crates/v/mbus-client)](https://crates.io/crates/mbus-client)
+[![docs.rs](https://docs.rs/mbus-client/badge.svg)](https://docs.rs/mbus-client)
 
-If you want a single top-level entry point, use `modbus-rs`.
-If you want direct access to client orchestration and callbacks, use `mbus-client`.
+## Features
 
-## Helper Crate Role
+- **Poll-driven** — no threads, no blocking I/O
+- **no_std compatible** — runs on embedded MCUs
+- **Transport agnostic** — TCP, Serial RTU, Serial ASCII
+- **All standard FCs** — coils, registers, discrete inputs, FIFO, file records, diagnostics
+- **Configurable retry** — exponential/linear/fixed backoff with optional jitter
 
-`mbus-client` is responsible for client workflow, not transport implementation:
-
-- Builds Modbus requests and tracks outstanding transactions.
-- Polls transport for responses and dispatches parsed callbacks.
-- Handles retries and timeout-based failure paths.
-- Exposes feature-gated service modules by function group.
-
-Transport implementations are provided by helper crates such as:
-- `mbus-network`
-- `mbus-serial`
-
-## What Is Included
-
-- `services::ClientServices`: the central client orchestrator.
-- `services::SerialClientServices`: convenience alias for serial clients (`N = 1`).
-- Feature-gated service modules:
-  - `services::coil`
-  - `services::register`
-  - `services::discrete_input`
-  - `services::fifo_queue`
-  - `services::file_record`
-  - `services::diagnostic`
-- `app` callback traits:
-  - `RequestErrorNotifier`
-  - response traits for each function group
-
-## Retry Backoff and Jitter
-
-Retries are poll-driven and timestamp-scheduled. The client never sleeps or blocks.
-
-- Timeout detection happens inside `ClientServices::poll()`.
-- Retries are scheduled using `BackoffStrategy` from `modbus-rs`.
-- Optional jitter is applied using `JitterStrategy`.
-- Randomness for jitter is application-provided via `retry_random_fn` on config.
-
-Example (TCP with exponential backoff + percentage jitter):
+## Quick Start
 
 ```rust
-use modbus_rs::{BackoffStrategy, JitterStrategy, ModbusTcpConfig};
+use mbus_client::{ClientServices, ModbusTcpConfig, StdTcpTransport};
 
-fn app_random_u32() -> u32 {
-  // Replace with your MCU/OS RNG source.
-  42
+let config = ModbusTcpConfig::new("192.168.1.10", 502)?;
+let mut client = ClientServices::<_, _, 4>::new(
+    StdTcpTransport::new(),
+    app,
+    config.into()
+)?;
+
+client.connect()?;
+client.coils().read_coils(1, unit_id, 0, 16)?;
+
+loop {
+    client.poll();  // Drive state machine
 }
-
-let mut tcp = ModbusTcpConfig::new("127.0.0.1", 502)?;
-tcp.retry_attempts = 3;
-tcp.retry_backoff_strategy = BackoffStrategy::Exponential {
-  base_delay_ms: 100,
-  max_delay_ms: 2000,
-};
-tcp.retry_jitter_strategy = JitterStrategy::Percentage { percent: 20 };
-tcp.retry_random_fn = Some(app_random_u32);
 ```
 
-If `retry_random_fn` is `None`, jitter strategies gracefully fall back to non-jittered delays.
+## Documentation
 
-## Reconnect and Connection State
+📖 **[Full Documentation](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/client)**
 
-`ClientServices` now exposes explicit connection management helpers:
+| Topic | Link |
+|-------|------|
+| Quick Start | [documentation/client/quick_start.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/client/quick_start.md) |
+| Building Apps | [documentation/client/building_applications.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/client/building_applications.md) |
+| Feature Flags | [documentation/client/feature_flags.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/client/feature_flags.md) |
+| Architecture | [documentation/client/architecture.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/client/architecture.md) |
 
-- `client.connect()` to open the transport after construction.
-- `client.is_connected()` to query transport connection state.
-- `client.reconnect()` to re-establish transport using the current config.
+## Related Crates
 
-Reconnect behavior:
+| Crate | Purpose |
+|-------|---------|
+| [`modbus-rs`](https://crates.io/crates/modbus-rs) | Top-level convenience crate |
+| [`mbus-core`](https://crates.io/crates/mbus-core) | Shared protocol types |
+| [`mbus-async`](https://crates.io/crates/mbus-async) | Tokio async facade |
+| [`mbus-network`](https://crates.io/crates/mbus-network) | TCP transport |
+| [`mbus-serial`](https://crates.io/crates/mbus-serial) | Serial RTU/ASCII transport |
 
-- Pending in-flight requests are failed immediately with `MbusError::ConnectionLost`.
-- Internal receive buffers and timeout checkpoints are cleared.
-- `disconnect()` is attempted, then `connect(&config)` is called.
-- Requests are not auto re-sent; the application should requeue explicitly.
-
-This behavior is suitable for long-running daemons and embedded systems that must
-recover from temporary link loss.
-
-## App Handler Access
-
-`ClientServices` keeps the application callback handler encapsulated.
-
-- Use `client.app()` for immutable inspection.
-- There is no public replacement/mutable handler API.
-
-This preserves callback identity for in-flight requests and avoids accidental
-handler swaps during active transactions.
-
-## Serial Queue Constraint
-
-For serial transports, Modbus is half-duplex and only one request may be in flight.
 
 - Runtime-safe path: `ClientServices::new(...)` validates serial `N == 1`.
 - Compile-time-safe path: `ClientServices::new_serial(...)` enforces `N == 1`.
@@ -131,7 +87,7 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-mbus-client = { version = "0.5.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.6.0", default-features = false, features = ["coils"] }
 ```
 
 ## Traffic Callbacks (optional `traffic` feature)
@@ -269,20 +225,23 @@ impl Transport for MockTransport {
 struct App;
 
 impl RequestErrorNotifier for App {
-    fn request_failed(&self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
+  fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 }
 
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
-    fn read_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-    fn read_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_single_coil_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_multiple_coils_response(&self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+  fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
+  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
 impl TimeKeeper for App {
     fn current_millis(&self) -> u64 { 0 }
 }
+
+#[cfg(feature = "traffic")]
+impl modbus_rs::TrafficNotifier for App {}
 
 fn main() -> Result<(), MbusError> {
     let transport = MockTransport;
@@ -302,7 +261,9 @@ fn main() -> Result<(), MbusError> {
       Ok::<(), MbusError>(())
     })?;
 
-    client.poll();
+    while client.has_pending_requests() {
+        client.poll();
+    }
     Ok(())
 }
 ```
@@ -352,10 +313,9 @@ cargo check -p mbus-client --no-default-features --features registers,discrete-i
 
 ## License
 
-Copyright (C) 2025 Raghava Challari
+This crate is licensed under **GPL-3.0-only**.
 
-This project is currently licensed under GNU GPL v3.0.
-See [LICENSE](../LICENSE) for details.
+If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 
 ## Disclaimer
 

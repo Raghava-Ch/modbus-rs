@@ -7,7 +7,9 @@
 //! - Silently drops broadcast frames on TCP (not supported by that transport).
 
 mod common;
-use common::{MockTransport, build_request, build_serial_request, serial_rtu_config, tcp_config, unit_id};
+use common::{
+    MockTransport, build_request, build_serial_request, serial_rtu_config, tcp_config, unit_id,
+};
 use heapless::Vec as HVec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
@@ -15,7 +17,16 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, SerialMode, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
+use mbus_server::{ResilienceConfig, ServerExceptionHandler, ServerServices};
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -71,8 +82,19 @@ struct BroadcastApp {
     calls: Arc<AtomicUsize>,
 }
 
-impl ModbusAppHandler for BroadcastApp {
-    #[cfg(feature = "coils")]
+impl ServerExceptionHandler for BroadcastApp {}
+
+impl ServerDiscreteInputHandler for BroadcastApp {}
+
+impl ServerInputRegisterHandler for BroadcastApp {}
+
+impl ServerFifoHandler for BroadcastApp {}
+
+impl ServerFileRecordHandler for BroadcastApp {}
+
+impl ServerDiagnosticsHandler for BroadcastApp {}
+
+impl ServerCoilHandler for BroadcastApp {
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
@@ -84,7 +106,6 @@ impl ModbusAppHandler for BroadcastApp {
         Ok(())
     }
 
-    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         _txn_id: u16,
@@ -96,8 +117,9 @@ impl ModbusAppHandler for BroadcastApp {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+}
 
-    #[cfg(feature = "holding-registers")]
+impl ServerHoldingRegisterHandler for BroadcastApp {
     fn write_single_register_request(
         &mut self,
         _txn_id: u16,
@@ -109,7 +131,6 @@ impl ModbusAppHandler for BroadcastApp {
         Ok(())
     }
 
-    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_request(
         &mut self,
         _txn_id: u16,
@@ -122,6 +143,9 @@ impl ModbusAppHandler for BroadcastApp {
     }
 }
 
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for BroadcastApp {}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -132,9 +156,7 @@ fn broadcast_addr() -> UnitIdOrSlaveAddr {
 
 /// Run one poll on a broadcast-capable serial transport with broadcast enabled.
 /// Returns `(app_call_count, sent_frame_count)`.
-fn run_broadcast_serial(
-    request: HVec<u8, MAX_ADU_FRAME_LEN>,
-) -> (usize, usize) {
+fn run_broadcast_serial(request: HVec<u8, MAX_ADU_FRAME_LEN>) -> (usize, usize) {
     let calls = Arc::new(AtomicUsize::new(0));
     let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
     let transport = MockSerialBroadcastTransport {
@@ -142,7 +164,9 @@ fn run_broadcast_serial(
         sent_frames: Arc::clone(&sent_frames),
         connected: true,
     };
-    let app = BroadcastApp { calls: Arc::clone(&calls) };
+    let app = BroadcastApp {
+        calls: Arc::clone(&calls),
+    };
     let mut server = ServerServices::new(
         transport,
         app,
@@ -245,7 +269,9 @@ fn broadcast_disabled_silent_drop_no_callback() {
         sent_frames: Arc::clone(&sent_frames),
         connected: true,
     };
-    let app = BroadcastApp { calls: Arc::clone(&calls) };
+    let app = BroadcastApp {
+        calls: Arc::clone(&calls),
+    };
     let mut server = ServerServices::new(
         transport,
         app,
@@ -285,7 +311,9 @@ fn broadcast_on_tcp_silently_dropped() {
         sent_frames: Arc::clone(&sent_frames),
         connected: true,
     };
-    let app = BroadcastApp { calls: Arc::clone(&calls) };
+    let app = BroadcastApp {
+        calls: Arc::clone(&calls),
+    };
     let mut server = ServerServices::new(
         transport,
         app,

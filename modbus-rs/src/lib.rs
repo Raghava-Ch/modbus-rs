@@ -1,3 +1,18 @@
+// When none of the std-requiring features are enabled this crate is no_std compatible.
+// The doc build is excluded so rustdoc can use std freely for link resolution.
+#![cfg_attr(
+    not(any(
+        doc,
+        feature = "tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii",
+        feature = "async",
+        feature = "logging",
+        feature = "server",
+    )),
+    no_std
+)]
+
 pub use heapless;
 
 pub use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};
@@ -32,15 +47,27 @@ pub use mbus_server::HoldingRegistersModel;
 pub use mbus_server::InputRegisterMap;
 #[cfg(all(feature = "server", feature = "input-registers"))]
 pub use mbus_server::InputRegistersModel;
-#[cfg(all(feature = "server", feature = "traffic"))]
-pub use mbus_server::TrafficNotifier;
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;
 #[cfg(feature = "server")]
 pub use mbus_server::{
     ClockFn, ForwardingApp, ModbusAppAccess, ModbusAppHandler, OverflowPolicy, RequestPriority,
-    ResilienceConfig, ServerServices, TimeoutConfig,
+    ResilienceConfig, ServerExceptionHandler, ServerServices, TimeoutConfig,
 };
+#[cfg(feature = "server")]
+pub use mbus_server::ServerCoilHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerDiagnosticsHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerDiscreteInputHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerFifoHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerFileRecordHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerHoldingRegisterHandler;
+#[cfg(feature = "server")]
+pub use mbus_server::ServerInputRegisterHandler;
 
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};

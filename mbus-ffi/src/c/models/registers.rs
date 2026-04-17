@@ -25,6 +25,9 @@ impl MbusRegisters {
 #[cfg(feature = "registers")]
 #[unsafe(no_mangle)]
 /// Returns the starting address of the registers range.
+///
+/// # Safety
+/// `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
 pub unsafe extern "C" fn mbus_registers_from_address(registers: *const MbusRegisters) -> u16 {
     if registers.is_null() {
         return 0;
@@ -35,6 +38,9 @@ pub unsafe extern "C" fn mbus_registers_from_address(registers: *const MbusRegis
 #[cfg(feature = "registers")]
 #[unsafe(no_mangle)]
 /// Returns the number of registers.
+///
+/// # Safety
+/// `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
 pub unsafe extern "C" fn mbus_registers_quantity(registers: *const MbusRegisters) -> u16 {
     if registers.is_null() {
         return 0;
@@ -45,6 +51,10 @@ pub unsafe extern "C" fn mbus_registers_quantity(registers: *const MbusRegisters
 #[cfg(feature = "registers")]
 #[unsafe(no_mangle)]
 /// Reads a single register value by address into `out_value`.
+///
+/// # Safety
+/// `registers` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_registers_value(
     registers: *const MbusRegisters,
     address: u16,
@@ -70,6 +80,10 @@ pub unsafe extern "C" fn mbus_registers_value(
 /// `index` must be less than [`mbus_registers_quantity`]; otherwise returns
 /// `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
 /// the Modbus starting address is required.
+///
+/// # Safety
+/// `registers` and `out_value` must be non-null and point to valid memory, or null
+/// (returns `MBUS_ERR_NULL_POINTER` for null).
 pub unsafe extern "C" fn mbus_registers_value_at_index(
     registers: *const MbusRegisters,
     index: u16,
@@ -92,6 +106,9 @@ pub unsafe extern "C" fn mbus_registers_value_at_index(
 #[cfg(feature = "registers")]
 #[unsafe(no_mangle)]
 /// Returns a raw pointer to the register values. Valid during callback only.
+///
+/// # Safety
+/// `registers` must either be null (returns a null pointer) or point to a valid `MbusRegisters`.
 pub unsafe extern "C" fn mbus_registers_values_ptr(registers: *const MbusRegisters) -> *const u16 {
     if registers.is_null() {
         return core::ptr::null();

@@ -983,18 +983,19 @@ where
             self.rxed_frame.clear();
         } else {
             client_log_trace!("non-fatal recv status during poll: {:?}", recv_error);
+            // Note: MbusError::Timeout here means the transport found no bytes on this
+            // poll cycle — a normal polling artifact, not an actual request deadline
+            // expiry. Real deadline timeouts are signalled in fail_exhausted_request
+            // via MbusError::NoRetriesLeft. We intentionally suppress on_rx_error for
+            // Timeout so the traffic handler only fires for meaningful events.
             #[cfg(feature = "traffic")]
-            {
-                // Timeout/parse-adjacent recv statuses are useful for simulator tooling while
-                // requests are in-flight. Use txn_id=0 when a specific request is unknown.
-                if !self.expected_responses.is_empty() {
-                    self.app.on_rx_error(
-                        0,
-                        UnitIdOrSlaveAddr::from_u8(0),
-                        recv_error,
-                        self.rxed_frame.as_slice(),
-                    );
-                }
+            if !matches!(recv_error, MbusError::Timeout) && !self.expected_responses.is_empty() {
+                self.app.on_rx_error(
+                    0,
+                    UnitIdOrSlaveAddr::from_u8(0),
+                    recv_error,
+                    self.rxed_frame.as_slice(),
+                );
             }
         }
     }
@@ -1497,6 +1498,21 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     /// the handler instance stable for in-flight requests.
     pub fn app(&self) -> &APP {
         &self.app
+    }
+
+    /// Returns `true` if there are requests awaiting a response.
+    ///
+    /// Use this in a polling loop to drive the client until all in-flight
+    /// requests have been resolved (responded to, timed out, or failed):
+    ///
+    /// ```rust,ignore
+    /// client.send_request(…)?;
+    /// while client.has_pending_requests() {
+    ///     client.poll();
+    /// }
+    /// ```
+    pub fn has_pending_requests(&self) -> bool {
+        !self.expected_responses.is_empty()
     }
 
     /// Returns whether the underlying transport currently considers itself connected.

@@ -413,7 +413,7 @@ static int drive_tcp_smoke(const char *host, int port) {
     }
 
     uint64_t deadline = current_millis_impl(NULL) + 5000;
-    while (!g_request_done && current_millis_impl(NULL) < deadline) {
+    while (mbus_tcp_has_pending_requests(client_id) && current_millis_impl(NULL) < deadline) {
         mbus_tcp_poll(client_id);
         usleep(10000);
     }
@@ -514,7 +514,7 @@ static int drive_serial_pty_smoke(void) {
     }
 
     uint64_t deadline = current_millis_impl(NULL) + 5000;
-    while (!g_request_done && current_millis_impl(NULL) < deadline) {
+    while (mbus_serial_has_pending_requests(client_id) && current_millis_impl(NULL) < deadline) {
         mbus_serial_poll(client_id);
         usleep(10000);
     }

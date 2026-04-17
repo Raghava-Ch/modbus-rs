@@ -1126,6 +1126,9 @@ const char *mbus_status_str(enum MbusStatusCode code);
 
 /**
  * Returns the starting address of the coils range.
+ *
+ * # Safety
+ * `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
  */
 #if defined(MBUS_FEATURE_COILS)
 uint16_t mbus_coils_from_address(const MbusCoils *coils);
@@ -1133,6 +1136,9 @@ uint16_t mbus_coils_from_address(const MbusCoils *coils);
 
 /**
  * Returns the number of coils.
+ *
+ * # Safety
+ * `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
  */
 #if defined(MBUS_FEATURE_COILS)
 uint16_t mbus_coils_quantity(const MbusCoils *coils);
@@ -1140,6 +1146,10 @@ uint16_t mbus_coils_quantity(const MbusCoils *coils);
 
 /**
  * Reads a single coil value by address into `out_value`.
+ *
+ * # Safety
+ * `coils` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, bool *out_value);
@@ -1151,6 +1161,10 @@ enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, b
  * `index` must be less than [`mbus_coils_quantity`]; otherwise returns
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_coils_value`], no knowledge of
  * the Modbus starting address is required.
+ *
+ * # Safety
+ * `coils` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_COILS)
 enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
@@ -1160,6 +1174,9 @@ enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
 
 /**
  * Returns a raw pointer to the packed coil bit-values. Valid during callback only.
+ *
+ * # Safety
+ * `coils` must either be null (returns a null pointer) or point to a valid `MbusCoils`.
  */
 #if defined(MBUS_FEATURE_COILS)
 const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
@@ -1167,6 +1184,9 @@ const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
 
 /**
  * Returns the starting address of the discrete inputs range.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
  */
 #if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_inputs);
@@ -1174,6 +1194,9 @@ uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_in
 
 /**
  * Returns the number of discrete inputs.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
  */
 #if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs);
@@ -1181,6 +1204,10 @@ uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs
 
 /**
  * Reads a single discrete input value by address into `out_value`.
+ *
+ * # Safety
+ * `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discrete_inputs,
@@ -1194,6 +1221,10 @@ enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discret
  * `index` must be less than [`mbus_discrete_inputs_quantity`]; otherwise returns
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_discrete_inputs_value`], no knowledge
  * of the Modbus starting address is required.
+ *
+ * # Safety
+ * `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs *discrete_inputs,
@@ -1203,6 +1234,10 @@ enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs
 
 /**
  * Returns a raw pointer to the discrete input bit-values. Valid during callback only.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns a null pointer) or point to a valid
+ * `MbusDiscreteInputs`.
  */
 #if defined(MBUS_FEATURE_DISCRETE_INPUTS)
 const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discrete_inputs);
@@ -1210,6 +1245,9 @@ const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discret
 
 /**
  * Returns the FIFO pointer address.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
  */
 #if defined(MBUS_FEATURE_FIFO)
 uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
@@ -1217,6 +1255,9 @@ uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
 
 /**
  * Returns the number of values in the FIFO queue.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
  */
 #if defined(MBUS_FEATURE_FIFO)
 uint16_t mbus_fifo_queue_count(const MbusFifoQueue *fifo_queue);
@@ -1224,6 +1265,10 @@ uint16_t mbus_fifo_queue_count(const MbusFifoQueue *fifo_queue);
 
 /**
  * Reads a FIFO value by index.
+ *
+ * # Safety
+ * `fifo_queue` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_FIFO)
 enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
@@ -1233,6 +1278,9 @@ enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
 
 /**
  * Returns a raw pointer to the FIFO values. Valid during callback only.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns a null pointer) or point to a valid `MbusFifoQueue`.
  */
 #if defined(MBUS_FEATURE_FIFO)
 const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
@@ -1240,6 +1288,9 @@ const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
 
 /**
  * Returns the starting address of the registers range.
+ *
+ * # Safety
+ * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
  */
 #if defined(MBUS_FEATURE_REGISTERS)
 uint16_t mbus_registers_from_address(const MbusRegisters *registers);
@@ -1247,6 +1298,9 @@ uint16_t mbus_registers_from_address(const MbusRegisters *registers);
 
 /**
  * Returns the number of registers.
+ *
+ * # Safety
+ * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
  */
 #if defined(MBUS_FEATURE_REGISTERS)
 uint16_t mbus_registers_quantity(const MbusRegisters *registers);
@@ -1254,6 +1308,10 @@ uint16_t mbus_registers_quantity(const MbusRegisters *registers);
 
 /**
  * Reads a single register value by address into `out_value`.
+ *
+ * # Safety
+ * `registers` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
@@ -1267,6 +1325,10 @@ enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
  * `index` must be less than [`mbus_registers_quantity`]; otherwise returns
  * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
  * the Modbus starting address is required.
+ *
+ * # Safety
+ * `registers` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
  */
 #if defined(MBUS_FEATURE_REGISTERS)
 enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers,
@@ -1276,6 +1338,9 @@ enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers
 
 /**
  * Returns a raw pointer to the register values. Valid during callback only.
+ *
+ * # Safety
+ * `registers` must either be null (returns a null pointer) or point to a valid `MbusRegisters`.
  */
 #if defined(MBUS_FEATURE_REGISTERS)
 const uint16_t *mbus_registers_values_ptr(const MbusRegisters *registers);
@@ -1350,6 +1415,12 @@ uint8_t mbus_serial_is_connected(MbusClientId id);
 void mbus_serial_poll(MbusClientId id);
 
 /**
+ * Returns `1` if the client has in-flight requests awaiting response/timeout,
+ * `0` otherwise.
+ */
+uint8_t mbus_serial_has_pending_requests(MbusClientId id);
+
+/**
  * Disconnect then reconnect the serial port.
  */
 enum MbusStatusCode mbus_serial_reconnect(MbusClientId id);
@@ -1408,6 +1479,12 @@ uint8_t mbus_tcp_is_connected(MbusClientId id);
  * loop. All registered callbacks are invoked synchronously from within this call.
  */
 void mbus_tcp_poll(MbusClientId id);
+
+/**
+ * Returns `1` if the client has in-flight requests awaiting response/timeout,
+ * `0` otherwise.
+ */
+uint8_t mbus_tcp_has_pending_requests(MbusClientId id);
 
 /**
  * Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.

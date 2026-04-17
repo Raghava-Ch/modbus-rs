@@ -10,15 +10,31 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
-use mbus_server::{ModbusAppHandler, ResilienceConfig, ServerServices};
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
+use mbus_server::{ResilienceConfig, ServerServices};
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 struct StatsApp;
 
-impl ModbusAppHandler for StatsApp {
-    #[cfg(feature = "diagnostics")]
+impl ServerExceptionHandler for StatsApp {}
+impl ServerCoilHandler for StatsApp {}
+impl ServerDiscreteInputHandler for StatsApp {}
+impl ServerHoldingRegisterHandler for StatsApp {}
+impl ServerInputRegisterHandler for StatsApp {}
+impl ServerFifoHandler for StatsApp {}
+impl ServerFileRecordHandler for StatsApp {}
+impl ServerDiagnosticsHandler for StatsApp {
     fn diagnostics_request(
         &mut self,
         _txn_id: u16,
@@ -29,6 +45,9 @@ impl ModbusAppHandler for StatsApp {
         Err(MbusError::InvalidFunctionCode)
     }
 }
+
+#[cfg(feature = "traffic")]
+impl TrafficNotifier for StatsApp {}
 
 #[derive(Debug)]
 struct QueueSerialTransport {

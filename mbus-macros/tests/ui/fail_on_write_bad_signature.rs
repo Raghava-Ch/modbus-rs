@@ -68,7 +68,14 @@ pub mod transport {
 }
 
 pub mod app {
-    pub trait ModbusAppHandler {}
+    pub trait ServerExceptionHandler {}
+    pub trait ServerCoilHandler {}
+    pub trait ServerDiscreteInputHandler {}
+    pub trait ServerHoldingRegisterHandler {}
+    pub trait ServerInputRegisterHandler {}
+    pub trait ServerFifoHandler {}
+    pub trait ServerFileRecordHandler {}
+    pub trait ServerDiagnosticsHandler {}
 }
 
 use mbus_macros::{HoldingRegistersModel, modbus_app};
