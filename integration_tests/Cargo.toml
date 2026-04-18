@@ -9,7 +9,7 @@ modbus-rs = { version = "0.6.0", path = "../modbus-rs", features = [
     "async",
     "serial-ascii",
 ] }
-mbus-core = { version = "0.6.0", path = "../mbus-core" }
+mbus-core = { version = "0.6.0", path = "../mbus-core", features = ["async"] }
 mbus-server = { version = "0.6.0", path = "../mbus-server" }
 mbus-async = { version = "0.6.0", path = "../mbus-async", optional = true }
 mbus-macros = { version = "0.6.0", path = "../mbus-macros", optional = true }

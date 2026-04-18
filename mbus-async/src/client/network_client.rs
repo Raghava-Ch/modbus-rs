@@ -5,8 +5,17 @@
 //! transparently through the [`std::ops::Deref`] implementation that resolves
 //! to `AsyncClientCore`.
 
-use super::*;
 use std::ops::Deref;
+use std::time::Duration;
+
+#[cfg(feature = "tcp")]
+use mbus_core::transport::ModbusTcpConfig;
+#[cfg(feature = "tcp")]
+use mbus_network::TokioTcpTransport;
+use tokio::sync::{mpsc, watch};
+
+use super::{AsyncClientCore, AsyncError};
+use crate::client::task::{ClientTask, ConnectFactory};
 
 /// Async Modbus TCP client facade.
 ///
@@ -15,7 +24,7 @@ use std::ops::Deref;
 /// [`AsyncClientCore`].
 ///
 /// The constant generic parameter `N` is the compile-time pipeline depth
-/// forwarded to `ClientServices<_, _, N>` (default `9`).
+/// (default `9`).
 pub struct AsyncTcpClient<const N: usize = 9> {
     core: AsyncClientCore,
 }
@@ -42,25 +51,23 @@ impl AsyncTcpClient<9> {
 
     /// Deprecated constructor alias.
     ///
-    /// Use [`AsyncTcpClient::new_with_poll_interval`] and then call
-    /// `client.connect().await?`.
+    /// Use [`AsyncTcpClient::new`] and then call `client.connect().await?`.
     #[cfg(feature = "tcp")]
     #[deprecated(
-        note = "use AsyncTcpClient::new_with_poll_interval(...) and then client.connect().await"
+        note = "use AsyncTcpClient::new(...) and then client.connect().await"
     )]
     pub fn connect_with_poll_interval(
         host: &str,
         port: u16,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        Self::new_with_poll_interval(host, port, poll_interval)
+        Self::new(host, port)
     }
 
     /// Creates an async TCP client for `host`:`port` without connecting.
     ///
-    /// Uses the default pipeline depth of 9 and a 20 ms polling interval. Call
-    /// [`AsyncClientCore::connect`] on the returned client before sending
-    /// requests.
+    /// Uses the default pipeline depth of 9. Call [`AsyncClientCore::connect`]
+    /// on the returned client before sending requests.
     #[cfg(feature = "tcp")]
     pub fn new(host: &str, port: u16) -> Result<Self, AsyncError> {
         Self::new_with_pipeline(host, port)
@@ -69,32 +76,32 @@ impl AsyncTcpClient<9> {
     /// Creates an async TCP client for `host`:`port` with a custom
     /// `poll_interval`.
     ///
+    /// The poll interval is ignored in the async implementation.
     /// Uses the default pipeline depth of 9. Call [`AsyncClientCore::connect`]
     /// on the returned client before sending requests.
     #[cfg(feature = "tcp")]
     pub fn new_with_poll_interval(
         host: &str,
         port: u16,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        Self::new_with_pipeline_and_poll_interval(host, port, poll_interval)
+        Self::new(host, port)
     }
 
-    /// Creates an async TCP client with a fully custom [`ModbusTcpConfig`] and
-    /// a custom `poll_interval`, using the default pipeline depth of 9.
-    ///
-    /// Use this when you need to override fields such as `response_timeout_ms`,
-    /// `retry_attempts`, or backoff strategy.
+    /// Creates an async TCP client with a fully custom [`ModbusTcpConfig`],
+    /// using the default pipeline depth of 9.
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
     #[cfg(feature = "tcp")]
     pub fn new_with_config(
         tcp_config: ModbusTcpConfig,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        let transport = StdTcpTransport::new();
-        Self::from_transport_config(transport, ModbusConfig::Tcp(tcp_config), poll_interval)
+        Self::from_connect_fn(make_tcp_factory(
+            tcp_config.host.as_str().to_string(),
+            tcp_config.port,
+        ))
     }
 }
 
@@ -115,8 +122,8 @@ impl<const N: usize> AsyncTcpClient<N> {
 
     /// Deprecated constructor alias.
     ///
-    /// Use [`AsyncTcpClient::new_with_pipeline_and_poll_interval`] and then call
-    /// `client.connect().await?`.
+    /// Use [`AsyncTcpClient::new_with_pipeline_and_poll_interval`] and then
+    /// call `client.connect().await?`.
     #[cfg(feature = "tcp")]
     #[deprecated(
         note = "use AsyncTcpClient::new_with_pipeline_and_poll_interval(...) and then client.connect().await"
@@ -124,24 +131,24 @@ impl<const N: usize> AsyncTcpClient<N> {
     pub fn connect_with_pipeline_and_poll_interval(
         host: &str,
         port: u16,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        Self::new_with_pipeline_and_poll_interval(host, port, poll_interval)
+        Self::new_with_pipeline(host, port)
     }
 
     /// Creates an async TCP client with compile-time pipeline depth `N`.
     ///
-    /// Uses a 20 ms polling interval. Call [`AsyncClientCore::connect`] on the
-    /// returned client before sending requests.
+    /// Call [`AsyncClientCore::connect`] on the returned client before sending
+    /// requests.
     #[cfg(feature = "tcp")]
     pub fn new_with_pipeline(host: &str, port: u16) -> Result<Self, AsyncError> {
-        let transport = StdTcpTransport::new();
-        let config = ModbusConfig::Tcp(ModbusTcpConfig::new(host, port)?);
-        Self::from_transport_config(transport, config, Duration::from_millis(20))
+        Self::from_connect_fn(make_tcp_factory(host.to_string(), port))
     }
 
     /// Creates an async TCP client with compile-time pipeline depth `N` and a
     /// custom `poll_interval`.
+    ///
+    /// The poll interval is ignored in the async implementation.
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
@@ -149,73 +156,67 @@ impl<const N: usize> AsyncTcpClient<N> {
     pub fn new_with_pipeline_and_poll_interval(
         host: &str,
         port: u16,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        let transport = StdTcpTransport::new();
-        let config = ModbusConfig::Tcp(ModbusTcpConfig::new(host, port)?);
-        Self::from_transport_config(transport, config, poll_interval)
+        Self::new_with_pipeline(host, port)
     }
 
-    /// Creates an async TCP client with a fully custom [`ModbusTcpConfig`] and
-    /// a custom `poll_interval`.
-    ///
-    /// Use this when you need to override fields such as `response_timeout_ms`,
-    /// `retry_attempts`, or backoff strategy beyond what the convenience
-    /// constructors expose.
+    /// Creates an async TCP client with a fully custom config and pipeline
+    /// depth `N`.
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
     #[cfg(feature = "tcp")]
     pub fn new_with_config_and_pipeline(
         tcp_config: ModbusTcpConfig,
-        poll_interval: Duration,
+        _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        let transport = StdTcpTransport::new();
-        Self::from_transport_config(transport, ModbusConfig::Tcp(tcp_config), poll_interval)
+        Self::from_connect_fn(make_tcp_factory(
+            tcp_config.host.as_str().to_string(),
+            tcp_config.port,
+        ))
     }
 
-    /// Internal constructor: wires `transport` + `config` into a
-    /// `ClientServices` instance, spawns the worker thread, and wraps the
-    /// resulting channel in an [`AsyncClientCore`].
+    /// Internal constructor: wires a `ConnectFactory` into a spawned
+    /// [`ClientTask`] and wraps the resulting channels in an
+    /// [`AsyncClientCore`].
     #[cfg(feature = "tcp")]
-    fn from_transport_config(
-        transport: StdTcpTransport,
-        config: ModbusConfig,
-        poll_interval: Duration,
-    ) -> Result<Self, AsyncError> {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
+    fn from_connect_fn(connect_fn: ConnectFactory<TokioTcpTransport>) -> Result<Self, AsyncError> {
+        let handle = tokio::runtime::Handle::try_current()
+            .map_err(|_| AsyncError::WorkerClosed)?;
+        let (cmd_tx, cmd_rx) = mpsc::channel(64);
+        let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
+
         #[cfg(feature = "traffic")]
-        let traffic_handler = Arc::new(Mutex::new(None));
-        #[cfg(feature = "traffic")]
-        let (traffic_sender, traffic_receiver) = mpsc::channel();
-        let app = AsyncApp {
-            pending: pending.clone(),
+        let notifier = crate::client::notifier::new_notifier_store();
+
+        let task = ClientTask::<TokioTcpTransport, N>::new(
+            connect_fn,
+            cmd_rx,
+            pending_count_tx,
             #[cfg(feature = "traffic")]
-            traffic_sender,
-        };
+            notifier.clone(),
+        );
+        handle.spawn(task.run());
 
-        let client = ClientServices::<_, _, N>::new(transport, app, config)?;
-        let (sender, receiver) = mpsc::channel();
-
-        thread::spawn(move || run_worker(client, pending, receiver, poll_interval));
-        #[cfg(feature = "traffic")]
-        {
-            let dispatcher_handler = traffic_handler.clone();
-            thread::spawn(move || run_traffic_dispatcher(traffic_receiver, dispatcher_handler));
-        }
-
-        #[cfg(feature = "traffic")]
-        {
-            Ok(Self {
-                core: AsyncClientCore::new(sender, traffic_handler),
-            })
-        }
-
-        #[cfg(not(feature = "traffic"))]
-        {
-            Ok(Self {
-                core: AsyncClientCore::new(sender),
-            })
-        }
+        Ok(Self {
+            core: AsyncClientCore::new(
+                cmd_tx,
+                pending_count_rx,
+                #[cfg(feature = "traffic")]
+                notifier,
+            ),
+        })
     }
+}
+
+// ── Internal helpers ─────────────────────────────────────────────────────────
+
+/// Builds a [`ConnectFactory`] that resolves a TCP connection to `host:port`.
+#[cfg(feature = "tcp")]
+fn make_tcp_factory(host: String, port: u16) -> ConnectFactory<TokioTcpTransport> {
+    Box::new(move || {
+        let h = host.clone();
+        Box::pin(async move { TokioTcpTransport::connect((h.as_str(), port)).await })
+    })
 }
