@@ -511,14 +511,4 @@ fn fix_up_response(
     }
 }
 
-/// Attempts to extract a raw TCP txn_id from the first 2 bytes of a frame.
-///
-/// For serial frames (which have no MBAP header) this returns 0, which is the
-/// same as what `decompile_adu_frame` returns — the serial fallback matching
-/// path picks it up.
-fn raw_txn_id_from_frame(frame: &[u8]) -> u16 {
-    match frame {
-        [hi, lo, ..] => u16::from_be_bytes([*hi, *lo]),
-        _ => 0,
-    }
-}
+

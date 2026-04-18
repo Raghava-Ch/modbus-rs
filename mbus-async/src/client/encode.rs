@@ -243,7 +243,10 @@ pub(crate) fn encode_read_file_record(
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     use mbus_core::models::file_record::PduDataBytes;
     let payload_bytes = sub_request.to_sub_req_pdu_bytes()?;
-    let pdu = Pdu::build_byte_count_payload(FunctionCode::ReadFileRecord, &payload_bytes)?;
+    // `to_sub_req_pdu_bytes` already prepends the Modbus byte-count field;
+    // do NOT pass through `build_byte_count_payload` (that would add a second one).
+    let data_len = payload_bytes.len() as u8;
+    let pdu = Pdu::new(FunctionCode::ReadFileRecord, payload_bytes, data_len);
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
@@ -257,7 +260,10 @@ pub(crate) fn encode_write_file_record(
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     use mbus_core::models::file_record::PduDataBytes;
     let payload_bytes = sub_request.to_sub_req_pdu_bytes()?;
-    let pdu = Pdu::build_byte_count_payload(FunctionCode::WriteFileRecord, &payload_bytes)?;
+    // `to_sub_req_pdu_bytes` already prepends the Modbus byte-count field;
+    // do NOT pass through `build_byte_count_payload` (that would add a second one).
+    let data_len = payload_bytes.len() as u8;
+    let pdu = Pdu::new(FunctionCode::WriteFileRecord, payload_bytes, data_len);
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 

@@ -538,8 +538,8 @@ async fn test_async_tcp_client_read_fifo_queue() -> Result<()> {
 
     let client = connected_tcp_client(addr.port()).await?;
     let fifo = client.read_fifo_queue(1, 0x0010).await?;
-    // Current service implementation builds the response model with ptr_address = 0.
-    assert_eq!(fifo.ptr_address(), 0);
+    // fix_up_response restores ptr_address from the original request.
+    assert_eq!(fifo.ptr_address(), 0x0010);
     assert_eq!(fifo.length(), 1);
     assert_eq!(fifo.queue(), &[0x1234]);
 
