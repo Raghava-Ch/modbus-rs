@@ -12,12 +12,12 @@ categories.workspace = true
 description = "Async (Tokio) facade for the modbus-rs client stack"
 
 [dependencies]
-mbus-core = { workspace = true }
+mbus-core = { workspace = true, features = ["async"] }
 mbus-client = { workspace = true }
 mbus-network = { workspace = true, optional = true }
 mbus-serial = { workspace = true, optional = true }
 heapless = { workspace = true }
-tokio = { version = "1", features = ["sync", "macros"] }
+tokio = { version = "1", features = ["sync", "macros", "rt"] }
 log = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -28,9 +28,9 @@ anyhow = "1.0"
 [features]
 default = ["tcp", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"]
 full = ["default", "traffic"]
-tcp = ["dep:mbus-network"]
-serial-rtu = ["dep:mbus-serial"]
-serial-ascii = ["dep:mbus-serial", "mbus-core/serial-ascii", "mbus-client/serial-ascii"]
+tcp = ["dep:mbus-network", "mbus-network/async", "tokio/net", "tokio/rt"]
+serial-rtu = ["dep:mbus-serial", "mbus-serial/async"]
+serial-ascii = ["dep:mbus-serial", "mbus-core/serial-ascii", "mbus-client/serial-ascii", "mbus-serial/async"]
 coils = ["mbus-core/coils", "mbus-client/coils"]
 registers = ["mbus-core/registers", "mbus-client/registers"]
 discrete-inputs = ["mbus-core/discrete-inputs", "mbus-client/discrete-inputs"]

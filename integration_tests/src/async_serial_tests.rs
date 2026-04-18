@@ -3,7 +3,7 @@ use heapless::Vec as HVec;
 use modbus_rs::mbus_async::{AsyncError, AsyncSerialClient};
 use modbus_rs::{
     crc16, BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MbusError,
-    ModbusConfig, ModbusSerialConfig, Parity, SerialMode, Transport, TransportError, TransportType,
+    ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TransportType,
     MAX_ADU_FRAME_LEN,
 };
 use std::collections::VecDeque;
@@ -32,20 +32,8 @@ impl<const ASCII: bool> MockAsyncSerialTransport<ASCII> {
     }
 }
 
-impl<const ASCII: bool> Transport for MockAsyncSerialTransport<ASCII> {
-    type Error = TransportError;
-    const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
-
-    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn disconnect(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+impl<const ASCII: bool> mbus_core::transport::AsyncTransport for MockAsyncSerialTransport<ASCII> {
+    async fn send(&mut self, adu: &[u8]) -> Result<(), MbusError> {
         self.sent_frames
             .lock()
             .expect("sent_frames lock poisoned")
@@ -53,7 +41,7 @@ impl<const ASCII: bool> Transport for MockAsyncSerialTransport<ASCII> {
         Ok(())
     }
 
-    fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+    async fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let maybe_frame = self
             .recv_frames
             .lock()
@@ -62,13 +50,17 @@ impl<const ASCII: bool> Transport for MockAsyncSerialTransport<ASCII> {
 
         let frame = match maybe_frame {
             Some(v) => v,
-            None => return Err(TransportError::Timeout),
+            None => return Err(MbusError::Timeout),
         };
 
         let mut out = HVec::new();
         out.extend_from_slice(&frame)
-            .map_err(|_| TransportError::BufferTooSmall)?;
+            .map_err(|_| MbusError::BufferTooSmall)?;
         Ok(out)
+    }
+
+    fn transport_type(&self) -> TransportType {
+        TransportType::CustomSerial(Self::MODE)
     }
 
     fn is_connected(&self) -> bool {

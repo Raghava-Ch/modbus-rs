@@ -54,10 +54,13 @@ use mbus_core::{
 /// `(txn_id, unit, ClientResponse)` triple.
 ///
 /// Returns `Err(MbusError)` for any framing, exception, or parse error.
+///
+/// On an exception response the returned `Err` is wrapped in `Ok((txn_id, unit, Err(...)))`
+/// so the caller can still route the error to the correct pending entry.
 pub(crate) fn decode_response(
     frame: &[u8],
     transport_type: TransportType,
-) -> Result<(u16, UnitIdOrSlaveAddr, ClientResponse), MbusError> {
+) -> Result<(u16, UnitIdOrSlaveAddr, Result<ClientResponse, MbusError>), MbusError> {
     let message = decompile_adu_frame(frame, transport_type)?;
 
     let txn_id = message.transaction_id();
@@ -67,11 +70,11 @@ pub(crate) fn decode_response(
     // Exception PDU: if error_code is Some, the server returned an exception
     // response.  The exception code byte is the payload.
     if let Some(exception_code) = pdu.error_code() {
-        return Err(MbusError::ModbusException(exception_code));
+        return Ok((txn_id, unit, Err(MbusError::ModbusException(exception_code))));
     }
 
     let response = decode_pdu(pdu)?;
-    Ok((txn_id, unit, response))
+    Ok((txn_id, unit, Ok(response)))
 }
 
 // ─── PDU dispatcher ───────────────────────────────────────────────────────────

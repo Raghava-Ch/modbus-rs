@@ -78,8 +78,7 @@ pub(crate) type PendingCountReceiver = watch::Receiver<usize>;
 struct PendingEntry {
     /// Channel to deliver the result to the waiting caller.
     resp_tx: ResponseSender,
-    /// Original request parameters — kept for traffic-notifier unit extraction.
-    #[allow(dead_code)] // used only under cfg(feature = "traffic")
+    /// Original request parameters — used for traffic hooks and response fix-up.
     request: ClientRequest,
 }
 
@@ -228,12 +227,11 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             None => return,
         };
 
-        let (decoded_txn_id, _unit, response) = match decode_response(frame, ttype) {
+        let (decoded_txn_id, _unit, inner) = match decode_response(frame, ttype) {
             Ok(v) => v,
             Err(e) => {
-                // Framing error or exception response — fail the closest pending entry.
-                let raw_txn_id = raw_txn_id_from_frame(frame);
-                self.fail_entry(raw_txn_id, e);
+                // Hard framing error — no txn_id recoverable; fail first pending entry.
+                self.fail_entry(0, e);
                 return;
             }
         };
@@ -247,7 +245,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 #[cfg(feature = "traffic")]
                 self.fire_rx_frame(decoded_txn_id, entry.request.unit(), frame);
 
-                let _ = entry.resp_tx.send(Ok(response));
+                let result = inner.map(|response| fix_up_response(response, &entry.request));
+                let _ = entry.resp_tx.send(result);
             }
         }
         // Unsolicited frame → discard silently.
@@ -411,6 +410,104 @@ async fn recv_if_active<T: AsyncTransport>(
     match transport.as_mut() {
         Some(t) if in_flight > 0 => t.recv().await,
         _ => std::future::pending().await,
+    }
+}
+
+// ─── Response fix-up ──────────────────────────────────────────────────────────
+
+/// Overwrites the placeholder `address` (and for bit/register reads, the
+/// quantity) on responses where [`decode_response`] cannot know the original
+/// request parameters.
+///
+/// Server *read* responses do not echo the requested starting address back;
+/// `decode_response` initialises it to 0 as a placeholder.  This function
+/// replaces that placeholder with the real values from `original`.
+///
+/// Server *write* responses echo address/quantity directly, so they need no
+/// fix-up and fall through to the catch-all arm.
+fn fix_up_response(
+    response: crate::client::response::ClientResponse,
+    original: &crate::client::command::ClientRequest,
+) -> crate::client::response::ClientResponse {
+    use crate::client::command::ClientRequest as Q;
+    use crate::client::response::ClientResponse as R;
+
+    match (response, original) {
+        // ── FC01: Read Multiple Coils ─────────────────────────────────────
+        #[cfg(feature = "coils")]
+        (R::Coils(raw), Q::ReadMultipleCoils { address, quantity, .. }) => {
+            use mbus_core::models::coil::Coils;
+            Coils::new(*address, *quantity)
+                .and_then(|c| c.with_values(raw.values(), *quantity))
+                .map(R::Coils)
+                .unwrap_or_else(|_| R::Coils(raw))
+        }
+
+        // ── FC02: Read Discrete Inputs ────────────────────────────────────
+        #[cfg(feature = "discrete-inputs")]
+        (R::DiscreteInputs(raw), Q::ReadDiscreteInputs { address, quantity, .. }) => {
+            use mbus_core::models::discrete_input::DiscreteInputs;
+            DiscreteInputs::new(*address, *quantity)
+                .and_then(|d| d.with_values(raw.values(), *quantity))
+                .map(R::DiscreteInputs)
+                .unwrap_or_else(|_| R::DiscreteInputs(raw))
+        }
+
+        // ── FC03: Read Holding Registers ──────────────────────────────────
+        #[cfg(feature = "registers")]
+        (R::Registers(raw), Q::ReadHoldingRegisters { address, quantity, .. }) => {
+            use mbus_core::models::register::Registers;
+            Registers::new(*address, *quantity)
+                .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
+                .map(R::Registers)
+                .unwrap_or_else(|_| R::Registers(raw))
+        }
+
+        // ── FC04: Read Input Registers ────────────────────────────────────
+        #[cfg(feature = "registers")]
+        (R::Registers(raw), Q::ReadInputRegisters { address, quantity, .. }) => {
+            use mbus_core::models::register::Registers;
+            Registers::new(*address, *quantity)
+                .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
+                .map(R::Registers)
+                .unwrap_or_else(|_| R::Registers(raw))
+        }
+
+        // ── FC17: Read/Write Multiple Registers ───────────────────────────
+        #[cfg(feature = "registers")]
+        (
+            R::Registers(raw),
+            Q::ReadWriteMultipleRegisters {
+                read_address,
+                read_quantity,
+                ..
+            },
+        ) => {
+            use mbus_core::models::register::Registers;
+            Registers::new(*read_address, *read_quantity)
+                .and_then(|r| {
+                    r.with_values(
+                        &raw.values()[..*read_quantity as usize],
+                        *read_quantity,
+                    )
+                })
+                .map(R::Registers)
+                .unwrap_or_else(|_| R::Registers(raw))
+        }
+
+        // ── FC18: Read FIFO Queue ─────────────────────────────────────────
+        #[cfg(feature = "fifo")]
+        (R::FifoQueue(raw), Q::ReadFifoQueue { address, .. }) => {
+            use mbus_core::models::fifo_queue::{FifoQueue, MAX_FIFO_QUEUE_COUNT_PER_PDU};
+            let length = raw.length();
+            let mut arr = [0u16; MAX_FIFO_QUEUE_COUNT_PER_PDU];
+            arr[..length].copy_from_slice(raw.queue());
+            R::FifoQueue(FifoQueue::new(*address).with_values(arr, length))
+        }
+
+        // All write responses and diagnostics already carry correct
+        // addresses/values echoed from the server — no fix-up needed.
+        (r, _) => r,
     }
 }
 
