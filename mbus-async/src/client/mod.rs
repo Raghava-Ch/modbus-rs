@@ -63,6 +63,15 @@ pub enum AsyncError {
     WorkerClosed,
     /// Internal response routing mismatch between request and callback payload type.
     UnexpectedResponseType,
+    /// Per-request timeout elapsed before the server responded.
+    ///
+    /// Set via [`AsyncClientCore::set_request_timeout`].  The in-flight entry
+    /// remains in the background task until the transport delivers or errors;
+    /// call [`connect`](AsyncClientCore::connect) to reset transport state.
+    ///
+    /// [`AsyncClientCore::set_request_timeout`]: crate::client::AsyncClientCore::set_request_timeout
+    /// [`connect`]: crate::client::AsyncClientCore::connect
+    Timeout,
 }
 
 impl From<MbusError> for AsyncError {
@@ -77,6 +86,7 @@ impl std::fmt::Display for AsyncError {
             Self::Mbus(err) => write!(f, "Modbus error: {err}"),
             Self::WorkerClosed => write!(f, "async worker channel closed"),
             Self::UnexpectedResponseType => write!(f, "unexpected response type from worker"),
+            Self::Timeout => write!(f, "request timed out"),
         }
     }
 }

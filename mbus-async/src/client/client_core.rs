@@ -22,6 +22,10 @@
 //!
 //! [`ClientTask`]: crate::client::task::ClientTask
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
 use tokio::sync::{mpsc, oneshot};
 
 use mbus_core::errors::MbusError;
@@ -67,6 +71,8 @@ use super::{CommEventLogResponse, DiagnosticsDataResponse};
 pub struct AsyncClientCore {
     cmd_tx: mpsc::Sender<TaskCommand>,
     pending_count_rx: PendingCountReceiver,
+    /// Per-request timeout in nanoseconds; 0 = disabled.
+    request_timeout_ns: Arc<AtomicU64>,
     #[cfg(feature = "traffic")]
     notifier: NotifierStore,
 }
@@ -83,6 +89,7 @@ impl AsyncClientCore {
         Self {
             cmd_tx,
             pending_count_rx,
+            request_timeout_ns: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "traffic")]
             notifier,
         }
@@ -91,15 +98,28 @@ impl AsyncClientCore {
     // ── Internal helpers ─────────────────────────────────────────────────
 
     /// Sends a [`ClientRequest`] to the background task and awaits the reply.
+    ///
+    /// If a per-request timeout is set via [`set_request_timeout`](Self::set_request_timeout)
+    /// and no response arrives within that deadline, returns [`AsyncError::Timeout`].
     async fn send_request(&self, params: ClientRequest) -> Result<ClientResponse, AsyncError> {
         let (resp_tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(TaskCommand::Request { params, resp_tx })
             .await
             .map_err(|_| AsyncError::WorkerClosed)?;
-        rx.await
-            .map_err(|_| AsyncError::WorkerClosed)?
-            .map_err(AsyncError::Mbus)
+
+        let timeout_ns = self.request_timeout_ns.load(Ordering::Relaxed);
+        if timeout_ns > 0 {
+            tokio::time::timeout(Duration::from_nanos(timeout_ns), rx)
+                .await
+                .map_err(|_| AsyncError::Timeout)?
+                .map_err(|_| AsyncError::WorkerClosed)?
+                .map_err(AsyncError::Mbus)
+        } else {
+            rx.await
+                .map_err(|_| AsyncError::WorkerClosed)?
+                .map_err(AsyncError::Mbus)
+        }
     }
 
     // ── Connection ───────────────────────────────────────────────────────
@@ -125,7 +145,31 @@ impl AsyncClientCore {
     pub fn has_pending_requests(&self) -> bool {
         *self.pending_count_rx.borrow() > 0
     }
+    // ── Request timeout ──────────────────────────────────────────────────────────
 
+    /// Sets a per-request deadline applied to every subsequent request call.
+    ///
+    /// If a response is not received within `timeout`, the method returns
+    /// [`AsyncError::Timeout`].  The in-flight entry remains in the background
+    /// task until the transport delivers or errors; calling
+    /// [`connect`](Self::connect) resets transport state.
+    ///
+    /// The timeout can be updated at any time and takes effect on the next
+    /// request.  Call [`clear_request_timeout`](Self::clear_request_timeout) to
+    /// remove it.
+    pub fn set_request_timeout(&self, timeout: Duration) {
+        self.request_timeout_ns.store(
+            u64::try_from(timeout.as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Removes the per-request timeout set by
+    /// [`set_request_timeout`](Self::set_request_timeout), allowing requests to
+    /// wait indefinitely for a server response.
+    pub fn clear_request_timeout(&self) {
+        self.request_timeout_ns.store(0, Ordering::Relaxed);
+    }
     // ── Traffic notifier ─────────────────────────────────────────────────
 
     /// Registers (or replaces) an [`AsyncClientNotifier`] for traffic events.
