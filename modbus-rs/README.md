@@ -10,7 +10,7 @@ binary size.
 
 ## Basic Async Usage Example
 
-```rust,no_run
+```rust
 use anyhow::Result;
 use modbus_rs::Coils;
 use modbus_rs::mbus_async::AsyncTcpClient;
@@ -146,7 +146,7 @@ tokio = { version = "1", features = ["full"] }
 
 Use async clients from `modbus_rs::mbus_async` and connect explicitly before requests:
 
-```rust,no_run
+```rust
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
@@ -250,7 +250,7 @@ python3 -m http.server 8089
 
 ## Basic Usage Example
 
-```rust,no_run
+```rust
 use modbus_rs::{
 	ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
 	RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,

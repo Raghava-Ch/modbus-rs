@@ -118,7 +118,7 @@ The async client is a pure-Tokio transport driver — no worker threads, no poll
 │        ├── mpsc::Sender<TaskCommand>  ─────────────────┐ │
 │        ├── watch::Receiver<usize>  (pending count)     │ │
 │        └── Arc<AtomicU64>          (timeout ns)        │ │
-└─────────────────────────────────────────────────────────│─┘
+└────────────────────────────────────────────────────────│─┘
                                                          │
                                           tokio::spawn   ▼
 ┌──────────────────────────────────────────────────────────┐
@@ -167,7 +167,8 @@ being awaited resolve with `AsyncError::WorkerClosed`.
 
 `has_pending_requests()` is synchronous — no `.await` required:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 if client.has_pending_requests() {
     println!("requests still in flight");
 }
@@ -179,7 +180,8 @@ if client.has_pending_requests() {
 
 Set a deadline applied to every subsequent request:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 use std::time::Duration;
 
 client.set_request_timeout(Duration::from_millis(500));
@@ -198,7 +200,8 @@ After a timeout, call `client.connect().await?` to reopen the transport.
 `connect()` is safe to call at any time — it closes any active transport first, then opens a
 new connection. Use it after a transport error or `AsyncError::Timeout`:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 if let Err(_) = client.read_multiple_coils(1, 0, 8).await {
     client.connect().await?; // reconnect and retry
     let _ = client.read_multiple_coils(1, 0, 8).await?;
@@ -216,7 +219,7 @@ Enable with `traffic` feature:
 modbus-rs = { version = "0.6.0", features = ["async", "traffic"] }
 ```
 
-```rust,no_run
+```rust
 use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
 use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 

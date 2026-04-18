@@ -17,7 +17,7 @@ modbus-rs = { version = "0.6", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
-```rust,no_run
+```rust
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
@@ -49,7 +49,7 @@ modbus-rs = { version = "0.6", default-features = false, features = [
 tokio = { version = "1", features = ["full"] }
 ```
 
-```rust,no_run
+```rust
 use modbus_rs::mbus_async::AsyncSerialClient;
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
@@ -204,7 +204,8 @@ Custom pipeline (`AsyncTcpClient<N>`) constructors:
 
 ## Error Handling
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 use modbus_rs::mbus_async::AsyncError;
 
 match client.read_holding_registers(1, 0, 10).await {
@@ -227,7 +228,8 @@ and `oneshot` channel. The background Tokio task routes responses back by transa
 
 Example with custom TCP pipeline depth:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 let client = AsyncTcpClient::<16>::new_with_pipeline("127.0.0.1", 502)?;
@@ -238,7 +240,8 @@ client.connect().await?;
 
 Set a deadline applied to all subsequent requests:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 use std::time::Duration;
 
 client.set_request_timeout(Duration::from_millis(500));
@@ -255,7 +258,8 @@ client.clear_request_timeout(); // back to "wait forever"
 
 `has_pending_requests()` is **synchronous** — no `.await` required:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 if client.has_pending_requests() {
     println!("requests still in flight");
 }
@@ -265,7 +269,8 @@ if client.has_pending_requests() {
 
 After a transport error or timeout, call `connect()` again to restore the connection:
 
-```rust,ignore
+<!-- validate: skip -->
+```rust
 client.connect().await?; // safe to call repeatedly
 ```
 
@@ -281,7 +286,7 @@ modbus-rs = { version = "0.6", default-features = false, features = [
 tokio = { version = "1", features = ["full"] }
 ```
 
-```rust,no_run
+```rust
 use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
 use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
