@@ -30,6 +30,37 @@ cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
 
 ---
 
+## Async TCP Server Examples
+
+### Async TCP Demo Server
+
+Demonstrates a shared-state async TCP server using `#[async_modbus_app]` and
+`AsyncTcpServer::serve_shared`. A background task simulates live register changes
+so connected clients observe updating data.
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_async_tcp_demo \
+    --features server,async-server-tcp,coils,holding-registers,input-registers
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/async/demo.rs](../../modbus-rs/examples/server/network-tcp/async/demo.rs)
+
+---
+
+### Async TCP Traffic Logging
+
+Demonstrates implementing [`AsyncTrafficNotifier`] to intercept all raw ADU frames
+(TX, RX, framing errors, transmit errors) and the `on_exception` callback.
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_async_tcp_traffic \
+    --features server,async-server-tcp,coils,holding-registers,traffic
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/async/traffic.rs](../../modbus-rs/examples/server/network-tcp/async/traffic.rs)
+
+---
+
 ## Serial RTU Server Examples
 
 ### Serial RTU Demo

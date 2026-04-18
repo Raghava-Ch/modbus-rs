@@ -238,36 +238,33 @@ tokio = { version = "1", features = ["full"] }
 ```
 
 ```rust,no_run
-use modbus_rs::mbus_async::AsyncTcpClient;
+use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
+
+struct FrameLogger;
+
+impl AsyncClientNotifier for FrameLogger {
+    fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+    fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[RX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+    fn on_tx_error(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, error: MbusError, frame: &[u8]) {
+        println!("[TX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}", unit.get());
+    }
+    fn on_rx_error(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, error: MbusError, frame: &[u8]) {
+        println!("[RX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}", unit.get());
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-        let client = AsyncTcpClient::new("127.0.0.1", 502)?;
-
-        client.set_traffic_handler(|evt| {
-            if let Some(err) = evt.error {
-                println!(
-                    "[{:?}] txn={} unit={} error={:?} bytes={:02X?}",
-                    evt.direction,
-                    evt.txn_id,
-                    evt.unit_id_slave_addr.get(),
-                    err,
-                    evt.frame
-                );
-            } else {
-                println!(
-                    "[{:?}] txn={} unit={} bytes={:02X?}",
-                    evt.direction,
-                    evt.txn_id,
-                    evt.unit_id_slave_addr.get(),
-                    evt.frame
-                );
-            }
-        });
-
-        client.connect().await?;
-        let _ = client.read_multiple_coils(1, 0, 8).await?;
-        Ok(())
+    let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+    client.set_traffic_notifier(FrameLogger);
+    client.connect().await?;
+    let _ = client.read_multiple_coils(1, 0, 8).await?;
+    Ok(())
 }
 ```
 

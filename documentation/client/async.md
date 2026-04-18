@@ -158,14 +158,27 @@ Enable with `traffic` feature:
 modbus-rs = { version = "0.6.0", features = ["async", "traffic"] }
 ```
 
-```rust
-use modbus_rs::mbus_async::{AsyncTcpClient, TrafficEvent};
+```rust,no_run
+use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
-let client = AsyncTcpClient::new("192.168.1.10", 502)?;
-client.set_traffic_handler(|event: &TrafficEvent| {
-    println!("{:?} txn={} {:02X?}", event.direction, event.txn_id, event.frame);
-});
-client.connect().await?;
+struct FrameLogger;
+impl AsyncClientNotifier for FrameLogger {
+    fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+    fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[RX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+    client.set_traffic_notifier(FrameLogger);
+    client.connect().await?;
+    Ok(())
+}
 ```
 
 See [modbus-rs/examples/client/network-tcp/async/traffic.rs](../../modbus-rs/examples/client/network-tcp/async/traffic.rs)
