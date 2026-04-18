@@ -851,15 +851,34 @@ async fn test_async_tcp_client_server_closes_connection() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_tcp_client_server_timeout() -> Result<()> {
+    // Server 1: accepts connection, reads request, holds without responding (simulates hung server).
+    // Server 2: accepts connection after reconnect and responds normally.
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let addr = listener.local_addr()?;
     let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
 
     let server_handle = thread::spawn(move || -> Result<()> {
-        let (mut stream, _) = listener.accept()?;
-        let mut buf = [0u8; 12];
-        stream.read_exact(&mut buf)?; // consume the request
-        let _ = done_rx.recv();       // hold connection open until test signals
+        // Connection 1: consume request but never respond — triggers client timeout.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0u8; 12];
+            stream.read_exact(&mut buf)?;
+            let _ = done_rx.recv(); // hold open until client has seen Timeout
+        }
+
+        // Connection 2: respond normally so we can verify the pipeline recovered.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut req = [0u8; 12];
+            stream.read_exact(&mut req)?;
+            #[rustfmt::skip]
+            stream.write_all(&[
+                req[0], req[1],
+                0x00, 0x00,
+                0x00, 0x04,
+                req[6], 0x01, 0x01, 0xFF,
+            ])?;
+        }
         Ok(())
     });
 
@@ -867,13 +886,20 @@ async fn test_async_tcp_client_server_timeout() -> Result<()> {
     client.set_request_timeout(Duration::from_millis(100));
     client.connect().await?;
 
+    // Timeout — Disconnect is automatically sent to drain the pipeline.
     let result = client.read_multiple_coils(1, 0, 8).await;
     assert!(
         matches!(result, Err(AsyncError::Timeout)),
         "Expected Timeout, got {result:?}"
     );
 
-    done_tx.send(()).ok();
+    done_tx.send(()).ok(); // release hung server connection
+
+    // Pipeline self-healed: reconnect and verify the next request succeeds.
+    client.connect().await?;
+    let result = client.read_multiple_coils(1, 0, 8).await;
+    assert!(result.is_ok(), "Expected success after reconnect, got {result:?}");
+
     server_handle.join().expect("server thread panicked")?;
     Ok(())
 }
