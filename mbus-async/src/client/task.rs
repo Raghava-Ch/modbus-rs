@@ -173,6 +173,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 let _ = resp_tx.send(Err(MbusError::Unexpected));
                 return;
             }
+            // Disconnect is handled in handle_command before reaching here.
+            TaskCommand::Disconnect => return,
         };
 
         // Resolve txn_id and ttype before taking a mutable transport borrow.
@@ -277,7 +279,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     }
 
     /// Sends `ConnectionClosed` to every in-flight and queued request, then
-    /// resets counters.
+    /// resets counters.  Does **not** clear the transport; callers that also
+    /// want to close the transport must set `self.transport = None` afterwards.
     pub(crate) fn drain_all(&mut self) {
         for (_, entry) in self.pending.drain() {
             let _ = entry.resp_tx.send(Err(MbusError::ConnectionClosed));
@@ -286,17 +289,25 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             if let TaskCommand::Request { resp_tx, .. } = cmd {
                 let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
             }
+            // TaskCommand::Connect / Disconnect have no resp_tx to drain.
         }
         self.in_flight = 0;
         self.update_pending_count();
     }
 
-    /// Dispatches or queues a single request command; handles `Connect` inline.
+    /// Dispatches or queues a single request command; handles `Connect` and
+    /// `Disconnect` inline.
     async fn handle_command(&mut self, cmd: TaskCommand) {
         match cmd {
             TaskCommand::Connect { resp_tx } => {
                 let result = self.do_connect().await;
                 let _ = resp_tx.send(result);
+            }
+            TaskCommand::Disconnect => {
+                // Drain everything and close the transport so the pipeline is
+                // clean.  A subsequent Connect command will reopen it.
+                self.drain_all();
+                self.transport = None;
             }
             req_cmd => {
                 if self.in_flight < N {

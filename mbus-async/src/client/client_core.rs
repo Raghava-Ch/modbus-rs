@@ -110,9 +110,16 @@ impl AsyncClientCore {
 
         let timeout_ns = self.request_timeout_ns.load(Ordering::Relaxed);
         if timeout_ns > 0 {
-            tokio::time::timeout(Duration::from_nanos(timeout_ns), rx)
-                .await
-                .map_err(|_| AsyncError::Timeout)?
+            let outcome = tokio::time::timeout(Duration::from_nanos(timeout_ns), rx).await;
+            if outcome.is_err() {
+                // Transport may be hung.  Send a non-blocking Disconnect so the
+                // background task drains the pipeline and closes the transport;
+                // the caller can then call connect() to recover.
+                let _ = self.cmd_tx.try_send(TaskCommand::Disconnect);
+                return Err(AsyncError::Timeout);
+            }
+            outcome
+                .unwrap()
                 .map_err(|_| AsyncError::WorkerClosed)?
                 .map_err(AsyncError::Mbus)
         } else {
