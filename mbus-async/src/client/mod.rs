@@ -1,16 +1,41 @@
-//! Internal runtime for the async facade.
+//! Async client module.
 //!
-//! This module contains the worker-thread bridge between async callers and the
-//! synchronous `ClientServices` state machine.
-//!
-//! Public entry points are re-exported from the crate root:
+//! Public entry points:
 //! - [`AsyncTcpClient`] (TCP)
 //! - [`AsyncSerialClient`] (RTU/ASCII)
 //!
-//! Internal/shared building blocks:
-//! - [`AsyncClientCore`] stores worker channel state and implements request methods.
-//! - [`WorkerCommand`] and [`WorkerResponse`] carry typed request/response payloads.
-//! - [`run_worker`] drives polling and response routing.
+//! # Module layout
+//!
+//! | Module | Contents |
+//! |---|---|
+//! | `command` | [`ClientRequest`] and [`TaskCommand`] channel envelopes |
+//! | `response` | [`ClientResponse`] typed result enum |
+//! | `notifier` | [`AsyncClientNotifier`] traffic hook trait (`traffic` feature) |
+//! | `client_core` | [`AsyncClientCore`] — public request API |
+//! | `network_client` | [`AsyncTcpClient`] — TCP constructor |
+//! | `serial_client` | [`AsyncSerialClient`] — serial constructor |
+
+pub(crate) mod command;
+pub(crate) mod response;
+pub(crate) mod encode;
+pub(crate) mod decode;
+#[cfg(feature = "traffic")]
+pub mod notifier;
+
+mod client_core;
+mod network_client;
+mod serial_client;
+
+pub use client_core::AsyncClientCore;
+pub use network_client::AsyncTcpClient;
+pub use serial_client::AsyncSerialClient;
+#[cfg(feature = "traffic")]
+pub use notifier::AsyncClientNotifier;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy worker implementation — will be removed once the pure-async task
+// implementation (task.rs / encode.rs / decode.rs) is complete.
+// ─────────────────────────────────────────────────────────────────────────────
 
 use std::collections::HashMap;
 #[cfg(feature = "traffic")]
@@ -1153,18 +1178,10 @@ fn run_worker<TRANSPORT, const N: usize>(
     }
 }
 
-// ── Submodules ───────────────────────────────────────────────────────────────
-
-mod client_core;
-mod network_client;
-mod serial_client;
-
-pub(crate) use client_core::AsyncClientCore;
-pub use network_client::AsyncTcpClient;
-pub use serial_client::AsyncSerialClient;
-
-// ── Note: SubRequest, SubRequestParams, FifoQueue, DeviceIdentificationResponse,
-// ObjectId, ReadDeviceIdCode are already re-exported via their `pub use` imports above.
+// ── Note: AsyncClientCore, AsyncTcpClient, AsyncSerialClient and the traffic
+// types are re-exported from the module declarations at the top of this file.
+// SubRequest, SubRequestParams, FifoQueue, DeviceIdentificationResponse,
+// ObjectId, and ReadDeviceIdCode are re-exported via the `pub use` imports above.
 
 #[cfg(all(test, feature = "traffic"))]
 mod tests {
