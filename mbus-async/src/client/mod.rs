@@ -40,13 +40,13 @@ use mbus_client::services::ClientServices;
 #[cfg(feature = "coils")]
 use mbus_client::services::coil::Coils;
 #[cfg(feature = "diagnostics")]
-use mbus_client::services::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
+pub use mbus_client::services::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "discrete-inputs")]
 use mbus_client::services::discrete_input::DiscreteInputs;
 #[cfg(feature = "fifo")]
-use mbus_client::services::fifo_queue::FifoQueue;
+pub use mbus_client::services::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
-use mbus_client::services::file_record::{SubRequest, SubRequestParams};
+pub use mbus_client::services::file_record::{SubRequest, SubRequestParams};
 #[cfg(feature = "registers")]
 use mbus_client::services::register::Registers;
 use mbus_core::errors::MbusError;
@@ -1162,6 +1162,9 @@ mod serial_client;
 pub(crate) use client_core::AsyncClientCore;
 pub use network_client::AsyncTcpClient;
 pub use serial_client::AsyncSerialClient;
+
+// ── Note: SubRequest, SubRequestParams, FifoQueue, DeviceIdentificationResponse,
+// ObjectId, ReadDeviceIdCode are already re-exported via their `pub use` imports above.
 
 #[cfg(all(test, feature = "traffic"))]
 mod tests {

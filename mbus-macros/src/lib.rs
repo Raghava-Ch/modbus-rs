@@ -1096,6 +1096,7 @@ fn parse_holding_registers_options(input: &DeriveInput) -> Result<bool, Error> {
     Ok(allow_gaps)
 }
 
+/// Build availability + take tokens using `?` (suitable for sync contexts / closures returning Result).
 fn build_available_take_tokens(
     field_ty: &syn::Type,
     trait_path: proc_macro2::TokenStream,
@@ -1120,6 +1121,44 @@ fn build_advance_cursor_tokens() -> proc_macro2::TokenStream {
         cursor = cursor
             .checked_add(take)
             .ok_or(::mbus_core::errors::MbusError::InvalidAddress)?;
+    }
+}
+
+/// Build availability + take tokens WITHOUT `?` — for use directly in async blocks
+/// that return `ModbusResponse` (not `Result`).
+fn build_available_take_tokens_async(
+    field_ty: &syn::Type,
+    trait_path: proc_macro2::TokenStream,
+    remaining_expr: proc_macro2::TokenStream,
+    fc: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    quote! {
+        let map_max = <#field_ty as #trait_path>::ADDR_MAX;
+        let available = match map_max.checked_sub(cursor) {
+            Some(v) => v.saturating_add(1),
+            None => return ::mbus_async::server::ModbusResponse::exception(
+                #fc,
+                ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+            ),
+        };
+        let take = if (#remaining_expr) < available {
+            (#remaining_expr)
+        } else {
+            available
+        };
+    }
+}
+
+/// Build advance-cursor tokens WITHOUT `?` — for use directly in async blocks.
+fn build_advance_cursor_tokens_async(fc: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    quote! {
+        cursor = match cursor.checked_add(take) {
+            Some(v) => v,
+            None => return ::mbus_async::server::ModbusResponse::exception(
+                #fc,
+                ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+            ),
+        };
     }
 }
 
@@ -2376,6 +2415,935 @@ fn validate_contiguous_reg_addresses(
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// #[async_modbus_app] — async server handler macro
+// ---------------------------------------------------------------------------
+
+/// Async variant of `#[modbus_app]`.
+///
+/// Generates the same sync split-trait impls as `#[modbus_app]` **plus** an
+/// `impl ::mbus_async::server::AsyncAppHandler for STRUCT` with an `async fn handle()`
+/// that dispatches `ModbusRequest` variants through your model fields.
+///
+/// Write hooks declared with `on_write_N = fn` or `on_batch_write = fn` **must** be
+/// `async fn` — the generated code calls them with `.await`.
+///
+/// # Example
+/// ```rust,ignore
+/// #[async_modbus_app(
+///     coils(my_coils, on_write_0 = on_pump_changed),
+///     holding_registers(my_regs),
+/// )]
+/// struct HvacApp {
+///     my_coils: PumpCoils,
+///     my_regs:  TempRegisters,
+/// }
+///
+/// impl HvacApp {
+///     async fn on_pump_changed(&mut self, addr: u16, old: bool, new: bool)
+///         -> Result<(), MbusError>
+///     { /* ... */ Ok(()) }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn async_modbus_app(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let selected_fields = match parse_modbus_app_args(attr) {
+        Ok(v) => v,
+        Err(err) => return err.to_compile_error().into(),
+    };
+    match expand_async_modbus_app_struct(&input, &selected_fields) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+fn expand_async_modbus_app_struct(
+    input: &ItemStruct,
+    selected_fields: &SelectedAppFields,
+) -> Result<proc_macro2::TokenStream, Error> {
+    // The sync split-trait impls cannot call async hook methods.
+    // Strip single_write_hooks before generating them so the sync impls do plain
+    // reads/writes without hook dispatch.  The async AsyncAppHandler impl (below)
+    // is responsible for calling the async hooks.
+    let sync_fields = SelectedAppFields {
+        holding_registers: WritableGroupConfig {
+            field_idents: selected_fields.holding_registers.field_idents.clone(),
+            on_batch_write: None,
+            single_write_hooks: vec![],
+        },
+        coils: WritableGroupConfig {
+            field_idents: selected_fields.coils.field_idents.clone(),
+            on_batch_write: None,
+            single_write_hooks: vec![],
+        },
+        input_registers: selected_fields.input_registers.clone(),
+        discrete_inputs: selected_fields.discrete_inputs.clone(),
+    };
+    // Generate sync split-trait impls (hook-free).
+    let sync_tokens = expand_modbus_app_struct(input, &sync_fields)?;
+    // Generate the additional AsyncAppHandler impl (with async hooks).
+    let async_impl = generate_async_handler_impl(input, selected_fields)?;
+    Ok(quote! {
+        #sync_tokens
+        #async_impl
+    })
+}
+
+// ── Field group collection helper ────────────────────────────────────────────
+
+fn collect_group_fields_for_async(
+    named_fields: &syn::FieldsNamed,
+    selected: &[Ident],
+    helper_attr: &str,
+    group_name: &str,
+    struct_ident: &Ident,
+) -> Result<Vec<(Ident, syn::Type)>, Error> {
+    let mut out = Vec::new();
+    if !selected.is_empty() {
+        for selected_ident in selected {
+            let mut found: Option<(Ident, syn::Type)> = None;
+            for field in &named_fields.named {
+                if field.ident.as_ref() == Some(selected_ident) {
+                    let ident = field
+                        .ident
+                        .clone()
+                        .ok_or_else(|| Error::new_spanned(field, "field missing ident"))?;
+                    found = Some((ident, field.ty.clone()));
+                    break;
+                }
+            }
+            if let Some(pair) = found {
+                out.push(pair);
+            } else {
+                return Err(Error::new_spanned(
+                    struct_ident,
+                    format!(
+                        "unknown field '{}' in #[async_modbus_app({}(...))]",
+                        selected_ident, group_name
+                    ),
+                ));
+            }
+        }
+    } else {
+        for field in &named_fields.named {
+            if !field.attrs.iter().any(|a| a.path().is_ident(helper_attr)) {
+                continue;
+            }
+            let ident = field
+                .ident
+                .clone()
+                .ok_or_else(|| Error::new_spanned(field, "field missing ident"))?;
+            out.push((ident, field.ty.clone()));
+        }
+    }
+    Ok(out)
+}
+
+// ── Async write route builders ────────────────────────────────────────────────
+
+/// Async FC05 single-coil write route.  Hook calls use `.await`; errors `return` exception.
+fn build_async_write_single_coil_route(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+    single_write_hooks: &[SingleWriteHook],
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+
+        let hook_arms: Vec<proc_macro2::TokenStream> = single_write_hooks
+            .iter()
+            .map(|h| {
+                let addr = h.addr;
+                let hook_fn = &h.hook;
+                quote! {
+                    #addr => {
+                        let mut __old_buf = [0u8; 1];
+                        let _ = <#field_ty as ::mbus_server::CoilMap>::encode(
+                            &self.#field_ident, address, 1u16, &mut __old_buf,
+                        );
+                        let __old_val = (__old_buf[0] & 1u8) != 0u8;
+                        if let Err(__e) = self.#hook_fn(address, __old_val, value).await {
+                            return ::mbus_async::server::ModbusResponse::exception(
+                                ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
+                                mbus_err_to_exception(__e),
+                            );
+                        }
+                        true
+                    }
+                }
+            })
+            .collect();
+
+        let batch_notify_block = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                if !__hook_dispatched {
+                    if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
+                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        if let Err(__e) = self.#batch_fn(address, 1u16, &[__packed]).await {
+                            return ::mbus_async::server::ModbusResponse::exception(
+                                ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
+                                mbus_err_to_exception(__e),
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        route = quote! {
+            if (<#field_ty as ::mbus_server::CoilMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
+                .contains(&address)
+            {
+                let __hook_dispatched: bool = match address {
+                    #(#hook_arms)*
+                    _ => false,
+                };
+                #batch_notify_block
+                if let Err(__e) = <#field_ty as ::mbus_server::CoilMap>::write_single(
+                    &mut self.#field_ident, address, value,
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                wrote = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+/// Async FC0F multiple-coil write route.  Batch hook `.await`-ed before write.
+fn build_async_write_many_coil_route(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+        let fc = quote!(::mbus_core::function_codes::public::FunctionCode::WriteMultipleCoils);
+        let availability = build_available_take_tokens_async(
+            field_ty,
+            quote!(::mbus_server::CoilMap),
+            quote!(remaining_bits),
+            fc.clone(),
+        );
+        let advance_cursor = build_advance_cursor_tokens_async(fc.clone());
+
+        let hook_prelude = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                {
+                    let __packed_len = (take as usize).div_ceil(8);
+                    let mut __packed = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                    for __bit_i in 0usize..(take as usize) {
+                        let __src_pos = bit_offset + __bit_i;
+                        let __src_byte = values[__src_pos / 8];
+                        let __src_bit = (__src_byte >> (__src_pos % 8)) & 1u8;
+                        __packed[__bit_i / 8] |= __src_bit << (__bit_i % 8);
+                    }
+                    if let Err(__e) = self.#batch_fn(cursor, take, &__packed[..__packed_len]).await {
+                        return ::mbus_async::server::ModbusResponse::exception(
+                            ::mbus_core::function_codes::public::FunctionCode::WriteMultipleCoils,
+                            mbus_err_to_exception(__e),
+                        );
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        route = quote! {
+            if (<#field_ty as ::mbus_server::CoilMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::CoilMap>::ADDR_MAX)
+                .contains(&cursor)
+            {
+                #availability
+                #hook_prelude
+                if let Err(__e) = <#field_ty as ::mbus_server::CoilMap>::write_many_from_packed(
+                    &mut self.#field_ident,
+                    cursor,
+                    take,
+                    values,
+                    bit_offset,
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::WriteMultipleCoils,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                #advance_cursor
+                remaining_bits -= take;
+                bit_offset += take as usize;
+                advanced = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+/// Async FC06 single-register write route.
+fn build_async_write_single_register_route(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+    single_write_hooks: &[SingleWriteHook],
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+
+        let hook_arms: Vec<proc_macro2::TokenStream> = single_write_hooks
+            .iter()
+            .map(|h| {
+                let addr = h.addr;
+                let hook_fn = &h.hook;
+                quote! {
+                    #addr => {
+                        let mut __old_buf = [0u8; 2];
+                        let _ = <#field_ty as ::mbus_server::HoldingRegisterMap>::encode(
+                            &self.#field_ident, address, 1u16, &mut __old_buf,
+                        );
+                        let __old_val = u16::from_be_bytes([__old_buf[0], __old_buf[1]]);
+                        if let Err(__e) = self.#hook_fn(address, __old_val, value).await {
+                            return ::mbus_async::server::ModbusResponse::exception(
+                                ::mbus_core::function_codes::public::FunctionCode::WriteSingleRegister,
+                                mbus_err_to_exception(__e),
+                            );
+                        }
+                        true
+                    }
+                }
+            })
+            .collect();
+
+        let batch_notify_block = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                if !__hook_dispatched {
+                    if <#field_ty as ::mbus_server::HoldingRegisterMap>::is_batch_notified(address) {
+                        if let Err(__e) = self.#batch_fn(address, 1u16, &[value]).await {
+                            return ::mbus_async::server::ModbusResponse::exception(
+                                ::mbus_core::function_codes::public::FunctionCode::WriteSingleRegister,
+                                mbus_err_to_exception(__e),
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        route = quote! {
+            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                .contains(&address)
+            {
+                let __hook_dispatched: bool = match address {
+                    #(#hook_arms)*
+                    _ => false,
+                };
+                #batch_notify_block
+                if let Err(__e) = <#field_ty as ::mbus_server::HoldingRegisterMap>::write_single(
+                    &mut self.#field_ident, address, value,
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::WriteSingleRegister,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                wrote = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+/// Async FC10 / FC17-write multiple-register write route.
+///
+/// `fc` controls which function code appears in exception responses — pass
+/// `WriteMultipleRegisters` for FC10 and `ReadWriteMultipleRegisters` for FC17.
+fn build_async_write_many_register_route(
+    fields: &[(Ident, syn::Type)],
+    on_batch_write: Option<&Ident>,
+    fc: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+        let availability = build_available_take_tokens_async(
+            field_ty,
+            quote!(::mbus_server::HoldingRegisterMap),
+            quote!(remaining_values.len() as u16),
+            fc.clone(),
+        );
+        let advance_cursor = build_advance_cursor_tokens_async(fc.clone());
+
+        let hook_prelude = if let Some(batch_fn) = on_batch_write {
+            quote! {
+                if let Err(__e) = self.#batch_fn(cursor, take, &remaining_values[..split]).await {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        #fc,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        route = quote! {
+            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                .contains(&cursor)
+            {
+                #availability
+                let split = take as usize;
+                #hook_prelude
+                if let Err(__e) = <#field_ty as ::mbus_server::HoldingRegisterMap>::write_many(
+                    &mut self.#field_ident,
+                    cursor,
+                    &remaining_values[..split],
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        #fc,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                #advance_cursor
+                remaining_values = &remaining_values[split..];
+                advanced = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+/// Async FC16 (Mask Write Register) route.
+///
+/// Performs read-modify-write: reads the current value, applies AND then OR masks,
+/// and writes the result back.  Formula: `new = (old & and_mask) | (or_mask & !and_mask)`.
+fn build_async_mask_write_register_route(
+    fields: &[(Ident, syn::Type)],
+) -> proc_macro2::TokenStream {
+    let mut route = quote! {{}};
+    for (field_ident, field_ty) in fields.iter().rev() {
+        let inner = route;
+        route = quote! {
+            if (<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MIN
+                ..=<#field_ty as ::mbus_server::HoldingRegisterMap>::ADDR_MAX)
+                .contains(&address)
+            {
+                let mut __rd_buf = [0u8; 2];
+                if let Err(__e) = <#field_ty as ::mbus_server::HoldingRegisterMap>::encode(
+                    &self.#field_ident, address, 1u16, &mut __rd_buf,
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::MaskWriteRegister,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                let __old = u16::from_be_bytes([__rd_buf[0], __rd_buf[1]]);
+                let __new = (__old & and_mask) | (or_mask & !and_mask);
+                if let Err(__e) = <#field_ty as ::mbus_server::HoldingRegisterMap>::write_single(
+                    &mut self.#field_ident, address, __new,
+                ) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::MaskWriteRegister,
+                        mbus_err_to_exception(__e),
+                    );
+                }
+                found = true;
+            } else {
+                #inner
+            }
+        };
+    }
+    route
+}
+
+// ── Main async impl generator ─────────────────────────────────────────────────
+
+fn generate_async_handler_impl(
+    input: &ItemStruct,
+    selected_fields: &SelectedAppFields,
+) -> Result<proc_macro2::TokenStream, Error> {
+    let struct_name = &input.ident;
+    let generics = &input.generics;
+    let where_clause = &generics.where_clause;
+
+    let named_fields = match &input.fields {
+        Fields::Named(n) => n,
+        _ => {
+            return Err(Error::new_spanned(
+                &input.ident,
+                "#[async_modbus_app] requires a struct with named fields",
+            ));
+        }
+    };
+
+    let hr_fields = collect_group_fields_for_async(
+        named_fields,
+        &selected_fields.holding_registers.field_idents,
+        "holding_registers",
+        "holding_registers",
+        struct_name,
+    )?;
+    let ir_fields = collect_group_fields_for_async(
+        named_fields,
+        &selected_fields.input_registers,
+        "input_registers",
+        "input_registers",
+        struct_name,
+    )?;
+    let coil_fields = collect_group_fields_for_async(
+        named_fields,
+        &selected_fields.coils.field_idents,
+        "coils",
+        "coils",
+        struct_name,
+    )?;
+    let discrete_input_fields = collect_group_fields_for_async(
+        named_fields,
+        &selected_fields.discrete_inputs,
+        "discrete_inputs",
+        "discrete_inputs",
+        struct_name,
+    )?;
+
+    // ── Read routes (use existing sync builders; `?` works inside a closure) ─
+
+    let coil_read_route = build_segmented_coil_read_route(&coil_fields);
+    let di_read_route = build_segmented_discrete_input_read_route(&discrete_input_fields);
+    let hr_read_route = build_segmented_read_route(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
+    let ir_read_route = build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
+
+    // ── Async write routes ────────────────────────────────────────────────────
+
+    let coil_write_single_route = build_async_write_single_coil_route(
+        &coil_fields,
+        selected_fields.coils.on_batch_write.as_ref(),
+        &selected_fields.coils.single_write_hooks,
+    );
+    let coil_write_many_route = build_async_write_many_coil_route(
+        &coil_fields,
+        selected_fields.coils.on_batch_write.as_ref(),
+    );
+    let hr_write_single_route = build_async_write_single_register_route(
+        &hr_fields,
+        selected_fields.holding_registers.on_batch_write.as_ref(),
+        &selected_fields.holding_registers.single_write_hooks,
+    );
+    let hr_write_many_route = build_async_write_many_register_route(
+        &hr_fields,
+        selected_fields.holding_registers.on_batch_write.as_ref(),
+        quote!(::mbus_core::function_codes::public::FunctionCode::WriteMultipleRegisters),
+    );
+    let hr_write_many_route_fc17 = build_async_write_many_register_route(
+        &hr_fields,
+        selected_fields.holding_registers.on_batch_write.as_ref(),
+        quote!(::mbus_core::function_codes::public::FunctionCode::ReadWriteMultipleRegisters),
+    );
+    let hr_mask_write_route = build_async_mask_write_register_route(&hr_fields);
+
+    // ── Match arms (feature-gated, empty if no fields for that group) ─────────
+
+    let read_coils_arm = if !coil_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "coils")]
+            ::mbus_async::server::ModbusRequest::ReadCoils { address, count, .. } => {
+                let total_bytes = (count as usize).div_ceil(8);
+                let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                out[..total_bytes].fill(0);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let byte_width = |c: u16| (c as usize).div_ceil(8);
+                    let mut cursor = address;
+                    let mut remaining = count;
+                    let mut bit_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #coil_read_route
+                        if !advanced {
+                            return Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    let _ = byte_width;
+                    Ok(())
+                })();
+                match result {
+                    Ok(()) => ::mbus_async::server::ModbusResponse::packed_bits(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadCoils,
+                        &out[..total_bytes],
+                    ),
+                    Err(__e) => ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadCoils,
+                        mbus_err_to_exception(__e),
+                    ),
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let write_single_coil_arm = if !coil_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "coils")]
+            ::mbus_async::server::ModbusRequest::WriteSingleCoil { address, value, .. } => {
+                let mut wrote = false;
+                #coil_write_single_route
+                if !wrote {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
+                        ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                    );
+                }
+                ::mbus_async::server::ModbusResponse::echo_coil(address, value)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let write_multiple_coils_arm = if !coil_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "coils")]
+            ::mbus_async::server::ModbusRequest::WriteMultipleCoils { address, count, ref data, .. } => {
+                let values: &[u8] = data.as_slice();
+                let mut cursor = address;
+                let mut remaining_bits = count;
+                let mut bit_offset = 0usize;
+                while remaining_bits > 0 {
+                    let mut advanced = false;
+                    #coil_write_many_route
+                    if !advanced {
+                        return ::mbus_async::server::ModbusResponse::exception(
+                            ::mbus_core::function_codes::public::FunctionCode::WriteMultipleCoils,
+                            ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                        );
+                    }
+                }
+                ::mbus_async::server::ModbusResponse::echo_multi_write(
+                    ::mbus_core::function_codes::public::FunctionCode::WriteMultipleCoils,
+                    address,
+                    count,
+                )
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let read_discrete_inputs_arm = if !discrete_input_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "discrete-inputs")]
+            ::mbus_async::server::ModbusRequest::ReadDiscreteInputs { address, count, .. } => {
+                let total_bytes = (count as usize).div_ceil(8);
+                let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                out[..total_bytes].fill(0);
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let byte_width = |c: u16| (c as usize).div_ceil(8);
+                    let _ = byte_width;
+                    let mut cursor = address;
+                    let mut remaining = count;
+                    let mut bit_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #di_read_route
+                        if !advanced {
+                            return Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    Ok(())
+                })();
+                match result {
+                    Ok(()) => ::mbus_async::server::ModbusResponse::packed_bits(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadDiscreteInputs,
+                        &out[..total_bytes],
+                    ),
+                    Err(__e) => ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadDiscreteInputs,
+                        mbus_err_to_exception(__e),
+                    ),
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let read_holding_registers_arm = if !hr_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::ReadHoldingRegisters { address, count, .. } => {
+                let total_bytes = count as usize * 2;
+                let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let byte_width = |q: u16| q as usize * 2;
+                    let mut cursor = address;
+                    let mut remaining = count;
+                    let mut write_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #hr_read_route
+                        if !advanced {
+                            return Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    let _ = byte_width;
+                    Ok(())
+                })();
+                match result {
+                    Ok(()) => ::mbus_async::server::ModbusResponse::packed_bits(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadHoldingRegisters,
+                        &out[..total_bytes],
+                    ),
+                    Err(__e) => ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadHoldingRegisters,
+                        mbus_err_to_exception(__e),
+                    ),
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let write_single_register_arm = if !hr_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::WriteSingleRegister { address, value, .. } => {
+                let mut wrote = false;
+                #hr_write_single_route
+                if !wrote {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::WriteSingleRegister,
+                        ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                    );
+                }
+                ::mbus_async::server::ModbusResponse::echo_register(address, value)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let write_multiple_registers_arm = if !hr_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::WriteMultipleRegisters { address, count, ref data, .. } => {
+                // Decode raw BE bytes into u16 words.
+                let byte_count = count as usize * 2;
+                let raw = &data[..byte_count.min(data.len())];
+                let mut decoded: heapless::Vec<u16, 125> = heapless::Vec::new();
+                for chunk in raw.chunks_exact(2) {
+                    let _ = decoded.push(u16::from_be_bytes([chunk[0], chunk[1]]));
+                }
+                let mut cursor = address;
+                let mut remaining_values: &[u16] = &decoded;
+                while !remaining_values.is_empty() {
+                    let mut advanced = false;
+                    #hr_write_many_route
+                    if !advanced {
+                        return ::mbus_async::server::ModbusResponse::exception(
+                            ::mbus_core::function_codes::public::FunctionCode::WriteMultipleRegisters,
+                            ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                        );
+                    }
+                }
+                ::mbus_async::server::ModbusResponse::echo_multi_write(
+                    ::mbus_core::function_codes::public::FunctionCode::WriteMultipleRegisters,
+                    address,
+                    count,
+                )
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let mask_write_register_arm = if !hr_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::MaskWriteRegister { address, and_mask, or_mask, .. } => {
+                let mut found = false;
+                #hr_mask_write_route
+                if !found {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::MaskWriteRegister,
+                        ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                    );
+                }
+                ::mbus_async::server::ModbusResponse::echo_mask_write(address, and_mask, or_mask)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let read_write_multiple_registers_arm = if !hr_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::ReadWriteMultipleRegisters {
+                read_address, read_count, write_address, write_count, ref data, ..
+            } => {
+                // Validate quantities (per Modbus spec).
+                if !(1u16..=121).contains(&write_count) || !(1u16..=125).contains(&read_count) {
+                    return ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadWriteMultipleRegisters,
+                        ::mbus_core::errors::ExceptionCode::IllegalDataValue,
+                    );
+                }
+                // Decode write values from big-endian bytes.
+                let byte_count = write_count as usize * 2;
+                let raw = &data[..byte_count.min(data.len())];
+                let mut decoded: heapless::Vec<u16, 121> = heapless::Vec::new();
+                for chunk in raw.chunks_exact(2) {
+                    let _ = decoded.push(u16::from_be_bytes([chunk[0], chunk[1]]));
+                }
+                // Write phase (spec mandates write before read).
+                {
+                    let mut cursor = write_address;
+                    let mut remaining_values: &[u16] = &decoded;
+                    while !remaining_values.is_empty() {
+                        let mut advanced = false;
+                        #hr_write_many_route_fc17
+                        if !advanced {
+                            return ::mbus_async::server::ModbusResponse::exception(
+                                ::mbus_core::function_codes::public::FunctionCode::ReadWriteMultipleRegisters,
+                                ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
+                            );
+                        }
+                    }
+                }
+                // Read phase.
+                let total_bytes = read_count as usize * 2;
+                let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let byte_width = |q: u16| q as usize * 2;
+                    let mut cursor = read_address;
+                    let mut remaining = read_count;
+                    let mut write_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #hr_read_route
+                        if !advanced {
+                            return Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    let _ = byte_width;
+                    Ok(())
+                })();
+                match result {
+                    Ok(()) => ::mbus_async::server::ModbusResponse::packed_bits(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadWriteMultipleRegisters,
+                        &out[..total_bytes],
+                    ),
+                    Err(__e) => ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadWriteMultipleRegisters,
+                        mbus_err_to_exception(__e),
+                    ),
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let read_input_registers_arm = if !ir_fields.is_empty() {
+        quote! {
+            #[cfg(feature = "registers")]
+            ::mbus_async::server::ModbusRequest::ReadInputRegisters { address, count, .. } => {
+                let total_bytes = count as usize * 2;
+                let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
+                let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
+                    let byte_width = |q: u16| q as usize * 2;
+                    let mut cursor = address;
+                    let mut remaining = count;
+                    let mut write_offset = 0usize;
+                    while remaining > 0 {
+                        let mut advanced = false;
+                        #ir_read_route
+                        if !advanced {
+                            return Err(::mbus_core::errors::MbusError::InvalidAddress);
+                        }
+                    }
+                    let _ = byte_width;
+                    Ok(())
+                })();
+                match result {
+                    Ok(()) => ::mbus_async::server::ModbusResponse::packed_bits(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadInputRegisters,
+                        &out[..total_bytes],
+                    ),
+                    Err(__e) => ::mbus_async::server::ModbusResponse::exception(
+                        ::mbus_core::function_codes::public::FunctionCode::ReadInputRegisters,
+                        mbus_err_to_exception(__e),
+                    ),
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    Ok(quote! {
+        impl #generics ::mbus_async::server::AsyncAppHandler for #struct_name #generics #where_clause {
+            fn handle(
+                &mut self,
+                req: ::mbus_async::server::ModbusRequest,
+            ) -> impl ::std::future::Future<Output = ::mbus_async::server::ModbusResponse> + Send {
+                #[allow(unused)]
+                fn mbus_err_to_exception(
+                    e: ::mbus_core::errors::MbusError,
+                ) -> ::mbus_core::errors::ExceptionCode {
+                    match e {
+                        ::mbus_core::errors::MbusError::InvalidAddress
+                        | ::mbus_core::errors::MbusError::InvalidSlaveAddress => {
+                            ::mbus_core::errors::ExceptionCode::IllegalDataAddress
+                        }
+                        ::mbus_core::errors::MbusError::InvalidQuantity
+                        | ::mbus_core::errors::MbusError::InvalidByteCount
+                        | ::mbus_core::errors::MbusError::InvalidValue => {
+                            ::mbus_core::errors::ExceptionCode::IllegalDataValue
+                        }
+                        _ => ::mbus_core::errors::ExceptionCode::ServerDeviceFailure,
+                    }
+                }
+
+                async move {
+                    match req {
+                        #read_coils_arm
+                        #write_single_coil_arm
+                        #write_multiple_coils_arm
+                        #read_discrete_inputs_arm
+                        #read_holding_registers_arm
+                        #write_single_register_arm
+                        #write_multiple_registers_arm
+                        #mask_write_register_arm
+                        #read_write_multiple_registers_arm
+                        #read_input_registers_arm
+                        _ => ::mbus_async::server::ModbusResponse::NoResponse,
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[cfg(test)]
