@@ -1,10 +1,11 @@
 # mbus-async
 
-An async facade for the `modbus-rs` client stack.
+A pure-async Tokio client for Modbus TCP and serial.
 
-`mbus-async` wraps the existing poll-driven `mbus-client` state machine in a Tokio-compatible
-`.await` API. You get familiar `async/await` ergonomics without replacing the battle-tested
-synchronous protocol core.
+`mbus-async` drives Modbus communication natively in a Tokio task — no worker threads, no
+poll loops. Each request is a `Future` that resolves when the server responds. The transport
+layer is owned by a background Tokio task and communicates with the public API through lock-free
+channels.
 
 ## TCP Quick Start
 
@@ -12,11 +13,11 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4", features = ["async"] }
+modbus-rs = { version = "0.6", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
-```rust
+```rust,no_run
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
@@ -42,13 +43,13 @@ async fn main() -> anyhow::Result<()> {
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4", default-features = false, features = [
+modbus-rs = { version = "0.6", default-features = false, features = [
     "async", "serial-rtu", "coils", "registers"
 ] }
 tokio = { version = "1", features = ["full"] }
 ```
 
-```rust
+```rust,no_run
 use modbus_rs::mbus_async::AsyncSerialClient;
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
@@ -90,30 +91,39 @@ async fn main() -> anyhow::Result<()> {
 │  Your async code                                                │
 │  client.read_holding_registers(1, 0, 10).await?                 │
 └─────────────────────────┬───────────────────────────────────────┘
-                          │ WorkerCommand (mpsc)
+                          │ TaskCommand::Request (mpsc)
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Worker thread (std::thread)                                    │
-│  - receives WorkerCommand                                       │
-│  - calls ClientServices::<_, _, N> sync API                     │
-│  - polls state machine in a tight loop                          │
-│  - fires oneshot channel when response arrives                  │
+│  ClientTask  (Tokio task — tokio::spawn)                        │
+│                                                                 │
+│  tokio::select! {                                               │
+│    frame  ← transport.recv_frame()   (TCP / serial)            │
+│    cmd    ← mpsc::Receiver<TaskCommand>                         │
+│  }                                                              │
+│                                                                 │
+│  pending: HashMap<txn_id, (request, oneshot::Sender)>           │
+│  queued:  VecDeque<TaskCommand>   (if in_flight == N)           │
 └─────────────────────────┬───────────────────────────────────────┘
-                          │ Tokio oneshot resolved
+                          │ oneshot resolved
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Your async code resumes with the typed result                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Each call gets a unique transaction id. Multiple concurrent calls can be in flight
-simultaneously.
+1. `new()` / `new_rtu()` spawns a Tokio task (`tokio::spawn(task.run())`).
+2. Each request method creates a `oneshot` channel, enqueues a `TaskCommand::Request`, and
+   `await`s the oneshot receiver.
+3. The task drives `tokio::select!` between receiving frames from the transport and receiving
+   new commands from the public API.
+4. On a complete response frame the task matches it to the pending entry by transaction id and
+   resolves the caller's oneshot.
+5. `has_pending_requests()` is a **synchronous** check (reads a `watch` channel — no `.await`).
+6. Dropping all handles closes the mpsc channel; the task exits cleanly.
 
-TCP uses a compile-time pipeline depth const generic on `AsyncTcpClient<const N: usize = 9>`.
-The default is `9` via `AsyncTcpClient::new(...)`, and you can override it at compile time via
-`AsyncTcpClient::<N>::new_with_pipeline(...)`.
+TCP uses a compile-time pipeline depth `N` (`AsyncTcpClient<const N: usize = 9>`).  
+Serial is always depth 1 (request/reply protocol).
 
-Serial remains request/reply oriented and defaults to `1` in-flight request.
 
 ## Features
 
@@ -178,51 +188,85 @@ Each constructor validates that `ModbusSerialConfig::mode` matches the construct
 
 Default pipeline (`AsyncTcpClient<9>`) constructors:
 
-| Constructor | Pipeline | Poll Interval |
-|---|---|---|
-| `AsyncTcpClient::new(host, port)` | `9` | default (`20ms`) |
-| `AsyncTcpClient::new_with_poll_interval(host, port, interval)` | `9` | custom |
-| `AsyncTcpClient::new_with_config(tcp_config, interval)` | `9` | custom |
+| Constructor | Notes |
+|---|---|
+| `AsyncTcpClient::new(host, port)` | Pipeline depth 9 |
+| `AsyncTcpClient::new_with_poll_interval(host, port, interval)` | `poll_interval` ignored (pure-async) |
+| `AsyncTcpClient::new_with_config(tcp_config, interval)` | Full `ModbusTcpConfig` |
 
 Custom pipeline (`AsyncTcpClient<N>`) constructors:
 
-| Constructor | Pipeline | Poll Interval |
-|---|---|---|
-| `AsyncTcpClient::<N>::new_with_pipeline(host, port)` | `N` | default (`20ms`) |
-| `AsyncTcpClient::<N>::new_with_pipeline_and_poll_interval(host, port, interval)` | `N` | custom |
-| `AsyncTcpClient::<N>::new_with_config_and_pipeline(tcp_config, interval)` | `N` | custom |
+| Constructor | Notes |
+|---|---|
+| `AsyncTcpClient::<N>::new_with_pipeline(host, port)` | Compile-time depth `N` |
+| `AsyncTcpClient::<N>::new_with_pipeline_and_poll_interval(host, port, interval)` | `poll_interval` ignored |
+| `AsyncTcpClient::<N>::new_with_config_and_pipeline(tcp_config, interval)` | Full config + depth `N` |
 
 ## Error Handling
 
-```rust
+```rust,ignore
 use modbus_rs::mbus_async::AsyncError;
 
 match client.read_holding_registers(1, 0, 10).await {
     Ok(regs) => { /* use regs */ }
-    Err(AsyncError::Mbus(e)) => eprintln!("Modbus error: {}", e),
-    Err(AsyncError::WorkerClosed) => eprintln!("worker thread is gone"),
-    Err(AsyncError::UnexpectedResponseType) => eprintln!("internal protocol mismatch"),
+    Err(AsyncError::Mbus(e)) => eprintln!("Modbus error: {e}"),
+    Err(AsyncError::WorkerClosed) => eprintln!("background task exited"),
+    Err(AsyncError::UnexpectedResponseType) => eprintln!("internal routing mismatch"),
+    Err(AsyncError::Timeout) => eprintln!("per-request timeout elapsed"),
 }
 ```
 
 ## Concurrency
 
-Multiple concurrent `.await` calls are supported. Each call gets an independent
-transaction id and Tokio oneshot channel. Responses are routed back to the correct
-caller by transaction id when the worker's `AsyncApp` callback fires.
+Multiple concurrent `.await` calls are supported. Each gets an independent transaction id
+and `oneshot` channel. The background Tokio task routes responses back by transaction id.
 
-Under TCP the underlying sync client pipelines up to `N` simultaneous requests
-(default: `9`).
-Under serial, only one request can be outstanding at a time (Modbus serial is
-inherently request/reply).
+- **TCP**: up to `N` requests in-flight simultaneously (default `N = 9`). Excess requests
+  are queued internally and dispatched as pipeline slots free up.
+- **Serial**: exactly 1 in-flight request (Modbus serial is request/reply).
 
 Example with custom TCP pipeline depth:
 
-```rust
+```rust,ignore
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 let client = AsyncTcpClient::<16>::new_with_pipeline("127.0.0.1", 502)?;
 client.connect().await?;
+```
+
+## Per-Request Timeout
+
+Set a deadline applied to all subsequent requests:
+
+```rust,ignore
+use std::time::Duration;
+
+client.set_request_timeout(Duration::from_millis(500));
+
+// Returns AsyncError::Timeout after 500ms with no response.
+// The background task automatically drains the pipeline and closes the
+// transport — call client.connect().await? to recover.
+let result = client.read_multiple_coils(1, 0, 8).await;
+
+client.clear_request_timeout(); // back to "wait forever"
+```
+
+## Checking Pending Requests
+
+`has_pending_requests()` is **synchronous** — no `.await` required:
+
+```rust,ignore
+if client.has_pending_requests() {
+    println!("requests still in flight");
+}
+```
+
+## Reconnect
+
+After a transport error or timeout, call `connect()` again to restore the connection:
+
+```rust,ignore
+client.connect().await?; // safe to call repeatedly
 ```
 
 ## Traffic Callback (optional `traffic` feature)
@@ -231,7 +275,7 @@ Enable `traffic` when you need raw frame observability in async apps:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.4", default-features = false, features = [
+modbus-rs = { version = "0.6", default-features = false, features = [
     "async", "traffic", "tcp", "coils"
 ] }
 tokio = { version = "1", features = ["full"] }
