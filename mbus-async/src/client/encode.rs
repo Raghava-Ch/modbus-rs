@@ -28,6 +28,8 @@ use mbus_core::models::file_record::SubRequest;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 
+use crate::client::command::ClientRequest;
+
 
 // ─── Coils (FC 01 / 05 / 0F) ─────────────────────────────────────────────────
 
@@ -348,4 +350,106 @@ pub(crate) fn encode_report_server_id(
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_empty(FunctionCode::ReportServerId);
     common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+}
+
+// ─── Top-level dispatcher ─────────────────────────────────────────────────────
+
+/// Encodes a [`ClientRequest`] into a complete ADU frame using the given `txn_id`.
+///
+/// For serial-only function codes (FC 07 / 08 / 0B / 0C / 11) the `txn_id` is
+/// passed through but the serial ADU format does not include it on the wire.
+///
+/// [`ClientRequest`]: crate::client::command::ClientRequest
+pub(crate) fn encode_request(
+    txn_id: u16,
+    req: &ClientRequest,
+    transport_type: TransportType,
+) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    match req {
+        #[cfg(feature = "coils")]
+        ClientRequest::ReadMultipleCoils { unit, address, quantity } =>
+            encode_read_coils(txn_id, *unit, *address, *quantity, transport_type),
+
+        #[cfg(feature = "coils")]
+        ClientRequest::WriteSingleCoil { unit, address, value } =>
+            encode_write_single_coil(txn_id, *unit, *address, *value, transport_type),
+
+        #[cfg(feature = "coils")]
+        ClientRequest::WriteMultipleCoils { unit, address, coils } =>
+            encode_write_multiple_coils(txn_id, *unit, *address, coils, transport_type),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::ReadHoldingRegisters { unit, address, quantity } =>
+            encode_read_holding_registers(txn_id, *unit, *address, *quantity, transport_type),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::ReadInputRegisters { unit, address, quantity } =>
+            encode_read_input_registers(txn_id, *unit, *address, *quantity, transport_type),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::WriteSingleRegister { unit, address, value } =>
+            encode_write_single_register(txn_id, *unit, *address, *value, transport_type),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::WriteMultipleRegisters { unit, address, values } =>
+            encode_write_multiple_registers(txn_id, *unit, *address, values, transport_type),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::ReadWriteMultipleRegisters {
+            unit, read_address, read_quantity, write_address, write_values,
+        } => encode_read_write_multiple_registers(
+            txn_id, *unit, *read_address, *read_quantity, *write_address,
+            write_values, transport_type,
+        ),
+
+        #[cfg(feature = "registers")]
+        ClientRequest::MaskWriteRegister { unit, address, and_mask, or_mask } =>
+            encode_mask_write_register(txn_id, *unit, *address, *and_mask, *or_mask, transport_type),
+
+        #[cfg(feature = "discrete-inputs")]
+        ClientRequest::ReadDiscreteInputs { unit, address, quantity } =>
+            encode_read_discrete_inputs(txn_id, *unit, *address, *quantity, transport_type),
+
+        #[cfg(feature = "fifo")]
+        ClientRequest::ReadFifoQueue { unit, address } =>
+            encode_read_fifo_queue(txn_id, *unit, *address, transport_type),
+
+        #[cfg(feature = "file-record")]
+        ClientRequest::ReadFileRecord { unit, sub_request } =>
+            encode_read_file_record(txn_id, *unit, sub_request, transport_type),
+
+        #[cfg(feature = "file-record")]
+        ClientRequest::WriteFileRecord { unit, sub_request } =>
+            encode_write_file_record(txn_id, *unit, sub_request, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::ReadDeviceIdentification { unit, read_device_id_code, object_id } =>
+            encode_read_device_identification(
+                txn_id, *unit, *read_device_id_code, *object_id, transport_type,
+            ),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::EncapsulatedInterfaceTransport { unit, mei_type, data } =>
+            encode_encapsulated_interface_transport(txn_id, *unit, *mei_type, data, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::ReadExceptionStatus { unit } =>
+            encode_read_exception_status(*unit, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::Diagnostics { unit, sub_function, data } =>
+            encode_diagnostics(*unit, *sub_function, data, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::GetCommEventCounter { unit } =>
+            encode_get_comm_event_counter(*unit, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::GetCommEventLog { unit } =>
+            encode_get_comm_event_log(*unit, transport_type),
+
+        #[cfg(feature = "diagnostics")]
+        ClientRequest::ReportServerId { unit } =>
+            encode_report_server_id(*unit, transport_type),
+    }
 }

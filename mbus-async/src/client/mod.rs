@@ -19,6 +19,7 @@ pub(crate) mod command;
 pub(crate) mod response;
 pub(crate) mod encode;
 pub(crate) mod decode;
+pub(crate) mod task;
 #[cfg(feature = "traffic")]
 pub mod notifier;
 
