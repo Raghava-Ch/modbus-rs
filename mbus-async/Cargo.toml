@@ -17,7 +17,7 @@ mbus-client = { workspace = true }
 mbus-network = { workspace = true, optional = true }
 mbus-serial = { workspace = true, optional = true }
 heapless = { workspace = true }
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "macros"] }
 log = { workspace = true, optional = true }
 
 [dev-dependencies]
