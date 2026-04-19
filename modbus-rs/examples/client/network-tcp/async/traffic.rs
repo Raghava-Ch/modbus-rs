@@ -14,12 +14,30 @@ impl AsyncClientNotifier for FrameLogger {
         println!("[RX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
     }
 
-    fn on_tx_error(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, error: MbusError, frame: &[u8]) {
-        println!("[TX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}", unit.get());
+    fn on_tx_error(
+        &mut self,
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
+    ) {
+        println!(
+            "[TX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}",
+            unit.get()
+        );
     }
 
-    fn on_rx_error(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, error: MbusError, frame: &[u8]) {
-        println!("[RX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}", unit.get());
+    fn on_rx_error(
+        &mut self,
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
+    ) {
+        println!(
+            "[RX ERR] txn={txn_id} unit={} error={error:?} bytes={frame:02X?}",
+            unit.get()
+        );
     }
 }
 

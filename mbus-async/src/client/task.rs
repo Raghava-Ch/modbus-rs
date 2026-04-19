@@ -37,9 +37,7 @@ use heapless::Vec as HVec;
 use tokio::sync::{mpsc, watch};
 
 use mbus_core::{
-    data_unit::common::MAX_ADU_FRAME_LEN,
-    errors::MbusError,
-    transport::AsyncTransport,
+    data_unit::common::MAX_ADU_FRAME_LEN, errors::MbusError, transport::AsyncTransport,
 };
 
 use crate::client::command::{ClientRequest, ResponseSender, TaskCommand};
@@ -210,7 +208,13 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             Ok(()) => {
                 #[cfg(feature = "traffic")]
                 self.fire_tx_frame(txn_id, unit, &frame);
-                self.pending.insert(txn_id, PendingEntry { resp_tx, request: params });
+                self.pending.insert(
+                    txn_id,
+                    PendingEntry {
+                        resp_tx,
+                        request: params,
+                    },
+                );
                 self.in_flight += 1;
                 self.update_pending_count();
             }
@@ -239,17 +243,17 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         };
 
         let key = self.resolve_key(decoded_txn_id);
-        if let Some(k) = key {
-            if let Some(entry) = self.pending.remove(&k) {
-                self.in_flight = self.in_flight.saturating_sub(1);
-                self.update_pending_count();
+        if let Some(k) = key
+            && let Some(entry) = self.pending.remove(&k)
+        {
+            self.in_flight = self.in_flight.saturating_sub(1);
+            self.update_pending_count();
 
-                #[cfg(feature = "traffic")]
-                self.fire_rx_frame(decoded_txn_id, entry.request.unit(), frame);
+            #[cfg(feature = "traffic")]
+            self.fire_rx_frame(decoded_txn_id, entry.request.unit(), frame);
 
-                let result = inner.map(|response| fix_up_response(response, &entry.request));
-                let _ = entry.resp_tx.send(result);
-            }
+            let result = inner.map(|response| fix_up_response(response, &entry.request));
+            let _ = entry.resp_tx.send(result);
         }
         // Unsolicited frame → discard silently.
     }
@@ -260,7 +264,9 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     /// - Serial (txn_id == 0): take the first (and only for N=1) pending entry.
     fn resolve_key(&self, decoded_txn_id: u16) -> Option<u16> {
         if decoded_txn_id != 0 {
-            self.pending.contains_key(&decoded_txn_id).then_some(decoded_txn_id)
+            self.pending
+                .contains_key(&decoded_txn_id)
+                .then_some(decoded_txn_id)
         } else {
             // Serial fallback — any pending entry is the one (PIPELINE=1 enforces this).
             self.pending.keys().next().copied()
@@ -269,12 +275,12 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
 
     /// Fails the pending entry best matching `raw_txn_id` with `error`.
     fn fail_entry(&mut self, raw_txn_id: u16, error: MbusError) {
-        if let Some(k) = self.resolve_key(raw_txn_id) {
-            if let Some(entry) = self.pending.remove(&k) {
-                self.in_flight = self.in_flight.saturating_sub(1);
-                self.update_pending_count();
-                let _ = entry.resp_tx.send(Err(error));
-            }
+        if let Some(k) = self.resolve_key(raw_txn_id)
+            && let Some(entry) = self.pending.remove(&k)
+        {
+            self.in_flight = self.in_flight.saturating_sub(1);
+            self.update_pending_count();
+            let _ = entry.resp_tx.send(Err(error));
         }
     }
 
@@ -329,10 +335,10 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         frame: &[u8],
     ) {
         // Non-blocking try_lock: skip notification if the lock is contested.
-        if let Ok(mut g) = self.notifier.try_lock() {
-            if let Some(n) = g.as_mut() {
-                n.on_tx_frame(txn_id, unit, frame);
-            }
+        if let Ok(mut g) = self.notifier.try_lock()
+            && let Some(n) = g.as_mut()
+        {
+            n.on_tx_frame(txn_id, unit, frame);
         }
     }
 
@@ -343,10 +349,10 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         unit: mbus_core::transport::UnitIdOrSlaveAddr,
         err: MbusError,
     ) {
-        if let Ok(mut g) = self.notifier.try_lock() {
-            if let Some(n) = g.as_mut() {
-                n.on_tx_error(txn_id, unit, err, &[]);
-            }
+        if let Ok(mut g) = self.notifier.try_lock()
+            && let Some(n) = g.as_mut()
+        {
+            n.on_tx_error(txn_id, unit, err, &[]);
         }
     }
 
@@ -357,10 +363,10 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         unit: mbus_core::transport::UnitIdOrSlaveAddr,
         frame: &[u8],
     ) {
-        if let Ok(mut g) = self.notifier.try_lock() {
-            if let Some(n) = g.as_mut() {
-                n.on_rx_frame(txn_id, unit, frame);
-            }
+        if let Ok(mut g) = self.notifier.try_lock()
+            && let Some(n) = g.as_mut()
+        {
+            n.on_rx_frame(txn_id, unit, frame);
         }
     }
 
@@ -446,7 +452,12 @@ fn fix_up_response(
     match (response, original) {
         // ── FC01: Read Multiple Coils ─────────────────────────────────────
         #[cfg(feature = "coils")]
-        (R::Coils(raw), Q::ReadMultipleCoils { address, quantity, .. }) => {
+        (
+            R::Coils(raw),
+            Q::ReadMultipleCoils {
+                address, quantity, ..
+            },
+        ) => {
             use mbus_core::models::coil::Coils;
             Coils::new(*address, *quantity)
                 .and_then(|c| c.with_values(raw.values(), *quantity))
@@ -456,7 +467,12 @@ fn fix_up_response(
 
         // ── FC02: Read Discrete Inputs ────────────────────────────────────
         #[cfg(feature = "discrete-inputs")]
-        (R::DiscreteInputs(raw), Q::ReadDiscreteInputs { address, quantity, .. }) => {
+        (
+            R::DiscreteInputs(raw),
+            Q::ReadDiscreteInputs {
+                address, quantity, ..
+            },
+        ) => {
             use mbus_core::models::discrete_input::DiscreteInputs;
             DiscreteInputs::new(*address, *quantity)
                 .and_then(|d| d.with_values(raw.values(), *quantity))
@@ -466,7 +482,12 @@ fn fix_up_response(
 
         // ── FC03: Read Holding Registers ──────────────────────────────────
         #[cfg(feature = "registers")]
-        (R::Registers(raw), Q::ReadHoldingRegisters { address, quantity, .. }) => {
+        (
+            R::Registers(raw),
+            Q::ReadHoldingRegisters {
+                address, quantity, ..
+            },
+        ) => {
             use mbus_core::models::register::Registers;
             Registers::new(*address, *quantity)
                 .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
@@ -476,7 +497,12 @@ fn fix_up_response(
 
         // ── FC04: Read Input Registers ────────────────────────────────────
         #[cfg(feature = "registers")]
-        (R::Registers(raw), Q::ReadInputRegisters { address, quantity, .. }) => {
+        (
+            R::Registers(raw),
+            Q::ReadInputRegisters {
+                address, quantity, ..
+            },
+        ) => {
             use mbus_core::models::register::Registers;
             Registers::new(*address, *quantity)
                 .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
@@ -497,10 +523,7 @@ fn fix_up_response(
             use mbus_core::models::register::Registers;
             Registers::new(*read_address, *read_quantity)
                 .and_then(|r| {
-                    r.with_values(
-                        &raw.values()[..*read_quantity as usize],
-                        *read_quantity,
-                    )
+                    r.with_values(&raw.values()[..*read_quantity as usize], *read_quantity)
                 })
                 .map(R::Registers)
                 .unwrap_or_else(|_| R::Registers(raw))
@@ -521,5 +544,3 @@ fn fix_up_response(
         (r, _) => r,
     }
 }
-
-

@@ -14,14 +14,14 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "serial-ascii")]
-use mbus_serial::TokioAsciiTransport;
-#[cfg(feature = "serial-rtu")]
-use mbus_serial::TokioRtuTransport;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{AsyncTransport, ModbusConfig};
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use mbus_core::transport::{ModbusSerialConfig, SerialMode};
+#[cfg(feature = "serial-ascii")]
+use mbus_serial::TokioAsciiTransport;
+#[cfg(feature = "serial-rtu")]
+use mbus_serial::TokioRtuTransport;
 use tokio::sync::{mpsc, watch};
 
 use super::{AsyncClientCore, AsyncError};
@@ -58,9 +58,7 @@ impl AsyncSerialClient {
 
     /// Deprecated constructor alias.
     #[cfg(feature = "serial-rtu")]
-    #[deprecated(
-        note = "use AsyncSerialClient::new_rtu(...) and then client.connect().await"
-    )]
+    #[deprecated(note = "use AsyncSerialClient::new_rtu(...) and then client.connect().await")]
     pub fn connect_rtu_with_poll_interval(
         serial_config: ModbusSerialConfig,
         _poll_interval: Duration,
@@ -77,9 +75,7 @@ impl AsyncSerialClient {
 
     /// Deprecated constructor alias.
     #[cfg(feature = "serial-ascii")]
-    #[deprecated(
-        note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await"
-    )]
+    #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
     pub fn connect_ascii_with_poll_interval(
         serial_config: ModbusSerialConfig,
         _poll_interval: Duration,
@@ -176,9 +172,7 @@ impl AsyncSerialClient {
         let slot = Arc::new(std::sync::Mutex::new(Some(transport)));
         let connect_fn: ConnectFactory<T> = Box::new(move || {
             let s = slot.clone();
-            Box::pin(async move {
-                s.lock().unwrap().take().ok_or(MbusError::ConnectionClosed)
-            })
+            Box::pin(async move { s.lock().unwrap().take().ok_or(MbusError::ConnectionClosed) })
         });
 
         spawn_serial_task(connect_fn)
@@ -192,8 +186,7 @@ impl AsyncSerialClient {
 fn spawn_serial_task<T: AsyncTransport + Send + 'static>(
     connect_fn: ConnectFactory<T>,
 ) -> Result<AsyncSerialClient, AsyncError> {
-    let handle = tokio::runtime::Handle::try_current()
-        .map_err(|_| AsyncError::WorkerClosed)?;
+    let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
 

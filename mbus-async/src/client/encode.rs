@@ -13,23 +13,22 @@
 use heapless::Vec;
 
 use mbus_core::{
-    data_unit::common::{self, Pdu, MAX_ADU_FRAME_LEN},
+    data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
     transport::{TransportType, UnitIdOrSlaveAddr},
 };
 
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 #[cfg(feature = "coils")]
 use mbus_core::models::coil::Coils;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::SubRequest;
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 
 use crate::client::command::ClientRequest;
-
 
 // ─── Coils (FC 01 / 05 / 0F) ─────────────────────────────────────────────────
 
@@ -146,10 +145,8 @@ pub(crate) fn encode_write_multiple_registers(
     if !(1..=123).contains(&quantity) {
         return Err(MbusError::InvalidQuantity);
     }
-    let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> = values
-        .iter()
-        .flat_map(|v| v.to_be_bytes())
-        .collect();
+    let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> =
+        values.iter().flat_map(|v| v.to_be_bytes()).collect();
     let pdu = Pdu::build_write_multiple(
         FunctionCode::WriteMultipleRegisters,
         address,
@@ -171,10 +168,8 @@ pub(crate) fn encode_read_write_multiple_registers(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let write_quantity = write_values.len() as u16;
-    let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> = write_values
-        .iter()
-        .flat_map(|v| v.to_be_bytes())
-        .collect();
+    let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> =
+        write_values.iter().flat_map(|v| v.to_be_bytes()).collect();
     let pdu = Pdu::build_read_write_multiple(
         read_address,
         read_quantity,
@@ -373,89 +368,146 @@ pub(crate) fn encode_request(
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     match req {
         #[cfg(feature = "coils")]
-        ClientRequest::ReadMultipleCoils { unit, address, quantity } =>
-            encode_read_coils(txn_id, *unit, *address, *quantity, transport_type),
+        ClientRequest::ReadMultipleCoils {
+            unit,
+            address,
+            quantity,
+        } => encode_read_coils(txn_id, *unit, *address, *quantity, transport_type),
 
         #[cfg(feature = "coils")]
-        ClientRequest::WriteSingleCoil { unit, address, value } =>
-            encode_write_single_coil(txn_id, *unit, *address, *value, transport_type),
+        ClientRequest::WriteSingleCoil {
+            unit,
+            address,
+            value,
+        } => encode_write_single_coil(txn_id, *unit, *address, *value, transport_type),
 
         #[cfg(feature = "coils")]
-        ClientRequest::WriteMultipleCoils { unit, address, coils } =>
-            encode_write_multiple_coils(txn_id, *unit, *address, coils, transport_type),
+        ClientRequest::WriteMultipleCoils {
+            unit,
+            address,
+            coils,
+        } => encode_write_multiple_coils(txn_id, *unit, *address, coils, transport_type),
 
         #[cfg(feature = "registers")]
-        ClientRequest::ReadHoldingRegisters { unit, address, quantity } =>
-            encode_read_holding_registers(txn_id, *unit, *address, *quantity, transport_type),
+        ClientRequest::ReadHoldingRegisters {
+            unit,
+            address,
+            quantity,
+        } => encode_read_holding_registers(txn_id, *unit, *address, *quantity, transport_type),
 
         #[cfg(feature = "registers")]
-        ClientRequest::ReadInputRegisters { unit, address, quantity } =>
-            encode_read_input_registers(txn_id, *unit, *address, *quantity, transport_type),
+        ClientRequest::ReadInputRegisters {
+            unit,
+            address,
+            quantity,
+        } => encode_read_input_registers(txn_id, *unit, *address, *quantity, transport_type),
 
         #[cfg(feature = "registers")]
-        ClientRequest::WriteSingleRegister { unit, address, value } =>
-            encode_write_single_register(txn_id, *unit, *address, *value, transport_type),
+        ClientRequest::WriteSingleRegister {
+            unit,
+            address,
+            value,
+        } => encode_write_single_register(txn_id, *unit, *address, *value, transport_type),
 
         #[cfg(feature = "registers")]
-        ClientRequest::WriteMultipleRegisters { unit, address, values } =>
-            encode_write_multiple_registers(txn_id, *unit, *address, values, transport_type),
+        ClientRequest::WriteMultipleRegisters {
+            unit,
+            address,
+            values,
+        } => encode_write_multiple_registers(txn_id, *unit, *address, values, transport_type),
 
         #[cfg(feature = "registers")]
         ClientRequest::ReadWriteMultipleRegisters {
-            unit, read_address, read_quantity, write_address, write_values,
+            unit,
+            read_address,
+            read_quantity,
+            write_address,
+            write_values,
         } => encode_read_write_multiple_registers(
-            txn_id, *unit, *read_address, *read_quantity, *write_address,
-            write_values, transport_type,
+            txn_id,
+            *unit,
+            *read_address,
+            *read_quantity,
+            *write_address,
+            write_values,
+            transport_type,
         ),
 
         #[cfg(feature = "registers")]
-        ClientRequest::MaskWriteRegister { unit, address, and_mask, or_mask } =>
-            encode_mask_write_register(txn_id, *unit, *address, *and_mask, *or_mask, transport_type),
+        ClientRequest::MaskWriteRegister {
+            unit,
+            address,
+            and_mask,
+            or_mask,
+        } => {
+            encode_mask_write_register(txn_id, *unit, *address, *and_mask, *or_mask, transport_type)
+        }
 
         #[cfg(feature = "discrete-inputs")]
-        ClientRequest::ReadDiscreteInputs { unit, address, quantity } =>
-            encode_read_discrete_inputs(txn_id, *unit, *address, *quantity, transport_type),
+        ClientRequest::ReadDiscreteInputs {
+            unit,
+            address,
+            quantity,
+        } => encode_read_discrete_inputs(txn_id, *unit, *address, *quantity, transport_type),
 
         #[cfg(feature = "fifo")]
-        ClientRequest::ReadFifoQueue { unit, address } =>
-            encode_read_fifo_queue(txn_id, *unit, *address, transport_type),
+        ClientRequest::ReadFifoQueue { unit, address } => {
+            encode_read_fifo_queue(txn_id, *unit, *address, transport_type)
+        }
 
         #[cfg(feature = "file-record")]
-        ClientRequest::ReadFileRecord { unit, sub_request } =>
-            encode_read_file_record(txn_id, *unit, sub_request, transport_type),
+        ClientRequest::ReadFileRecord { unit, sub_request } => {
+            encode_read_file_record(txn_id, *unit, sub_request, transport_type)
+        }
 
         #[cfg(feature = "file-record")]
-        ClientRequest::WriteFileRecord { unit, sub_request } =>
-            encode_write_file_record(txn_id, *unit, sub_request, transport_type),
+        ClientRequest::WriteFileRecord { unit, sub_request } => {
+            encode_write_file_record(txn_id, *unit, sub_request, transport_type)
+        }
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::ReadDeviceIdentification { unit, read_device_id_code, object_id } =>
-            encode_read_device_identification(
-                txn_id, *unit, *read_device_id_code, *object_id, transport_type,
-            ),
+        ClientRequest::ReadDeviceIdentification {
+            unit,
+            read_device_id_code,
+            object_id,
+        } => encode_read_device_identification(
+            txn_id,
+            *unit,
+            *read_device_id_code,
+            *object_id,
+            transport_type,
+        ),
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::EncapsulatedInterfaceTransport { unit, mei_type, data } =>
-            encode_encapsulated_interface_transport(txn_id, *unit, *mei_type, data, transport_type),
+        ClientRequest::EncapsulatedInterfaceTransport {
+            unit,
+            mei_type,
+            data,
+        } => {
+            encode_encapsulated_interface_transport(txn_id, *unit, *mei_type, data, transport_type)
+        }
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::ReadExceptionStatus { unit } =>
-            encode_read_exception_status(*unit, transport_type),
+        ClientRequest::ReadExceptionStatus { unit } => {
+            encode_read_exception_status(*unit, transport_type)
+        }
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::Diagnostics { unit, sub_function, data } =>
-            encode_diagnostics(*unit, *sub_function, data, transport_type),
+        ClientRequest::Diagnostics {
+            unit,
+            sub_function,
+            data,
+        } => encode_diagnostics(*unit, *sub_function, data, transport_type),
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::GetCommEventCounter { unit } =>
-            encode_get_comm_event_counter(*unit, transport_type),
+        ClientRequest::GetCommEventCounter { unit } => {
+            encode_get_comm_event_counter(*unit, transport_type)
+        }
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::GetCommEventLog { unit } =>
-            encode_get_comm_event_log(*unit, transport_type),
+        ClientRequest::GetCommEventLog { unit } => encode_get_comm_event_log(*unit, transport_type),
 
         #[cfg(feature = "diagnostics")]
-        ClientRequest::ReportServerId { unit } =>
-            encode_report_server_id(*unit, transport_type),
+        ClientRequest::ReportServerId { unit } => encode_report_server_id(*unit, transport_type),
     }
 }

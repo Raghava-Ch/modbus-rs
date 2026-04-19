@@ -35,15 +35,17 @@ pub mod async_transport;
 #[cfg(feature = "async")]
 pub use async_transport::AsyncTransport;
 
-mod retry;
 mod config;
 mod error;
-mod unit_id;
+mod retry;
+#[allow(clippy::module_inception)]
 mod transport;
+mod unit_id;
 
-pub use retry::{BackoffStrategy, JitterStrategy, RetryRandomFn};
-pub use config::{BaudRate, DataBits, ModbusConfig, ModbusSerialConfig, ModbusTcpConfig, Parity, SerialMode};
+pub use config::{
+    BaudRate, DataBits, ModbusConfig, ModbusSerialConfig, ModbusTcpConfig, Parity, SerialMode,
+};
 pub use error::{TransportError, TransportType};
-pub use unit_id::{UidSaddrFrom, UnitIdOrSlaveAddr};
+pub use retry::{BackoffStrategy, JitterStrategy, RetryRandomFn};
 pub use transport::{TimeKeeper, Transport};
-
+pub use unit_id::{UidSaddrFrom, UnitIdOrSlaveAddr};

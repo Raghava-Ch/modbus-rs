@@ -216,7 +216,7 @@ Enable with `traffic` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", features = ["async", "traffic"] }
+modbus-rs = { version = "0.7.0", features = ["async", "traffic"] }
 ```
 
 ```rust

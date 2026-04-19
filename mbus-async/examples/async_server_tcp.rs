@@ -19,10 +19,10 @@
 //! ```
 
 use anyhow::Result;
-use mbus_async::server::{AsyncTcpServer, ModbusRequest, ModbusResponse};
+use mbus_async::server::{AsyncTcpServer};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{async_modbus_app, CoilsModel, HoldingRegistersModel};
+use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -116,10 +116,9 @@ async fn run_level1() -> Result<()> {
     let shared = Arc::new(Mutex::new(app));
 
     // This call runs forever; errors from individual sessions are silently dropped.
-    let _: std::convert::Infallible = AsyncTcpServer::serve_shared("127.0.0.1:5502", shared, unit_id(1))
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let _: std::convert::Infallible =
+        AsyncTcpServer::serve_shared("127.0.0.1:5502", shared, unit_id(1))
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
     unreachable!()
 }
-
-

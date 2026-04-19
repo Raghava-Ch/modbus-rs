@@ -33,12 +33,14 @@ use crate::client::response::ClientResponse;
 use mbus_core::models::coil::Coils;
 #[cfg(feature = "discrete-inputs")]
 use mbus_core::models::discrete_input::DiscreteInputs;
-#[cfg(feature = "registers")]
-use mbus_core::models::register::Registers;
 #[cfg(feature = "fifo")]
 use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
-use mbus_core::models::file_record::{MAX_SUB_REQUESTS_PER_PDU, SubRequestParams, FILE_RECORD_REF_TYPE};
+use mbus_core::models::file_record::{
+    FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SubRequestParams,
+};
+#[cfg(feature = "registers")]
+use mbus_core::models::register::Registers;
 #[cfg(feature = "diagnostics")]
 use mbus_core::{
     data_unit::common::MAX_PDU_DATA_LEN,
@@ -70,7 +72,11 @@ pub(crate) fn decode_response(
     // Exception PDU: if error_code is Some, the server returned an exception
     // response.  The exception code byte is the payload.
     if let Some(exception_code) = pdu.error_code() {
-        return Ok((txn_id, unit, Err(MbusError::ModbusException(exception_code))));
+        return Ok((
+            txn_id,
+            unit,
+            Err(MbusError::ModbusException(exception_code)),
+        ));
     }
 
     let response = decode_pdu(pdu)?;
@@ -167,8 +173,7 @@ fn decode_write_multiple_coils(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 fn decode_read_discrete_inputs(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let bcp = pdu.byte_count_payload()?;
     let bit_count = (bcp.byte_count as u16) * 8;
-    let discrete_inputs =
-        DiscreteInputs::new(0, bit_count)?.with_values(bcp.payload, bit_count)?;
+    let discrete_inputs = DiscreteInputs::new(0, bit_count)?.with_values(bcp.payload, bit_count)?;
     Ok(ClientResponse::DiscreteInputs(discrete_inputs))
 }
 
@@ -301,9 +306,7 @@ fn decode_write_file_record(_pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 // ─── Diagnostics decoders ─────────────────────────────────────────────────────
 
 #[cfg(feature = "diagnostics")]
-fn decode_encapsulated_interface_transport(
-    pdu: &Pdu,
-) -> Result<ClientResponse, MbusError> {
+fn decode_encapsulated_interface_transport(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let mtp = pdu.mei_type_payload()?;
     let mei_type_byte = mtp.mei_type_byte;
 

@@ -18,14 +18,14 @@ use tokio::sync::oneshot;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 #[cfg(feature = "coils")]
 use mbus_core::models::coil::Coils;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::SubRequest;
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 
 use crate::client::response::ClientResponse;
 
@@ -142,9 +142,7 @@ pub(crate) enum ClientRequest {
         data: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>,
     },
     #[cfg(feature = "diagnostics")]
-    ReadExceptionStatus {
-        unit: UnitIdOrSlaveAddr,
-    },
+    ReadExceptionStatus { unit: UnitIdOrSlaveAddr },
     #[cfg(feature = "diagnostics")]
     Diagnostics {
         unit: UnitIdOrSlaveAddr,
@@ -152,17 +150,11 @@ pub(crate) enum ClientRequest {
         data: heapless::Vec<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>,
     },
     #[cfg(feature = "diagnostics")]
-    GetCommEventCounter {
-        unit: UnitIdOrSlaveAddr,
-    },
+    GetCommEventCounter { unit: UnitIdOrSlaveAddr },
     #[cfg(feature = "diagnostics")]
-    GetCommEventLog {
-        unit: UnitIdOrSlaveAddr,
-    },
+    GetCommEventLog { unit: UnitIdOrSlaveAddr },
     #[cfg(feature = "diagnostics")]
-    ReportServerId {
-        unit: UnitIdOrSlaveAddr,
-    },
+    ReportServerId { unit: UnitIdOrSlaveAddr },
 }
 
 impl ClientRequest {
@@ -208,6 +200,9 @@ impl ClientRequest {
 /// Command envelope sent from [`AsyncClientCore`] to the background task.
 ///
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
+// `ClientRequest` is 18 KiB on the stack; the enum is transient (sent once over
+// the mpsc channel and immediately consumed), so boxing is unnecessary overhead.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum TaskCommand {
     /// Establish the transport connection.
     Connect {

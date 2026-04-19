@@ -16,12 +16,12 @@
 //! | `serial_client` | [`AsyncSerialClient`] — serial constructor |
 
 pub(crate) mod command;
-pub(crate) mod response;
-pub(crate) mod encode;
 pub(crate) mod decode;
-pub(crate) mod task;
+pub(crate) mod encode;
 #[cfg(feature = "traffic")]
 pub mod notifier;
+pub(crate) mod response;
+pub(crate) mod task;
 
 mod client_core;
 mod network_client;
@@ -29,17 +29,17 @@ mod serial_client;
 
 pub use client_core::AsyncClientCore;
 pub use network_client::AsyncTcpClient;
-pub use serial_client::AsyncSerialClient;
 #[cfg(feature = "traffic")]
 pub use notifier::AsyncClientNotifier;
+pub use serial_client::AsyncSerialClient;
 
 use mbus_core::errors::MbusError;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
-#[cfg(feature = "file-record")]
-pub use mbus_core::models::file_record::{SubRequest, SubRequestParams};
 #[cfg(feature = "diagnostics")]
 pub use mbus_core::models::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
+#[cfg(feature = "file-record")]
+pub use mbus_core::models::file_record::{SubRequest, SubRequestParams};
 
 #[cfg(feature = "diagnostics")]
 /// Diagnostics response payload returned by FC 08.
@@ -99,4 +99,3 @@ impl std::error::Error for AsyncError {
         }
     }
 }
-

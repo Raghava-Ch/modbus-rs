@@ -1,5 +1,7 @@
 use heapless::Vec;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MBAP_LENGTH_OFFSET_1B, MBAP_LENGTH_OFFSET_2B};
+use mbus_core::data_unit::common::{
+    MAX_ADU_FRAME_LEN, MBAP_LENGTH_OFFSET_1B, MBAP_LENGTH_OFFSET_2B,
+};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::{AsyncTransport, TransportType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -76,20 +78,14 @@ impl AsyncTransport for TokioTcpTransport {
         if !self.connected {
             return Err(MbusError::ConnectionClosed);
         }
-        self.stream
-            .write_all(adu)
-            .await
-            .map_err(|e| {
-                let err = Self::map_io_error(e);
-                if err == MbusError::ConnectionClosed {
-                    self.connected = false;
-                }
-                err
-            })?;
-        self.stream
-            .flush()
-            .await
-            .map_err(Self::map_io_error)
+        self.stream.write_all(adu).await.map_err(|e| {
+            let err = Self::map_io_error(e);
+            if err == MbusError::ConnectionClosed {
+                self.connected = false;
+            }
+            err
+        })?;
+        self.stream.flush().await.map_err(Self::map_io_error)
     }
 
     async fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {

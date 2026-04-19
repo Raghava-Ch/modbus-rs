@@ -80,7 +80,7 @@ For **embedded / no_std** targets, disable defaults and use the `no-std` conveni
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = ["no-std"] }
+modbus-rs = { version = "0.7.0", default-features = false, features = ["no-std"] }
 ```
 
 This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
@@ -121,7 +121,7 @@ Example: only enable client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
   "client",
   "tcp",
   "coils"
@@ -136,7 +136,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
 	"async",
 	"tcp",
 	"coils"
@@ -165,7 +165,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
 	"client",
 	"tcp",
 	"coils",
@@ -185,7 +185,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.7.0", default-features = false, features = ["tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -195,14 +195,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.6.0"
+modbus-rs = "0.7.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
   "client",
   "tcp",
   "registers"
@@ -213,7 +213,7 @@ modbus-rs = { version = "0.6.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = ["client", "tcp", "coils"] }
+modbus-rs = { version = "0.7.0", default-features = false, features = ["client", "tcp", "coils"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:

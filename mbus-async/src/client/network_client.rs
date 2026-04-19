@@ -53,9 +53,7 @@ impl AsyncTcpClient<9> {
     ///
     /// Use [`AsyncTcpClient::new`] and then call `client.connect().await?`.
     #[cfg(feature = "tcp")]
-    #[deprecated(
-        note = "use AsyncTcpClient::new(...) and then client.connect().await"
-    )]
+    #[deprecated(note = "use AsyncTcpClient::new(...) and then client.connect().await")]
     pub fn connect_with_poll_interval(
         host: &str,
         port: u16,
@@ -182,8 +180,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     /// [`AsyncClientCore`].
     #[cfg(feature = "tcp")]
     fn from_connect_fn(connect_fn: ConnectFactory<TokioTcpTransport>) -> Result<Self, AsyncError> {
-        let handle = tokio::runtime::Handle::try_current()
-            .map_err(|_| AsyncError::WorkerClosed)?;
+        let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
         let (cmd_tx, cmd_rx) = mpsc::channel(64);
         let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
 

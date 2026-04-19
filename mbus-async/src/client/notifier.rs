@@ -48,22 +48,10 @@ use tokio::sync::Mutex;
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
 pub trait AsyncClientNotifier {
     /// Called after a request frame is successfully sent to the device.
-    fn on_tx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
-    }
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
 
     /// Called after a complete response frame is received from the device.
-    fn on_rx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
-    }
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
 
     /// Called when transmitting a request frame fails.
     fn on_tx_error(
@@ -94,8 +82,7 @@ pub trait AsyncClientNotifier {
 /// can reach the same instance without an extra channel.
 ///
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
-pub(crate) type NotifierStore =
-    Arc<Mutex<Option<Box<dyn AsyncClientNotifier + Send + 'static>>>>;
+pub(crate) type NotifierStore = Arc<Mutex<Option<Box<dyn AsyncClientNotifier + Send + 'static>>>>;
 
 /// Creates a new, empty [`NotifierStore`].
 pub(crate) fn new_notifier_store() -> NotifierStore {

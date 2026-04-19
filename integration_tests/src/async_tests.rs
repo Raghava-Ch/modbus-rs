@@ -898,7 +898,10 @@ async fn test_async_tcp_client_server_timeout() -> Result<()> {
     // Pipeline self-healed: reconnect and verify the next request succeeds.
     client.connect().await?;
     let result = client.read_multiple_coils(1, 0, 8).await;
-    assert!(result.is_ok(), "Expected success after reconnect, got {result:?}");
+    assert!(
+        result.is_ok(),
+        "Expected success after reconnect, got {result:?}"
+    );
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -1006,8 +1009,8 @@ async fn test_async_tcp_client_pipeline_concurrent_requests() -> Result<()> {
 async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
     use modbus_rs::mbus_async::AsyncClientNotifier;
     use modbus_rs::UnitIdOrSlaveAddr;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     struct CountNotifier {
         tx: Arc<AtomicUsize>,
@@ -1054,8 +1057,16 @@ async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
     client.read_multiple_coils(1, 0, 8).await?;
 
     use std::sync::atomic::Ordering as AtomicOrd;
-    assert_eq!(tx_count.load(AtomicOrd::Relaxed), 1, "Expected 1 TX frame notification");
-    assert_eq!(rx_count.load(AtomicOrd::Relaxed), 1, "Expected 1 RX frame notification");
+    assert_eq!(
+        tx_count.load(AtomicOrd::Relaxed),
+        1,
+        "Expected 1 TX frame notification"
+    );
+    assert_eq!(
+        rx_count.load(AtomicOrd::Relaxed),
+        1,
+        "Expected 1 RX frame notification"
+    );
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())

@@ -1,7 +1,9 @@
 use heapless::Vec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
-use mbus_core::transport::{AsyncTransport, BaudRate, DataBits, ModbusConfig, Parity, SerialMode, TransportType};
+use mbus_core::transport::{
+    AsyncTransport, BaudRate, DataBits, ModbusConfig, Parity, SerialMode, TransportType,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{Duration, timeout};
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
@@ -135,10 +137,7 @@ impl<const ASCII: bool> AsyncTransport for TokioSerialTransport<ASCII> {
     }
 
     async fn send(&mut self, adu: &[u8]) -> Result<(), MbusError> {
-        self.port
-            .write_all(adu)
-            .await
-            .map_err(Self::map_io_error)?;
+        self.port.write_all(adu).await.map_err(Self::map_io_error)?;
         self.port.flush().await.map_err(Self::map_io_error)
     }
 
@@ -158,23 +157,22 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
         let mut scratch = [0u8; 1];
 
         // Wait for the first byte (no timeout — block indefinitely until data arrives)
-        self.port
-            .read_exact(&mut scratch)
-            .await
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    MbusError::ConnectionClosed
-                } else {
-                    Self::map_io_error(e)
-                }
-            })?;
-        buf.push(scratch[0]).map_err(|_| MbusError::BufferTooSmall)?;
+        self.port.read_exact(&mut scratch).await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                MbusError::ConnectionClosed
+            } else {
+                Self::map_io_error(e)
+            }
+        })?;
+        buf.push(scratch[0])
+            .map_err(|_| MbusError::BufferTooSmall)?;
 
         // Now collect remaining bytes, resetting the silence timer after each one.
         loop {
             match timeout(self.inter_frame_timeout, self.port.read_exact(&mut scratch)).await {
                 Ok(Ok(_)) => {
-                    buf.push(scratch[0]).map_err(|_| MbusError::BufferTooSmall)?;
+                    buf.push(scratch[0])
+                        .map_err(|_| MbusError::BufferTooSmall)?;
                 }
                 Ok(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     return Err(MbusError::ConnectionClosed);
@@ -194,18 +192,16 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
         let mut scratch = [0u8; 1];
 
         loop {
-            self.port
-                .read_exact(&mut scratch)
-                .await
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                        MbusError::ConnectionClosed
-                    } else {
-                        Self::map_io_error(e)
-                    }
-                })?;
+            self.port.read_exact(&mut scratch).await.map_err(|e| {
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    MbusError::ConnectionClosed
+                } else {
+                    Self::map_io_error(e)
+                }
+            })?;
 
-            buf.push(scratch[0]).map_err(|_| MbusError::BufferTooSmall)?;
+            buf.push(scratch[0])
+                .map_err(|_| MbusError::BufferTooSmall)?;
 
             // ASCII frame ends with CR LF
             let len = buf.len();

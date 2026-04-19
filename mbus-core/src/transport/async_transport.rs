@@ -3,10 +3,10 @@
 //! Enabled by the `async` feature flag. No new dependencies are required; `async fn`
 //! desugars to `core::future::Future` which is always available in `no_std` environments.
 
-use core::future::Future;
 use crate::data_unit::common::MAX_ADU_FRAME_LEN;
 use crate::errors::MbusError;
 use crate::transport::TransportType;
+use core::future::Future;
 use heapless::Vec;
 
 /// Async transport abstraction for Modbus communication.
@@ -37,7 +37,10 @@ pub trait AsyncTransport: Send {
     /// Send a complete Modbus ADU frame over the transport.
     ///
     /// Implementations must ensure all bytes are written before returning.
-    fn send<'a>(&'a mut self, adu: &'a [u8]) -> impl Future<Output = Result<(), MbusError>> + Send + 'a;
+    fn send<'a>(
+        &'a mut self,
+        adu: &'a [u8],
+    ) -> impl Future<Output = Result<(), MbusError>> + Send + 'a;
 
     /// Receive exactly one complete Modbus ADU frame.
     ///

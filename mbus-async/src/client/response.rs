@@ -40,6 +40,9 @@ use mbus_core::models::file_record::MAX_SUB_REQUESTS_PER_PDU;
 /// type expected by each public method.
 ///
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
+// Variants use heapless::Vec (stack-allocated) and are transient one-shot
+// values sent over a oneshot channel; boxing would add heap overhead for no gain.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum ClientResponse {
     // ── Coils ────────────────────────────────────────────────────────────

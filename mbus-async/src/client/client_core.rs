@@ -31,20 +31,20 @@ use tokio::sync::{mpsc, oneshot};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 #[cfg(feature = "coils")]
 use mbus_core::models::coil::Coils;
-#[cfg(feature = "registers")]
-use mbus_core::models::register::Registers;
+#[cfg(feature = "diagnostics")]
+use mbus_core::models::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "discrete-inputs")]
 use mbus_core::models::discrete_input::DiscreteInputs;
 #[cfg(feature = "fifo")]
 use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{SubRequest, SubRequestParams};
-#[cfg(feature = "diagnostics")]
-use mbus_core::models::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
+#[cfg(feature = "registers")]
+use mbus_core::models::register::Registers;
 
 use crate::client::command::{ClientRequest, TaskCommand};
 use crate::client::response::ClientResponse;
@@ -212,7 +212,11 @@ impl AsyncClientCore {
     ) -> Result<Coils, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::ReadMultipleCoils { unit, address, quantity })
+            .send_request(ClientRequest::ReadMultipleCoils {
+                unit,
+                address,
+                quantity,
+            })
             .await?
         {
             ClientResponse::Coils(coils) => Ok(coils),
@@ -232,7 +236,11 @@ impl AsyncClientCore {
     ) -> Result<(u16, bool), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::WriteSingleCoil { unit, address, value })
+            .send_request(ClientRequest::WriteSingleCoil {
+                unit,
+                address,
+                value,
+            })
             .await?
         {
             ClientResponse::Coils(coils) => {
@@ -281,7 +289,11 @@ impl AsyncClientCore {
     ) -> Result<Registers, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::ReadHoldingRegisters { unit, address, quantity })
+            .send_request(ClientRequest::ReadHoldingRegisters {
+                unit,
+                address,
+                quantity,
+            })
             .await?
         {
             ClientResponse::Registers(regs) => Ok(regs),
@@ -301,7 +313,11 @@ impl AsyncClientCore {
     ) -> Result<Registers, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::ReadInputRegisters { unit, address, quantity })
+            .send_request(ClientRequest::ReadInputRegisters {
+                unit,
+                address,
+                quantity,
+            })
             .await?
         {
             ClientResponse::Registers(regs) => Ok(regs),
@@ -321,7 +337,11 @@ impl AsyncClientCore {
     ) -> Result<(u16, u16), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::WriteSingleRegister { unit, address, value })
+            .send_request(ClientRequest::WriteSingleRegister {
+                unit,
+                address,
+                value,
+            })
             .await?
         {
             ClientResponse::SingleRegisterWrite { address, value } => Ok((address, value)),
@@ -340,7 +360,10 @@ impl AsyncClientCore {
         values: &[u16],
     ) -> Result<(u16, u16), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
-        let hv = heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(values)
+        let hv =
+            heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                values,
+            )
             .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
         match self
             .send_request(ClientRequest::WriteMultipleRegisters {
@@ -370,7 +393,10 @@ impl AsyncClientCore {
         write_values: &[u16],
     ) -> Result<Registers, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
-        let hv = heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(write_values)
+        let hv =
+            heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                write_values,
+            )
             .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
         match self
             .send_request(ClientRequest::ReadWriteMultipleRegisters {
@@ -427,7 +453,11 @@ impl AsyncClientCore {
     ) -> Result<DiscreteInputs, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
-            .send_request(ClientRequest::ReadDiscreteInputs { unit, address, quantity })
+            .send_request(ClientRequest::ReadDiscreteInputs {
+                unit,
+                address,
+                quantity,
+            })
             .await?
         {
             ClientResponse::DiscreteInputs(di) => Ok(di),
@@ -592,12 +622,10 @@ impl AsyncClientCore {
             })
             .await?
         {
-            ClientResponse::DiagnosticsData { sub_function, data } => {
-                Ok(DiagnosticsDataResponse {
-                    sub_function,
-                    data: data.as_slice().to_vec(),
-                })
-            }
+            ClientResponse::DiagnosticsData { sub_function, data } => Ok(DiagnosticsDataResponse {
+                sub_function,
+                data: data.as_slice().to_vec(),
+            }),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -612,9 +640,10 @@ impl AsyncClientCore {
             .send_request(ClientRequest::GetCommEventCounter { unit })
             .await?
         {
-            ClientResponse::CommEventCounter { status, event_count } => {
-                Ok((status, event_count))
-            }
+            ClientResponse::CommEventCounter {
+                status,
+                event_count,
+            } => Ok((status, event_count)),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -637,7 +666,12 @@ impl AsyncClientCore {
                 event_count,
                 message_count,
                 events,
-            } => Ok((status, event_count, message_count, events.as_slice().to_vec())),
+            } => Ok((
+                status,
+                event_count,
+                message_count,
+                events.as_slice().to_vec(),
+            )),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
