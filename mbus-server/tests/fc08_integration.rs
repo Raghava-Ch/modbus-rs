@@ -8,15 +8,15 @@ use mbus_core::transport::{
     ModbusConfig, SerialMode, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
 use mbus_server::ResilienceConfig;
-use mbus_server::ServerServices;
-use mbus_server::ServerExceptionHandler;
 use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
 use mbus_server::ServerDiscreteInputHandler;
-use mbus_server::ServerHoldingRegisterHandler;
-use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerExceptionHandler;
 use mbus_server::ServerFifoHandler;
 use mbus_server::ServerFileRecordHandler;
-use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
+use mbus_server::ServerServices;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;

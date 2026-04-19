@@ -11,18 +11,18 @@ use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
     SerialMode, Transport, TransportType, UnitIdOrSlaveAddr,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerInputRegisterHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 use mbus_server::{
     OverflowPolicy, ResilienceConfig, ServerExceptionHandler, ServerHoldingRegisterHandler,
     ServerServices, TimeoutConfig,
 };
-use mbus_server::ServerCoilHandler;
-use mbus_server::ServerDiscreteInputHandler;
-use mbus_server::ServerInputRegisterHandler;
-use mbus_server::ServerFifoHandler;
-use mbus_server::ServerFileRecordHandler;
-use mbus_server::ServerDiagnosticsHandler;
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};

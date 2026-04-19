@@ -273,12 +273,7 @@ fn extract_cargo_commands(blocks: &[CodeBlock]) -> Vec<CargoCmd> {
 }
 
 /// Parse a single `cargo run/check/build --example NAME …` string.
-fn parse_cargo_cmd(
-    cmd: &str,
-    file: &Path,
-    line: usize,
-    should_run: bool,
-) -> Option<CargoCmd> {
+fn parse_cargo_cmd(cmd: &str, file: &Path, line: usize, should_run: bool) -> Option<CargoCmd> {
     // Truncate at pipe, redirect, semicolon, or `&&`
     let cmd = cmd
         .split('|')
@@ -468,8 +463,8 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
         }
 
         let has_main = block.code.contains("fn main");
-        let force = block.tags.iter().any(|t| t == "no_run")
-            || block.marker.as_deref() == Some("compile");
+        let force =
+            block.tags.iter().any(|t| t == "no_run") || block.marker.as_deref() == Some("compile");
 
         if has_main || force {
             compilable.push(block);
@@ -503,24 +498,19 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
             let path = examples_dir.join(format!("{name}.rs"));
 
             // Build the temp file content
-            let mut content =
-                String::from("#![allow(unused_imports, unused_variables, dead_code, unused_mut, unreachable_code, unused_assignments)]\n");
+            let mut content = String::from(
+                "#![allow(unused_imports, unused_variables, dead_code, unused_mut, unreachable_code, unused_assignments)]\n",
+            );
             content.push_str(&block.code);
             if !block.code.contains("fn main") {
                 content.push_str("\n#[allow(dead_code)]\nfn main() {}\n");
             }
 
-            fs::write(&path, &content)
-                .map_err(|e| format!("write {}: {e}", path.display()))?;
+            fs::write(&path, &content).map_err(|e| format!("write {}: {e}", path.display()))?;
             temp_files.push(path);
 
             let rel = block.file.strip_prefix(root).unwrap_or(&block.file);
-            print!(
-                "  [{}:{:>3}] _dv_{:03}… ",
-                rel.display(),
-                block.line,
-                i,
-            );
+            print!("  [{}:{:>3}] _dv_{:03}… ", rel.display(), block.line, i,);
             std::io::stdout().flush().ok();
 
             let output = Command::new("cargo")
@@ -549,12 +539,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                         .find(|l| l.starts_with("error"))
                         .unwrap_or("compilation failed")
                         .trim();
-                    failures.push(format!(
-                        "{}:{}: {}",
-                        rel.display(),
-                        block.line,
-                        first_err,
-                    ));
+                    failures.push(format!("{}:{}: {}", rel.display(), block.line, first_err,));
                     failed += 1;
                 }
                 Err(e) => {
@@ -686,8 +671,7 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
     );
 
     let cargo_cmds = extract_cargo_commands(&all_blocks);
-    let doc_example_names: HashSet<String> =
-        cargo_cmds.iter().map(|c| c.example.clone()).collect();
+    let doc_example_names: HashSet<String> = cargo_cmds.iter().map(|c| c.example.clone()).collect();
 
     println!(
         "Extracted {} commands ({} unique examples)\n",
@@ -756,7 +740,10 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
 
     // ── Summary ──────────────────────────────────────────────────────
     println!("\n╔═══════════════════════════════════════════╗");
-    println!("║              {}                      ║", section("Summary"));
+    println!(
+        "║              {}                      ║",
+        section("Summary")
+    );
     println!("╚═══════════════════════════════════════════╝\n");
 
     println!(

@@ -17,14 +17,14 @@ Get your first Modbus server running in 5 minutes.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", features = ["server"] }
+modbus-rs = { version = "0.7.0", features = ["server"] }
 ```
 
 ### Minimal TCP Server (Coils + Registers Only)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
     "tcp",
     "coils",

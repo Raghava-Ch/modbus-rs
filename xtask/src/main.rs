@@ -262,13 +262,13 @@ fn main() -> ExitCode {
         "check-feature-header" => cmd_check_feature_header(&root),
         "build-c-smoke" => cmd_build_c_smoke(&root),
         "check-feature-matrix" => cmd_check_feature_matrix(&root),
-            "validate-docs" => validate_docs::cmd_validate_docs(&root),
+        "validate-docs" => validate_docs::cmd_validate_docs(&root),
         "check-release" => cmd_check_release(&root),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
         }
-            other => Err(format!("unknown xtask command: {other}")),
+        other => Err(format!("unknown xtask command: {other}")),
     };
 
     match result {

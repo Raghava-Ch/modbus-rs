@@ -5,11 +5,11 @@
 //! encode → network → decode → app → encode → network → decode round-trip works.
 
 use anyhow::Result;
-use mbus_async::server::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusResponse};
-#[cfg(feature = "diagnostics")]
-use mbus_async::client::{ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "file-record")]
 use mbus_async::client::SubRequest;
+#[cfg(feature = "diagnostics")]
+use mbus_async::client::{ObjectId, ReadDeviceIdCode};
+use mbus_async::server::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusResponse};
 use mbus_async::AsyncTcpClient;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
@@ -93,7 +93,12 @@ impl TestApp {
                 ModbusResponse::echo_coil(address, value)
             }
             // FC0F — Write Multiple Coils
-            ModbusRequest::WriteMultipleCoils { address, count, data, .. } => {
+            ModbusRequest::WriteMultipleCoils {
+                address,
+                count,
+                data,
+                ..
+            } => {
                 let addr = address as usize;
                 let cnt = count as usize;
                 if addr + cnt > self.coils.len() {
@@ -121,7 +126,10 @@ impl TestApp {
                         mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &self.holding[addr..addr + cnt])
+                ModbusResponse::registers(
+                    FunctionCode::ReadHoldingRegisters,
+                    &self.holding[addr..addr + cnt],
+                )
             }
             // FC06 — Write Single Register
             ModbusRequest::WriteSingleRegister { address, value, .. } => {
@@ -136,7 +144,12 @@ impl TestApp {
                 ModbusResponse::echo_register(address, value)
             }
             // FC10 — Write Multiple Registers
-            ModbusRequest::WriteMultipleRegisters { address, count, data, .. } => {
+            ModbusRequest::WriteMultipleRegisters {
+                address,
+                count,
+                data,
+                ..
+            } => {
                 let addr = address as usize;
                 let cnt = count as usize;
                 if addr + cnt > self.holding.len() {
@@ -166,7 +179,10 @@ impl TestApp {
                         mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                ModbusResponse::registers(FunctionCode::ReadInputRegisters, &self.input[addr..addr + cnt])
+                ModbusResponse::registers(
+                    FunctionCode::ReadInputRegisters,
+                    &self.input[addr..addr + cnt],
+                )
             }
             // FC02 — Read Discrete Inputs
             ModbusRequest::ReadDiscreteInputs { address, count, .. } => {
@@ -188,7 +204,12 @@ impl TestApp {
                 ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &bytes)
             }
             // FC16 — Mask Write Register
-            ModbusRequest::MaskWriteRegister { address, and_mask, or_mask, .. } => {
+            ModbusRequest::MaskWriteRegister {
+                address,
+                and_mask,
+                or_mask,
+                ..
+            } => {
                 let addr = address as usize;
                 if addr >= self.holding.len() {
                     return ModbusResponse::exception(
@@ -202,7 +223,12 @@ impl TestApp {
             }
             // FC19 — Read/Write Multiple Registers
             ModbusRequest::ReadWriteMultipleRegisters {
-                read_address, read_count, write_address, write_count, ref data, ..
+                read_address,
+                read_count,
+                write_address,
+                write_count,
+                ref data,
+                ..
             } => {
                 let r_addr = read_address as usize;
                 let r_cnt = read_count as usize;
@@ -228,7 +254,9 @@ impl TestApp {
             }
             // FC18 — Read FIFO Queue
             #[cfg(feature = "fifo")]
-            ModbusRequest::ReadFifoQueue { pointer_address, .. } => {
+            ModbusRequest::ReadFifoQueue {
+                pointer_address, ..
+            } => {
                 if pointer_address == 0x0005 {
                     // Return 2-element FIFO: count=2, values [0x001A, 0x002B]
                     let payload: &[u8] = &[0x00, 0x02, 0x00, 0x1A, 0x00, 0x2B];
@@ -250,8 +278,8 @@ impl TestApp {
                 let mut payload: Vec<u8> = Vec::new();
                 for _ in 0..sub_requests.len() {
                     // sub_len = ref_type(1) + data(4) = 5
-                    payload.push(5);       // sub_len
-                    payload.push(0x06);    // ref_type (always 6 per spec)
+                    payload.push(5); // sub_len
+                    payload.push(0x06); // ref_type (always 6 per spec)
                     payload.extend_from_slice(&word_a.to_be_bytes());
                     payload.extend_from_slice(&word_b.to_be_bytes());
                 }
@@ -269,11 +297,11 @@ impl TestApp {
                     // Two objects: VendorName (0x00) = "Test", ProductCode (0x01) = "V1"
                     let mut objects: Vec<u8> = Vec::new();
                     let vendor = b"Test";
-                    objects.push(0x00);                        // Object ID: VendorName
+                    objects.push(0x00); // Object ID: VendorName
                     objects.push(vendor.len() as u8);
                     objects.extend_from_slice(vendor);
                     let product = b"V1";
-                    objects.push(0x01);                        // Object ID: ProductCode
+                    objects.push(0x01); // Object ID: ProductCode
                     objects.push(product.len() as u8);
                     objects.extend_from_slice(product);
                     ModbusResponse::read_device_id(
@@ -298,7 +326,9 @@ impl TestApp {
                 ModbusResponse::read_exception_status(0xA5)
             }
             #[cfg(feature = "diagnostics")]
-            ModbusRequest::Diagnostics { sub_function, data, .. } => {
+            ModbusRequest::Diagnostics {
+                sub_function, data, ..
+            } => {
                 // Echo the sub-function and data back to the client.
                 ModbusResponse::diagnostics_echo(sub_function, data)
             }
@@ -343,7 +373,9 @@ where
     tokio::spawn(async move {
         let server = server;
         loop {
-            let Ok((mut session, _)) = server.accept().await else { break };
+            let Ok((mut session, _)) = server.accept().await else {
+                break;
+            };
             let mut app_instance = app.clone();
             tokio::spawn(async move {
                 let _ = session.run(&mut app_instance).await;
@@ -481,7 +513,11 @@ async fn fc05_write_single_coil() -> Result<()> {
     // Coil 3 (zero-indexed) is ON: bit 3 = 0b0000_1000 = 0x08
     assert_eq!(coils.values()[0] & 0x08, 0x08, "coil 3 should be ON");
     // All other low bits should be off
-    assert_eq!(coils.values()[0] & !0x08, 0x00, "no other coils should be set");
+    assert_eq!(
+        coils.values()[0] & !0x08,
+        0x00,
+        "no other coils should be set"
+    );
     Ok(())
 }
 
@@ -518,7 +554,9 @@ async fn shared_state_server_arc_mutex() -> Result<()> {
     let shared = Arc::clone(&app);
     tokio::spawn(async move {
         loop {
-            let Ok((mut session, _)) = server.accept().await else { break };
+            let Ok((mut session, _)) = server.accept().await else {
+                break;
+            };
             let app_clone = Arc::clone(&shared);
             tokio::spawn(async move {
                 let mut handler = app_clone;
@@ -582,7 +620,11 @@ async fn fc02_read_discrete_inputs() -> Result<()> {
 
     let inputs = client.read_discrete_inputs(1, 0, 8).await?;
     assert_eq!(inputs.quantity(), 8);
-    assert_eq!(inputs.values()[0], 0x55, "expected alternating ON/OFF pattern 0x55");
+    assert_eq!(
+        inputs.values()[0],
+        0x55,
+        "expected alternating ON/OFF pattern 0x55"
+    );
     Ok(())
 }
 
@@ -630,10 +672,7 @@ async fn fc01_read_coils_out_of_range_returns_exception() -> Result<()> {
 
     // TestApp has 16 coils — reading 5 starting at address 14 goes out of range.
     let err = client.read_multiple_coils(1, 14, 5).await;
-    assert!(
-        err.is_err(),
-        "expected error for out-of-range coil read"
-    );
+    assert!(err.is_err(), "expected error for out-of-range coil read");
     Ok(())
 }
 
@@ -733,7 +772,10 @@ async fn fc14_read_file_record() -> Result<()> {
     let result = client.read_file_record(1, &sub_request).await?;
     assert_eq!(result.len(), 1, "one sub-response expected");
     let entry = &result[0];
-    let data = entry.record_data.as_ref().expect("read sub_request should have data");
+    let data = entry
+        .record_data
+        .as_ref()
+        .expect("read sub_request should have data");
     assert_eq!(data[0], 0xAABB, "first word");
     assert_eq!(data[1], 0xCCDD, "second word");
     Ok(())
@@ -748,7 +790,9 @@ async fn fc15_write_file_record() -> Result<()> {
     let client = connect_client(port).await?;
 
     let mut data_buf: heapless::Vec<u16, 252> = heapless::Vec::new();
-    data_buf.extend_from_slice(&[0x0001u16, 0x0002, 0x0003]).ok();
+    data_buf
+        .extend_from_slice(&[0x0001u16, 0x0002, 0x0003])
+        .ok();
     let mut sub_request = SubRequest::new();
     sub_request.add_write_sub_request(1, 0, 3, data_buf)?;
     // write_file_record returns Ok(()) on a matching echo response
@@ -804,10 +848,10 @@ fn mbap(txn_id: u16, unit_id: u8, pdu: &[u8]) -> Vec<u8> {
     let length = (1 + pdu.len()) as u16;
     let mut frame = Vec::with_capacity(6 + pdu.len());
     frame.extend_from_slice(&txn_id.to_be_bytes()); // Transaction ID
-    frame.extend_from_slice(&[0x00, 0x00]);          // Protocol ID
-    frame.extend_from_slice(&length.to_be_bytes());  // Length
-    frame.push(unit_id);                             // Unit ID
-    frame.extend_from_slice(pdu);                    // PDU
+    frame.extend_from_slice(&[0x00, 0x00]); // Protocol ID
+    frame.extend_from_slice(&length.to_be_bytes()); // Length
+    frame.push(unit_id); // Unit ID
+    frame.extend_from_slice(pdu); // PDU
     frame
 }
 
@@ -842,7 +886,7 @@ async fn fc07_read_exception_status_raw() -> Result<()> {
 
     // MBAP(6) + unit(1) + fc(1) + status(1) = 9 bytes total
     assert_eq!(response.len(), 9, "FC07 response length");
-    assert_eq!(response[6], 1,    "unit id echoed");
+    assert_eq!(response[6], 1, "unit id echoed");
     assert_eq!(response[7], 0x07, "FC byte");
     assert_eq!(response[8], 0xA5, "exception status byte");
     Ok(())
@@ -861,7 +905,7 @@ async fn fc08_diagnostics_echo_raw() -> Result<()> {
     // MBAP(6) + unit(1) + fc(1) + sub_fn(2) + data(2) = 12 bytes
     assert_eq!(response.len(), 12, "FC08 response length");
     assert_eq!(response[7], 0x08, "FC byte");
-    assert_eq!(&response[8..10],  &[0x00, 0x00], "sub-function echoed");
+    assert_eq!(&response[8..10], &[0x00, 0x00], "sub-function echoed");
     assert_eq!(&response[10..12], &[0x12, 0x34], "data echoed");
     Ok(())
 }
@@ -879,10 +923,10 @@ async fn fc0b_get_comm_event_counter_raw() -> Result<()> {
     // MBAP(6) + unit(1) + fc(1) + status_word(2) + event_count(2) = 12 bytes
     assert_eq!(response.len(), 12, "FC0B response length");
     assert_eq!(response[7], 0x0B, "FC byte");
-    let status = u16::from_be_bytes([response[8],  response[9]]);
-    let count  = u16::from_be_bytes([response[10], response[11]]);
+    let status = u16::from_be_bytes([response[8], response[9]]);
+    let count = u16::from_be_bytes([response[10], response[11]]);
     assert_eq!(status, 0x0000, "status word");
-    assert_eq!(count,  0x0005, "event count");
+    assert_eq!(count, 0x0005, "event count");
     Ok(())
 }
 
@@ -901,7 +945,7 @@ async fn fc0c_get_comm_event_log_raw() -> Result<()> {
     let byte_count = response[8] as usize;
     assert_eq!(response.len(), 6 + 1 + 1 + 1 + byte_count, "frame length");
     // payload: status(0x0000) + event_count(0x0005) + msg_count(0x0002) + events[0xAB,0xCD]
-    assert_eq!(&response[9..11],  &[0x00, 0x00], "status");
+    assert_eq!(&response[9..11], &[0x00, 0x00], "status");
     assert_eq!(&response[11..13], &[0x00, 0x05], "event count");
     assert_eq!(&response[13..15], &[0x00, 0x02], "msg count");
     assert_eq!(response[15], 0xAB, "first event byte");
@@ -924,7 +968,7 @@ async fn fc11_report_server_id_raw() -> Result<()> {
     let byte_count = response[8] as usize;
     assert_eq!(response.len(), 6 + 1 + 1 + 1 + byte_count, "frame length");
     // payload: [0x01, 0x02, 0xFF]
-    assert_eq!(response[9],  0x01, "server id byte 0");
+    assert_eq!(response[9], 0x01, "server id byte 0");
     assert_eq!(response[10], 0x02, "server id byte 1");
     assert_eq!(response[11], 0xFF, "run indicator (0xFF = running)");
     Ok(())
@@ -945,9 +989,7 @@ async fn raw_tcp_send(stream: &mut tokio::net::TcpStream, data: &[u8]) -> Result
 
 /// Read exactly one MBAP+PDU frame from `stream`, with a 250 ms timeout.
 /// Returns `None` if the timeout expires (i.e. the server sent no response).
-async fn raw_tcp_recv_timeout(
-    stream: &mut tokio::net::TcpStream,
-) -> Option<Vec<u8>> {
+async fn raw_tcp_recv_timeout(stream: &mut tokio::net::TcpStream) -> Option<Vec<u8>> {
     use tokio::io::AsyncReadExt;
     let mut header = [0u8; 6];
     tokio::time::timeout(
@@ -985,27 +1027,47 @@ async fn fc08_listen_only_mode_and_restart() -> Result<()> {
     let mut stream = raw_tcp_connect(port).await?;
 
     // 1. Baseline: FC03 read holding registers works normally.
-    raw_tcp_send(&mut stream, &mbap(0x0001, 1, &[0x03, 0x00, 0x00, 0x00, 0x01])).await?;
-    let resp = raw_tcp_recv_timeout(&mut stream).await.expect("FC03 before listen-only");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0001, 1, &[0x03, 0x00, 0x00, 0x00, 0x01]),
+    )
+    .await?;
+    let resp = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("FC03 before listen-only");
     assert_eq!(resp[7], 0x03, "FC03 FC byte before listen-only");
 
     // 2. FC08/0x0004 — Force Listen Only Mode → no response (per Modbus spec).
-    raw_tcp_send(&mut stream, &mbap(0x0002, 1, &[0x08, 0x00, 0x04, 0x00, 0x00])).await?;
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0002, 1, &[0x08, 0x00, 0x04, 0x00, 0x00]),
+    )
+    .await?;
     assert!(
         raw_tcp_recv_timeout(&mut stream).await.is_none(),
         "ForceListenOnlyMode must produce no response"
     );
 
     // 3. FC03 while in listen-only → silently dropped, no response.
-    raw_tcp_send(&mut stream, &mbap(0x0003, 1, &[0x03, 0x00, 0x00, 0x00, 0x01])).await?;
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0003, 1, &[0x03, 0x00, 0x00, 0x00, 0x01]),
+    )
+    .await?;
     assert!(
         raw_tcp_recv_timeout(&mut stream).await.is_none(),
         "FC03 in listen-only must produce no response"
     );
 
     // 4. FC08/0x0001 — Restart Communications Option → echo + clears listen-only.
-    raw_tcp_send(&mut stream, &mbap(0x0004, 1, &[0x08, 0x00, 0x01, 0x00, 0x00])).await?;
-    let resp = raw_tcp_recv_timeout(&mut stream).await.expect("RestartComms echo");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0004, 1, &[0x08, 0x00, 0x01, 0x00, 0x00]),
+    )
+    .await?;
+    let resp = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("RestartComms echo");
     assert_eq!(resp[7], 0x08, "FC08 byte in restart response");
     assert_eq!(
         u16::from_be_bytes([resp[8], resp[9]]),
@@ -1014,8 +1076,14 @@ async fn fc08_listen_only_mode_and_restart() -> Result<()> {
     );
 
     // 5. FC03 should work again now that listen-only is cleared.
-    raw_tcp_send(&mut stream, &mbap(0x0005, 1, &[0x03, 0x00, 0x00, 0x00, 0x01])).await?;
-    let resp = raw_tcp_recv_timeout(&mut stream).await.expect("FC03 after restart");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0005, 1, &[0x03, 0x00, 0x00, 0x00, 0x01]),
+    )
+    .await?;
+    let resp = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("FC03 after restart");
     assert_eq!(resp[7], 0x03, "FC03 FC byte after listen-only cleared");
 
     Ok(())
@@ -1030,12 +1098,12 @@ async fn fc08_loopback_handled_by_session_not_app() -> Result<()> {
     #[derive(Clone, Default)]
     struct PanicOnLoopback;
     impl AsyncAppHandler for PanicOnLoopback {
-        fn handle(
-            &mut self,
-            req: ModbusRequest,
-        ) -> impl Future<Output = ModbusResponse> + Send {
+        fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
             let resp = match req {
-                ModbusRequest::Diagnostics { sub_function: 0x0000, .. } => {
+                ModbusRequest::Diagnostics {
+                    sub_function: 0x0000,
+                    ..
+                } => {
                     panic!("session should have intercepted sub-function 0x0000")
                 }
                 _ => ModbusResponse::NoResponse,
@@ -1049,10 +1117,19 @@ async fn fc08_loopback_handled_by_session_not_app() -> Result<()> {
     let port = start_server_custom(PanicOnLoopback).await?;
 
     // PDU = [FC=0x08, sub=0x0000, data=0xABCD]
-    let response = raw_tcp_roundtrip(port, &mbap(0x0001, 1, &[0x08, 0x00, 0x00, 0xAB, 0xCD])).await?;
+    let response =
+        raw_tcp_roundtrip(port, &mbap(0x0001, 1, &[0x08, 0x00, 0x00, 0xAB, 0xCD])).await?;
     assert_eq!(response[7], 0x08, "FC byte in echo response");
-    assert_eq!(u16::from_be_bytes([response[8], response[9]]), 0x0000, "sub-function echoed");
-    assert_eq!(u16::from_be_bytes([response[10], response[11]]), 0xABCD, "data echoed");
+    assert_eq!(
+        u16::from_be_bytes([response[8], response[9]]),
+        0x0000,
+        "sub-function echoed"
+    );
+    assert_eq!(
+        u16::from_be_bytes([response[10], response[11]]),
+        0xABCD,
+        "data echoed"
+    );
 
     Ok(())
 }
@@ -1070,35 +1147,70 @@ async fn fc08_diagnostics_stats_counters() -> Result<()> {
     // Send three FC03 requests (valid, address 0, count 1).
     for txn in 1u16..=3 {
         raw_tcp_send(&mut stream, &mbap(txn, 1, &[0x03, 0x00, 0x00, 0x00, 0x01])).await?;
-        raw_tcp_recv_timeout(&mut stream).await.expect("FC03 response");
+        raw_tcp_recv_timeout(&mut stream)
+            .await
+            .expect("FC03 response");
     }
 
     // Send one FC03 with an out-of-range address to trigger an exception.
-    raw_tcp_send(&mut stream, &mbap(0x0004, 1, &[0x03, 0xFF, 0xFF, 0x00, 0x01])).await?;
-    let exc = raw_tcp_recv_timeout(&mut stream).await.expect("exception response");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0004, 1, &[0x03, 0xFF, 0xFF, 0x00, 0x01]),
+    )
+    .await?;
+    let exc = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("exception response");
     assert_eq!(exc[7], 0x03 | 0x80, "exception FC byte");
 
     // FC08/0x000E — ReturnServerMessageCount → expect 4 (3 normal + 1 exception).
-    raw_tcp_send(&mut stream, &mbap(0x0005, 1, &[0x08, 0x00, 0x0E, 0x00, 0x00])).await?;
-    let stat = raw_tcp_recv_timeout(&mut stream).await.expect("server_message_count response");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0005, 1, &[0x08, 0x00, 0x0E, 0x00, 0x00]),
+    )
+    .await?;
+    let stat = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("server_message_count response");
     let count = u16::from_be_bytes([stat[10], stat[11]]);
     assert_eq!(count, 4, "server_message_count should be 4");
 
     // FC08/0x000D — ReturnBusExceptionErrorCount → expect 1.
-    raw_tcp_send(&mut stream, &mbap(0x0006, 1, &[0x08, 0x00, 0x0D, 0x00, 0x00])).await?;
-    let stat = raw_tcp_recv_timeout(&mut stream).await.expect("exception_error_count response");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0006, 1, &[0x08, 0x00, 0x0D, 0x00, 0x00]),
+    )
+    .await?;
+    let stat = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("exception_error_count response");
     let exc_count = u16::from_be_bytes([stat[10], stat[11]]);
     assert_eq!(exc_count, 1, "exception_error_count should be 1");
 
     // FC08/0x000A — ClearCounters → all counters reset to 0.
-    raw_tcp_send(&mut stream, &mbap(0x0007, 1, &[0x08, 0x00, 0x0A, 0x00, 0x00])).await?;
-    raw_tcp_recv_timeout(&mut stream).await.expect("clear counters echo");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0007, 1, &[0x08, 0x00, 0x0A, 0x00, 0x00]),
+    )
+    .await?;
+    raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("clear counters echo");
 
     // After clear: server_message_count should be 0.
-    raw_tcp_send(&mut stream, &mbap(0x0008, 1, &[0x08, 0x00, 0x0E, 0x00, 0x00])).await?;
-    let stat = raw_tcp_recv_timeout(&mut stream).await.expect("server_message_count after clear");
+    raw_tcp_send(
+        &mut stream,
+        &mbap(0x0008, 1, &[0x08, 0x00, 0x0E, 0x00, 0x00]),
+    )
+    .await?;
+    let stat = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("server_message_count after clear");
     let count_after = u16::from_be_bytes([stat[10], stat[11]]);
-    assert_eq!(count_after, 0, "server_message_count should be 0 after clear");
+    assert_eq!(
+        count_after, 0,
+        "server_message_count should be 0 after clear"
+    );
 
     Ok(())
 }
@@ -1122,11 +1234,16 @@ async fn framing_error_fc_gets_no_response() -> Result<()> {
     let mut stream = raw_tcp_connect(port).await?;
     raw_tcp_send(&mut stream, &mbap(0x0001, 1, &[0x20, 0x00, 0x00])).await?;
     let response = raw_tcp_recv_timeout(&mut stream).await;
-    assert!(response.is_none(), "server must not respond to an unrecognised FC byte");
+    assert!(
+        response.is_none(),
+        "server must not respond to an unrecognised FC byte"
+    );
 
     // Verify the session is still alive: a valid request succeeds afterwards.
     raw_tcp_send(&mut stream, &mbap(0x0002, 1, &[0x07])).await?;
-    let alive = raw_tcp_recv_timeout(&mut stream).await.expect("FC07 succeeds after framing error");
+    let alive = raw_tcp_recv_timeout(&mut stream)
+        .await
+        .expect("FC07 succeeds after framing error");
     assert_eq!(alive[7], 0x07, "FC07 response proves session survived");
 
     Ok(())
@@ -1144,7 +1261,9 @@ async fn broadcast_write_suppression_config_api() -> Result<()> {
     let port = server.local_addr()?.port();
     tokio::spawn(async move {
         loop {
-            let Ok((mut session, _)) = server.accept().await else { break };
+            let Ok((mut session, _)) = server.accept().await else {
+                break;
+            };
             assert!(!session.broadcast_writes_enabled(), "default must be false");
             session.set_broadcast_writes(true);
             assert!(session.broadcast_writes_enabled());
@@ -1204,7 +1323,7 @@ async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
     impl mbus_async::server::AsyncTrafficNotifier for MacroApp {}
 
     let port = start_server_custom(MacroApp::default()).await?;
-    let mut client = connect_client(port).await?;
+    let client = connect_client(port).await?;
 
     // Write then read holding register.
     client.write_single_register(1u8, 0, 42).await?;
@@ -1228,7 +1347,10 @@ async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
 async fn traffic_notifier_rx_tx_counts() -> Result<()> {
     use mbus_async::server::AsyncTrafficNotifier;
     use mbus_core::errors::MbusError;
-    use std::sync::{Arc, atomic::{AtomicU32, Ordering}};
+    use std::sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    };
 
     #[derive(Clone, Default)]
     struct Counters {
@@ -1270,7 +1392,9 @@ async fn traffic_notifier_rx_tx_counts() -> Result<()> {
     }
 
     let counters = Counters::default();
-    let app = TrafficApp { counters: counters.clone() };
+    let app = TrafficApp {
+        counters: counters.clone(),
+    };
     let port = start_server_custom(app).await?;
 
     // Send 3 FC07 (ReadExceptionStatus) requests — each fully dispatched to app
@@ -1279,8 +1403,16 @@ async fn traffic_notifier_rx_tx_counts() -> Result<()> {
     let _r2 = raw_tcp_roundtrip(port, &mbap(0x0002, 1, &[0x07])).await?;
     let _r3 = raw_tcp_roundtrip(port, &mbap(0x0003, 1, &[0x07])).await?;
 
-    assert_eq!(counters.rx.load(Ordering::SeqCst), 3, "on_rx_frame called for each dispatched request");
-    assert_eq!(counters.tx.load(Ordering::SeqCst), 3, "on_tx_frame called for each sent response");
+    assert_eq!(
+        counters.rx.load(Ordering::SeqCst),
+        3,
+        "on_rx_frame called for each dispatched request"
+    );
+    assert_eq!(
+        counters.tx.load(Ordering::SeqCst),
+        3,
+        "on_tx_frame called for each sent response"
+    );
 
     Ok(())
 }

@@ -6,6 +6,7 @@
 use crate::data_unit::common::MAX_ADU_FRAME_LEN;
 use crate::errors::MbusError;
 use crate::transport::TransportType;
+use core::future::Future;
 use heapless::Vec;
 
 /// Async transport abstraction for Modbus communication.
@@ -29,22 +30,25 @@ use heapless::Vec;
 ///
 /// # Send bounds
 ///
-/// No `Send` bound is placed on the trait itself so that it remains usable in `no_std`
-/// / single-threaded contexts. Callers that spawn tasks (e.g. `tokio::spawn`) enforce
-/// `Send` at the call site; the concrete impls (`TokioTcpTransport`, `TokioRtuTransport`,
-/// `TokioAsciiTransport`) are all `Send`, so their futures are `Send` by inference.
-#[allow(async_fn_in_trait)]
-pub trait AsyncTransport {
+/// Both `send` and `recv` return futures that are `Send`, enabling their use with
+/// `tokio::spawn` without boxing. Implementations using `async fn` syntax are accepted
+/// by the compiler as long as all captured state is `Send`.
+pub trait AsyncTransport: Send {
     /// Send a complete Modbus ADU frame over the transport.
     ///
     /// Implementations must ensure all bytes are written before returning.
-    async fn send(&mut self, adu: &[u8]) -> Result<(), MbusError>;
+    fn send<'a>(
+        &'a mut self,
+        adu: &'a [u8],
+    ) -> impl Future<Output = Result<(), MbusError>> + Send + 'a;
 
     /// Receive exactly one complete Modbus ADU frame.
     ///
     /// Suspends the caller until a full frame is available. See the
     /// [framing contract](AsyncTransport#framing-contract) for details per transport type.
-    async fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError>;
+    fn recv(
+        &mut self,
+    ) -> impl Future<Output = Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError>> + Send + '_;
 
     /// Runtime transport type — used by the server session for framing decisions
     /// (e.g. TCP vs RTU vs ASCII ADU layout, broadcast eligibility).

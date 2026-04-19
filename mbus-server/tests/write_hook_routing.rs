@@ -3,9 +3,9 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 
 #[cfg(feature = "coils")]
 use mbus_server::CoilsModel;
-use mbus_server::ServerCoilHandler;
 #[cfg(feature = "holding-registers")]
 use mbus_server::HoldingRegistersModel;
+use mbus_server::ServerCoilHandler;
 use mbus_server::ServerHoldingRegisterHandler;
 use mbus_server::modbus_app;
 

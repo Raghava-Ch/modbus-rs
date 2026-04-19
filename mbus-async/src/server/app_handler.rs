@@ -4,17 +4,15 @@
 //! - Implement [`AsyncAppHandler`] manually (Level 2 — full control), or
 //! - Let the `#[async_modbus_app]` macro generate the impl (Level 1 — zero boilerplate).
 
-use mbus_core::data_unit::common::{
-    compile_adu_frame, Pdu, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN,
-};
+use heapless::Vec;
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
-use mbus_core::function_codes::public::FunctionCode;
-use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_PER_PDU};
-use heapless::Vec;
+use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
 use std::future::Future;
 
 /// Direction of a Modbus traffic event — mirrors [`mbus_server::TrafficDirection`] for
@@ -91,6 +89,9 @@ pub struct AsyncFileRecordWriteSubRequest {
 /// Produced by the session loop inside [`AsyncServerSession::run`](super::session::AsyncServerSession::run).
 /// Feature flags mirror `mbus-server` exactly: each variant is only present when the
 /// corresponding feature is enabled.
+// Variants use heapless fixed-size buffers (stack-allocated) and are consumed
+// once per request; boxing the large variant would change the public API.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ModbusRequest {
@@ -612,7 +613,11 @@ impl ModbusResponse {
 
     /// Echo a mask-write register (FC16).
     pub fn echo_mask_write(address: u16, and_mask: u16, or_mask: u16) -> Self {
-        ModbusResponse::EchoMaskWrite { address, and_mask, or_mask }
+        ModbusResponse::EchoMaskWrite {
+            address,
+            and_mask,
+            or_mask,
+        }
     }
 
     /// Echo a multi-write (FC0F / FC10).
@@ -633,13 +638,19 @@ impl ModbusResponse {
     /// Single-byte response for FC07 (Read Exception Status).
     #[cfg(feature = "diagnostics")]
     pub fn read_exception_status(status: u8) -> Self {
-        ModbusResponse::SingleByte { fc: FunctionCode::ReadExceptionStatus, value: status }
+        ModbusResponse::SingleByte {
+            fc: FunctionCode::ReadExceptionStatus,
+            value: status,
+        }
     }
 
     /// Diagnostics echo for FC08: echo sub-function + result.
     #[cfg(feature = "diagnostics")]
     pub fn diagnostics_echo(sub_function: u16, result: u16) -> Self {
-        ModbusResponse::DiagnosticsEcho { sub_function, result }
+        ModbusResponse::DiagnosticsEcho {
+            sub_function,
+            result,
+        }
     }
 
     /// Two-u16 response for FC0B (Get Comm Event Counter).
@@ -660,7 +671,10 @@ impl ModbusResponse {
     pub fn comm_event_log(payload: &[u8]) -> Self {
         let mut data: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         let _ = data.extend_from_slice(payload);
-        ModbusResponse::ByteCountPayload { fc: FunctionCode::GetCommEventLog, data }
+        ModbusResponse::ByteCountPayload {
+            fc: FunctionCode::GetCommEventLog,
+            data,
+        }
     }
 
     /// Byte-count-prefixed payload for FC11 (Report Server ID).
@@ -670,7 +684,10 @@ impl ModbusResponse {
     pub fn report_server_id(payload: &[u8]) -> Self {
         let mut data: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         let _ = data.extend_from_slice(payload);
-        ModbusResponse::ByteCountPayload { fc: FunctionCode::ReportServerId, data }
+        ModbusResponse::ByteCountPayload {
+            fc: FunctionCode::ReportServerId,
+            data,
+        }
     }
 
     /// Read Device Identification response (FC2B / MEI 0x0E).
@@ -712,7 +729,10 @@ impl ModbusResponse {
     pub fn read_file_record_response(payload: &[u8]) -> Self {
         let mut data: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         let _ = data.extend_from_slice(payload);
-        ModbusResponse::ByteCountPayload { fc: FunctionCode::ReadFileRecord, data }
+        ModbusResponse::ByteCountPayload {
+            fc: FunctionCode::ReadFileRecord,
+            data,
+        }
     }
 
     /// Echo response for FC15 (Write File Record): pass the `raw_pdu_data` from the request.
@@ -740,9 +760,11 @@ impl ModbusResponse {
             ModbusResponse::EchoRegister { address, value } => {
                 encode_echo_register(address, value, txn_id, unit, transport_type)
             }
-            ModbusResponse::EchoMaskWrite { address, and_mask, or_mask } => {
-                encode_echo_mask_write(address, and_mask, or_mask, txn_id, unit, transport_type)
-            }
+            ModbusResponse::EchoMaskWrite {
+                address,
+                and_mask,
+                or_mask,
+            } => encode_echo_mask_write(address, and_mask, or_mask, txn_id, unit, transport_type),
             ModbusResponse::EchoMultiWrite { fc, address, count } => {
                 encode_echo_multi_write(fc, address, count, txn_id, unit, transport_type)
             }
@@ -751,9 +773,10 @@ impl ModbusResponse {
                 encode_single_byte(fc, value, txn_id, unit, transport_type)
             }
             #[cfg(feature = "diagnostics")]
-            ModbusResponse::DiagnosticsEcho { sub_function, result } => {
-                encode_diagnostics_echo(sub_function, result, txn_id, unit, transport_type)
-            }
+            ModbusResponse::DiagnosticsEcho {
+                sub_function,
+                result,
+            } => encode_diagnostics_echo(sub_function, result, txn_id, unit, transport_type),
             #[cfg(feature = "diagnostics")]
             ModbusResponse::TwoU16 { fc, first, second } => {
                 encode_two_u16(fc, first, second, txn_id, unit, transport_type)
@@ -815,22 +838,10 @@ pub trait AsyncTrafficNotifier {
     ///
     /// Note: `txn_id` is `0` for malformed frames where the header could not be
     /// parsed.  In the normal dispatch path it reflects the actual MBAP transaction ID.
-    fn on_rx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
-    }
+    fn on_rx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
 
     /// Called after a response frame is successfully transmitted.
-    fn on_tx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
-    }
+    fn on_tx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
 
     /// Called when transmitting a response frame fails.
     fn on_tx_error(
@@ -1075,6 +1086,7 @@ fn encode_fifo_data(
 /// Builds the 5-byte MEI header (`code`, `conformity`, `more`, `next_id`, `n_objects`),
 /// appends the raw object triples, then wraps in a MEI-type PDU.
 #[cfg(feature = "diagnostics")]
+#[allow(clippy::too_many_arguments)]
 fn encode_read_device_id(
     read_device_id_code: u8,
     conformity_level: u8,
@@ -1087,13 +1099,23 @@ fn encode_read_device_id(
 ) -> EncodeResult {
     let n_objects = count_mei_objects(objects).map_err(|_| MbusError::InvalidPduLength)?;
     let more_byte: u8 = if more_follows { 0xFF } else { 0x00 };
-    let header = [read_device_id_code, conformity_level, more_byte, next_object_id, n_objects];
+    let header = [
+        read_device_id_code,
+        conformity_level,
+        more_byte,
+        next_object_id,
+        n_objects,
+    ];
     if header.len() + objects.len() > MAX_ADU_FRAME_LEN - 1 {
         return Err(MbusError::BufferTooSmall);
     }
     let mut mei_data: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-    mei_data.extend_from_slice(&header).map_err(|_| MbusError::BufferTooSmall)?;
-    mei_data.extend_from_slice(objects).map_err(|_| MbusError::BufferTooSmall)?;
+    mei_data
+        .extend_from_slice(&header)
+        .map_err(|_| MbusError::BufferTooSmall)?;
+    mei_data
+        .extend_from_slice(objects)
+        .map_err(|_| MbusError::BufferTooSmall)?;
     let pdu = Pdu::build_mei_type(
         FunctionCode::EncapsulatedInterfaceTransport,
         EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
@@ -1121,7 +1143,9 @@ fn encode_exception(
     unit: UnitIdOrSlaveAddr,
     tt: TransportType,
 ) -> EncodeResult {
-    let exception_fc = request_fc.exception_response().ok_or(MbusError::InvalidFunctionCode)?;
+    let exception_fc = request_fc
+        .exception_response()
+        .ok_or(MbusError::InvalidFunctionCode)?;
     let pdu = Pdu::build_byte_payload(exception_fc, code as u8)?;
     compile_adu_frame(txn_id, unit.get(), pdu, tt)
 }

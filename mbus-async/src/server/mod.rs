@@ -33,7 +33,9 @@ pub mod tcp_server;
 pub mod serial_server;
 
 // Flat re-exports for ergonomic use.
-pub use app_handler::{AsyncAppHandler, AsyncAppRequirements, AsyncServerError, ModbusRequest, ModbusResponse};
+pub use app_handler::{
+    AsyncAppHandler, AsyncAppRequirements, AsyncServerError, ModbusRequest, ModbusResponse,
+};
 #[cfg(feature = "traffic")]
 pub use app_handler::{AsyncTrafficDirection, AsyncTrafficNotifier};
 pub use session::AsyncServerSession;

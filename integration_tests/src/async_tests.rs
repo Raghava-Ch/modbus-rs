@@ -1,10 +1,11 @@
 use anyhow::Result;
-use modbus_rs::mbus_async::AsyncTcpClient;
+use modbus_rs::mbus_async::{AsyncError, AsyncTcpClient};
 use modbus_rs::Coils;
 use modbus_rs::{EncapsulatedInterfaceType, ObjectId, ReadDeviceIdCode, SubRequest};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
+use std::time::Duration;
 
 async fn connected_tcp_client(port: u16) -> Result<AsyncTcpClient> {
     let client = AsyncTcpClient::new("127.0.0.1", port)?;
@@ -538,8 +539,8 @@ async fn test_async_tcp_client_read_fifo_queue() -> Result<()> {
 
     let client = connected_tcp_client(addr.port()).await?;
     let fifo = client.read_fifo_queue(1, 0x0010).await?;
-    // Current service implementation builds the response model with ptr_address = 0.
-    assert_eq!(fifo.ptr_address(), 0);
+    // fix_up_response restores ptr_address from the original request.
+    assert_eq!(fifo.ptr_address(), 0x0010);
     assert_eq!(fifo.length(), 1);
     assert_eq!(fifo.queue(), &[0x1234]);
 
@@ -850,24 +851,222 @@ async fn test_async_tcp_client_server_closes_connection() -> Result<()> {
 
 #[tokio::test]
 async fn test_async_tcp_client_server_timeout() -> Result<()> {
+    // Server 1: accepts connection, reads request, holds without responding (simulates hung server).
+    // Server 2: accepts connection after reconnect and responds normally.
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+
+    let server_handle = thread::spawn(move || -> Result<()> {
+        // Connection 1: consume request but never respond — triggers client timeout.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut buf = [0u8; 12];
+            stream.read_exact(&mut buf)?;
+            let _ = done_rx.recv(); // hold open until client has seen Timeout
+        }
+
+        // Connection 2: respond normally so we can verify the pipeline recovered.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut req = [0u8; 12];
+            stream.read_exact(&mut req)?;
+            #[rustfmt::skip]
+            stream.write_all(&[
+                req[0], req[1],
+                0x00, 0x00,
+                0x00, 0x04,
+                req[6], 0x01, 0x01, 0xFF,
+            ])?;
+        }
+        Ok(())
+    });
+
+    let client = AsyncTcpClient::new("127.0.0.1", addr.port())?;
+    client.set_request_timeout(Duration::from_millis(100));
+    client.connect().await?;
+
+    // Timeout — Disconnect is automatically sent to drain the pipeline.
+    let result = client.read_multiple_coils(1, 0, 8).await;
+    assert!(
+        matches!(result, Err(AsyncError::Timeout)),
+        "Expected Timeout, got {result:?}"
+    );
+
+    done_tx.send(()).ok(); // release hung server connection
+
+    // Pipeline self-healed: reconnect and verify the next request succeeds.
+    client.connect().await?;
+    let result = client.read_multiple_coils(1, 0, 8).await;
+    assert!(
+        result.is_ok(),
+        "Expected success after reconnect, got {result:?}"
+    );
+
+    server_handle.join().expect("server thread panicked")?;
+    Ok(())
+}
+
+/// After the server closes the TCP connection the client can reconnect and
+/// continue issuing requests over the new connection.
+#[tokio::test]
+async fn test_async_tcp_client_reconnect_after_disconnect() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let addr = listener.local_addr()?;
 
     let server_handle = thread::spawn(move || -> Result<()> {
-        let (_stream, _) = listener.accept()?;
-        // Simulate slow server - just wait without sending response
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        // Connection 1: serve one request then deliberately close.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut req = [0u8; 12];
+            stream.read_exact(&mut req)?;
+            #[rustfmt::skip]
+            let resp = [req[0], req[1], 0x00, 0x00, 0x00, 0x04, req[6], 0x01, 0x01, 0x01];
+            stream.write_all(&resp)?;
+        } // stream dropped → TCP FIN sent to client
+
+        // Connection 2: serve one request after reconnect.
+        {
+            let (mut stream, _) = listener.accept()?;
+            let mut req = [0u8; 12];
+            stream.read_exact(&mut req)?;
+            #[rustfmt::skip]
+            let resp = [req[0], req[1], 0x00, 0x00, 0x00, 0x04, req[6], 0x01, 0x01, 0x01];
+            stream.write_all(&resp)?;
+        }
         Ok(())
     });
 
-    let client = connected_tcp_client(addr.port()).await?;
-    let result = tokio::time::timeout(
-        std::time::Duration::from_millis(500),
-        client.read_multiple_coils(1, 0, 8),
-    )
-    .await;
+    let client = AsyncTcpClient::new("127.0.0.1", addr.port())?;
+    client.connect().await?;
 
-    assert!(result.is_err(), "Expected timeout");
+    // Request 1: succeeds on connection 1.
+    let r = client.read_multiple_coils(1, 0, 1).await;
+    assert!(r.is_ok(), "First request should succeed: {r:?}");
+
+    // Server has now closed connection 1; the next request should fail.
+    let r = client.read_multiple_coils(1, 0, 1).await;
+    assert!(
+        matches!(r, Err(AsyncError::Mbus(_))),
+        "Expected connection error after server disconnect, got {r:?}"
+    );
+
+    // Reconnect and verify a fresh request succeeds.
+    client.connect().await?;
+    let r = client.read_multiple_coils(1, 0, 1).await;
+    assert!(r.is_ok(), "Request after reconnect should succeed: {r:?}");
+
+    server_handle.join().expect("server thread panicked")?;
+    Ok(())
+}
+
+/// Two requests are in-flight simultaneously (pipeline depth 2).  The server
+/// replies out-of-order to exercise the txn_id routing path.
+#[tokio::test]
+async fn test_async_tcp_client_pipeline_concurrent_requests() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+
+    let server_handle = thread::spawn(move || -> Result<()> {
+        let (mut stream, _) = listener.accept()?;
+
+        // Read both in-flight requests before responding to either.
+        let mut req1 = [0u8; 12];
+        stream.read_exact(&mut req1)?;
+        let mut req2 = [0u8; 12];
+        stream.read_exact(&mut req2)?;
+
+        // Reply to req2 first, then req1 — exercises out-of-order txn_id routing.
+        #[rustfmt::skip]
+        let resp2 = [req2[0], req2[1], 0x00, 0x00, 0x00, 0x04, req2[6], 0x01, 0x01, 0xFF];
+        stream.write_all(&resp2)?;
+        #[rustfmt::skip]
+        let resp1 = [req1[0], req1[1], 0x00, 0x00, 0x00, 0x04, req1[6], 0x01, 0x01, 0xFF];
+        stream.write_all(&resp1)?;
+
+        Ok(())
+    });
+
+    // Pipeline depth 2: both requests can be in-flight at the same time.
+    let client = AsyncTcpClient::<2>::new_with_pipeline("127.0.0.1", addr.port())?;
+    client.connect().await?;
+
+    let (r1, r2) = tokio::join!(
+        client.read_multiple_coils(1, 0, 8),
+        client.read_multiple_coils(1, 0, 8),
+    );
+    assert!(r1.is_ok(), "Pipeline request 1 failed: {r1:?}");
+    assert!(r2.is_ok(), "Pipeline request 2 failed: {r2:?}");
+
+    server_handle.join().expect("server thread panicked")?;
+    Ok(())
+}
+
+/// The traffic notifier receives one TX notification and one RX notification
+/// per successful request.
+#[cfg(feature = "async-traffic")]
+#[tokio::test]
+async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
+    use modbus_rs::mbus_async::AsyncClientNotifier;
+    use modbus_rs::UnitIdOrSlaveAddr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct CountNotifier {
+        tx: Arc<AtomicUsize>,
+        rx: Arc<AtomicUsize>,
+    }
+    impl AsyncClientNotifier for CountNotifier {
+        fn on_tx_frame(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {
+            self.tx.fetch_add(1, Ordering::Relaxed);
+        }
+        fn on_rx_frame(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {
+            self.rx.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+
+    let server_handle = thread::spawn(move || -> Result<()> {
+        let (mut stream, _) = listener.accept()?;
+        let mut req = [0u8; 12];
+        stream.read_exact(&mut req)?;
+        #[rustfmt::skip]
+        stream.write_all(&[
+            req[0], req[1],  // txn_id echo
+            0x00, 0x00,      // protocol
+            0x00, 0x04,      // len
+            req[6],          // unit
+            0x01,            // FC01
+            0x01,            // byte count
+            0xFF,            // 8 coils on
+        ])?;
+        Ok(())
+    });
+
+    let tx_count = Arc::new(AtomicUsize::new(0));
+    let rx_count = Arc::new(AtomicUsize::new(0));
+
+    let client = connected_tcp_client(addr.port()).await?;
+    client.set_traffic_notifier(CountNotifier {
+        tx: tx_count.clone(),
+        rx: rx_count.clone(),
+    });
+
+    client.read_multiple_coils(1, 0, 8).await?;
+
+    use std::sync::atomic::Ordering as AtomicOrd;
+    assert_eq!(
+        tx_count.load(AtomicOrd::Relaxed),
+        1,
+        "Expected 1 TX frame notification"
+    );
+    assert_eq!(
+        rx_count.load(AtomicOrd::Relaxed),
+        1,
+        "Expected 1 RX frame notification"
+    );
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
