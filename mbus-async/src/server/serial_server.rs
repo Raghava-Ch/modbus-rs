@@ -27,7 +27,10 @@ impl<T: mbus_core::transport::AsyncTransport + Send> AsyncSerialServer<T> {
     /// Run the server loop until the port is closed.
     ///
     /// Calls `session.run(app)` internally.
-    pub async fn run<APP: AsyncAppHandler>(&mut self, mut app: APP) -> Result<(), AsyncServerError> {
+    pub async fn run<APP: AsyncAppHandler>(
+        &mut self,
+        mut app: APP,
+    ) -> Result<(), AsyncServerError> {
         self.session.run(&mut app).await
     }
 
@@ -45,13 +48,11 @@ impl<T: mbus_core::transport::AsyncTransport + Send> AsyncSerialServer<T> {
 
 /// Type alias for an RTU serial server.
 #[cfg(feature = "server-serial")]
-pub type AsyncRtuServer =
-    AsyncSerialServer<mbus_serial::TokioRtuTransport>;
+pub type AsyncRtuServer = AsyncSerialServer<mbus_serial::TokioRtuTransport>;
 
 /// Type alias for an ASCII serial server.
 #[cfg(feature = "server-serial")]
-pub type AsyncAsciiServer =
-    AsyncSerialServer<mbus_serial::TokioAsciiTransport>;
+pub type AsyncAsciiServer = AsyncSerialServer<mbus_serial::TokioAsciiTransport>;
 
 #[cfg(feature = "server-serial")]
 impl AsyncRtuServer {
@@ -60,8 +61,8 @@ impl AsyncRtuServer {
         config: &mbus_core::transport::ModbusConfig,
         unit: UnitIdOrSlaveAddr,
     ) -> Result<Self, AsyncServerError> {
-        let transport = mbus_serial::TokioRtuTransport::new(config)
-            .map_err(AsyncServerError::Transport)?;
+        let transport =
+            mbus_serial::TokioRtuTransport::new(config).map_err(AsyncServerError::Transport)?;
         Ok(Self::from_transport(transport, unit))
     }
 }
@@ -73,8 +74,8 @@ impl AsyncAsciiServer {
         config: &mbus_core::transport::ModbusConfig,
         unit: UnitIdOrSlaveAddr,
     ) -> Result<Self, AsyncServerError> {
-        let transport = mbus_serial::TokioAsciiTransport::new(config)
-            .map_err(AsyncServerError::Transport)?;
+        let transport =
+            mbus_serial::TokioAsciiTransport::new(config).map_err(AsyncServerError::Transport)?;
         Ok(Self::from_transport(transport, unit))
     }
 }

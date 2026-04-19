@@ -2930,8 +2930,10 @@ fn generate_async_handler_impl(
 
     let coil_read_route = build_segmented_coil_read_route(&coil_fields);
     let di_read_route = build_segmented_discrete_input_read_route(&discrete_input_fields);
-    let hr_read_route = build_segmented_read_route(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
-    let ir_read_route = build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
+    let hr_read_route =
+        build_segmented_read_route(&hr_fields, quote!(::mbus_server::HoldingRegisterMap));
+    let ir_read_route =
+        build_segmented_read_route(&ir_fields, quote!(::mbus_server::InputRegisterMap));
 
     // ── Async write routes ────────────────────────────────────────────────────
 

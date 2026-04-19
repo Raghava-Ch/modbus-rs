@@ -556,8 +556,12 @@ where
         error: MbusError,
     ) {
         #[cfg(feature = "traffic")]
-        self.app
-            .on_rx_error(txn_id, unit_id_or_slave_addr, error, self.rxed_frame.as_slice());
+        self.app.on_rx_error(
+            txn_id,
+            unit_id_or_slave_addr,
+            error,
+            self.rxed_frame.as_slice(),
+        );
 
         let exception_code = function_code.exception_code_for_error(&error);
 
@@ -1235,15 +1239,18 @@ where
             // Modbus spec) rather than silently resyncing byte-by-byte.
             Err(MbusError::UnsupportedFunction(fc_byte)) => {
                 use TransportType::*;
-                if expected_length >= 8
-                    && matches!(TRANSPORT::TRANSPORT_TYPE, StdTcp | CustomTcp)
-                {
+                if expected_length >= 8 && matches!(TRANSPORT::TRANSPORT_TYPE, StdTcp | CustomTcp) {
                     let txn_hi = self.rxed_frame[0];
                     let txn_lo = self.rxed_frame[1];
                     let unit_id = self.rxed_frame[6];
                     // MBAP(6) + PDU(2): txn(2) proto(2) len=3(2) unit(1) | exc_fc(1) exc_code(1)
                     let exc_frame: [u8; 9] = [
-                        txn_hi, txn_lo, 0x00, 0x00, 0x00, 0x03,
+                        txn_hi,
+                        txn_lo,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x03,
                         unit_id,
                         fc_byte | 0x80,
                         0x01, // Illegal Function

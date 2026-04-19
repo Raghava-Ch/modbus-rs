@@ -16,9 +16,6 @@ pub mod services;
 #[cfg(feature = "diagnostics-stats")]
 pub mod statistics;
 
-#[cfg(feature = "traffic")]
-pub use app::TrafficNotifier;
-pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ServerExceptionHandler};
 pub use app::ServerCoilHandler;
 pub use app::ServerDiagnosticsHandler;
 pub use app::ServerDiscreteInputHandler;
@@ -26,6 +23,9 @@ pub use app::ServerFifoHandler;
 pub use app::ServerFileRecordHandler;
 pub use app::ServerHoldingRegisterHandler;
 pub use app::ServerInputRegisterHandler;
+#[cfg(feature = "traffic")]
+pub use app::TrafficNotifier;
+pub use app::{ForwardingApp, ModbusAppAccess, ModbusAppHandler, ServerExceptionHandler};
 #[cfg(feature = "coils")]
 pub use mbus_macros::CoilsModel;
 #[cfg(feature = "discrete-inputs")]
@@ -34,8 +34,8 @@ pub use mbus_macros::DiscreteInputsModel;
 pub use mbus_macros::HoldingRegistersModel;
 #[cfg(feature = "input-registers")]
 pub use mbus_macros::InputRegistersModel;
-pub use mbus_macros::modbus_app;
 pub use mbus_macros::async_modbus_app;
+pub use mbus_macros::modbus_app;
 pub use services::ServerServices;
 pub use services::resilience::{
     ClockFn, OverflowPolicy, RequestPriority, ResilienceConfig, TimeoutConfig,

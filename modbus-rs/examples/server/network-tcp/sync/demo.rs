@@ -6,14 +6,14 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
     ResilienceConfig, ServerServices, modbus_app,
 };
-use mbus_server::ServerCoilHandler;
-use mbus_server::ServerHoldingRegisterHandler;
-use mbus_server::ServerInputRegisterHandler;
-use mbus_server::ServerExceptionHandler;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -505,9 +505,7 @@ fn main() -> Result<()> {
     println!("Modbus TCP demo server listening on {bind}");
     println!("Unit id: {}", unit.get());
     println!("Supported now: FC01, FC03, FC04, FC05, FC06, FC0F, FC10, FC17");
-    println!(
-        "Try from client tool: read holding 10 / 20..24, read inputs 0..4, read coils 0..7"
-    );
+    println!("Try from client tool: read holding 10 / 20..24, read inputs 0..4, read coils 0..7");
 
     let next_worker_id = AtomicUsize::new(1);
 

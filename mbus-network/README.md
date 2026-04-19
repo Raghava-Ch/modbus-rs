@@ -42,7 +42,7 @@ from:
 
 ```toml
 [dependencies]
-modbus-rs = "0.6.0"
+modbus-rs = "0.7.0"
 ```
 
 ### 2) Create TCP config and connect transport
@@ -81,7 +81,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-network = { version = "0.6.0", features = ["logging"] }
+mbus-network = { version = "0.7.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 

@@ -10,10 +10,10 @@
 
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-#[cfg(feature = "traffic")]
-use mbus_server::TrafficNotifier;
 use mbus_server::ServerCoilHandler;
 use mbus_server::ServerHoldingRegisterHandler;
+#[cfg(feature = "traffic")]
+use mbus_server::TrafficNotifier;
 use mbus_server::{CoilsModel, HoldingRegistersModel, modbus_app};
 
 #[derive(Debug, Default, CoilsModel)]

@@ -540,26 +540,14 @@ impl<A> ForwardingApp<A> {
 
 #[cfg(feature = "traffic")]
 impl<A: ModbusAppAccess> TrafficNotifier for ForwardingApp<A> {
-    fn on_rx_frame(
-        &mut self,
-        txn_id: u16,
-        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        frame: &[u8],
-    ) {
-        self.inner.with_app_mut(|app| {
-            app.on_rx_frame(txn_id, unit_id_or_slave_addr, frame)
-        })
+    fn on_rx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {
+        self.inner
+            .with_app_mut(|app| app.on_rx_frame(txn_id, unit_id_or_slave_addr, frame))
     }
 
-    fn on_tx_frame(
-        &mut self,
-        txn_id: u16,
-        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        frame: &[u8],
-    ) {
-        self.inner.with_app_mut(|app| {
-            app.on_tx_frame(txn_id, unit_id_or_slave_addr, frame)
-        })
+    fn on_tx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {
+        self.inner
+            .with_app_mut(|app| app.on_tx_frame(txn_id, unit_id_or_slave_addr, frame))
     }
 
     fn on_rx_error(
@@ -569,9 +557,8 @@ impl<A: ModbusAppAccess> TrafficNotifier for ForwardingApp<A> {
         error: MbusError,
         frame: &[u8],
     ) {
-        self.inner.with_app_mut(|app| {
-            app.on_rx_error(txn_id, unit_id_or_slave_addr, error, frame)
-        })
+        self.inner
+            .with_app_mut(|app| app.on_rx_error(txn_id, unit_id_or_slave_addr, error, frame))
     }
 
     fn on_tx_error(
@@ -581,9 +568,8 @@ impl<A: ModbusAppAccess> TrafficNotifier for ForwardingApp<A> {
         error: MbusError,
         frame: &[u8],
     ) {
-        self.inner.with_app_mut(|app| {
-            app.on_tx_error(txn_id, unit_id_or_slave_addr, error, frame)
-        })
+        self.inner
+            .with_app_mut(|app| app.on_tx_error(txn_id, unit_id_or_slave_addr, error, frame))
     }
 }
 impl<A> ServerExceptionHandler for ForwardingApp<A>

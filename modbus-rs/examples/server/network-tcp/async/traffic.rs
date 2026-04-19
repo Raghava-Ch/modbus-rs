@@ -20,7 +20,7 @@
 //! ```
 
 use anyhow::{Context, Result};
-use mbus_async::server::{AsyncTrafficDirection, AsyncTrafficNotifier, AsyncTcpServer};
+use mbus_async::server::{AsyncTcpServer, AsyncTrafficDirection, AsyncTrafficNotifier};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};

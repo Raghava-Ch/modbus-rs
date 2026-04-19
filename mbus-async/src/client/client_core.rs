@@ -1,7 +1,7 @@
 //! Core async client handle shared by all transport flavours.
 //!
 //! [`AsyncClientCore`] is the single place that owns the channel to the
-//! background worker thread and implements every Modbus request method.
+//! background [`ClientTask`] and implements every Modbus request method.
 //! Transport-specific client types (`AsyncTcpClient`, `AsyncSerialClient`)
 //! store an `AsyncClientCore` as their only field and expose its API
 //! transparently via [`std::ops::Deref`].
@@ -11,134 +11,190 @@
 //! ```text
 //! AsyncTcpClient / AsyncSerialClient
 //!   └── AsyncClientCore   (this module)
-//!         ├── Sender<WorkerCommand>  ──────► background std::thread
-//!         │                                    └── run_worker loop
-//!         │                                          └── ClientServices (sync)
-//!         └── AtomicU16  (monotonic transaction counter)
+//!         ├── mpsc::Sender<TaskCommand>  ──────► ClientTask::run()  (tokio task)
+//!         └── watch::Receiver<usize>            (pending-request count)
 //! ```
 //!
 //! Each public async method:
-//! 1. Allocates a `oneshot` channel.
-//! 2. Sends a [`WorkerCommand`] (carrying the oneshot sender) over the mpsc channel.
+//! 1. Creates a `oneshot` channel.
+//! 2. Sends a [`TaskCommand::Request`] (carrying the oneshot sender) over the mpsc channel.
 //! 3. `await`s the oneshot receiver for the reply.
+//!
+//! [`ClientTask`]: crate::client::task::ClientTask
 
-use super::*;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
+use tokio::sync::{mpsc, oneshot};
+
+use mbus_core::errors::MbusError;
+use mbus_core::transport::UnitIdOrSlaveAddr;
+
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
+#[cfg(feature = "coils")]
+use mbus_core::models::coil::Coils;
+#[cfg(feature = "diagnostics")]
+use mbus_core::models::diagnostic::{DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode};
+#[cfg(feature = "discrete-inputs")]
+use mbus_core::models::discrete_input::DiscreteInputs;
+#[cfg(feature = "fifo")]
+use mbus_core::models::fifo_queue::FifoQueue;
+#[cfg(feature = "file-record")]
+use mbus_core::models::file_record::{SubRequest, SubRequestParams};
+#[cfg(feature = "registers")]
+use mbus_core::models::register::Registers;
+
+use crate::client::command::{ClientRequest, TaskCommand};
+use crate::client::response::ClientResponse;
+use crate::client::task::PendingCountReceiver;
+
+#[cfg(feature = "traffic")]
+use crate::client::notifier::{AsyncClientNotifier, NotifierStore};
+
+use super::AsyncError;
+#[cfg(feature = "diagnostics")]
+use super::{CommEventLogResponse, DiagnosticsDataResponse};
 
 // ── Core handle ─────────────────────────────────────────────────────────────
 
 /// Shared async client handle.
 ///
-/// Owns the `mpsc::Sender` that drives the background poll worker and a
-/// monotonically-incrementing transaction counter used to correlate pending
-/// requests.
+/// Owns the `mpsc::Sender` that drives the background async task and a
+/// `watch::Receiver` used for a synchronous `has_pending_requests()` query.
 ///
-/// Dropping this value sends a [`WorkerCommand::Shutdown`] to the worker
-/// thread so it exits cleanly.
+/// Dropping this value closes the channel, which causes the background
+/// [`ClientTask`] to exit cleanly via its `cmd_rx.recv()` returning `None`.
+///
+/// [`ClientTask`]: crate::client::task::ClientTask
 pub struct AsyncClientCore {
-    sender: Sender<WorkerCommand>,
-    next_txn_id: AtomicU16,
+    cmd_tx: mpsc::Sender<TaskCommand>,
+    pending_count_rx: PendingCountReceiver,
+    /// Per-request timeout in nanoseconds; 0 = disabled.
+    request_timeout_ns: Arc<AtomicU64>,
     #[cfg(feature = "traffic")]
-    traffic_handler: TrafficHandlerStore,
+    notifier: NotifierStore,
 }
 
 impl AsyncClientCore {
-    /// Creates a new core handle from the sending half of an already-spawned
-    /// worker channel.  The transaction counter starts at 1.
-    #[cfg(feature = "traffic")]
-    pub(super) fn new(sender: Sender<WorkerCommand>, traffic_handler: TrafficHandlerStore) -> Self {
+    /// Creates a new core handle wired to an already-spawned [`ClientTask`].
+    ///
+    /// [`ClientTask`]: crate::client::task::ClientTask
+    pub(super) fn new(
+        cmd_tx: mpsc::Sender<TaskCommand>,
+        pending_count_rx: PendingCountReceiver,
+        #[cfg(feature = "traffic")] notifier: NotifierStore,
+    ) -> Self {
         Self {
-            sender,
-            next_txn_id: AtomicU16::new(1),
+            cmd_tx,
+            pending_count_rx,
+            request_timeout_ns: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "traffic")]
-            traffic_handler,
-        }
-    }
-
-    /// Creates a new core handle from the sending half of an already-spawned
-    /// worker channel. The transaction counter starts at 1.
-    #[cfg(not(feature = "traffic"))]
-    pub(super) fn new(sender: Sender<WorkerCommand>) -> Self {
-        Self {
-            sender,
-            next_txn_id: AtomicU16::new(1),
+            notifier,
         }
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────
 
-    /// Returns the next transaction id (wraps on overflow).
-    fn next_txn_id(&self) -> u16 {
-        self.next_txn_id.fetch_add(1, Ordering::Relaxed)
-    }
-
-    /// Sends a command to the worker and awaits the corresponding response.
+    /// Sends a [`ClientRequest`] to the background task and awaits the reply.
     ///
-    /// `build` receives the oneshot sender and must return the [`WorkerCommand`]
-    /// that wraps it so the worker can resolve the future later.
-    async fn request_with<F>(&self, build: F) -> Result<WorkerResponse, AsyncError>
-    where
-        F: FnOnce(PendingSender) -> WorkerCommand,
-    {
-        let (sender, receiver) = oneshot::channel();
-        let command = build(sender);
-
-        self.sender
-            .send(command)
+    /// If a per-request timeout is set via [`set_request_timeout`](Self::set_request_timeout)
+    /// and no response arrives within that deadline, returns [`AsyncError::Timeout`].
+    async fn send_request(&self, params: ClientRequest) -> Result<ClientResponse, AsyncError> {
+        let (resp_tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(TaskCommand::Request { params, resp_tx })
+            .await
             .map_err(|_| AsyncError::WorkerClosed)?;
 
-        receiver
-            .await
-            .map_err(|_| AsyncError::WorkerClosed)?
-            .map_err(AsyncError::from)
+        let timeout_ns = self.request_timeout_ns.load(Ordering::Relaxed);
+        if timeout_ns > 0 {
+            let outcome = tokio::time::timeout(Duration::from_nanos(timeout_ns), rx).await;
+            if outcome.is_err() {
+                // Transport may be hung.  Send a non-blocking Disconnect so the
+                // background task drains the pipeline and closes the transport;
+                // the caller can then call connect() to recover.
+                let _ = self.cmd_tx.try_send(TaskCommand::Disconnect);
+                return Err(AsyncError::Timeout);
+            }
+            outcome
+                .unwrap()
+                .map_err(|_| AsyncError::WorkerClosed)?
+                .map_err(AsyncError::Mbus)
+        } else {
+            rx.await
+                .map_err(|_| AsyncError::WorkerClosed)?
+                .map_err(AsyncError::Mbus)
+        }
     }
+
+    // ── Connection ───────────────────────────────────────────────────────
 
     /// Establishes the underlying transport connection.
     ///
-    /// Async client constructors only build the worker and state machine. Call
-    /// this method before issuing Modbus requests.
+    /// Must be called once before issuing Modbus requests.  Can be called
+    /// again after a disconnect to reconnect.
     pub async fn connect(&self) -> Result<(), AsyncError> {
-        let response = self
-            .request_with(|sender| WorkerCommand::Connect { sender })
-            .await?;
-
-        match response {
-            WorkerResponse::Ack => Ok(()),
-            _ => Err(AsyncError::UnexpectedResponseType),
-        }
+        let (resp_tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(TaskCommand::Connect { resp_tx })
+            .await
+            .map_err(|_| AsyncError::WorkerClosed)?;
+        rx.await
+            .map_err(|_| AsyncError::WorkerClosed)?
+            .map_err(AsyncError::Mbus)
     }
 
-    /// Returns `true` when the underlying sync client still has in-flight
-    /// requests waiting for response/timeout resolution.
-    pub async fn has_pending_requests(&self) -> Result<bool, AsyncError> {
-        let response = self
-            .request_with(|sender| WorkerCommand::HasPendingRequests { sender })
-            .await?;
-
-        match response {
-            WorkerResponse::HasPendingRequests(value) => Ok(value),
-            _ => Err(AsyncError::UnexpectedResponseType),
-        }
-    }
-
-    #[cfg(feature = "traffic")]
-    /// Registers (or replaces) a dedicated traffic-dispatcher callback.
+    /// Returns `true` when there are requests in-flight awaiting a response.
     ///
-    /// The callback is invoked from a dedicated dispatcher thread and should
-    /// remain lightweight and non-blocking.
-    pub fn set_traffic_handler<F>(&self, handler: F)
-    where
-        F: FnMut(&TrafficEvent) + Send + 'static,
-    {
-        if let Ok(mut slot) = self.traffic_handler.lock() {
-            *slot = Some(Box::new(handler));
+    /// This is a **synchronous** check — no `.await` required.
+    pub fn has_pending_requests(&self) -> bool {
+        *self.pending_count_rx.borrow() > 0
+    }
+    // ── Request timeout ──────────────────────────────────────────────────────────
+
+    /// Sets a per-request deadline applied to every subsequent request call.
+    ///
+    /// If a response is not received within `timeout`, the method returns
+    /// [`AsyncError::Timeout`].  The in-flight entry remains in the background
+    /// task until the transport delivers or errors; calling
+    /// [`connect`](Self::connect) resets transport state.
+    ///
+    /// The timeout can be updated at any time and takes effect on the next
+    /// request.  Call [`clear_request_timeout`](Self::clear_request_timeout) to
+    /// remove it.
+    pub fn set_request_timeout(&self, timeout: Duration) {
+        self.request_timeout_ns.store(
+            u64::try_from(timeout.as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Removes the per-request timeout set by
+    /// [`set_request_timeout`](Self::set_request_timeout), allowing requests to
+    /// wait indefinitely for a server response.
+    pub fn clear_request_timeout(&self) {
+        self.request_timeout_ns.store(0, Ordering::Relaxed);
+    }
+    // ── Traffic notifier ─────────────────────────────────────────────────
+
+    /// Registers (or replaces) an [`AsyncClientNotifier`] for traffic events.
+    ///
+    /// The notifier is invoked from the background task on every transmitted
+    /// and received frame.
+    #[cfg(feature = "traffic")]
+    pub fn set_traffic_notifier<N: AsyncClientNotifier + Send + 'static>(&self, notifier: N) {
+        if let Ok(mut g) = self.notifier.try_lock() {
+            *g = Some(Box::new(notifier));
         }
     }
 
+    /// Removes any previously registered traffic notifier.
     #[cfg(feature = "traffic")]
-    /// Removes any previously registered traffic callback.
-    pub fn clear_traffic_handler(&self) {
-        if let Ok(mut slot) = self.traffic_handler.lock() {
-            *slot = None;
+    pub fn clear_traffic_notifier(&self) {
+        if let Ok(mut g) = self.notifier.try_lock() {
+            *g = None;
         }
     }
 
@@ -154,19 +210,16 @@ impl AsyncClientCore {
         address: u16,
         quantity: u16,
     ) -> Result<Coils, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadMultipleCoils {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadMultipleCoils {
                 unit,
                 address,
                 quantity,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Coils(coils) => Ok(coils),
+            .await?
+        {
+            ClientResponse::Coils(coils) => Ok(coils),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -181,19 +234,16 @@ impl AsyncClientCore {
         address: u16,
         value: bool,
     ) -> Result<(u16, bool), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::WriteSingleCoil {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::WriteSingleCoil {
                 unit,
                 address,
                 value,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Coils(coils) => {
+            .await?
+        {
+            ClientResponse::Coils(coils) => {
                 let v = coils.value(coils.from_address()).unwrap_or(false);
                 Ok((coils.from_address(), v))
             }
@@ -211,19 +261,16 @@ impl AsyncClientCore {
         address: u16,
         coils: &Coils,
     ) -> Result<(u16, u16), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::WriteMultipleCoils {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::WriteMultipleCoils {
                 unit,
                 address,
                 coils: coils.clone(),
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Coils(coils) => Ok((coils.from_address(), coils.quantity())),
+            .await?
+        {
+            ClientResponse::Coils(coils) => Ok((coils.from_address(), coils.quantity())),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -240,19 +287,16 @@ impl AsyncClientCore {
         address: u16,
         quantity: u16,
     ) -> Result<Registers, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadHoldingRegisters {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadHoldingRegisters {
                 unit,
                 address,
                 quantity,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Registers(registers) => Ok(registers),
+            .await?
+        {
+            ClientResponse::Registers(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -267,19 +311,16 @@ impl AsyncClientCore {
         address: u16,
         quantity: u16,
     ) -> Result<Registers, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadInputRegisters {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadInputRegisters {
                 unit,
                 address,
                 quantity,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Registers(registers) => Ok(registers),
+            .await?
+        {
+            ClientResponse::Registers(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -294,19 +335,16 @@ impl AsyncClientCore {
         address: u16,
         value: u16,
     ) -> Result<(u16, u16), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::WriteSingleRegister {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::WriteSingleRegister {
                 unit,
                 address,
                 value,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::SingleRegisterWrite { address, value } => Ok((address, value)),
+            .await?
+        {
+            ClientResponse::SingleRegisterWrite { address, value } => Ok((address, value)),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -321,19 +359,21 @@ impl AsyncClientCore {
         address: u16,
         values: &[u16],
     ) -> Result<(u16, u16), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::WriteMultipleRegisters {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        let hv =
+            heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                values,
+            )
+            .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
+        match self
+            .send_request(ClientRequest::WriteMultipleRegisters {
                 unit,
                 address,
-                values: values.to_vec(),
-                sender,
+                values: hv,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Registers(regs) => Ok((regs.from_address(), regs.quantity())),
+            .await?
+        {
+            ClientResponse::Registers(regs) => Ok((regs.from_address(), regs.quantity())),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -352,21 +392,23 @@ impl AsyncClientCore {
         write_address: u16,
         write_values: &[u16],
     ) -> Result<Registers, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadWriteMultipleRegisters {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        let hv =
+            heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                write_values,
+            )
+            .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
+        match self
+            .send_request(ClientRequest::ReadWriteMultipleRegisters {
                 unit,
                 read_address,
                 read_quantity,
                 write_address,
-                write_values: write_values.to_vec(),
-                sender,
+                write_values: hv,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::Registers(regs) => Ok(regs),
+            .await?
+        {
+            ClientResponse::Registers(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -382,20 +424,17 @@ impl AsyncClientCore {
         and_mask: u16,
         or_mask: u16,
     ) -> Result<(), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::MaskWriteRegister {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::MaskWriteRegister {
                 unit,
                 address,
                 and_mask,
                 or_mask,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::MaskWriteRegister => Ok(()),
+            .await?
+        {
+            ClientResponse::MaskWriteRegister => Ok(()),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -412,19 +451,16 @@ impl AsyncClientCore {
         address: u16,
         quantity: u16,
     ) -> Result<DiscreteInputs, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadDiscreteInputs {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadDiscreteInputs {
                 unit,
                 address,
                 quantity,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::DiscreteInputs(di) => Ok(di),
+            .await?
+        {
+            ClientResponse::DiscreteInputs(di) => Ok(di),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -440,18 +476,12 @@ impl AsyncClientCore {
         unit_id: u8,
         address: u16,
     ) -> Result<FifoQueue, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadFifoQueue {
-                txn_id: self.next_txn_id(),
-                unit,
-                address,
-                sender,
-            })
-            .await?;
-
-        match response {
-            WorkerResponse::FifoQueue(queue) => Ok(queue),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadFifoQueue { unit, address })
+            .await?
+        {
+            ClientResponse::FifoQueue(queue) => Ok(queue),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -467,18 +497,15 @@ impl AsyncClientCore {
         unit_id: u8,
         sub_request: &SubRequest,
     ) -> Result<Vec<SubRequestParams>, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadFileRecord {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadFileRecord {
                 unit,
                 sub_request: sub_request.clone(),
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::FileRecordRead(data) => Ok(data),
+            .await?
+        {
+            ClientResponse::FileRecordRead(data) => Ok(data.into_iter().collect()),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -490,18 +517,15 @@ impl AsyncClientCore {
         unit_id: u8,
         sub_request: &SubRequest,
     ) -> Result<(), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::WriteFileRecord {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::WriteFileRecord {
                 unit,
                 sub_request: sub_request.clone(),
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::FileRecordWrite => Ok(()),
+            .await?
+        {
+            ClientResponse::FileRecordWrite => Ok(()),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -509,9 +533,6 @@ impl AsyncClientCore {
     // ── Diagnostics methods ───────────────────────────────────────────────
 
     /// Reads device identification objects (FC 43 / MEI 14).
-    ///
-    /// `read_device_id_code` controls the conformity level to query and
-    /// `object_id` selects the first object to read.
     #[cfg(feature = "diagnostics")]
     pub async fn read_device_identification(
         &self,
@@ -519,19 +540,16 @@ impl AsyncClientCore {
         read_device_id_code: ReadDeviceIdCode,
         object_id: ObjectId,
     ) -> Result<DeviceIdentificationResponse, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadDeviceIdentification {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadDeviceIdentification {
                 unit,
                 read_device_id_code,
                 object_id,
-                sender,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::DeviceIdentification(resp) => Ok(resp),
+            .await?
+        {
+            ClientResponse::DeviceIdentification(resp) => Ok(resp),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -546,47 +564,41 @@ impl AsyncClientCore {
         mei_type: EncapsulatedInterfaceType,
         data: &[u8],
     ) -> Result<(EncapsulatedInterfaceType, Vec<u8>), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::EncapsulatedInterfaceTransport {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        let hv =
+            heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                data,
+            )
+            .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
+        match self
+            .send_request(ClientRequest::EncapsulatedInterfaceTransport {
                 unit,
                 mei_type,
-                data: data.to_vec(),
-                sender,
+                data: hv,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::EncapsulatedInterfaceTransport { mei_type, data } => {
-                Ok((mei_type, data))
+            .await?
+        {
+            ClientResponse::EncapsulatedInterfaceTransport { mei_type, data } => {
+                Ok((mei_type, data.as_slice().to_vec()))
             }
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
 
     /// Reads the device exception status (FC 07).
-    ///
-    /// Returns the 8-bit exception status byte.
     #[cfg(feature = "diagnostics")]
     pub async fn read_exception_status(&self, unit_id: u8) -> Result<u8, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReadExceptionStatus {
-                txn_id: self.next_txn_id(),
-                unit,
-                sender,
-            })
-            .await?;
-
-        match response {
-            WorkerResponse::ExceptionStatus(status) => Ok(status),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReadExceptionStatus { unit })
+            .await?
+        {
+            ClientResponse::ExceptionStatus(status) => Ok(status),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
 
-    /// Sends a diagnostics request (FC 08) with the given `sub_function` and
-    /// `data` words.
+    /// Sends a diagnostics request (FC 08).
     ///
     /// Returns [`DiagnosticsDataResponse`] with echoed `sub_function` and `data`.
     #[cfg(feature = "diagnostics")]
@@ -596,19 +608,24 @@ impl AsyncClientCore {
         sub_function: DiagnosticSubFunction,
         data: &[u16],
     ) -> Result<DiagnosticsDataResponse, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::Diagnostics {
-                txn_id: self.next_txn_id(),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        let hv =
+            heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
+                data,
+            )
+            .map_err(|_| AsyncError::Mbus(MbusError::BufferTooSmall))?;
+        match self
+            .send_request(ClientRequest::Diagnostics {
                 unit,
                 sub_function,
-                data: data.to_vec(),
-                sender,
+                data: hv,
             })
-            .await?;
-
-        match response {
-            WorkerResponse::DiagnosticsData(resp) => Ok(resp),
+            .await?
+        {
+            ClientResponse::DiagnosticsData { sub_function, data } => Ok(DiagnosticsDataResponse {
+                sub_function,
+                data: data.as_slice().to_vec(),
+            }),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -618,17 +635,12 @@ impl AsyncClientCore {
     /// Returns `(status_word, event_count)`.
     #[cfg(feature = "diagnostics")]
     pub async fn get_comm_event_counter(&self, unit_id: u8) -> Result<(u16, u16), AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::GetCommEventCounter {
-                txn_id: self.next_txn_id(),
-                unit,
-                sender,
-            })
-            .await?;
-
-        match response {
-            WorkerResponse::CommEventCounter {
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::GetCommEventCounter { unit })
+            .await?
+        {
+            ClientResponse::CommEventCounter {
                 status,
                 event_count,
             } => Ok((status, event_count)),
@@ -644,17 +656,22 @@ impl AsyncClientCore {
         &self,
         unit_id: u8,
     ) -> Result<CommEventLogResponse, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::GetCommEventLog {
-                txn_id: self.next_txn_id(),
-                unit,
-                sender,
-            })
-            .await?;
-
-        match response {
-            WorkerResponse::CommEventLog(resp) => Ok(resp),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::GetCommEventLog { unit })
+            .await?
+        {
+            ClientResponse::CommEventLog {
+                status,
+                event_count,
+                message_count,
+                events,
+            } => Ok((
+                status,
+                event_count,
+                message_count,
+                events.as_slice().to_vec(),
+            )),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -664,30 +681,13 @@ impl AsyncClientCore {
     /// Returns the raw server ID byte array.
     #[cfg(feature = "diagnostics")]
     pub async fn report_server_id(&self, unit_id: u8) -> Result<Vec<u8>, AsyncError> {
-        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::from)?;
-        let response = self
-            .request_with(|sender| WorkerCommand::ReportServerId {
-                txn_id: self.next_txn_id(),
-                unit,
-                sender,
-            })
-            .await?;
-
-        match response {
-            WorkerResponse::ReportServerId(data) => Ok(data),
+        let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        match self
+            .send_request(ClientRequest::ReportServerId { unit })
+            .await?
+        {
+            ClientResponse::ReportServerId(data) => Ok(data.as_slice().to_vec()),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
-    }
-}
-
-// ── Lifecycle ────────────────────────────────────────────────────────────────
-
-impl Drop for AsyncClientCore {
-    /// Signals the background worker thread to stop.
-    ///
-    /// The send may fail if the worker already exited (e.g. transport error);
-    /// that is silently ignored because the thread is already gone.
-    fn drop(&mut self) {
-        let _ = self.sender.send(WorkerCommand::Shutdown);
     }
 }

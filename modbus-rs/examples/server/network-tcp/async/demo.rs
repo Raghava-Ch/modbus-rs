@@ -14,9 +14,9 @@
 //! Then connect any Modbus TCP client to 127.0.0.1:5502 (unit 1).
 
 use anyhow::{Context, Result};
-use mbus_server::{CoilsModel, HoldingRegistersModel, InputRegistersModel, async_modbus_app};
 use mbus_async::server::AsyncTcpServer;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_server::{CoilsModel, HoldingRegistersModel, InputRegistersModel, async_modbus_app};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
@@ -81,7 +81,9 @@ fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
 fn parse_cli() -> Result<(String, u16, u8)> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        println!("Usage: modbus_rs_server_async_tcp_demo [--host HOST] [--port PORT] [--unit UNIT]");
+        println!(
+            "Usage: modbus_rs_server_async_tcp_demo [--host HOST] [--port PORT] [--unit UNIT]"
+        );
         std::process::exit(0);
     }
 
@@ -103,15 +105,11 @@ fn parse_cli() -> Result<(String, u16, u8)> {
                 i += 2;
             }
             "--port" if i + 1 < args.len() => {
-                port = args[i + 1]
-                    .parse::<u16>()
-                    .context("invalid --port")?;
+                port = args[i + 1].parse::<u16>().context("invalid --port")?;
                 i += 2;
             }
             "--unit" if i + 1 < args.len() => {
-                unit = args[i + 1]
-                    .parse::<u8>()
-                    .context("invalid --unit")?;
+                unit = args[i + 1].parse::<u8>().context("invalid --unit")?;
                 i += 2;
             }
             other => {
@@ -143,7 +141,8 @@ fn spawn_telemetry_task(shared: Arc<Mutex<HvacServerApp>>) {
             {
                 let mut app = shared.lock().await;
                 app.input.set_zone_temp_tenths_c(temp);
-                app.input.set_discharge_temp_tenths_c(temp.saturating_add(55));
+                app.input
+                    .set_discharge_temp_tenths_c(temp.saturating_add(55));
             }
             if up {
                 temp = (temp + 1).min(265);
@@ -169,7 +168,10 @@ async fn main() -> Result<()> {
     let bind = format!("{host}:{port}");
     let unit = unit_id(unit_raw);
 
-    println!("Async HVAC Modbus TCP server on {bind}  (unit {})", unit.get());
+    println!(
+        "Async HVAC Modbus TCP server on {bind}  (unit {})",
+        unit.get()
+    );
     println!("Supported FC: 01, 03, 04, 05, 06, 0F, 10");
     println!("Holding  addr 0 = setpoint (tenths °C), addr 1 = fan_mode");
     println!("Input    addr 0 = zone temp,            addr 1 = discharge temp");

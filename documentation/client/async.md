@@ -10,7 +10,7 @@ Enable the `async` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", features = ["async"] }
+modbus-rs = { version = "0.6", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -109,43 +109,104 @@ cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu \
 
 ## Architecture
 
-The async client wraps the synchronous `ClientServices` with a Tokio runtime:
+The async client is a pure-Tokio transport driver — no worker threads, no poll loops:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  AsyncTcpClient / AsyncSerialClient                      │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │  Arc<Mutex<ClientServices>>                        │  │
-│  └────────────────────────────────────────────────────┘  │
-│                          ▲                               │
-│                          │                               │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │  Internal worker thread                          │    │
-│  │  - Calls client.poll() in a loop                 │    │
-│  │  - Resolves per-request Futures on response      │    │
-│  └──────────────────────────────────────────────────┘    │
+│  └── AsyncClientCore                                     │
+│        ├── mpsc::Sender<TaskCommand>  ─────────────────┐ │
+│        ├── watch::Receiver<usize>  (pending count)     │ │
+│        └── Arc<AtomicU64>          (timeout ns)        │ │
+└────────────────────────────────────────────────────────│─┘
+                                                         │
+                                          tokio::spawn   ▼
+┌──────────────────────────────────────────────────────────┐
+│  ClientTask<T, N>  (background Tokio task)               │
+│                                                          │
+│  tokio::select! {                                        │
+│    frame ← transport.recv_frame()                        │
+│    cmd   ← mpsc::Receiver<TaskCommand>                   │
+│  }                                                       │
+│                                                          │
+│  pending: HashMap<txn_id, (request, oneshot::Sender)>    │
+│  queued:  VecDeque  (overflow when in_flight == N)       │
 └──────────────────────────────────────────────────────────┘
 ```
 
 ### How It Works
 
-1. `new()` / `new_rtu()` creates the client and an internal worker thread that drives `ClientServices::poll()`
-2. Each request method (e.g. `read_multiple_coils`) sends a command to the worker and returns a `Future`
-3. The worker processes the response and resolves the `Future` — no callbacks involved
-4. The worker is event-driven when idle: it blocks when there are no in-flight requests and wakes on new commands.
-5. During active traffic it polls at the configured `poll_interval`.
-6. `.await`-ing the `Future` gives you the response value directly, or an `AsyncError` on failure
+1. `new()` / `new_rtu()` spawns a Tokio task (`tokio::spawn(task.run())`). No threads are created.
+2. Each request method creates a `oneshot` channel, sends a `TaskCommand::Request` carrying the
+   oneshot sender over the mpsc channel, and `await`s the oneshot receiver.
+3. The Tokio task runs `tokio::select!` between receiving frames from the transport and
+   receiving new commands from the public API.
+4. On a complete response frame the task matches it by transaction id to the pending entry and
+   resolves the caller's oneshot with the typed result.
+5. `has_pending_requests()` is **synchronous** — it reads a `watch` channel; no `.await` needed.
+6. Dropping all client handles closes the mpsc channel; the task's `recv()` returns `None`
+   and the task exits cleanly.
 
-You can query worker state explicitly:
+### Pipelining
 
-```rust
-let has_pending = client.has_pending_requests().await?;
-println!("pending={has_pending}");
-```
+The `N` const generic controls how many requests may be in-flight simultaneously.
+
+- **TCP**: default `N = 9` (`AsyncTcpClient<9>`). Requests beyond `N` are queued locally
+  and dispatched as pipeline slots become available.
+- **Serial**: always `N = 1` — Modbus serial is a strict request/reply protocol.
 
 ### Drop Behavior
 
-When the async client is dropped, the worker thread stops. Any in-flight `Future`s resolve with `AsyncError::WorkerClosed`.
+When all `AsyncTcpClient` / `AsyncSerialClient` handles are dropped, the mpsc sender closes.
+The background Tokio task exits on the next iteration. Any in-flight `Future`s that are still
+being awaited resolve with `AsyncError::WorkerClosed`.
+
+---
+
+## Checking Pending Requests
+
+`has_pending_requests()` is synchronous — no `.await` required:
+
+<!-- validate: skip -->
+```rust
+if client.has_pending_requests() {
+    println!("requests still in flight");
+}
+```
+
+---
+
+## Per-Request Timeout
+
+Set a deadline applied to every subsequent request:
+
+<!-- validate: skip -->
+```rust
+use std::time::Duration;
+
+client.set_request_timeout(Duration::from_millis(500));
+
+// AsyncError::Timeout is returned if no response arrives within 500ms.
+// The pipeline is automatically drained and the transport closed.
+client.clear_request_timeout(); // remove the deadline
+```
+
+After a timeout, call `client.connect().await?` to reopen the transport.
+
+---
+
+## Reconnect After Disconnect
+
+`connect()` is safe to call at any time — it closes any active transport first, then opens a
+new connection. Use it after a transport error or `AsyncError::Timeout`:
+
+<!-- validate: skip -->
+```rust
+if let Err(_) = client.read_multiple_coils(1, 0, 8).await {
+    client.connect().await?; // reconnect and retry
+    let _ = client.read_multiple_coils(1, 0, 8).await?;
+}
+```
 
 ---
 
@@ -155,17 +216,30 @@ Enable with `traffic` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", features = ["async", "traffic"] }
+modbus-rs = { version = "0.7.0", features = ["async", "traffic"] }
 ```
 
 ```rust
-use modbus_rs::mbus_async::{AsyncTcpClient, TrafficEvent};
+use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
-let client = AsyncTcpClient::new("192.168.1.10", 502)?;
-client.set_traffic_handler(|event: &TrafficEvent| {
-    println!("{:?} txn={} {:02X?}", event.direction, event.txn_id, event.frame);
-});
-client.connect().await?;
+struct FrameLogger;
+impl AsyncClientNotifier for FrameLogger {
+    fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+    fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
+        println!("[RX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+    client.set_traffic_notifier(FrameLogger);
+    client.connect().await?;
+    Ok(())
+}
 ```
 
 See [modbus-rs/examples/client/network-tcp/async/traffic.rs](../../modbus-rs/examples/client/network-tcp/async/traffic.rs)

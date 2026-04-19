@@ -14,7 +14,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 ```toml
 [dependencies]
-modbus-rs = "0.6.0"
+modbus-rs = "0.7.0"
 ```
 
 ```rust

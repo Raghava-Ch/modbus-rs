@@ -17,16 +17,16 @@ use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{
     ModbusConfig, SerialMode, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
 use mbus_server::{ResilienceConfig, ServerExceptionHandler, ServerServices};
-use mbus_server::ServerCoilHandler;
-use mbus_server::ServerDiscreteInputHandler;
-use mbus_server::ServerHoldingRegisterHandler;
-use mbus_server::ServerInputRegisterHandler;
-use mbus_server::ServerFifoHandler;
-use mbus_server::ServerFileRecordHandler;
-use mbus_server::ServerDiagnosticsHandler;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

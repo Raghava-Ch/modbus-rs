@@ -30,14 +30,14 @@ Control binary size and functionality by enabling only what you need.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", features = ["server"] }
+modbus-rs = { version = "0.7.0", features = ["server"] }
 ```
 
 ### Minimal TCP Server (Coils + Registers)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
     "tcp",
     "coils",
@@ -49,7 +49,7 @@ modbus-rs = { version = "0.6.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
     "serial-rtu",
     "coils",
@@ -61,7 +61,7 @@ modbus-rs = { version = "0.6.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6.0", default-features = false, features = [
+modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
     "tcp",
     "coils",

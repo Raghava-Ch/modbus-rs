@@ -135,11 +135,7 @@ pub extern "C" fn mbus_serial_poll(id: MbusClientId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_has_pending_requests(id: MbusClientId) -> u8 {
     with_serial_client_uniform!(id, |inner| {
-        if inner.has_pending_requests() {
-            1
-        } else {
-            0
-        }
+        if inner.has_pending_requests() { 1 } else { 0 }
     })
     .unwrap_or(0)
 }

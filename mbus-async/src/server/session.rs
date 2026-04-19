@@ -157,7 +157,9 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         app: &mut APP,
     ) -> Result<(), AsyncServerError> {
         loop {
-            let Some(r) = self.recv_request(app).await? else { continue };
+            let Some(r) = self.recv_request(app).await? else {
+                continue;
+            };
 
             #[cfg(feature = "diagnostics")]
             if self.should_discard_in_listen_only_mode(&r.req, r.txn_id) {
@@ -165,20 +167,28 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
             }
 
             #[cfg(feature = "diagnostics")]
-            if self.try_dispatch_fc08_auto(r.txn_id, r.unit, &r.req).await? {
+            if self
+                .try_dispatch_fc08_auto(r.txn_id, r.unit, &r.req)
+                .await?
+            {
                 continue;
             }
 
             if r.unit.is_broadcast() && r.transport_type.is_serial_type() {
-                self.handle_serial_broadcast(app, r.req, r.txn_id, r.unit).await;
+                self.handle_serial_broadcast(app, r.req, r.txn_id, r.unit)
+                    .await;
                 continue;
             }
 
-            if self.try_reply_unknown_fc(app, &r.req, r.txn_id, r.unit).await? {
+            if self
+                .try_reply_unknown_fc(app, &r.req, r.txn_id, r.unit)
+                .await?
+            {
                 continue;
             }
 
-            self.dispatch_and_send(app, &r.adu, r.req, r.txn_id, r.unit).await?;
+            self.dispatch_and_send(app, &r.adu, r.req, r.txn_id, r.unit)
+                .await?;
         }
     }
 
@@ -193,7 +203,11 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         &mut self,
         app: &mut APP,
     ) -> Result<Option<ReceivedRequest>, AsyncServerError> {
-        let adu = self.transport.recv().await.map_err(AsyncServerError::from)?;
+        let adu = self
+            .transport
+            .recv()
+            .await
+            .map_err(AsyncServerError::from)?;
 
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_message_count();
@@ -203,7 +217,13 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
             Ok(Some(req)) => {
                 let txn_id = req.txn_id();
                 let unit = req.unit();
-                Ok(Some(ReceivedRequest { adu, req, txn_id, unit, transport_type }))
+                Ok(Some(ReceivedRequest {
+                    adu,
+                    req,
+                    txn_id,
+                    unit,
+                    transport_type,
+                }))
             }
             Ok(None) => Ok(None), // wrong unit address — discard silently
             Err(AsyncServerError::FramingError(e)) => {
@@ -248,8 +268,13 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         unit: UnitIdOrSlaveAddr,
         req: &ModbusRequest,
     ) -> Result<bool, AsyncServerError> {
-        if let ModbusRequest::Diagnostics { sub_function, data, .. } = req {
-            return self.handle_fc08_auto(txn_id, unit, *sub_function, *data).await;
+        if let ModbusRequest::Diagnostics {
+            sub_function, data, ..
+        } = req
+        {
+            return self
+                .handle_fc08_auto(txn_id, unit, *sub_function, *data)
+                .await;
         }
         Ok(false)
     }
@@ -261,7 +286,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         app: &mut APP,
         req: ModbusRequest,
         txn_id: u16,
-        unit: UnitIdOrSlaveAddr,
+        _unit: UnitIdOrSlaveAddr,
     ) {
         if self.enable_broadcast_writes && is_broadcast_write_fc(&req) {
             async_log_debug!(
@@ -293,7 +318,11 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         txn_id: u16,
         unit: UnitIdOrSlaveAddr,
     ) -> Result<bool, AsyncServerError> {
-        if let ModbusRequest::Unknown { function_code: fc_byte, .. } = req {
+        if let ModbusRequest::Unknown {
+            function_code: fc_byte,
+            ..
+        } = req
+        {
             let fc_byte = *fc_byte;
             async_log_debug!(
                 "unknown/disabled FC=0x{:02X} txn_id={}: replying IllegalFunction",
@@ -371,7 +400,9 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
             return Ok(());
         }
         let tt = self.transport.transport_type();
-        let frame = resp.encode(txn_id, unit, tt).map_err(AsyncServerError::Transport)?;
+        let frame = resp
+            .encode(txn_id, unit, tt)
+            .map_err(AsyncServerError::Transport)?;
         match self.transport.send(&frame).await {
             Ok(_) => {
                 #[cfg(feature = "traffic")]

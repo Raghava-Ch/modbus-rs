@@ -1,12 +1,12 @@
 //! [`AsyncTcpServer`] — multi-connection Modbus TCP server.
 
+use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_network::TokioTcpTransport;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
-use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_network::TokioTcpTransport;
 
 use super::app_handler::{AsyncAppHandler, AsyncServerError};
 use super::session::AsyncServerSession;

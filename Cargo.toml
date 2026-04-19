@@ -15,7 +15,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license = "GPL-3.0-only"
@@ -30,14 +30,14 @@ description = "Modbus client stack for embedded and std environments with TCP, R
 
 [workspace.dependencies]
 # Shared dependencies across workspace
-mbus-core   = { version = "0.6.0", path = "./mbus-core" }
-mbus-serial = { version = "0.6.0", path = "./mbus-serial" }
-mbus-network= { version = "0.6.0", path = "./mbus-network" }
-mbus-client = { version = "0.6.0", path = "./mbus-client" }
-mbus-async = { version = "0.6.0", path = "./mbus-async" }
-mbus-ffi    = { version = "0.6.0", path = "./mbus-ffi" }
-mbus-server = { version = "0.6.0", path = "./mbus-server" }
-mbus-macros = { version = "0.6.0", path = "./mbus-macros" }
+mbus-core   = { version = "0.7.0", path = "./mbus-core" }
+mbus-serial = { version = "0.7.0", path = "./mbus-serial" }
+mbus-network= { version = "0.7.0", path = "./mbus-network" }
+mbus-client = { version = "0.7.0", path = "./mbus-client" }
+mbus-async = { version = "0.7.0", path = "./mbus-async" }
+mbus-ffi    = { version = "0.7.0", path = "./mbus-ffi" }
+mbus-server = { version = "0.7.0", path = "./mbus-server" }
+mbus-macros = { version = "0.7.0", path = "./mbus-macros" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
