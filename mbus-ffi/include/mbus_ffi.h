@@ -247,6 +247,41 @@ typedef enum MbusBackoffStrategy {
 } MbusBackoffStrategy;
 
 /**
+ * Exception code returned by every C server callback.
+ *
+ * Maps 1-to-1 with the Modbus standard exception codes:
+ * - `0x01` IllegalFunction
+ * - `0x02` IllegalDataAddress
+ * - `0x03` IllegalDataValue
+ * - `0x04` ServerDeviceFailure
+ *
+ * The value `Ok = 0` is a non-standard sentinel used by this API to signal
+ * "request handled successfully; no exception".
+ */
+typedef enum MbusServerExceptionCode {
+    /**
+     * No exception — the callback handled the request successfully.
+     */
+    Ok = 0,
+    /**
+     * FC is not supported / not implemented by this server.
+     */
+    IllegalFunction = 1,
+    /**
+     * Address or offset is outside the server's valid range.
+     */
+    IllegalDataAddress = 2,
+    /**
+     * A data value in the request is not acceptable.
+     */
+    IllegalDataValue = 3,
+    /**
+     * The server could not complete the request due to an internal failure.
+     */
+    ServerDeviceFailure = 4,
+} MbusServerExceptionCode;
+
+/**
  * Client ID type: an opaque `u16` index into one of the three sub-pools.
  * Use `MBUS_INVALID_CLIENT_ID` (0xFFFF) as the sentinel "no client" value.
  */
@@ -1046,9 +1081,583 @@ typedef struct MbusSubRequest {
 } MbusSubRequest;
 
 /**
+ * Server ID type: an opaque `u16` index into one of the server sub-pools.
+ */
+typedef uint16_t MbusServerId;
+
+/**
+ * Request context for FC 0x01 — Read Coils.
+ *
+ * C reads `address` and `quantity`; writes packed coil bits into `out_data` (at most
+ * `out_data_len` bytes) and sets `out_byte_count` to the number of bytes written.
+ */
+typedef struct MbusServerReadCoilsReq {
+    /**
+     * Slave/unit address of the request.
+     */
+    uint8_t unit_id;
+    /**
+     * Transaction ID (MBAP) or 0 for serial.
+     */
+    uint16_t txn_id;
+    /**
+     * Starting coil address.
+     */
+    uint16_t address;
+    /**
+     * Number of coils to read.
+     */
+    uint16_t quantity;
+    /**
+     * Buffer to write packed coil bytes into (Rust-allocated, valid for callback duration).
+     */
+    uint8_t *out_data;
+    /**
+     * Capacity of `out_data` in bytes.
+     */
+    uintptr_t out_data_len;
+    /**
+     * C must set this to the number of bytes written into `out_data`.
+     */
+    uint8_t out_byte_count;
+} MbusServerReadCoilsReq;
+
+/**
+ * C callback type for FC 0x01.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadCoilsFn)(struct MbusServerReadCoilsReq *req,
+                                                              void *userdata);
+
+/**
+ * Request context for FC 0x05 — Write Single Coil.
+ */
+typedef struct MbusServerWriteSingleCoilReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    /**
+     * `true` = force coil ON, `false` = force coil OFF.
+     */
+    bool value;
+} MbusServerWriteSingleCoilReq;
+
+/**
+ * C callback type for FC 0x05.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerWriteSingleCoilFn)(const struct MbusServerWriteSingleCoilReq *req,
+                                                                    void *userdata);
+
+/**
+ * Request context for FC 0x0F — Write Multiple Coils.
+ *
+ * `values` is a packed bit array from the master (LSB of first byte = coil at
+ * `starting_address`). Valid for the duration of the callback only.
+ */
+typedef struct MbusServerWriteMultipleCoilsReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t starting_address;
+    uint16_t quantity;
+    /**
+     * Packed coil bits from the master (read-only, valid for callback duration).
+     */
+    const uint8_t *values;
+    /**
+     * Number of bytes in `values`.
+     */
+    uintptr_t values_len;
+} MbusServerWriteMultipleCoilsReq;
+
+/**
+ * C callback type for FC 0x0F.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleCoilsFn)(const struct MbusServerWriteMultipleCoilsReq *req,
+                                                                       void *userdata);
+
+/**
+ * Request context for FC 0x02 — Read Discrete Inputs.
+ */
+typedef struct MbusServerReadDiscreteInputsReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    uint16_t quantity;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    uint8_t out_byte_count;
+} MbusServerReadDiscreteInputsReq;
+
+/**
+ * C callback type for FC 0x02.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadDiscreteInputsFn)(struct MbusServerReadDiscreteInputsReq *req,
+                                                                       void *userdata);
+
+/**
+ * Request context for FC 0x03 — Read Holding Registers.
+ *
+ * `out_data` receives big-endian register bytes (2 bytes per register).
+ * `out_byte_count` must be set to `quantity * 2` on success.
+ */
+typedef struct MbusServerReadHoldingRegistersReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    uint16_t quantity;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    uint8_t out_byte_count;
+} MbusServerReadHoldingRegistersReq;
+
+/**
+ * C callback type for FC 0x03.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadHoldingRegistersFn)(struct MbusServerReadHoldingRegistersReq *req,
+                                                                         void *userdata);
+
+/**
+ * Request context for FC 0x06 — Write Single Register.
+ */
+typedef struct MbusServerWriteSingleRegisterReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    uint16_t value;
+} MbusServerWriteSingleRegisterReq;
+
+/**
+ * C callback type for FC 0x06.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerWriteSingleRegisterFn)(const struct MbusServerWriteSingleRegisterReq *req,
+                                                                        void *userdata);
+
+/**
+ * Request context for FC 0x10 — Write Multiple Registers.
+ *
+ * `values` contains the decoded `u16` register values (big-endian already parsed).
+ * Valid for the duration of the callback only.
+ */
+typedef struct MbusServerWriteMultipleRegistersReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t starting_address;
+    /**
+     * Decoded register values from the master (read-only, valid for callback duration).
+     */
+    const uint16_t *values;
+    /**
+     * Number of elements in `values`.
+     */
+    uintptr_t values_len;
+} MbusServerWriteMultipleRegistersReq;
+
+/**
+ * C callback type for FC 0x10.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleRegistersFn)(const struct MbusServerWriteMultipleRegistersReq *req,
+                                                                           void *userdata);
+
+/**
+ * Request context for FC 0x16 — Mask Write Register.
+ */
+typedef struct MbusServerMaskWriteRegisterReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    uint16_t and_mask;
+    uint16_t or_mask;
+} MbusServerMaskWriteRegisterReq;
+
+/**
+ * C callback type for FC 0x16.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerMaskWriteRegisterFn)(const struct MbusServerMaskWriteRegisterReq *req,
+                                                                      void *userdata);
+
+/**
+ * Request context for FC 0x17 — Read/Write Multiple Registers.
+ *
+ * C writes the read result into `out_data` (big-endian register bytes) and sets
+ * `out_byte_count`. `write_values` contains the decoded write values from the master.
+ */
+typedef struct MbusServerReadWriteMultipleRegistersReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t read_address;
+    uint16_t read_quantity;
+    uint16_t write_address;
+    /**
+     * Decoded write values from the master (read-only, valid for callback duration).
+     */
+    const uint16_t *write_values;
+    uintptr_t write_values_len;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    /**
+     * C must set to the number of bytes written into `out_data`.
+     */
+    uint8_t out_byte_count;
+} MbusServerReadWriteMultipleRegistersReq;
+
+/**
+ * C callback type for FC 0x17.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadWriteMultipleRegistersFn)(struct MbusServerReadWriteMultipleRegistersReq *req,
+                                                                               void *userdata);
+
+/**
+ * Request context for FC 0x04 — Read Input Registers.
+ */
+typedef struct MbusServerReadInputRegistersReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t address;
+    uint16_t quantity;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    uint8_t out_byte_count;
+} MbusServerReadInputRegistersReq;
+
+/**
+ * C callback type for FC 0x04.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadInputRegistersFn)(struct MbusServerReadInputRegistersReq *req,
+                                                                       void *userdata);
+
+/**
+ * Request context for FC 0x18 — Read FIFO Queue.
+ */
+typedef struct MbusServerReadFifoQueueReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t pointer_address;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    /**
+     * C must set to the number of bytes written.
+     */
+    uint8_t out_byte_count;
+} MbusServerReadFifoQueueReq;
+
+/**
+ * C callback type for FC 0x18.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadFifoQueueFn)(struct MbusServerReadFifoQueueReq *req,
+                                                                  void *userdata);
+
+/**
+ * Request context for FC 0x14 — Read File Record (one sub-request at a time).
+ *
+ * C writes record data bytes into `out_data` and sets `out_byte_count`.
+ */
+typedef struct MbusServerReadFileRecordReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t file_number;
+    uint16_t record_number;
+    uint16_t record_length;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    /**
+     * C must set to the number of bytes written into `out_data`.
+     */
+    uint8_t out_byte_count;
+} MbusServerReadFileRecordReq;
+
+/**
+ * C callback type for FC 0x14.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadFileRecordFn)(struct MbusServerReadFileRecordReq *req,
+                                                                   void *userdata);
+
+/**
+ * Request context for FC 0x15 — Write File Record (one sub-request at a time).
+ *
+ * `record_data` contains decoded `u16` words. Valid for the callback duration only.
+ */
+typedef struct MbusServerWriteFileRecordReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint16_t file_number;
+    uint16_t record_number;
+    uint16_t record_length;
+    /**
+     * Decoded record data words (read-only, valid for callback duration).
+     */
+    const uint16_t *record_data;
+    uintptr_t record_data_len;
+} MbusServerWriteFileRecordReq;
+
+/**
+ * C callback type for FC 0x15.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerWriteFileRecordFn)(const struct MbusServerWriteFileRecordReq *req,
+                                                                    void *userdata);
+
+/**
+ * Request context for FC 0x07 — Read Exception Status.
+ *
+ * C sets `out_status` to the 8-bit exception status byte.
+ */
+typedef struct MbusServerReadExceptionStatusReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    /**
+     * C must set this to the 8-bit exception status byte.
+     */
+    uint8_t out_status;
+} MbusServerReadExceptionStatusReq;
+
+/**
+ * C callback type for FC 0x07.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadExceptionStatusFn)(struct MbusServerReadExceptionStatusReq *req,
+                                                                        void *userdata);
+
+/**
+ * Request context for FC 0x08 — Diagnostics.
+ *
+ * `sub_function` is the raw 16-bit sub-function code (see Modbus spec §6.8).
+ * C sets `out_result` to the 16-bit data echo/result.
+ */
+typedef struct MbusServerDiagnosticsReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    /**
+     * Raw sub-function code (e.g. 0x0000 = Return Query Data, 0x0002 = Return Diagnostic Register).
+     */
+    uint16_t sub_function;
+    /**
+     * Data word from the request.
+     */
+    uint16_t data;
+    /**
+     * C must set this to the 16-bit result/echo value.
+     */
+    uint16_t out_result;
+} MbusServerDiagnosticsReq;
+
+/**
+ * C callback type for FC 0x08.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerDiagnosticsFn)(struct MbusServerDiagnosticsReq *req,
+                                                                void *userdata);
+
+/**
+ * Request context for FC 0x0B — Get Comm Event Counter.
+ *
+ * C sets `out_status` (status word) and `out_event_count`.
+ */
+typedef struct MbusServerGetCommEventCounterReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    /**
+     * C must set this to the status word.
+     */
+    uint16_t out_status;
+    /**
+     * C must set this to the event counter value.
+     */
+    uint16_t out_event_count;
+} MbusServerGetCommEventCounterReq;
+
+/**
+ * C callback type for FC 0x0B.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerGetCommEventCounterFn)(struct MbusServerGetCommEventCounterReq *req,
+                                                                        void *userdata);
+
+/**
+ * Request context for FC 0x0C — Get Comm Event Log.
+ *
+ * C writes event bytes into `out_events` (max `out_events_len` bytes) and
+ * sets the four output scalar fields.
+ */
+typedef struct MbusServerGetCommEventLogReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    /**
+     * Buffer for event log bytes (Rust-allocated, valid for callback duration).
+     */
+    uint8_t *out_events;
+    /**
+     * Capacity of `out_events`.
+     */
+    uintptr_t out_events_len;
+    /**
+     * C must set to the Status word.
+     */
+    uint16_t out_status;
+    /**
+     * C must set to the Event Count.
+     */
+    uint16_t out_event_count;
+    /**
+     * C must set to the Message Count.
+     */
+    uint16_t out_message_count;
+    /**
+     * C must set to the number of events written into `out_events`.
+     */
+    uint8_t out_num_events;
+} MbusServerGetCommEventLogReq;
+
+/**
+ * C callback type for FC 0x0C.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerGetCommEventLogFn)(struct MbusServerGetCommEventLogReq *req,
+                                                                    void *userdata);
+
+/**
+ * Request context for FC 0x11 — Report Server ID.
+ *
+ * C writes vendor/device identification bytes into `out_server_id` and sets
+ * `out_byte_count` and `out_run_indicator_status`.
+ */
+typedef struct MbusServerReportServerIdReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    /**
+     * Buffer for server ID bytes (Rust-allocated).
+     */
+    uint8_t *out_server_id;
+    /**
+     * Capacity of `out_server_id`.
+     */
+    uintptr_t out_server_id_len;
+    /**
+     * C must set to the number of Server ID bytes written.
+     */
+    uint8_t out_byte_count;
+    /**
+     * C must set to the Run Indicator Status byte (0x00 = OFF, 0xFF = ON).
+     */
+    uint8_t out_run_indicator_status;
+} MbusServerReportServerIdReq;
+
+/**
+ * C callback type for FC 0x11.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReportServerIdFn)(struct MbusServerReportServerIdReq *req,
+                                                                   void *userdata);
+
+/**
+ * Request context for FC 0x2B / MEI 0x0E — Read Device Identification.
+ *
+ * C writes object data into `out_data` and sets all `out_*` fields.
+ */
+typedef struct MbusServerReadDeviceIdentificationReq {
+    uint8_t unit_id;
+    uint16_t txn_id;
+    uint8_t read_device_id_code;
+    uint8_t start_object_id;
+    uint8_t *out_data;
+    uintptr_t out_data_len;
+    /**
+     * C must set to the conformity level byte.
+     */
+    uint8_t out_conformity_level;
+    /**
+     * C must set to the "more follows" object ID (0x00 if none).
+     */
+    uint8_t out_more_follows_object_id;
+    /**
+     * C must set to `true` if more objects follow (segmentation).
+     */
+    bool out_has_more;
+    /**
+     * C must set to the next Object ID to request (only valid when `out_has_more` is true).
+     */
+    uint8_t out_next_object_id;
+    /**
+     * C must set to the number of bytes written into `out_data`.
+     */
+    uint8_t out_byte_count;
+} MbusServerReadDeviceIdentificationReq;
+
+/**
+ * C callback type for FC 0x2B / MEI 0x0E.
+ */
+typedef enum MbusServerExceptionCode (*MbusServerReadDeviceIdentificationFn)(struct MbusServerReadDeviceIdentificationReq *req,
+                                                                             void *userdata);
+
+/**
+ * Master callback table for a C Modbus server application.
+ *
+ * Pass a populated instance of this struct to `mbus_tcp_server_new` or
+ * `mbus_serial_server_new`. Any callback left as `NULL` will cause the server
+ * to respond with `ExceptionCode::IllegalFunction` for that function code.
+ *
+ * The `userdata` pointer is passed as-is to every callback. It is the caller's
+ * responsibility to ensure its lifetime exceeds the server's.
+ *
+ * # Example (C)
+ *
+ * ```c
+ * static MbusServerHandlers g_handlers = {
+ *     .userdata         = &my_app_state,
+ *     .on_read_coils    = my_read_coils_handler,
+ *     .on_write_single_coil = my_write_single_coil_handler,
+ *     /* leave other fields NULL to return IllegalFunction */
+ * };
+ * ```
+ */
+typedef struct MbusServerHandlers {
+    /**
+     * Opaque pointer passed to every callback.
+     */
+    void *userdata;
+    MbusServerReadCoilsFn on_read_coils;
+    MbusServerWriteSingleCoilFn on_write_single_coil;
+    MbusServerWriteMultipleCoilsFn on_write_multiple_coils;
+    MbusServerReadDiscreteInputsFn on_read_discrete_inputs;
+    MbusServerReadHoldingRegistersFn on_read_holding_registers;
+    MbusServerWriteSingleRegisterFn on_write_single_register;
+    MbusServerWriteMultipleRegistersFn on_write_multiple_registers;
+    MbusServerMaskWriteRegisterFn on_mask_write_register;
+    MbusServerReadWriteMultipleRegistersFn on_read_write_multiple_registers;
+    MbusServerReadInputRegistersFn on_read_input_registers;
+    MbusServerReadFifoQueueFn on_read_fifo_queue;
+    MbusServerReadFileRecordFn on_read_file_record;
+    MbusServerWriteFileRecordFn on_write_file_record;
+    MbusServerReadExceptionStatusFn on_read_exception_status;
+    MbusServerDiagnosticsFn on_diagnostics;
+    MbusServerGetCommEventCounterFn on_get_comm_event_counter;
+    MbusServerGetCommEventLogFn on_get_comm_event_log;
+    MbusServerReportServerIdFn on_report_server_id;
+    MbusServerReadDeviceIdentificationFn on_read_device_identification;
+} MbusServerHandlers;
+
+/**
+ * Common server configuration shared by TCP and Serial server types.
+ *
+ * Only fields that influence the server runtime logic are included here;
+ * transport-level details (host address, port, baud rate) are handled
+ * separately in the `_new` constructor callbacks.
+ */
+typedef struct MbusServerConfig {
+    /**
+     * Slave/unit address this server will respond to.  Valid range: 1–247.
+     * For TCP-only deployments the conventional value is 1 or 0xFF.
+     */
+    uint8_t slave_address;
+    /**
+     * Maximum time (ms) allocated to process and respond to a single request.
+     * Passed to `ResilienceConfig::default()` for now; reserved for future
+     * per-request timeout enforcement.
+     */
+    uint32_t response_timeout_ms;
+} MbusServerConfig;
+
+/**
  * Sentinel value meaning "no valid client".
  */
 #define MBUS_INVALID_CLIENT_ID 65535
+
+/**
+ * Sentinel value meaning "no valid server" / creation failed.
+ */
+#define MBUS_INVALID_SERVER_ID 65535
 
 /**
  * Returns a static null-terminated C string describing the status code.
@@ -1680,5 +2289,164 @@ enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
                                                               uint16_t write_address,
                                                               const uint16_t *write_values,
                                                               uint16_t write_qty);
+
+/**
+ * Lock the global server pool (used only during server creation/destruction).
+ */
+extern void mbus_server_pool_lock(void);
+
+/**
+ * Unlock the global server pool.
+ */
+extern void mbus_server_pool_unlock(void);
+
+/**
+ * Lock a specific server instance.
+ */
+extern void mbus_server_lock(MbusServerId id);
+
+/**
+ * Unlock a specific server instance.
+ */
+extern void mbus_server_unlock(MbusServerId id);
+
+/**
+ * Creates a new Modbus Serial server (RTU or ASCII) and returns an opaque server ID.
+ *
+ * # Parameters
+ * - `transport` — Transport callbacks providing connect/disconnect/send/recv.
+ * - `handlers`  — Application callback table.
+ * - `config`    — Server configuration (slave address, timeout).
+ * - `ascii_mode` — Pass `true` for ASCII framing, `false` for RTU framing.
+ *
+ * # Returns
+ * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
+ *
+ * # Safety
+ * Same requirements as `mbus_tcp_server_new`.
+ */
+MbusServerId mbus_serial_server_new(const struct MbusTransportCallbacks *transport,
+                                    const struct MbusServerHandlers *handlers,
+                                    const struct MbusServerConfig *config,
+                                    bool ascii_mode);
+
+/**
+ * Destroys a Serial server and releases its pool slot.
+ */
+void mbus_serial_server_free(MbusServerId id);
+
+/**
+ * Opens the serial server's transport.
+ */
+enum MbusStatusCode mbus_serial_server_connect(MbusServerId id);
+
+/**
+ * Closes the serial server's transport.
+ */
+enum MbusStatusCode mbus_serial_server_disconnect(MbusServerId id);
+
+/**
+ * Drives the serial server state machine for one iteration.
+ */
+enum MbusStatusCode mbus_serial_server_poll(MbusServerId id);
+
+/**
+ * Returns `true` if the serial server's transport is connected.
+ */
+bool mbus_serial_server_is_connected(MbusServerId id);
+
+/**
+ * Returns the number of requests waiting in the priority queue.
+ */
+uintptr_t mbus_serial_server_pending_request_count(MbusServerId id);
+
+/**
+ * Returns the number of responses waiting for retry.
+ */
+uintptr_t mbus_serial_server_pending_response_count(MbusServerId id);
+
+/**
+ * Creates a new Modbus TCP server and returns an opaque server ID.
+ *
+ * # Parameters
+ * - `transport` — Transport callbacks providing connect/disconnect/send/recv operations.
+ * - `handlers`  — Application callback table. NULL callback slots respond with
+ *   `IllegalFunction`.
+ * - `config`    — Server configuration (slave address, timeouts).
+ *
+ * # Returns
+ * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` if the pool
+ * is full or the configuration is invalid.
+ *
+ * # Safety
+ * - `transport` and `handlers` must be non-null for the lifetime of the server.
+ * - All function pointers in both structs must be valid.
+ * - `handlers.userdata` must outlive the server.
+ */
+MbusServerId mbus_tcp_server_new(const struct MbusTransportCallbacks *transport,
+                                 const struct MbusServerHandlers *handlers,
+                                 const struct MbusServerConfig *config);
+
+/**
+ * Destroys a TCP server and releases its pool slot.
+ *
+ * The server's transport is NOT automatically disconnected before freeing. Call
+ * `mbus_tcp_server_disconnect` first if the transport is still connected.
+ *
+ * After this call, `id` is invalid and must not be used.
+ *
+ * # Safety
+ * The caller must hold the server lock (`mbus_server_lock(id)`) before calling this.
+ */
+void mbus_tcp_server_free(MbusServerId id);
+
+/**
+ * Opens the server's transport (e.g. begins listening for connections).
+ *
+ * For the C transport model, "connect" invokes the `connect` callback supplied
+ * to `mbus_tcp_server_new`. For a Modbus TCP server this typically means
+ * starting the listening socket and accepting a connection.
+ *
+ * # Returns
+ * `MbusOk` on success, or an error code if the transport callback failed.
+ */
+enum MbusStatusCode mbus_tcp_server_connect(MbusServerId id);
+
+/**
+ * Closes the server's transport.
+ *
+ * Invokes the `disconnect` transport callback.
+ */
+enum MbusStatusCode mbus_tcp_server_disconnect(MbusServerId id);
+
+/**
+ * Drives the server state machine for one iteration.
+ *
+ * Must be called in a tight loop or event loop. Each call:
+ * 1. Retries any queued, undelivered responses.
+ * 2. Reads bytes from the transport.
+ * 3. Parses complete frames and dispatches them to the application callbacks.
+ * 4. Sends responses back over the transport.
+ *
+ * The server lock must be held while calling this function.
+ */
+enum MbusStatusCode mbus_tcp_server_poll(MbusServerId id);
+
+/**
+ * Returns `true` if the server's transport reports itself as connected.
+ */
+bool mbus_tcp_server_is_connected(MbusServerId id);
+
+/**
+ * Returns the number of requests currently waiting in the priority queue.
+ *
+ * Non-zero when priority queuing is enabled in the resilience config.
+ */
+uintptr_t mbus_tcp_server_pending_request_count(MbusServerId id);
+
+/**
+ * Returns the number of responses waiting for retry (failed sends).
+ */
+uintptr_t mbus_tcp_server_pending_response_count(MbusServerId id);
 
 #endif  /* MBUS_FFI_H */

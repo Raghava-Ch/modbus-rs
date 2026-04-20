@@ -39,7 +39,7 @@ cargo build --release -p mbus-ffi --features c,full
 ### Automatic `mbus_ffi.h` Header Generation
 We utilize `cbindgen` to define memory-perfect opaque wrappers for external model parsing:
 ```bash
-cbindgen --config mbus-ffi/cbindgen.toml --crate mbus-ffi --output mbus-ffi/include/mbus_ffi.h
+cbindgen --config mbus-ffi/cbindgen_client.toml --crate mbus-ffi --output mbus-ffi/include/mbus_ffi.h
 ```
 
 ### Header / Feature Compatibility

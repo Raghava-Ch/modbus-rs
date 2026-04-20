@@ -53,17 +53,17 @@ pub struct MbusTransportCallbacks {
     pub on_is_connected: Option<unsafe extern "C" fn(userdata: *mut c_void) -> u8>,
 }
 
-pub(super) struct CTcpTransport {
+pub(crate) struct CTcpTransport {
     callbacks: MbusTransportCallbacks,
 }
 
 impl CTcpTransport {
-    pub(super) fn new(callbacks: MbusTransportCallbacks) -> Self {
+    pub(crate) fn new(callbacks: MbusTransportCallbacks) -> Self {
         Self { callbacks }
     }
 }
 
-pub(super) struct CSerialTransport<const ASCII: bool = false> {
+pub(crate) struct CSerialTransport<const ASCII: bool = false> {
     callbacks: MbusTransportCallbacks,
 }
 
@@ -74,15 +74,15 @@ impl<const ASCII: bool> CSerialTransport<ASCII> {
         SerialMode::Rtu
     };
 
-    pub(super) fn new(callbacks: MbusTransportCallbacks) -> Self {
+    pub(crate) fn new(callbacks: MbusTransportCallbacks) -> Self {
         Self { callbacks }
     }
 }
 
-pub(super) type CRtuTransport = CSerialTransport<false>;
-pub(super) type CAsciiTransport = CSerialTransport<true>;
+pub(crate) type CRtuTransport = CSerialTransport<false>;
+pub(crate) type CAsciiTransport = CSerialTransport<true>;
 
-pub(super) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
+pub(crate) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
     callbacks.on_connect.is_some()
         && callbacks.on_disconnect.is_some()
         && callbacks.on_send.is_some()

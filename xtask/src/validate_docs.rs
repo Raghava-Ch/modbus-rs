@@ -229,6 +229,18 @@ fn parse_info_string(info: &str) -> (String, Vec<String>) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  Helper — Extract warnings from compiler output
+// ═══════════════════════════════════════════════════════════════════════
+
+fn extract_warnings(stderr: &str) -> Vec<String> {
+    stderr
+        .lines()
+        .filter(|l| l.contains("warning:"))
+        .map(|l| l.trim().to_string())
+        .collect()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  Phase 3 — Extract and validate cargo example commands
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -349,7 +361,8 @@ fn parse_cargo_cmd(cmd: &str, file: &Path, line: usize, should_run: bool) -> Opt
 
 /// Validate each unique `cargo --example` command by running `cargo check`
 /// (or `cargo run` if `<!-- validate: run -->` was set).
-fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<String>) {
+/// Returns: (passed, failed, failures, warnings).
+fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<String>, Vec<String>) {
     let mut seen = HashSet::new();
     let mut unique: Vec<&CargoCmd> = Vec::new();
 
@@ -369,6 +382,7 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut failures = Vec::new();
+    let mut warnings = Vec::new();
 
     for cmd in &unique {
         let feat_display = if cmd.features.is_empty() {
@@ -411,6 +425,19 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
             Ok(o) if o.status.success() => {
                 println!("{}", ok("✓"));
                 passed += 1;
+                
+                // Capture warnings even on success
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let block_warnings = extract_warnings(&stderr);
+                for w in block_warnings {
+                    warnings.push(format!(
+                        "{} ({}:{}): {}",
+                        cmd.example,
+                        rel.display(),
+                        cmd.line,
+                        w,
+                    ));
+                }
             }
             Ok(o) => {
                 println!("{}", err("✗"));
@@ -437,7 +464,7 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
         }
     }
 
-    (passed, failed, failures)
+    (passed, failed, failures, warnings)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -480,9 +507,10 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
 /// `modbus-rs/examples/` and running individual `cargo check` calls.
 ///
 /// Temp files are cleaned up even on failure.
-fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>) {
+/// Returns: (passed, failed, failures, warnings).
+fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>, Vec<String>) {
     if blocks.is_empty() {
-        return (0, 0, Vec::new());
+        return (0, 0, Vec::new(), Vec::new());
     }
 
     let examples_dir = root.join("modbus-rs").join("examples");
@@ -490,6 +518,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut failures: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
 
     // Ensure cleanup runs no matter what
     let result = (|| -> Result<(), String> {
@@ -529,6 +558,13 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                 Ok(o) if o.status.success() => {
                     println!("{}", ok("✓"));
                     passed += 1;
+                    
+                    // Capture warnings even on success
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    let block_warnings = extract_warnings(&stderr);
+                    for w in block_warnings {
+                        warnings.push(format!("{}:{}: {}", rel.display(), block.line, w));
+                    }
                 }
                 Ok(o) => {
                     println!("{}", err("✗"));
@@ -561,7 +597,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
         failures.push(format!("internal error: {e}"));
     }
 
-    (passed, failed, failures)
+    (passed, failed, failures, warnings)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -679,7 +715,7 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         doc_example_names.len()
     );
 
-    let (cargo_pass, cargo_fail, cargo_failures) = validate_cargo_commands(root, &cargo_cmds);
+    let (cargo_pass, cargo_fail, cargo_failures, cargo_warnings) = validate_cargo_commands(root, &cargo_cmds);
     total_fail += cargo_fail;
 
     // ── Phase 4: Rust code blocks ────────────────────────────────────
@@ -695,7 +731,7 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         skipped_n
     );
 
-    let (rust_pass, rust_fail, rust_failures) = validate_rust_blocks(root, &compilable);
+    let (rust_pass, rust_fail, rust_failures, rust_warnings) = validate_rust_blocks(root, &compilable);
     total_fail += rust_fail;
 
     // ── Phase 5: Cross-reference ─────────────────────────────────────
@@ -773,12 +809,43 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         }
     }
 
+    // ── Warnings section (bold) ──────────────────────────────────────
+    let total_warnings = cargo_warnings.len() + rust_warnings.len();
+    if total_warnings > 0 {
+        println!("\n");
+        println!(
+            "  {} {} documentation examples have warnings:",
+            warn("⚠"),
+            warn(&format!("BOLD: {} total", total_warnings))
+        );
+        
+        if !cargo_warnings.is_empty() {
+            println!("\n    {} Cargo example warnings ({}):",
+                warn("⚠"),
+                cargo_warnings.len()
+            );
+            for w in &cargo_warnings {
+                println!("      {} {w}", warn("⚠"));
+            }
+        }
+        
+        if !rust_warnings.is_empty() {
+            println!("\n    {} Rust block warnings ({}):",
+                warn("⚠"),
+                rust_warnings.len()
+            );
+            for w in &rust_warnings {
+                println!("      {} {w}", warn("⚠"));
+            }
+        }
+    }
+
     println!();
 
     if total_fail > 0 {
         Err(format!("{total_fail} validation(s) failed"))
     } else {
-        println!("{} All validations passed!\n", ok("✓"));
+        println!("{} All validations passed! ({} warnings found)\n", ok("✓"), total_warnings);
         Ok(())
     }
 }

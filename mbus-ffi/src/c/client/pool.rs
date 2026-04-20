@@ -439,7 +439,7 @@ where
 /// ```
 macro_rules! with_serial_client_uniform {
     ($id:expr, |$inner:ident| $body:expr) => {
-        $crate::c::pool::with_serial_client($id, |$inner| $body, |$inner| $body)
+        $crate::c::client::pool::with_serial_client($id, |$inner| $body, |$inner| $body)
     };
 }
 pub(super) use with_serial_client_uniform;

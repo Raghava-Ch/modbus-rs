@@ -67,15 +67,69 @@ fn main() {
         Err(_) => 1, // default
     };
 
+    // ── MBUS_MAX_TCP_SERVERS ──────────────────────────────────────────────────
+    //
+    // Controls how many TCP server slots are pre-allocated in the static server pool.
+    // Default: 1. Valid range: [1, 255].
+    // IDs 0x10xx index the TCP server pool.
+    println!("cargo::rerun-if-env-changed=MBUS_MAX_TCP_SERVERS");
+
+    let max_tcp_servers: usize = match std::env::var("MBUS_MAX_TCP_SERVERS") {
+        Ok(val) => {
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_MAX_TCP_SERVERS must be a valid integer, got: \"{val}\"")
+            });
+            if n == 0 {
+                panic!("MBUS_MAX_TCP_SERVERS must be >= 1, got: 0");
+            }
+            if n > 255 {
+                panic!("MBUS_MAX_TCP_SERVERS must be <= 255, got: {n}");
+            }
+            n
+        }
+        Err(_) => 1, // default
+    };
+
+    // ── MBUS_MAX_SERIAL_SERVERS ───────────────────────────────────────────────
+    //
+    // Controls how many Serial server slots are pre-allocated in the static server pool.
+    // Default: 1. Valid range: [1, 255].
+    // IDs 0x11xx index the Serial server pool.
+    println!("cargo::rerun-if-env-changed=MBUS_MAX_SERIAL_SERVERS");
+
+    let max_serial_servers: usize = match std::env::var("MBUS_MAX_SERIAL_SERVERS") {
+        Ok(val) => {
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_MAX_SERIAL_SERVERS must be a valid integer, got: \"{val}\"")
+            });
+            if n == 0 {
+                panic!("MBUS_MAX_SERIAL_SERVERS must be >= 1, got: 0");
+            }
+            if n > 255 {
+                panic!("MBUS_MAX_SERIAL_SERVERS must be <= 255, got: {n}");
+            }
+            n
+        }
+        Err(_) => 1, // default
+    };
+
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     let config_path = format!("{out_dir}/pool_config.rs");
     std::fs::write(
         &config_path,
         format!(
             "/// Maximum number of TCP client slots (set via `MBUS_MAX_TCP_CLIENTS` env var, default 1).\n\
+             #[allow(dead_code)]\n\
              pub(crate) const MAX_TCP_CLIENTS: usize = {max_tcp};\n\
              /// Maximum number of Serial client slots (set via `MBUS_MAX_SERIAL_CLIENTS` env var, default 1).\n\
-             pub(crate) const MAX_SERIAL_CLIENTS: usize = {max_serial};\n"
+             #[allow(dead_code)]\n\
+             pub(crate) const MAX_SERIAL_CLIENTS: usize = {max_serial};\n\
+             /// Maximum number of TCP server slots (set via `MBUS_MAX_TCP_SERVERS` env var, default 1).\n\
+             #[allow(dead_code)]\n\
+             pub(crate) const MAX_TCP_SERVERS: usize = {max_tcp_servers};\n\
+             /// Maximum number of Serial server slots (set via `MBUS_MAX_SERIAL_SERVERS` env var, default 1).\n\
+             #[allow(dead_code)]\n\
+             pub(crate) const MAX_SERIAL_SERVERS: usize = {max_serial_servers};\n"
         ),
     )
     .expect("failed to write pool_config.rs");
@@ -83,7 +137,7 @@ fn main() {
     // ── cbindgen ──────────────────────────────────────────────────────────────
 
     // Only run cbindgen when the `c` feature is enabled.
-    if std::env::var("CARGO_FEATURE_C").is_err() {
+    if std::env::var("CARGO_FEATURE_C").is_err() && std::env::var("CARGO_FEATURE_C_SERVER").is_err() {
         return;
     }
 
@@ -91,24 +145,41 @@ fn main() {
     let include_dir = format!("{crate_dir}/include");
     std::fs::create_dir_all(&include_dir).expect("failed to create include/ directory");
 
-    let output_file = format!("{include_dir}/mbus_ffi.h");
+    if std::env::var("CARGO_FEATURE_C").is_ok() {
+        let output_file = format!("{include_dir}/mbus_ffi.h");
+        let config_path = format!("{crate_dir}/cbindgen_client.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
 
-    let config_path = format!("{crate_dir}/cbindgen.toml");
-    let config = cbindgen::Config::from_file(&config_path)
-        .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "c", "MBUS_FEATURE_C")
+            .with_define("feature", "coils", "MBUS_FEATURE_COILS")
+            .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
+            .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
+            .with_define("feature", "fifo", "MBUS_FEATURE_FIFO")
+            .with_define("feature", "file-record", "MBUS_FEATURE_FILE_RECORD")
+            .with_define("feature", "diagnostics", "MBUS_FEATURE_DIAGNOSTICS")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate C header")
+            .write_to_file(&output_file);
+    }
 
-    cbindgen::Builder::new()
-        .with_crate(&crate_dir)
-        .with_language(cbindgen::Language::C)
-        .with_define("feature", "c", "MBUS_FEATURE_C")
-        .with_define("feature", "coils", "MBUS_FEATURE_COILS")
-        .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
-        .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
-        .with_define("feature", "fifo", "MBUS_FEATURE_FIFO")
-        .with_define("feature", "file-record", "MBUS_FEATURE_FILE_RECORD")
-        .with_define("feature", "diagnostics", "MBUS_FEATURE_DIAGNOSTICS")
-        .with_config(config)
-        .generate()
-        .expect("cbindgen failed to generate C header")
-        .write_to_file(&output_file);
+    if std::env::var("CARGO_FEATURE_C_SERVER").is_ok() {
+        let output_file = format!("{include_dir}/mbus_ffi_server.h");
+        let config_path = format!("{crate_dir}/cbindgen_server.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "c-server", "MBUS_FEATURE_C_SERVER")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate server C header")
+            .write_to_file(&output_file);
+    }
 }
