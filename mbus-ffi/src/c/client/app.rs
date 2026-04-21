@@ -22,7 +22,7 @@ use super::callbacks::{
 };
 #[cfg(feature = "coils")]
 use super::callbacks::{MbusReadCoilsCtx, MbusWriteMultipleCoilsCtx, MbusWriteSingleCoilCtx};
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 #[cfg(feature = "coils")]
 use super::models::coils::MbusCoils;
 #[cfg(feature = "discrete-inputs")]

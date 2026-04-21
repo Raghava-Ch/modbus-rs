@@ -19,7 +19,7 @@
 #include <pty.h>
 #endif
 
-#include "mbus_ffi.h"
+#include "modbus_rs_client.h"
 
 static pthread_mutex_t g_pool_mutex = PTHREAD_MUTEX_INITIALIZER;
 

@@ -5,7 +5,7 @@ use mbus_core::transport::{
     ModbusTcpConfig, Parity, SerialMode,
 };
 
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 
 /// Backoff strategy selector for retry logic.
 #[repr(C)]

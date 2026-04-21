@@ -143,10 +143,15 @@ fn main() {
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let include_dir = format!("{crate_dir}/include");
+
+    // Rerun cbindgen if the configs or any source file changes.
+    println!("cargo::rerun-if-changed=cbindgen_client.toml");
+    println!("cargo::rerun-if-changed=cbindgen_server.toml");
+    println!("cargo::rerun-if-changed=src");
     std::fs::create_dir_all(&include_dir).expect("failed to create include/ directory");
 
     if std::env::var("CARGO_FEATURE_C").is_ok() {
-        let output_file = format!("{include_dir}/mbus_ffi.h");
+        let output_file = format!("{include_dir}/modbus_rs_client.h");
         let config_path = format!("{crate_dir}/cbindgen_client.toml");
         let config = cbindgen::Config::from_file(&config_path)
             .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
@@ -168,7 +173,7 @@ fn main() {
     }
 
     if std::env::var("CARGO_FEATURE_C_SERVER").is_ok() {
-        let output_file = format!("{include_dir}/mbus_ffi_server.h");
+        let output_file = format!("{include_dir}/modbus_rs_server.h");
         let config_path = format!("{crate_dir}/cbindgen_server.toml");
         let config = cbindgen::Config::from_file(&config_path)
             .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
@@ -181,5 +186,66 @@ fn main() {
             .generate()
             .expect("cbindgen failed to generate server C header")
             .write_to_file(&output_file);
+
+        // ── Server app code generation ────────────────────────────────────────
+        //
+        // Reads a user-supplied YAML config and generates the Rust dispatcher
+        // (model structs + FFI exports) into OUT_DIR/generated_server.rs.
+        // The source file is then pulled in via `include!` in server_gen/mod.rs.
+        //
+        // Set MBUS_SERVER_APP_CONFIG to the path of your YAML config file:
+        //   MBUS_SERVER_APP_CONFIG=/path/to/server_app.yaml cargo build -p mbus-ffi --features c-server
+        println!("cargo::rerun-if-env-changed=MBUS_SERVER_APP_CONFIG");
+        // When MBUS_SERVER_APP_CONFIG is not set, fall back to the bundled
+        // example YAML if it is present (i.e. we are inside the workspace).
+        // This makes `cargo test --workspace --all-features` work without
+        // extra environment setup.  A warning is emitted so the fallback is
+        // never silent.  Production builds that extracted only `mbus-ffi`
+        // won't have the example file and will still get the clear panic.
+        let example_yaml = std::path::Path::new(&crate_dir)
+            .join("examples/c_server_demo_yaml/mbus_server_app.example.yaml");
+        let app_config_raw = std::env::var("MBUS_SERVER_APP_CONFIG").unwrap_or_else(|_| {
+            if example_yaml.exists() {
+                println!(
+                    "cargo::warning=MBUS_SERVER_APP_CONFIG not set; \
+                     using bundled example YAML for development/testing. \
+                     Set MBUS_SERVER_APP_CONFIG for production builds."
+                );
+                example_yaml.to_string_lossy().into_owned()
+            } else {
+                panic!(
+                    "\n\nError: MBUS_SERVER_APP_CONFIG is not set.\n\
+                     The `c-server` feature requires a YAML device config to generate the server app layer.\n\
+                     Set the environment variable to the path of your server_app.yaml:\n\
+                     \n\
+                     MBUS_SERVER_APP_CONFIG=/path/to/server_app.yaml cargo build -p mbus-ffi --features c-server\n\
+                     \n\
+                     See mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml for the format.\n"
+                )
+            }
+        });
+        // Resolve relative paths against the workspace root (parent of the crate dir).
+        let app_config_path = {
+            let p = std::path::Path::new(&app_config_raw);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                std::path::Path::new(&crate_dir)
+                    .parent()
+                    .expect("CARGO_MANIFEST_DIR has no parent")
+                    .join(p)
+            }
+        };
+        println!("cargo::rerun-if-changed={}", app_config_path.display());
+        let app_config_text = std::fs::read_to_string(&app_config_path)
+            .unwrap_or_else(|e| panic!("failed to read MBUS_SERVER_APP_CONFIG={}: {e}", app_config_path.display()));
+        let app_config = mbus_codegen::parse_yaml(&app_config_text)
+            .unwrap_or_else(|e| panic!("invalid YAML in {}: {e}", app_config_path.display()));
+        mbus_codegen::validate_config(&app_config)
+            .unwrap_or_else(|e| panic!("config error in {}: {e}", app_config_path.display()));
+        let rust_src = mbus_codegen::render_rust_dispatcher(&app_config);
+        let gen_path = format!("{out_dir}/generated_server.rs");
+        std::fs::write(&gen_path, rust_src)
+            .unwrap_or_else(|e| panic!("failed to write {gen_path}: {e}"));
     }
 }

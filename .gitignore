@@ -18,6 +18,11 @@ Cargo.lock
 
 # Project specific
 .DS_Store
+
+# Server app dispatcher — generated at build time by build.rs via MBUS_SERVER_APP_CONFIG.
+# Lives in $OUT_DIR, not the source tree. This line is a safety net if it
+# accidentally ends up in src/ during development.
+mbus-ffi/src/c/server_gen/generated_server.rs
 temp
 **.temp.**
 **.temp

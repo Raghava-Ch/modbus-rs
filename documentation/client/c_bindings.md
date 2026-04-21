@@ -244,10 +244,10 @@ A pre-built C example is available:
 cargo run -p xtask -- build-c-smoke
 
 # Run (serial PTY loopback)
-./mbus-ffi/examples/c_smoke_cmake/build/c_smoke_test --serial-pty
+./mbus-ffi/examples/c_client_demo/build/c_smoke_test --serial-pty
 ```
 
-Source: [mbus-ffi/examples/c_smoke_cmake/main.c](../../mbus-ffi/examples/c_smoke_cmake/main.c)
+Source: [mbus-ffi/examples/c_client_demo/main.c](../../mbus-ffi/examples/c_client_demo/main.c)
 
 ---
 

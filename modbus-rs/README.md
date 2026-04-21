@@ -234,7 +234,9 @@ Bindings are implemented in the `mbus-ffi` crate and distributed separately from
 	- browser smoke pages: `mbus-ffi/examples/network_smoke.html` and `mbus-ffi/examples/serial_smoke.html`
 - Native C bindings:
 	- C header: `mbus-ffi/include/mbus_ffi.h`
-	- C smoke example: `mbus-ffi/examples/c_smoke_cmake/`
+	- C client smoke example: `mbus-ffi/examples/c_client_demo/`
+	- C server — hand-written handlers: `mbus-ffi/examples/c_server_demo/`
+	- C server — YAML-driven codegen: `mbus-ffi/examples/c_server_demo_yaml/`
 	- C test instructions: [../mbus-ffi/README.md](../mbus-ffi/README.md)
 
 If you are building browser or native C integrations, start from `mbus-ffi` directly.

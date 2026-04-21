@@ -22,12 +22,10 @@
 pub mod app;
 pub mod callbacks;
 pub mod config;
-pub mod error;
 pub mod models;
 pub mod pool;
 pub mod serial_client;
 pub mod tcp_client;
-pub mod transport;
 
 #[cfg(feature = "coils")]
 pub mod coils;
@@ -44,5 +42,5 @@ pub mod registers;
 
 // ── Re-exports ───────────────────────────────────────────────────────────────
 
-pub use error::MbusStatusCode;
+pub use crate::c::error::MbusStatusCode;
 pub use pool::{MBUS_INVALID_CLIENT_ID, MbusClientId};

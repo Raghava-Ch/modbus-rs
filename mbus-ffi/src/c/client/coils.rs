@@ -4,7 +4,7 @@
 use mbus_client::services::coil::Coils;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 macro_rules! call_tcp {

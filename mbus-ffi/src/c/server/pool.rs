@@ -14,8 +14,8 @@
 //!
 //! ## Safety Contract
 //!
-//! Same as the client pool: `UnsafeCell` + external locking via `mbus_server_pool_lock` /
-//! `mbus_server_pool_unlock` hooks for pool-level operations, and `mbus_server_lock` /
+//! Same as the client pool: `UnsafeCell` + external locking via `mbus_pool_lock` /
+//! `mbus_pool_unlock` hooks for pool-level operations, and `mbus_server_lock` /
 //! `mbus_server_unlock` hooks for per-server operations.
 
 use core::cell::UnsafeCell;
@@ -53,9 +53,9 @@ const TAG_SERIAL_ASCII_SERVER: u8 = 0x12;
 
 unsafe extern "C" {
     /// Lock the global server pool (used only during server creation/destruction).
-    fn mbus_server_pool_lock();
+    fn mbus_pool_lock();
     /// Unlock the global server pool.
-    fn mbus_server_pool_unlock();
+    fn mbus_pool_unlock();
 
     /// Lock a specific server instance.
     fn mbus_server_lock(id: MbusServerId);
@@ -67,13 +67,13 @@ unsafe extern "C" {
 pub(super) struct ServerPoolLockGuard;
 impl ServerPoolLockGuard {
     pub(super) fn new() -> Self {
-        unsafe { mbus_server_pool_lock() };
+        unsafe { mbus_pool_lock() };
         Self
     }
 }
 impl Drop for ServerPoolLockGuard {
     fn drop(&mut self) {
-        unsafe { mbus_server_pool_unlock() };
+        unsafe { mbus_pool_unlock() };
     }
 }
 

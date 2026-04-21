@@ -65,7 +65,11 @@ discrete-inputs = ["mbus-core/discrete-inputs", "mbus-async?/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
 file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
-diagnostics-stats = ["diagnostics", "mbus-async?/diagnostics-stats", "mbus-server?/diagnostics-stats"]
+diagnostics-stats = [
+    "diagnostics",
+    "mbus-async?/diagnostics-stats",
+    "mbus-server?/diagnostics-stats",
+]
 logging = [
     "mbus-network?/logging",
     "mbus-serial?/logging",
@@ -166,12 +170,24 @@ required-features = ["coils", "holding-registers", "input-registers"]
 [[example]]
 name = "modbus_rs_server_async_tcp_demo"
 path = "examples/server/network-tcp/async/demo.rs"
-required-features = ["server", "async-server-tcp", "coils", "holding-registers", "input-registers"]
+required-features = [
+    "server",
+    "async-server-tcp",
+    "coils",
+    "holding-registers",
+    "input-registers",
+]
 
 [[example]]
 name = "modbus_rs_server_async_tcp_traffic"
 path = "examples/server/network-tcp/async/traffic.rs"
-required-features = ["server", "async-server-tcp", "coils", "holding-registers", "traffic"]
+required-features = [
+    "server",
+    "async-server-tcp",
+    "coils",
+    "holding-registers",
+    "traffic",
+]
 
 [[example]]
 name = "modbus_rs_server_std_transport_client_demo"

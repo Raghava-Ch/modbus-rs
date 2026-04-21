@@ -32,8 +32,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use mbus_client::services::ClientServices;
 
 use super::app::CApp;
-use super::error::MbusStatusCode;
-use super::transport::{CAsciiTransport, CRtuTransport, CTcpTransport};
+use crate::c::error::MbusStatusCode;
+use crate::c::transport::{CAsciiTransport, CRtuTransport, CTcpTransport};
 
 use crate::{MAX_SERIAL_CLIENTS, MAX_TCP_CLIENTS};
 

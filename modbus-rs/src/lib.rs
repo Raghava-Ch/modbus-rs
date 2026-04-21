@@ -27,6 +27,10 @@ pub use mbus_core::transport::{
 
 #[cfg(feature = "tcp")]
 pub use mbus_network::StdTcpTransport;
+#[cfg(feature = "tcp")]
+pub use mbus_network::StdTcpServerTransport;
+#[cfg(all(feature = "tcp", feature = "async"))]
+pub use mbus_network::TokioTcpTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use mbus_serial::{StdAsciiTransport, StdRtuTransport, StdSerialTransport};
 

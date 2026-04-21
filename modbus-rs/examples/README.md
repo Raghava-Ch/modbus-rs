@@ -28,7 +28,7 @@ See `modbus-rs/Cargo.toml` `[[example]]` entries for the canonical list.
 
 ### Real-world HVAC Server (mbus-network server transport)
 
-This example is a server-only Modbus TCP application that uses `AcceptedTcpTransport` from `mbus-network` with `mbus-server` macros (`HoldingRegistersModel`, `CoilsModel`, `modbus_app`).
+This example is a server-only Modbus TCP application that uses `StdTcpServerTransport` from `mbus-network` with `mbus-server` macros (`HoldingRegistersModel`, `CoilsModel`, `modbus_app`).
 
 Run:
 

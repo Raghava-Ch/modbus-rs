@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <mbus_ffi.h>
+#include <modbus_rs_client.h>
 
 static int tests_passed = 0;
 static int tests_failed = 0;

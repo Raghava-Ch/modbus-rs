@@ -548,7 +548,7 @@ pub type MbusServerReadDeviceIdentificationFn = Option<
 ///     .userdata         = &my_app_state,
 ///     .on_read_coils    = my_read_coils_handler,
 ///     .on_write_single_coil = my_write_single_coil_handler,
-///     /* leave other fields NULL to return IllegalFunction */
+///     // leave other fields NULL to return IllegalFunction
 /// };
 /// ```
 #[repr(C)]

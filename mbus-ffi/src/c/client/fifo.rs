@@ -2,7 +2,7 @@
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 /// Queue a Read FIFO Queue (FC 0x18) request.

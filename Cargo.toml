@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "xtask",
+    "mbus-codegen",
     "mbus-core",
     "mbus-serial",
     "mbus-network",
@@ -30,6 +31,7 @@ description = "Modbus client stack for embedded and std environments with TCP, R
 
 [workspace.dependencies]
 # Shared dependencies across workspace
+mbus-codegen = { version = "0.7.0", path = "./mbus-codegen" }
 mbus-core   = { version = "0.7.0", path = "./mbus-core" }
 mbus-serial = { version = "0.7.0", path = "./mbus-serial" }
 mbus-network= { version = "0.7.0", path = "./mbus-network" }

@@ -16,16 +16,16 @@ use std::sync::Mutex;
 
 // ── Lock hook stubs ───────────────────────────────────────────────────────────
 //
-// `mbus-ffi` declares `mbus_server_pool_lock/unlock` and `mbus_server_lock/unlock`
+// `mbus-ffi` declares `mbus_pool_lock/unlock` and `mbus_server_lock/unlock`
 // as `extern "C"` hooks so that C callers can inject a mutex.  When running
 // under Rust tests there is no C linker glue, so we provide no-op stubs here.
 // (Tests that exercise pool concurrency would need real mutexes; these tests
 // are single-threaded and use `--test-threads=1`.)
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mbus_server_pool_lock() {}
+pub unsafe extern "C" fn mbus_pool_lock() {}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mbus_server_pool_unlock() {}
+pub unsafe extern "C" fn mbus_pool_unlock() {}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_server_lock(_id: u16) {}
 #[unsafe(no_mangle)]
@@ -62,9 +62,16 @@ static COIL_CB_CALLS: std::sync::atomic::AtomicUsize =
 static WRITE_COIL_CB_CALLS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
+/// Serialization lock: acquired at the start of every test that reads or writes
+/// shared global state (`SENT_BYTES`, `RECV_FRAME`, counters) or the global
+/// server pool.  Prevents data races when the default multi-threaded test runner
+/// runs tests concurrently, and prevents mutex poisoning from spreading across
+/// tests.
+static TEST_SERIAL: Mutex<()> = Mutex::new(());
+
 fn reset_test_state() {
-    SENT_BYTES.lock().unwrap().clear();
-    *RECV_FRAME.lock().unwrap() = None;
+    SENT_BYTES.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    *RECV_FRAME.lock().unwrap_or_else(|e| e.into_inner()) = None;
     COIL_CB_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
     WRITE_COIL_CB_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
 }
@@ -85,7 +92,8 @@ unsafe extern "C" fn test_send(
     _userdata: *mut c_void,
 ) -> MbusStatusCode {
     let bytes = unsafe { core::slice::from_raw_parts(data, len as usize) };
-    SENT_BYTES.lock().unwrap().push(bytes.to_vec());
+    // Must not panic: this function is called from within `extern "C"` context.
+    SENT_BYTES.lock().unwrap_or_else(|e| e.into_inner()).push(bytes.to_vec());
     MbusStatusCode::MbusOk
 }
 
@@ -95,7 +103,8 @@ unsafe extern "C" fn test_recv(
     out_len: *mut u16,
     _userdata: *mut c_void,
 ) -> MbusStatusCode {
-    let mut guard = RECV_FRAME.lock().unwrap();
+    // Must not panic: this function is called from within `extern "C"` context.
+    let mut guard = RECV_FRAME.lock().unwrap_or_else(|e| e.into_inner());
     match guard.take() {
         Some(frame) => {
             let copy_len = frame.len().min(buffer_cap as usize);
@@ -282,6 +291,7 @@ fn tcp_server_new_incomplete_transport_returns_invalid_id() {
 
 #[test]
 fn tcp_server_new_and_free_succeeds() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let transport = make_transport_callbacks();
     let handlers = make_test_handlers();
     let config = make_test_config();
@@ -296,6 +306,7 @@ fn tcp_server_new_and_free_succeeds() {
 
 #[test]
 fn tcp_server_is_connected_after_connect() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let transport = make_transport_callbacks();
     let handlers = make_test_handlers();
     let config = make_test_config();
@@ -373,6 +384,7 @@ const MBAP_HEADER_LEN: usize = 7;
 
 #[test]
 fn fc01_read_coils_dispatches_callback_and_returns_success_response() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     reset_test_state();
 
     *RECV_FRAME.lock().unwrap() = Some(build_fc01_request());
@@ -424,6 +436,7 @@ fn fc01_read_coils_dispatches_callback_and_returns_success_response() {
 
 #[test]
 fn fc03_read_holding_registers_dispatches_callback() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     reset_test_state();
 
     *RECV_FRAME.lock().unwrap() = Some(build_fc03_request());
@@ -452,6 +465,7 @@ fn fc03_read_holding_registers_dispatches_callback() {
 
 #[test]
 fn fc05_write_single_coil_dispatches_callback_and_echoes() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     reset_test_state();
 
     *RECV_FRAME.lock().unwrap() = Some(build_fc05_request());
@@ -484,6 +498,7 @@ fn fc05_write_single_coil_dispatches_callback_and_echoes() {
 
 #[test]
 fn null_callback_slot_returns_illegal_function_exception() {
+    let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     reset_test_state();
 
     // FC01 request with on_read_coils = None → server returns IllegalFunction exception.

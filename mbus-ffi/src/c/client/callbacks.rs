@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 
 // ── Opaque Model Types ───────────────────────────────────────────────────────
 

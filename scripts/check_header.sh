@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check_header.sh — Verify that mbus_ffi.h matches the current Rust source.
+# check_header.sh — Verify that modbus_rs_client.h matches the current Rust source.
 #
 # Usage:
 #   ./scripts/check_header.sh          # exits 1 if the header is stale
@@ -12,8 +12,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HEADER="$REPO_ROOT/mbus-ffi/include/mbus_ffi.h"
-CBINDGEN_TOML="$REPO_ROOT/mbus-ffi/cbindgen.toml"
+HEADER="$REPO_ROOT/mbus-ffi/include/modbus_rs_client.h"
+CBINDGEN_TOML="$REPO_ROOT/mbus-ffi/cbindgen_client.toml"
 
 if ! command -v cbindgen &>/dev/null; then
     echo "ERROR: cbindgen not found. Install with: cargo install cbindgen --locked"
@@ -38,7 +38,7 @@ fi
 
 if ! diff -u "$HEADER" "$TMPFILE"; then
     echo ""
-    echo "ERROR: mbus_ffi.h is out of date with the Rust source."
+    echo "ERROR: modbus_rs_client.h is out of date with the Rust source."
     echo "Run the following to fix it:"
     echo ""
     echo "  ./scripts/check_header.sh --fix"
@@ -46,4 +46,4 @@ if ! diff -u "$HEADER" "$TMPFILE"; then
     exit 1
 fi
 
-echo "OK: mbus_ffi.h is up to date."
+echo "OK: modbus_rs_client.h is up to date."

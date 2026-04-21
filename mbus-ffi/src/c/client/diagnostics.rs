@@ -4,7 +4,7 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::error::MbusStatusCode;
+use crate::c::error::MbusStatusCode;
 use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 macro_rules! tcp_diag_fn {
