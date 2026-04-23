@@ -43,6 +43,8 @@ enum Mode {
     BadByteCount,
     /// Write fifo_count > 31 (to trigger server-side limit check).
     ExceedMaxCount,
+    /// Return fewer than 2 bytes so fifo_count cannot be decoded.
+    TooShort,
 }
 
 struct Fc18App {
@@ -112,6 +114,10 @@ impl ServerFifoHandler for Fc18App {
                     out[2 + i * 2 + 1] = 0x00;
                 }
                 Ok(2 + count as u8 * 2)
+            }
+            Mode::TooShort => {
+                out[0] = 0xAA;
+                Ok(1)
             }
         }
     }
@@ -329,4 +335,20 @@ fn fc18_max_31_entries_succeeds() {
     assert_eq!(byte_count, 2 + 31 * 2); // 64
     let fifo_count = u16::from_be_bytes([response[10], response[11]]);
     assert_eq!(fifo_count, 31);
+}
+
+#[test]
+fn fc18_app_returns_less_than_two_bytes_returns_illegal_data_value() {
+    let payload = fc18_payload(0x0042);
+    let request = build_request(10, unit_id(1), FunctionCode::ReadFifoQueue, &payload);
+    let (app, h) = make_app(Mode::TooShort);
+
+    let response = run_once(request, app);
+
+    assert_eq!(h.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(response[7], 0x98);
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalDataValue
+    );
 }

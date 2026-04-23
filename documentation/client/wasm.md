@@ -174,6 +174,26 @@ main();
 
 ---
 
+## Web Serial (Browser Serial API)
+
+In addition to WebSocket/TCP proxy mode, the wasm bindings also expose Web Serial
+support through:
+
+- `request_serial_port()`
+- `WasmSerialPortHandle`
+- `WasmSerialModbusClient`
+
+Typical flow:
+
+1. Call `request_serial_port()` from a user gesture (button click).
+2. Construct `WasmSerialModbusClient` with the returned handle.
+3. Use the same Promise-based request methods (`read_coils`, `read_holding_registers`, etc.).
+
+Web Serial is currently supported in Chromium-based browsers under secure contexts
+(`https://` or `http://localhost`).
+
+---
+
 ## API Reference
 
 ### Constructor

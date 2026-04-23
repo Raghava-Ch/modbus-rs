@@ -4,7 +4,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 - **no_std compatible** — runs on embedded MCUs and standard OS targets
 - **All transports** — TCP, Serial RTU, Serial ASCII
-- **Sync and async** — poll-driven core with optional Tokio facade
+- **Sync and async** — poll-driven sync core; native `async/await` via Tokio
 - **Feature-gated** — enable only what you need for minimal binary size
 - **C and WASM bindings** — native C/C++ and browser integration via `mbus-ffi`
 
@@ -50,7 +50,8 @@ loop { client.poll(); }
 | [`mbus-client`](mbus-client/) | Client state machine and request services |
 | [`mbus-server`](mbus-server/) | Server runtime with derive macros |
 | [`mbus-core`](mbus-core/) | Shared protocol types and transport trait |
-| [`mbus-async`](mbus-async/) | Tokio async facade |
+| [`mbus-async`](mbus-async/) | Native async client and server via Tokio |
+| [`mbus-macros`](mbus-macros/) | Proc macros: `#[modbus_app]`, `#[derive(CoilsModel)]`, etc. |
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
 | [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings |
@@ -63,14 +64,17 @@ loop { client.poll(); }
 |------|-------------|
 | `client` | Client state machine (default) |
 | `server` | Server runtime and macros |
-| `tcp` | Modbus TCP transport (default) |
+| `network-tcp` | Modbus TCP transport (default) |
 | `serial-rtu` | Serial RTU transport (default) |
 | `serial-ascii` | Serial ASCII transport |
-| `async` | Tokio async facade |
+| `async` | Native async runtime via Tokio for client and server APIs |
 | `coils` | FC01, FC05, FC0F (default) |
 | `registers` | FC03, FC04, FC06, FC10 (default) |
 | `discrete-inputs` | FC02 (default) |
+| `fifo` | FC18 FIFO queue read (default) |
+| `file-record` | FC14, FC15 file record read/write (default) |
 | `diagnostics` | FC07, FC08, FC2B, etc. (default) |
+| `diagnostics-stats` | Per-counter diagnostics statistics |
 | `traffic` | Raw TX/RX frame callbacks |
 | `logging` | `log` facade integration |
 
@@ -80,28 +84,111 @@ See [Feature Flags Reference](documentation/client/feature_flags.md) for complet
 
 ## Examples
 
-### TCP Client
+### TCP Client (sync)
 
-```bash
-cargo run -p modbus-rs --example modbus_rs_client_tcp_coils -- 192.168.1.10 502 1
+```rust
+use modbus_rs::{ClientServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport};
+
+let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.1.10", 502)?);
+let mut client = ClientServices::<_, _, 4>::new(StdTcpTransport::new(), app, config)?;
+client.connect()?;
+client.coils().read_coils(1, unit_id, 0, 16)?;
+loop { client.poll(); }
 ```
 
-### Serial RTU Client
+### Async TCP Client
 
-```bash
-cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_registers -- /dev/ttyUSB0 1
+```rust
+use modbus_rs::mbus_async::AsyncTcpClient;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+    client.connect().await?;
+
+    let coils = client.read_multiple_coils(1, 0, 8).await?;
+    for addr in coils.from_address()..coils.from_address() + coils.quantity() {
+        println!("coil[{}] = {}", addr, coils.value(addr)?);
+    }
+
+    let holding = client.read_holding_registers(1, 0, 4).await?;
+    for addr in holding.from_address()..holding.from_address() + holding.quantity() {
+        println!("reg[{}] = {}", addr, holding.value(addr)?);
+    }
+
+    client.write_single_coil(1, 0, true).await?;
+    Ok(())
+}
 ```
 
-### Async Client
-
 ```bash
-cargo run -p modbus-rs --example modbus_rs_client_async_tcp --features async
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,client,network-tcp,coils,registers,discrete-inputs
 ```
 
-### TCP Server
+### C Client (via `mbus-ffi`)
+
+```c
+#include "modbus_rs_client.h"
+
+/* Required locking hooks — provide real mutexes in production */
+void mbus_pool_lock(void)        { /* pthread_mutex_lock(&g_pool_mutex); */ }
+void mbus_pool_unlock(void)      { /* pthread_mutex_unlock(&g_pool_mutex); */ }
+void mbus_client_lock(MbusClientId id)   { (void)id; }
+void mbus_client_unlock(MbusClientId id) { (void)id; }
+
+/* Transport callbacks — wire these to your socket/UART layer */
+static MbusStatusCode on_connect(void *ud)    { return tcp_open(ud);  }
+static MbusStatusCode on_disconnect(void *ud) { return tcp_close(ud); }
+static MbusStatusCode on_send(const uint8_t *buf, uint16_t len, void *ud)
+    { return tcp_write(ud, buf, len); }
+static MbusStatusCode on_recv(uint8_t *buf, uint16_t cap, uint16_t *out, void *ud)
+    { return tcp_read(ud, buf, cap, out); }
+static uint8_t on_is_connected(void *ud) { return tcp_is_open(ud); }
+
+/* Response callback */
+static void on_read_coils(const MbusReadCoilsCtx *ctx) {
+    for (uint16_t i = 0; i < mbus_coils_quantity(ctx->coils); i++) {
+        bool val; mbus_coils_value_at_index(ctx->coils, i, &val);
+        printf("coil[%u] = %d\n", i, val);
+    }
+}
+
+int main(void) {
+    struct MyTcpCtx io = { .fd = -1, .host = "192.168.1.10", .port = 502 };
+
+    MbusTransportCallbacks transport = {
+        .userdata = &io, .on_connect = on_connect, .on_disconnect = on_disconnect,
+        .on_send = on_send, .on_recv = on_recv, .on_is_connected = on_is_connected,
+    };
+    MbusTcpConfig cfg = { .host = "192.168.1.10", .port = 502,
+                          .response_timeout_ms = 2000, .retries = 1 };
+    MbusCallbacks app = { .on_read_coils = on_read_coils };
+
+    MbusClientId id = mbus_tcp_client_new(&cfg, &transport, &app);
+    mbus_tcp_connect(id);
+    mbus_tcp_read_coils(id, /*unit*/1, /*txn*/42, /*addr*/0, /*qty*/10);
+
+    while (mbus_tcp_has_pending_requests(id))
+        mbus_tcp_poll(id);
+
+    mbus_tcp_disconnect(id);
+    mbus_tcp_client_free(id);
+}
+```
+
+See [`mbus-ffi/`](mbus-ffi/) for the full C binding reference, build instructions, and server demo.
+
+### Run examples
 
 ```bash
-cargo run -p modbus-rs --example modbus_rs_server_tcp_demo --features server
+# Sync TCP client
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-features --features client,network-tcp,coils -- 192.168.1.10 502 1
+
+# Serial RTU client
+cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils --no-default-features --features client,serial-rtu,coils -- /dev/ttyUSB0 1
+
+# TCP server
+cargo run -p modbus-rs --example modbus_rs_server_tcp_demo --features server,network-tcp,coils,holding-registers,input-registers
 ```
 
 📖 **[All Examples →](documentation/client/examples.md)**

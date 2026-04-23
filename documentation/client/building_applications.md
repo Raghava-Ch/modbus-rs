@@ -241,11 +241,11 @@ The different callback traits use **different receiver types**:
 
 | Trait | Method Receiver | Can Mutate State? | Use Case |
 |-------|-----------------|-------------------|----------|
-| `RequestErrorNotifier` | `&self` | ❌ No | Error logging only |
+| `RequestErrorNotifier` | `&mut self` | ✅ Yes | Error logging and app state updates |
 | `CoilResponse` | `&mut self` | ✅ Yes | Store coil states, update app |
 | `RegisterResponse` | `&mut self` | ✅ Yes | Store register values, update app |
 | `TimeKeeper` | `&self` | ❌ No | Read-only time access |
-| `TrafficNotifier` | `&self` | ❌ No | Frame logging only |
+| `TrafficNotifier` | `&mut self` | ✅ Yes | Frame logging and per-connection counters |
 
 ### Using `&mut self` to Update Application State
 
@@ -272,9 +272,9 @@ impl RegisterResponse for App {
 }
 
 impl RequestErrorNotifier for MyApp {
-    fn request_failed(&self, txn_id: u16, uid: UnitIdOrSlaveAddr, error: MbusError) {
-        eprintln!("Error: {:?}", error);  // ❌ Cannot mutate with &self
-        // To update state on error, use a RefCell or Mutex if needed
+    fn request_failed(&mut self, txn_id: u16, uid: UnitIdOrSlaveAddr, error: MbusError) {
+        eprintln!("Error: {:?}", error);
+        self.error_count += 1;
     }
 }
 ```
@@ -358,7 +358,7 @@ fn request_failed(&self, txn_id: u16, uid: UnitIdOrSlaveAddr, error: MbusError) 
         MbusError::Timeout => {
             // Request timed out after all retries
         }
-        MbusError::ExceptionResponse(code) => {
+        MbusError::ModbusException(code) => {
             // Server returned an exception
         }
         MbusError::ConnectionLost => {

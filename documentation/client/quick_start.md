@@ -26,7 +26,7 @@ modbus-rs = "0.7.0"
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "client",
-    "tcp",
+    "network-tcp",
     "coils"
 ] }
 ```

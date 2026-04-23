@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./scripts/check_header.sh          # exits 1 if the header is stale
-#   ./scripts/check_header.sh --fix    # regenerates the header in place
+#   ./scripts/check_header.sh --fix    # regenerates the header under target/
 #
 # Prerequisites: cbindgen must be on $PATH.
 #   cargo install cbindgen --locked
@@ -12,7 +12,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HEADER="$REPO_ROOT/mbus-ffi/include/modbus_rs_client.h"
+HEADER_DIR="$REPO_ROOT/target/mbus-ffi/include"
+HEADER="$HEADER_DIR/modbus_rs_client.h"
 CBINDGEN_TOML="$REPO_ROOT/mbus-ffi/cbindgen_client.toml"
 
 if ! command -v cbindgen &>/dev/null; then
@@ -30,7 +31,15 @@ cbindgen \
     --output "$TMPFILE" \
     --quiet
 
+if [[ ! -f "$HEADER" ]]; then
+    mkdir -p "$HEADER_DIR"
+    cp "$TMPFILE" "$HEADER"
+    echo "Header bootstrapped: $HEADER"
+    exit 0
+fi
+
 if [[ "${1:-}" == "--fix" ]]; then
+    mkdir -p "$HEADER_DIR"
     cp "$TMPFILE" "$HEADER"
     echo "Header regenerated: $HEADER"
     exit 0

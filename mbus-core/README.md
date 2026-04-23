@@ -29,11 +29,11 @@ client and transport crates.
 
 ## Module Overview
 
-- `data_unit`: ADU/PDU structures and framing helpers.
+- `data_unit`: ADU/PDU structures, framing helpers, and shared buffer constants.
 - `errors`: Core error types used by all crates.
 - `function_codes`: Public and user-defined function code definitions.
-- `models`: Feature-gated Modbus data models.
-- `transport`: Transport traits, config types, and transport-related enums/errors.
+- `models`: Feature-gated Modbus data models (`coil`, `register`, `discrete_input`, `fifo_queue`, `file_record`, `diagnostic`).
+- `transport`: Transport traits, config types, checksum helpers, and transport-related enums/errors.
 
 ## Feature Flags
 
@@ -48,10 +48,11 @@ Available feature flags:
 - `fifo`
 - `file-record`
 - `diagnostics`
+- `async`
 
 Default behavior:
 
-- `default` enables all features above.
+- `default` enables all features above except `async`.
 
 `serial-ascii` affects ADU buffer sizing:
 
@@ -66,6 +67,14 @@ Example with selective features:
 ```toml
 [dependencies]
 mbus-core = { version = "0.7.0", default-features = false, features = ["coils", "registers"] }
+```
+
+If you need the async transport trait definitions from `transport`, enable `async`
+explicitly:
+
+```toml
+[dependencies]
+mbus-core = { version = "0.7.0", default-features = false, features = ["registers", "async"] }
 ```
 
 ## no_std

@@ -8,7 +8,7 @@
 //! Run:
 //! ```text
 //! cargo run --example modbus_rs_server_async_tcp_demo \
-//!     --features "server,async,tcp,coils,holding-registers,input-registers"
+//!     --features "server,async,network-tcp,coils,holding-registers,input-registers"
 //! ```
 //!
 //! Then connect any Modbus TCP client to 127.0.0.1:5502 (unit 1).

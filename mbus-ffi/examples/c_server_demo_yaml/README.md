@@ -17,7 +17,8 @@ implements application logic and transport, then wires everything together with
 │  • Calls mbus_server_set_* to update read-only registers │
 │  • Runs a server poll thread (pthread)                   │
 ├──────────────────────────────────────────────────────────┤
-│  mbus_server_app.h  (generated C header)                 │
+│  target/mbus-ffi/include/mbus_server_app.h               │
+│  (generated C header)                                    │
 │  • mbus_server_model_init()                              │
 │  • mbus_server_default_handlers(userdata)                │
 │  • mbus_server_get_* / mbus_server_set_* per register    │
@@ -41,7 +42,7 @@ implements application logic and transport, then wires everything together with
 |---|---|
 | `mbus_server_app.example.yaml` | Device register map declaration |
 | `main.c` | Transport, hooks, threading, Industrial application server lifecycle |
-| `mbus_server_app.h` | Generated C header (do not edit by hand) |
+| `target/mbus-ffi/include/mbus_server_app.h` | Generated C header (do not edit by hand) |
 | `CMakeLists.txt` | Build config — always links `libmbus_ffi.a` statically |
 | `CMakePresets.json` | Presets for macOS (forces Apple Clang) user may reconfigure for your system requirements |
 
@@ -107,7 +108,7 @@ cargo run -p xtask -- build-c-demo c_server_demo_yaml --static
 ```
 
 This single command (xtask reads `demo.yaml` and sets `MBUS_SERVER_APP_CONFIG` automatically):
-1. Runs `gen-server-app` → writes `mbus_server_app.h` (C header only)
+1. Runs `gen-server-app` → writes `target/mbus-ffi/include/mbus_server_app.h` (C header only)
 2. Compiles `libmbus_ffi.a` — `build.rs` reads `MBUS_SERVER_APP_CONFIG` and generates
    `generated_server.rs` into `$OUT_DIR` (never written to the source tree)
 3. Configures CMake with `build-static/` and links statically
@@ -118,10 +119,10 @@ To regenerate only the C header (without building):
 ```bash
 cargo run -p xtask -- gen-server-app \
   --config mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
-  --emit-c-header mbus-ffi/include/mbus_server_app.h
+  --emit-c-header target/mbus-ffi/include/mbus_server_app.h
 ```
 
-Verify the checked-in C header is in sync with the YAML:
+Verify the generated C header is in sync with the YAML:
 
 ```bash
 cargo run -p xtask -- check-server-gen

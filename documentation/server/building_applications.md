@@ -1,127 +1,79 @@
 # Building Server Applications
 
-Complete guide to building production-ready Modbus server applications.
+Guide to building server applications against the current `mbus-server` runtime.
 
 ---
 
-## Table of Contents
+## Runtime Shape
 
-1. [Application Structure](#application-structure)
-2. [Data Models](#data-models)
-3. [Transport Configuration](#transport-configuration)
-4. [Request Handling](#request-handling)
-5. [Error Handling](#error-handling)
-6. [The Poll Loop](#the-poll-loop)
+A synchronous server has four pieces:
 
----
+1. A transport such as `StdTcpTransport`, `StdRtuTransport`, or `StdAsciiTransport`
+2. An application that implements the split server traits directly or via `#[modbus_app]`
+3. A `ModbusConfig`
+4. A `ServerServices` instance that owns the transport and app callback surface
 
-## Application Structure
+The current lifecycle is:
 
-A Modbus server application consists of:
-
-1. **Transport** — The communication layer (TCP, Serial RTU, Serial ASCII)
-2. **App** — Your struct implementing the split server traits or using `#[modbus_app]`
-3. **ServerServices** — The orchestrator managing requests and responses
-4. **Config** — Transport and protocol parameters
-
-<!-- validate: skip -->
 ```rust
-use modbus_rs::{
-    ServerServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport,
-    ServerCoilHandler, ServerHoldingRegisterHandler, ServerExceptionHandler,
-    MbusError, UnitIdOrSlaveAddr, Coils, Registers,
-};
-
-// Application with in-memory data
-struct App {
-    coils: [bool; 100],
-    holding_registers: [u16; 100],
-}
-
-impl ServerExceptionHandler for App {}
-
-impl ServerCoilHandler for App {
-    // Implement coil callbacks (FC01, FC05, FC0F)...
-}
-
-impl ServerHoldingRegisterHandler for App {
-    // Implement register callbacks (FC03, FC06, FC10)...
-}
-
-fn main() -> Result<(), MbusError> {
-    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("0.0.0.0", 502)?);
-    let transport = StdTcpTransport::new();
-    let app = App {
-        coils: [false; 100],
-        holding_registers: [0; 100],
-    };
-    
-    // Queue depth of 4 pending responses
-    let mut server = ServerServices::<_, _, 4>::new(transport, app, config)?;
-    
-    server.bind()?;
-    
-    loop {
-        server.poll();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+let mut server = ServerServices::new(
+    transport,
+    app,
+    config,
+    unit_id,
+    resilience,
+);
+server.connect()?;
+loop {
+    server.poll();
 }
 ```
+
+There is no `bind()` step on `ServerServices`.
 
 ---
 
 ## Data Models
 
-### Using Derive Macros (Recommended)
+### Recommended: derive-backed maps
 
-The derive macros generate protocol handling automatically:
+The derive macros generate compact range-checked maps that `#[modbus_app]` can route automatically:
 
 ```rust
-use modbus_rs::{modbus_app, CoilsModel, HoldingRegistersModel, InputRegistersModel, DiscreteInputsModel};
+use modbus_rs::{
+    modbus_app, CoilsModel, DiscreteInputsModel, HoldingRegistersModel,
+    InputRegistersModel,
+};
 
-// Coils map (FC01, FC05, FC0F)
 #[derive(Default, CoilsModel)]
-struct DeviceOutputs {
+struct Outputs {
     #[coil(addr = 0)]
-    motor_enable: bool,
+    run_enable: bool,
     #[coil(addr = 1)]
-    heater_enable: bool,
-    #[coil(addr = 2)]
-    alarm_ack: bool,
+    alarm_reset: bool,
 }
 
-// Holding registers map (FC03, FC06, FC10)
 #[derive(Default, HoldingRegistersModel)]
-struct DeviceSetpoints {
+struct Setpoints {
     #[reg(addr = 0)]
     target_speed: u16,
     #[reg(addr = 1, scale = 10)]
-    target_temp: u16,  // 0.1°C resolution
-    #[reg(addr = 2, unit = "RPM")]
-    max_speed: u16,
+    target_temp_tenths: u16,
 }
 
-// Input registers map (FC04) - read-only
 #[derive(Default, InputRegistersModel)]
-struct DeviceSensors {
-    #[reg(addr = 0, scale = 10)]
-    current_temp: u16,  // 0.1°C resolution
-    #[reg(addr = 1)]
-    current_speed: u16,
+struct Sensors {
+    #[reg(addr = 0)]
+    actual_speed: u16,
 }
 
-// Discrete inputs map (FC02) - read-only
 #[derive(Default, DiscreteInputsModel)]
-struct DeviceStatus {
+struct Status {
     #[discrete_input(addr = 0)]
     motor_running: bool,
-    #[discrete_input(addr = 1)]
-    temp_alarm: bool,
-    #[discrete_input(addr = 2)]
-    door_open: bool,
 }
 
-// Combine into application
+#[derive(Default)]
 #[modbus_app(
     coils(outputs),
     holding_registers(setpoints),
@@ -129,261 +81,256 @@ struct DeviceStatus {
     discrete_inputs(status),
 )]
 struct App {
-    outputs: DeviceOutputs,
-    setpoints: DeviceSetpoints,
-    sensors: DeviceSensors,
-    status: DeviceStatus,
+    outputs: Outputs,
+    setpoints: Setpoints,
+    sensors: Sensors,
+    status: Status,
 }
 ```
 
-### Manual Callback Implementation
+`#[modbus_app]` also supports non-range routing groups:
 
-For full control, implement the split traits directly. `ModbusAppHandler` is
-automatically satisfied via a blanket impl when all required traits are implemented.
+- `fifo(...)` routes FC18 by `FifoQueue::POINTER_ADDRESS`
+- `file_record(...)` routes FC14 and FC15 by `FileRecord::FILE_NUMBER`
+
+### Manual handlers
+
+If you need custom storage or behavior, implement the split traits directly. Read callbacks now write into an output buffer and return the byte count instead of returning wrapper model types.
 
 ```rust
-impl ServerExceptionHandler for App {}
-
-impl ServerCoilHandler for App {
+impl modbus_rs::ServerCoilHandler for MyApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        start_address: u16,
+        _uid: modbus_rs::UnitIdOrSlaveAddr,
+        address: u16,
         quantity: u16,
-    ) -> Result<Coils, MbusError> {
-        // Validate range
-        let start = start_address as usize;
-        let qty = quantity as usize;
-        if start + qty > self.coils.len() {
-            return Err(MbusError::InvalidAddress);
+        out: &mut [u8],
+    ) -> Result<u8, modbus_rs::MbusError> {
+        let start = address as usize;
+        let end = start + quantity as usize;
+        if end > self.coils.len() {
+            return Err(modbus_rs::MbusError::InvalidAddress);
         }
-        
-        // Return coils
-        Ok(Coils::from_values(start_address, &self.coils[start..start + qty]))
+
+        let byte_count = (quantity as usize).div_ceil(8);
+        if out.len() < byte_count {
+            return Err(modbus_rs::MbusError::BufferTooSmall);
+        }
+
+        out[..byte_count].fill(0);
+        for (index, value) in self.coils[start..end].iter().enumerate() {
+            if *value {
+                out[index / 8] |= 1u8 << (index % 8);
+            }
+        }
+
+        Ok(byte_count as u8)
     }
-    
+
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
-        uid: UnitIdOrSlaveAddr,
+        uid: modbus_rs::UnitIdOrSlaveAddr,
         address: u16,
         value: bool,
-    ) -> Result<(), MbusError> {
-        // Handle broadcast (no response sent)
+    ) -> Result<(), modbus_rs::MbusError> {
+        let slot = address as usize;
+        if slot >= self.coils.len() {
+            return Err(modbus_rs::MbusError::InvalidAddress);
+        }
+
         if uid.is_broadcast() {
-            // Apply write but don't send response
+            // Apply any broadcast-specific side effects here.
         }
-        
-        let addr = address as usize;
-        if addr >= self.coils.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        
-        self.coils[addr] = value;
+
+        self.coils[slot] = value;
         Ok(())
     }
 }
-
-// Implement other traits as needed (ServerHoldingRegisterHandler, etc.)
 ```
+
+`ServerExceptionHandler` defaults to a no-op, so implement it only if you want exception visibility.
 
 ---
 
 ## Transport Configuration
 
-### TCP Transport
+### TCP
 
 ```rust
-use modbus_rs::{ModbusTcpConfig, ResilienceConfig, TimeoutConfig};
+use modbus_rs::{ModbusConfig, ModbusTcpConfig, StdTcpTransport};
 
-let config = ModbusTcpConfig::new("0.0.0.0", 502)?;
-
-// With resilience settings
-let resilience = ResilienceConfig {
-    timeouts: TimeoutConfig {
-        app_callback_ms: 20,
-        send_ms: 50,
-        request_deadline_ms: 500,
-        ..Default::default()
-    },
-    clock_fn: Some(my_clock),
-    max_send_retries: 3,
-    ..Default::default()
-};
-
-let config = ModbusConfig::Tcp(config);
+let transport = StdTcpTransport::new();
+let config = ModbusConfig::Tcp(ModbusTcpConfig::new("0.0.0.0", 5502)?);
 ```
 
-### Serial RTU Transport
+### Serial RTU
 
 ```rust
-use modbus_rs::{ModbusSerialConfig, SerialMode, BaudRate, DataBits, Parity, StdRtuTransport};
+use modbus_rs::{
+    BaudRate, DataBits, ModbusConfig, ModbusSerialConfig, Parity, SerialMode,
+    StdRtuTransport,
+};
 
-let config = ModbusSerialConfig {
+let transport = StdRtuTransport::new();
+let config = ModbusConfig::Serial(ModbusSerialConfig {
     port_path: "/dev/ttyUSB0".try_into()?,
     mode: SerialMode::Rtu,
     baud_rate: BaudRate::Baud19200,
     data_bits: DataBits::Eight,
     stop_bits: 1,
-    parity: Parity::Even,
-    ..Default::default()
-};
-
-let transport = StdRtuTransport::new();
-let config = ModbusConfig::Serial(config);
+    parity: Parity::None,
+    response_timeout_ms: 100,
+    retry_attempts: 1,
+    retry_backoff_strategy: modbus_rs::BackoffStrategy::Immediate,
+    retry_jitter_strategy: modbus_rs::JitterStrategy::None,
+    retry_random_fn: None,
+});
 ```
 
-### Serial ASCII Transport
+### Serial ASCII
 
 ```rust
-use modbus_rs::{ModbusSerialConfig, SerialMode, StdAsciiTransport};
-
-let config = ModbusSerialConfig {
-    mode: SerialMode::Ascii,
-    // ... same as RTU
-    ..Default::default()
-};
+use modbus_rs::{ModbusConfig, ModbusSerialConfig, SerialMode, StdAsciiTransport};
 
 let transport = StdAsciiTransport::new();
+let config = ModbusConfig::Serial(ModbusSerialConfig {
+    mode: SerialMode::Ascii,
+    ..Default::default()
+});
 ```
 
 ---
 
-## Request Handling
+## Resilience And Queue Depth
 
-### Unit ID / Slave Address Filtering
+`ServerServices::new(...)` uses the default queue depth of `8`.
 
-```rust
-fn read_coils_request(
-    &mut self,
-    _txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    quantity: u16,
-) -> Result<Coils, MbusError> {
-    // Only respond to unit ID 1
-    if uid.get() != 1 {
-        return Err(MbusError::NotAddressedToMe);
-    }
-    
-    // ...
-}
-```
-
-### Broadcast Handling (Serial)
+If you want a different depth, instantiate the const generic explicitly and call `with_queue_depth(...)`:
 
 ```rust
-fn write_single_coil_request(
-    &mut self,
-    _txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    address: u16,
-    value: bool,
-) -> Result<(), MbusError> {
-    // Check if this is a broadcast write
-    if uid.is_broadcast() {
-        // Apply the write but don't expect a response
-        self.coils[address as usize] = value;
-        return Ok(());
-    }
-    
-    // Normal unicast request
-    self.coils[address as usize] = value;
-    Ok(())
-}
+let mut server: modbus_rs::ServerServices<_, _, 16> =
+    modbus_rs::ServerServices::with_queue_depth(
+        transport,
+        app,
+        config,
+        unit_id,
+        resilience,
+    );
 ```
 
-Broadcast writes require `ResilienceConfig::enable_broadcast_writes = true`.
+Timeouts, retry cadence, overflow behavior, broadcast writes, and priority dispatch all live under `ResilienceConfig`.
+
+---
+
+## Shared State
+
+`ServerServices` owns the app object. If your application state must also be updated from elsewhere, use `ForwardingApp` with a `ModbusAppAccess` implementation.
+
+```rust
+use modbus_rs::{ForwardingApp, ModbusAppAccess};
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+struct SharedApp {
+    inner: Arc<Mutex<RealApp>>,
+}
+
+impl ModbusAppAccess for SharedApp {
+    type App = RealApp;
+
+    fn with_app_mut<R, F>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Self::App) -> R,
+    {
+        let mut guard = self.inner.lock().expect("poisoned app mutex");
+        f(&mut guard)
+    }
+}
+
+let app = ForwardingApp::new(shared.clone());
+```
+
+This pattern is what the shared-state TCP example uses.
+
+---
+
+## Addressing And Broadcasts
+
+`ServerServices` is constructed with a single `UnitIdOrSlaveAddr`. Frames for other unit ids are filtered before your callback runs.
+
+Broadcast behavior is separate:
+
+- serial broadcast writes use address `0`
+- they are accepted only when `enable_broadcast_writes = true`
+- callbacks observe them via `uid.is_broadcast()`
+- no response is sent
+
+TCP unit id `0` is not treated as a writable broadcast.
 
 ---
 
 ## Error Handling
 
-### Returning Exceptions
+Return `Err(MbusError::...)` from a callback to emit an exception response.
 
-Return `MbusError` to send an exception response:
+Typical cases are:
 
-```rust
-fn read_coils_request(&mut self, ...) -> Result<Coils, MbusError> {
-    // Invalid address
-    if start_address >= 1000 {
-        return Err(MbusError::InvalidAddress);  // → IllegalDataAddress
-    }
-    
-    // Invalid quantity
-    if quantity == 0 || quantity > 2000 {
-        return Err(MbusError::InvalidData);  // → IllegalDataValue
-    }
-    
-    // Device busy
-    if self.is_busy {
-        return Err(MbusError::DeviceBusy);  // → ServerDeviceBusy
-    }
-    
-    Ok(...)
-}
-```
+- `MbusError::InvalidAddress` for windows outside your model
+- `MbusError::InvalidQuantity` for zero or oversized reads and writes
+- `MbusError::InvalidValue`, `InvalidByteCount`, or related validation errors for malformed payloads
 
-### Exception Callback
-
-Implement `on_exception` to log or track exceptions:
+To observe emitted exceptions, override the callback on `ServerExceptionHandler`:
 
 ```rust
+use mbus_core::errors::ExceptionCode;
+use mbus_core::function_codes::public::FunctionCode;
+
 fn on_exception(
     &mut self,
     txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
+    uid: modbus_rs::UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     exception_code: ExceptionCode,
-    error: MbusError,
+    error: modbus_rs::MbusError,
 ) {
     eprintln!(
-        "Exception on FC{:02X} for unit {}: {:?} (caused by {:?})",
-        function_code as u8, uid.get(), exception_code, error
+        "txn={} uid={} fc={:?} exception={:?} error={:?}",
+        txn_id,
+        uid.get(),
+        function_code,
+        exception_code,
+        error,
     );
 }
 ```
 
 ---
 
-## The Poll Loop
+## Poll Loop
 
-The server is **poll-driven** — no internal threads:
+The server remains entirely poll-driven. `poll()` performs receive, parse, dispatch, response send, and retry-queue work.
 
-<!-- validate: skip -->
 ```rust
-fn main() -> Result<(), MbusError> {
-    let mut server = ServerServices::<_, _, 4>::new(transport, app, config)?;
-    server.bind()?;
-    
-    loop {
-        server.poll();
-        
-        // Optional: Update sensor values, check alarms, etc.
-        server.app_mut().update_sensors();
-        
-        // On std: sleep briefly
-        std::thread::sleep(Duration::from_millis(10));
-    }
+loop {
+    server.poll();
+    std::thread::sleep(std::time::Duration::from_millis(1));
 }
 ```
 
-### What `poll()` Does
+If you need to update application state alongside polling, either:
 
-1. Checks transport for incoming data
-2. Parses complete ADU frames
-3. Validates unit ID / slave address
-4. Dispatches to your callback
-5. Builds and sends response
-6. Handles retry queue for failed sends
+- do it through shared state with `ForwardingApp`
+- update your app before moving it into `ServerServices`
+- keep the poll loop thread responsible for both state refresh and `poll()` calls
 
 ---
 
 ## See Also
 
-- [Feature Flags](feature_flags.md) — Customize your build
-- [Architecture](architecture.md) — Internal design
-- [Policies](policies.md) — Timeouts, retry queues
-- [Macros](macros.md) — Derive macro details
-- [Write Hooks](write_hooks.md) — React to writes
+- [Quick Start](quick_start.md)
+- [Architecture](architecture.md)
+- [Policies](policies.md)
+- [Macros](macros.md)
+- [Write Hooks](write_hooks.md)

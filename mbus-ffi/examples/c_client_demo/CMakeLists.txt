@@ -6,7 +6,7 @@ include(CTest)
 find_package(Threads REQUIRED)
 
 # Point to the generated header
-include_directories(../../include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../target/mbus-ffi/include)
 
 # Path to the Rust library (dev profile)
 set(RUST_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../target/debug")

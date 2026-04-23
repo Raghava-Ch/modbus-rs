@@ -16,16 +16,14 @@ mbus-core = { workspace = true }
 
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["net", "io-util"], optional = true }
 
-# WASM-only dependencies
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys        = { version = "0.3", optional = true }
-
 [dependencies.web-sys]
-version  = "0.3"
+version = "0.3"
 optional = true
 features = [
     "WebSocket",
@@ -40,5 +38,5 @@ features = [
 [features]
 default = []
 logging = ["dep:log"]
-wasm    = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
-async   = ["dep:tokio", "mbus-core/async"]
+wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
+async = ["dep:tokio", "mbus-core/async"]

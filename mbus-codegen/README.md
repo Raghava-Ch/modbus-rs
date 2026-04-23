@@ -173,7 +173,7 @@ pub fn validate_config(config: &ServerAppConfig) -> Result<(), String>;
 // Render the Rust dispatcher source (goes to $OUT_DIR/generated_server.rs).
 pub fn render_rust_dispatcher(config: &ServerAppConfig) -> String;
 
-// Render the C header source (goes to mbus-ffi/include/mbus_server_app.h).
+// Render the C header source (goes to target/mbus-ffi/include/mbus_server_app.h).
 pub fn render_c_header(config: &ServerAppConfig) -> String;
 ```
 

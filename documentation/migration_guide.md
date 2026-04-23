@@ -78,7 +78,7 @@ Use aliases for clarity:
 
 Always use the generated header from this repository version:
 
-- `mbus-ffi/include/mbus_ffi.h`
+- `target/mbus-ffi/include/modbus_rs_client.h`
 
 Recommended validation command from workspace root:
 

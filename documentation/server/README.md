@@ -28,7 +28,7 @@ This section covers everything you need to build Modbus server applications with
 
 | Transport | Feature Flag | Documentation |
 |-----------|--------------|---------------|
-| Modbus TCP | `tcp` | [Building Applications](building_applications.md#tcp-transport) |
+| Modbus TCP | `network-tcp` | [Building Applications](building_applications.md#tcp-transport) |
 | Serial RTU | `serial-rtu` | [Building Applications](building_applications.md#serial-rtu-transport) |
 | Serial ASCII | `serial-ascii` | [Building Applications](building_applications.md#serial-ascii-transport) |
 
@@ -44,14 +44,20 @@ This section covers everything you need to build Modbus server applications with
 | `0x04` | Read Input Registers | `input-registers` | Read |
 | `0x05` | Write Single Coil | `coils` | Write |
 | `0x06` | Write Single Register | `holding-registers` | Write |
+| `0x07` | Read Exception Status | `diagnostics` | Read |
+| `0x08` | Diagnostics | `diagnostics` | R/W |
+| `0x0B` | Get Comm Event Counter | `diagnostics` | Read |
+| `0x0C` | Get Comm Event Log | `diagnostics` | Read |
 | `0x0F` | Write Multiple Coils | `coils` | Write |
 | `0x10` | Write Multiple Registers | `holding-registers` | Write |
+| `0x11` | Report Server ID | `diagnostics` | Read |
 | `0x14` | Read File Record | `file-record` | Read |
 | `0x15` | Write File Record | `file-record` | Write |
 | `0x16` | Mask Write Register | `holding-registers` | Write |
 | `0x17` | Read/Write Multiple Registers | `holding-registers` | R/W |
 | `0x18` | Read FIFO Queue | `fifo` | Read |
-| `0x2B` | Read Device Identification | `diagnostics` | Read |
+| `0x2B/0x0E` | Read Device Identification | `diagnostics` | Read |
+| `0x2B` | Encapsulated Interface Transport | `diagnostics` | R/W |
 
 See [Function Codes Reference](function_codes.md) for complete details.
 

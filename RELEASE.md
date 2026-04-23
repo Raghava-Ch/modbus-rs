@@ -28,7 +28,7 @@ cargo test --workspace
 
 ## 3. FFI — header checks
 
-Verify the checked-in headers match the current Rust API:
+Verify the generated headers match the current Rust API:
 
 ```bash
 cargo run -p xtask -- check-header          # modbus_rs_client.h + feature-gated variant
@@ -41,7 +41,7 @@ Regenerate if needed:
 cargo run -p xtask -- gen-header
 cargo run -p xtask -- gen-server-app \
   --config mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
-  --emit-c-header mbus-ffi/include/mbus_server_app.h
+  --emit-c-header target/mbus-ffi/include/mbus_server_app.h
 ```
 
 ---

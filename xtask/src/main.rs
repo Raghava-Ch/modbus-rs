@@ -15,6 +15,10 @@ fn repo_root() -> PathBuf {
     manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf()
 }
 
+fn ffi_include_dir(root: &Path) -> PathBuf {
+    root.join("target/mbus-ffi/include")
+}
+
 fn run_step(program: &str, args: &[&str], cwd: &Path) -> Result<(), String> {
     let status = Command::new(program)
         .args(args)
@@ -51,8 +55,9 @@ fn run_step_with_env(
 }
 
 fn headers_paths(root: &Path) -> (PathBuf, PathBuf) {
-    let base = root.join("mbus-ffi/include/modbus_rs_client.h");
-    let gated = root.join("mbus-ffi/include/modbus_rs_client_feature_gated.h");
+    let include_dir = ffi_include_dir(root);
+    let base = include_dir.join("modbus_rs_client.h");
+    let gated = include_dir.join("modbus_rs_client_feature_gated.h");
     (base, gated)
 }
 
@@ -169,6 +174,10 @@ fn cmd_gen_feature_header(root: &Path) -> Result<(), String> {
     let base_header =
         fs::read_to_string(&base).map_err(|e| format!("failed to read {}: {e}", base.display()))?;
     let generated = generate_feature_gated_header(&base_header);
+    if let Some(parent) = gated.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
+    }
     fs::write(&gated, generated)
         .map_err(|e| format!("failed to write {}: {e}", gated.display()))?;
     println!("Feature-gated header regenerated: {}", gated.display());
@@ -180,6 +189,16 @@ fn cmd_check_feature_header(root: &Path) -> Result<(), String> {
     let base_header =
         fs::read_to_string(&base).map_err(|e| format!("failed to read {}: {e}", base.display()))?;
     let expected = generate_feature_gated_header(&base_header);
+    if !gated.exists() {
+        if let Some(parent) = gated.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
+        }
+        fs::write(&gated, &expected)
+            .map_err(|e| format!("failed to write {}: {e}", gated.display()))?;
+        println!("Feature-gated header bootstrapped: {}", gated.display());
+        return Ok(());
+    }
     let current = fs::read_to_string(&gated)
         .map_err(|e| format!("failed to read {}: {e}", gated.display()))?;
 
@@ -489,11 +508,22 @@ fn cmd_gen_server_app(root: &Path, args: &[String]) -> Result<(), String> {
 fn cmd_check_server_gen(root: &Path) -> Result<(), String> {
     // Only the C header is checked here; the Rust dispatcher is generated at
     // build time by mbus-ffi/build.rs and lives in OUT_DIR, not the source tree.
+    let header_path = root.join("target/mbus-ffi/include/mbus_server_app.h");
+    if !header_path.exists() {
+        let bootstrap_args = vec![
+            "--config".to_string(),
+            "mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml".to_string(),
+            "--emit-c-header".to_string(),
+            "target/mbus-ffi/include/mbus_server_app.h".to_string(),
+        ];
+        cmd_gen_server_app(root, &bootstrap_args)?;
+    }
+
     let args = vec![
         "--config".to_string(),
         "mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml".to_string(),
         "--emit-c-header".to_string(),
-        "mbus-ffi/include/mbus_server_app.h".to_string(),
+        "target/mbus-ffi/include/mbus_server_app.h".to_string(),
         "--check".to_string(),
     ];
     cmd_gen_server_app(root, &args)
@@ -558,7 +588,7 @@ fn print_help() {
     println!("      The Rust dispatcher is generated at compile time by build.rs (set MBUS_SERVER_APP_CONFIG).");
     println!("      --out-dir is optional; omit it for the normal build.rs-driven workflow.");
     println!("  check-server-gen");
-    println!("      Verify the checked-in mbus_server_app.h matches the current YAML config.");
+    println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
     println!();
     println!("FFI HEADER COMMANDS");
     println!("  gen-header");

@@ -3,7 +3,7 @@
 #![cfg_attr(
     not(any(
         doc,
-        feature = "tcp",
+        feature = "network-tcp",
         feature = "serial-rtu",
         feature = "serial-ascii",
         feature = "async",
@@ -25,11 +25,11 @@ pub use mbus_core::transport::{
     UnitIdOrSlaveAddr,
 };
 
-#[cfg(feature = "tcp")]
+#[cfg(feature = "network-tcp")]
 pub use mbus_network::StdTcpTransport;
-#[cfg(feature = "tcp")]
+#[cfg(feature = "network-tcp")]
 pub use mbus_network::StdTcpServerTransport;
-#[cfg(all(feature = "tcp", feature = "async"))]
+#[cfg(all(feature = "network-tcp", feature = "async"))]
 pub use mbus_network::TokioTcpTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use mbus_serial::{StdAsciiTransport, StdRtuTransport, StdSerialTransport};

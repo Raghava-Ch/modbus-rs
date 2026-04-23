@@ -10,7 +10,7 @@ Enable the `async` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6", features = ["async"] }
+modbus-rs = { version = "0.7.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -55,6 +55,13 @@ cargo run -p modbus-rs --example modbus_rs_client_async_tcp --features async
 ---
 
 ## Async Serial Client
+
+`AsyncSerialClient` supports RTU and ASCII constructors:
+
+- `AsyncSerialClient::new_rtu(config)`
+- `AsyncSerialClient::new_ascii(config)`
+- `AsyncSerialClient::new_rtu_with_poll_interval(config, interval)`
+- `AsyncSerialClient::new_ascii_with_poll_interval(config, interval)`
 
 ### RTU Mode
 
@@ -220,10 +227,14 @@ modbus-rs = { version = "0.7.0", features = ["async", "traffic"] }
 ```
 
 ```rust
-use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::mbus_async::AsyncTcpClient;
+#[cfg(feature = "traffic")]
+use modbus_rs::mbus_async::AsyncClientNotifier;
 use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
+#[cfg(feature = "traffic")]
 struct FrameLogger;
+#[cfg(feature = "traffic")]
 impl AsyncClientNotifier for FrameLogger {
     fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
         println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
@@ -236,6 +247,7 @@ impl AsyncClientNotifier for FrameLogger {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let client = AsyncTcpClient::new("192.168.1.10", 502)?;
+    #[cfg(feature = "traffic")]
     client.set_traffic_notifier(FrameLogger);
     client.connect().await?;
     Ok(())
@@ -243,6 +255,19 @@ async fn main() -> anyhow::Result<()> {
 ```
 
 See [modbus-rs/examples/client/network-tcp/async/traffic.rs](../../modbus-rs/examples/client/network-tcp/async/traffic.rs)
+
+---
+
+## Async API Coverage
+
+Both `AsyncTcpClient` and `AsyncSerialClient` expose the same request API (feature-gated):
+
+- Coils: FC01, FC05, FC0F
+- Discrete inputs: FC02
+- Registers: FC03, FC04, FC06, FC10, FC16, FC17
+- FIFO: FC18 (`fifo` feature)
+- File record: FC14, FC15 (`file-record` feature)
+- Diagnostics: FC07, FC08, FC0B, FC0C, FC11, FC2B (`diagnostics` feature)
 
 ---
 

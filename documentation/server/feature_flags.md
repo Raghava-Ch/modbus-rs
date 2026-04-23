@@ -1,51 +1,59 @@
 # Server Feature Flags
 
-Control binary size and functionality by enabling only what you need.
+Feature flags that matter when building server applications from the top-level `modbus-rs` crate.
 
 ---
 
 ## Quick Reference
 
+The `Default` column below refers to the top-level `modbus-rs` crate with default features enabled.
+
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `server` | ❌ | Enables `mbus-server` runtime |
-| `tcp` | ✅ | TCP transport (`StdTcpTransport`) |
-| `serial-rtu` | ✅ | Serial RTU transport |
-| `serial-ascii` | ❌ | Serial ASCII transport |
+| `server` | ✅ | Enables `mbus-server` and the synchronous server runtime |
+| `network-tcp` | ✅ | Enables TCP transports |
+| `serial-rtu` | ✅ | Enables Serial RTU transports |
+| `serial-ascii` | ❌ | Enables Serial ASCII framing and transport support |
 | `coils` | ✅ | FC01, FC05, FC0F |
 | `holding-registers` | ✅ | FC03, FC06, FC10, FC16, FC17 |
 | `input-registers` | ✅ | FC04 |
 | `discrete-inputs` | ✅ | FC02 |
 | `fifo` | ✅ | FC18 |
 | `file-record` | ✅ | FC14, FC15 |
-| `diagnostics` | ✅ | FC07, FC08, FC0B, FC0C, FC11, FC2B |
-| `diagnostics-stats` | ❌ | Auto-handle FC08 counter sub-functions |
-| `logging` | ❌ | `log` facade integration |
+| `diagnostics` | ✅ | FC07, FC08, FC0B, FC0C, FC11, FC2B/0x0E |
+| `diagnostics-stats` | ❌ | Stack-managed FC08 counter sub-functions |
+| `logging` | ❌ | Logging integration for transport/client crates |
+| `async` | ❌ | Pulls in `mbus-async` |
+| `traffic` | ❌ | Traffic notifier support |
+
+If you use `default-features = false`, none of the above are enabled until you list them.
 
 ---
 
 ## Common Configurations
 
-### Full Server (Everything)
+### Keep the Full Default Stack
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["server"] }
+modbus-rs = "0.7.0"
 ```
 
-### Minimal TCP Server (Coils + Registers)
+This includes client and server support.
+
+### TCP Server Only
 
 ```toml
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
-    "tcp",
+    "network-tcp",
     "coils",
     "holding-registers"
 ] }
 ```
 
-### Minimal Serial RTU Server
+### Serial RTU Server With Diagnostics
 
 ```toml
 [dependencies]
@@ -53,145 +61,79 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
     "serial-rtu",
     "coils",
-    "holding-registers"
+    "holding-registers",
+    "input-registers",
+    "diagnostics"
 ] }
 ```
 
-### All Data Models, No Diagnostics
+### Server With Automatic Diagnostic Counters
 
 ```toml
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
-    "tcp",
+    "network-tcp",
     "coils",
     "holding-registers",
-    "input-registers",
-    "discrete-inputs"
+    "diagnostics",
+    "diagnostics-stats"
 ] }
 ```
 
 ---
 
-## Feature Details
+## Notes By Feature
 
 ### `server`
 
-Enables the `mbus-server` crate with `ServerServices`.
+Re-exports `ServerServices`, the split server traits, and the derive / routing macros.
 
-```rust
-use modbus_rs::ServerServices;
-```
+### `network-tcp`
 
----
+Enables the synchronous TCP transport and, if `async` is also enabled, the async TCP server adapter.
 
-### Function Code Features
+### `serial-rtu` and `serial-ascii`
 
-#### `coils`
+Enable the synchronous serial transports and, when `async` is present, the async serial server adapter.
 
-- FC01: Read Coils
-- FC05: Write Single Coil
-- FC0F: Write Multiple Coils
+### `diagnostics`
 
-Callbacks: `read_coils_request`, `write_single_coil_request`, `write_multiple_coils_request`
+Enables:
 
-#### `holding-registers`
+- FC07 Read Exception Status
+- FC08 Diagnostics
+- FC0B Get Comm Event Counter
+- FC0C Get Comm Event Log
+- FC11 Report Server ID
+- FC2B / MEI 0x0E Read Device Identification
 
-- FC03: Read Holding Registers
-- FC06: Write Single Register
-- FC10: Write Multiple Registers
-- FC16: Mask Write Register
-- FC17: Read/Write Multiple Registers
+### `diagnostics-stats`
 
-Callbacks: `read_multiple_holding_registers_request`, `write_single_register_request`, `write_multiple_registers_request`, `mask_write_register_request`, `read_write_multiple_registers_request`
+Builds on `diagnostics` and lets the stack answer the FC08 counter sub-functions directly.
 
-#### `input-registers`
+### `traffic`
 
-- FC04: Read Input Registers
-
-Callback: `read_input_registers_request`
-
-#### `discrete-inputs`
-
-- FC02: Read Discrete Inputs
-
-Callback: `read_discrete_inputs_request`
-
-#### `fifo`
-
-- FC18: Read FIFO Queue
-
-Callback: `read_fifo_queue_request`
-
-#### `file-record`
-
-- FC14: Read File Record
-- FC15: Write File Record
-
-Callbacks: `read_file_record_request`, `write_file_record_request`
+Enables the `TrafficNotifier` trait for observing raw RX/TX frames and framing or send errors.
 
 ---
 
-### Diagnostics Features
+## Derive Macros
 
-#### `diagnostics`
-
-Enables diagnostic function codes:
-
-- FC07: Read Exception Status
-- FC08: Diagnostics (with sub-functions)
-- FC0B: Get Comm Event Counter
-- FC0C: Get Comm Event Log
-- FC11: Report Server ID
-- FC2B: Read Device Identification (MEI 0x0E)
-
-#### `diagnostics-stats`
-
-Auto-handles FC08 counter sub-functions in the stack:
-
-| Sub-function | Name |
-|-------------|------|
-| `0x000A` | Clear Counters |
-| `0x000B` | Bus Message Count |
-| `0x000C` | Bus Comm Error Count |
-| `0x000D` | Bus Exception Error Count |
-| `0x000E` | Server Message Count |
-| `0x000F` | Server No-Response Count |
-| `0x0010` | Server NAK Count |
-| `0x0011` | Server Busy Count |
-| `0x0012` | Bus Character Overrun Count |
-| `0x0014` | Clear Overrun Counter/Flag |
-
----
-
-### Optional Features
-
-#### `logging`
-
-Enables `log` facade calls for debugging:
-
-```bash
-RUST_LOG=debug cargo run --features server,logging
-```
-
----
-
-## Derive Macro Availability
-
-The derive macros are always available when `server` is enabled:
+The derive macros depend on the corresponding server-side model features:
 
 | Macro | Requires |
 |-------|----------|
-| `CoilsModel` | `coils` |
-| `HoldingRegistersModel` | `holding-registers` |
-| `InputRegistersModel` | `input-registers` |
-| `DiscreteInputsModel` | `discrete-inputs` |
-| `modbus_app` | at least one data model feature |
+| `CoilsModel` | `server` + `coils` |
+| `HoldingRegistersModel` | `server` + `holding-registers` |
+| `InputRegistersModel` | `server` + `input-registers` |
+| `DiscreteInputsModel` | `server` + `discrete-inputs` |
+| `modbus_app` | `server` plus at least one routed group |
 
 ---
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Quick Start](quick_start.md)
 - [Function Codes](function_codes.md)
 - [Macros](macros.md)

@@ -77,7 +77,7 @@ Demonstrates `log` facade integration for transport diagnostics.
 
 ```bash
 RUST_LOG=debug cargo run -p modbus-rs --example modbus_rs_client_tcp_logging \
-    --no-default-features --features tcp,logging
+    --no-default-features --features network-tcp,logging
 ```
 
 **Source:** [modbus-rs/examples/client/network-tcp/sync/logging.rs](../../modbus-rs/examples/client/network-tcp/sync/logging.rs)
@@ -212,7 +212,7 @@ Demonstrates all function-code services in one example.
 <!-- validate: skip -->
 ```bash
 cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades \
-    --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+    --no-default-features --features client,network-tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
 ```
 
 ---

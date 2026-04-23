@@ -20,7 +20,7 @@ This section covers everything you need to build Modbus client applications with
 | **Sync Rust** (poll-driven) | [Building Applications](building_applications.md) |
 | **Async Rust** (Tokio) | [Async Development](async.md) |
 | **C/C++ Native** | [C/FFI Bindings](c_bindings.md) |
-| **Browser/WASM** | [WASM Development](wasm.md) |
+| **Browser/WASM** (WebSocket + Web Serial) | [WASM Development](wasm.md) |
 
 ---
 
@@ -28,7 +28,7 @@ This section covers everything you need to build Modbus client applications with
 
 | Transport | Feature Flag | Documentation |
 |-----------|--------------|---------------|
-| Modbus TCP | `tcp` | [Building Applications](building_applications.md#tcp-transport) |
+| Modbus TCP | `network-tcp` | [Building Applications](building_applications.md#tcp-transport) |
 | Serial RTU | `serial-rtu` | [Building Applications](building_applications.md#serial-rtu-transport) |
 | Serial ASCII | `serial-ascii` | [Building Applications](building_applications.md#serial-ascii-transport) |
 
@@ -46,10 +46,18 @@ This section covers everything you need to build Modbus client applications with
 | `0x06` | Write Single Register | `registers` |
 | `0x0F` | Write Multiple Coils | `coils` |
 | `0x10` | Write Multiple Registers | `registers` |
+| `0x16` | Mask Write Register | `registers` |
+| `0x17` | Read/Write Multiple Registers | `registers` |
 | `0x18` | Read FIFO Queue | `fifo` |
 | `0x14` | Read File Record | `file-record` |
 | `0x15` | Write File Record | `file-record` |
-| `0x2B` | Read Device Identification | `diagnostics` |
+| `0x07` | Read Exception Status | `diagnostics` |
+| `0x08` | Diagnostics | `diagnostics` |
+| `0x0B` | Get Comm Event Counter | `diagnostics` |
+| `0x0C` | Get Comm Event Log | `diagnostics` |
+| `0x11` | Report Server ID | `diagnostics` |
+| `0x2B/0x0E` | Read Device Identification (MEI) | `diagnostics` |
+| `0x2B` | Encapsulated Interface Transport (MEI) | `diagnostics` |
 
 ---
 

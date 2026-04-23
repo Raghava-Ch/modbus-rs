@@ -8,7 +8,7 @@ find_package(Threads REQUIRED)
 # Canonical YAML config for generated handlers:
 #   mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml
 
-include_directories(../../include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../target/mbus-ffi/include)
 
 set(RUST_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../target/debug")
 

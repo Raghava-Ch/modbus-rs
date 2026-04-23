@@ -12,9 +12,9 @@ categories.workspace = true
 description = "Provides serial transport layer functionalities for modbus-rs project"
 
 [dependencies]
-mbus-core ={ workspace = true }
+mbus-core = { workspace = true }
 
-heapless ={ workspace = true }
+heapless = { workspace = true }
 log = { workspace = true, optional = true }
 gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -23,11 +23,16 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 serialport = { version = "4.2.2", default-features = true }
-tokio        = { version = "1", features = ["io-util", "time"], optional = true }
+tokio = { version = "1", features = ["io-util", "time"], optional = true }
 tokio-serial = { version = "5", optional = true }
 
 [features]
 default = []
 logging = ["dep:log"]
-wasm = ["dep:gloo-timers", "dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+wasm = [
+    "dep:gloo-timers",
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+]
 async = ["dep:tokio", "dep:tokio-serial", "mbus-core/async"]

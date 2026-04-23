@@ -1,32 +1,26 @@
 # Server Quick Start
 
-Get your first Modbus server running in 5 minutes.
-
----
-
-## Prerequisites
-
-- Rust 1.75+ (2024 edition)
-- A Modbus client/master to connect (or use an included client example)
+Get a synchronous Modbus server running with the current `ServerServices` API.
 
 ---
 
 ## 1. Add Dependencies
 
-### Full Default Stack (TCP + All FCs)
+If you are fine with the top-level default stack, this is enough:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["server"] }
+modbus-rs = "0.7.0"
 ```
 
-### Minimal TCP Server (Coils + Registers Only)
+That default includes both client and server support. For a smaller TCP-only server build,
+disable defaults and opt in explicitly:
 
 ```toml
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "server",
-    "tcp",
+    "network-tcp",
     "coils",
     "holding-registers"
 ] }
@@ -34,93 +28,50 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ---
 
-## 2. Write Your First Server
+## 2. Write a Server
 
-### TCP Server with Derive Macros
+The current lifecycle is:
+
+1. Build `ModbusConfig`
+2. Construct a transport
+3. Create `ServerServices::new(transport, app, config, unit_id, resilience)`
+4. Call `connect()`
+5. Drive `poll()` in a loop
 
 ```rust
 use modbus_rs::{
-    modbus_app, CoilsModel, HoldingRegistersModel,
-    ServerServices, MbusError, ModbusConfig, ModbusTcpConfig,
-    ResilienceConfig, StdTcpTransport, UnitIdOrSlaveAddr,
+    modbus_app, CoilsModel, HoldingRegistersModel, MbusError, ModbusConfig,
+    ModbusTcpConfig, ResilienceConfig, ServerServices, StdTcpTransport,
+    UnitIdOrSlaveAddr,
 };
 
-// Define coils data model
 #[derive(Default, CoilsModel)]
-struct MyCoils {
+struct Outputs {
     #[coil(addr = 0)]
-    output_enable: bool,
-    #[coil(addr = 1)]
-    alarm_reset: bool,
+    run_enable: bool,
 }
 
-// Define holding registers data model
 #[derive(Default, HoldingRegistersModel)]
-struct MyRegisters {
+struct Setpoints {
     #[reg(addr = 0)]
-    setpoint: u16,
-    #[reg(addr = 1, scale = 10)]
-    temperature: u16,  // 0.1°C resolution
+    target_speed: u16,
 }
 
-// Create application handler
+#[derive(Default)]
 #[modbus_app(
-    coils(coils),
-    holding_registers(registers),
+    coils(outputs),
+    holding_registers(setpoints),
 )]
-struct MyApp {
-    coils: MyCoils,
-    registers: MyRegisters,
-}
-
-#[cfg(feature = "traffic")]
-impl modbus_rs::TrafficNotifier for MyApp {
-    fn on_rx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
-        println!("RX frame ({} bytes)", frame.len());
-    }
-
-    fn on_tx_frame(&mut self, _txn_id: u16, _uid: UnitIdOrSlaveAddr, frame: &[u8]) {
-        println!("TX frame ({} bytes)", frame.len());
-    }
-
-    fn on_rx_error(
-        &mut self,
-        _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        error: MbusError,
-        frame: &[u8],
-    ) {
-        println!("RX error {:?} on frame ({} bytes)", error, frame.len());
-    }
-
-    fn on_tx_error(
-        &mut self,
-        _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        error: MbusError,
-        frame: &[u8],
-    ) {
-        println!("TX error {:?} on frame ({} bytes)", error, frame.len());
-    }
-}
-
-impl MyApp {
-    fn new() -> Self {
-        Self {
-            coils: MyCoils::default(),
-            registers: MyRegisters {
-                setpoint: 250,      // 25.0
-                temperature: 235,   // 23.5°C
-            },
-        }
-    }
+struct App {
+    outputs: Outputs,
+    setpoints: Setpoints,
 }
 
 fn main() -> Result<(), MbusError> {
-    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("0.0.0.0", 502)?);
+    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("0.0.0.0", 5502)?);
     let transport = StdTcpTransport::new();
-    let app = MyApp::new();
-    
+    let app = App::default();
+
     let mut server = ServerServices::new(
         transport,
         app,
@@ -128,133 +79,79 @@ fn main() -> Result<(), MbusError> {
         UnitIdOrSlaveAddr::new(1)?,
         ResilienceConfig::default(),
     );
-    
+
     server.connect()?;
-    
-    println!("Modbus TCP server listening on port 502");
-    
+
     loop {
         server.poll();
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
 ```
 
-### TCP Server with Manual Callbacks
+The derive macros generate the split handler impls for FC01/FC05/FC0F and
+FC03/FC06/FC10/FC16/FC17.
 
-<!-- validate: skip -->
+---
+
+## 3. Manual Callbacks
+
+If you do not want macros, implement the split traits directly. The current read callbacks
+write encoded bytes into `out` and return the number of bytes written.
+
 ```rust
-use modbus_rs::{
-    ServerServices, MbusError, ModbusConfig, ModbusTcpConfig,
-    StdTcpTransport, ServerCoilHandler, ServerHoldingRegisterHandler,
-    ServerExceptionHandler, UnitIdOrSlaveAddr, Coils, Registers,
-};
-
-struct MyApp {
-    coils: [bool; 16],
-    registers: [u16; 10],
-}
-
-impl ServerExceptionHandler for MyApp {}
-
-impl ServerCoilHandler for MyApp {
+impl modbus_rs::ServerCoilHandler for MyApp {
     fn read_coils_request(
         &mut self,
         _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        start_address: u16,
-        quantity: u16,
-    ) -> Result<Coils, MbusError> {
-        let start = start_address as usize;
-        let qty = quantity as usize;
-        
-        if start + qty > self.coils.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        
-        Ok(Coils::from_values(start_address, &self.coils[start..start + qty]))
-    }
-    
-    fn write_single_coil_request(
-        &mut self,
-        _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
+        _uid: modbus_rs::UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
-    ) -> Result<(), MbusError> {
-        let addr = address as usize;
-        
-        if addr >= self.coils.len() {
-            return Err(MbusError::InvalidAddress);
-        }
-        
-        self.coils[addr] = value;
-        Ok(())
-    }
-}
-
-impl ServerHoldingRegisterHandler for MyApp {
-    fn read_multiple_holding_registers_request(
-        &mut self,
-        _txn_id: u16,
-        _uid: UnitIdOrSlaveAddr,
-        start_address: u16,
         quantity: u16,
-    ) -> Result<Registers, MbusError> {
-        let start = start_address as usize;
-        let qty = quantity as usize;
-        
-        if start + qty > self.registers.len() {
-            return Err(MbusError::InvalidAddress);
+        out: &mut [u8],
+    ) -> Result<u8, modbus_rs::MbusError> {
+        let start = address as usize;
+        let end = start + quantity as usize;
+        if end > self.coils.len() {
+            return Err(modbus_rs::MbusError::InvalidAddress);
         }
-        
-        Ok(Registers::from_values(start_address, &self.registers[start..start + qty]))
-    }
-}
 
-fn main() -> Result<(), MbusError> {
-    let config = ModbusConfig::Tcp(ModbusTcpConfig::new("0.0.0.0", 502)?);
-    let transport = StdTcpTransport::new();
-    let app = MyApp {
-        coils: [false; 16],
-        registers: [0; 10],
-    };
-    
-    let mut server = ServerServices::<_, _, 4>::new(transport, app, config)?;
-    server.bind()?;
-    
-    loop {
-        server.poll();
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        let byte_count = (quantity as usize).div_ceil(8);
+        if out.len() < byte_count {
+            return Err(modbus_rs::MbusError::BufferTooSmall);
+        }
+
+        out[..byte_count].fill(0);
+        for (index, value) in self.coils[start..end].iter().enumerate() {
+            if *value {
+                out[index / 8] |= 1u8 << (index % 8);
+            }
+        }
+
+        Ok(byte_count as u8)
     }
 }
 ```
 
+For full examples, see [Examples](examples.md) and [Building Applications](building_applications.md).
+
 ---
 
-## 3. Test Your Server
+## 4. Test It
 
-From the workspace root, use the client examples:
+Start the server, then use one of the included TCP client examples from the workspace root:
 
 ```bash
-# Read 8 coils starting at address 0
-cargo run -p modbus-rs --example modbus_rs_client_tcp_coils -- 127.0.0.1 502 1
+# Read coils / exercise retry policy example client
+cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter -- 127.0.0.1 5502 1
 
-# Read 10 holding registers starting at address 0
-cargo run -p modbus-rs --example modbus_rs_client_tcp_registers -- 127.0.0.1 502 1
+# Read holding registers
+cargo run -p modbus-rs --example modbus_rs_client_tcp_registers -- 127.0.0.1 5502 1
 ```
 
-Or use any Modbus client tool (e.g., `modpoll`).
-
----
-
-## 4. Run a Pre-Built Server Example
+Or run one of the prebuilt server demos directly:
 
 ```bash
-# TCP demo server
 cargo run -p modbus-rs --example modbus_rs_server_tcp_demo
-
-# TCP shared-state demo server
 cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
 ```
 
@@ -262,8 +159,6 @@ cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
 
 ## Next Steps
 
-- [Examples Reference](examples.md) — Find an example for your use case
-- [Building Applications](building_applications.md) — Production-ready setup
-- [Macros](macros.md) — Learn the derive macro system
-- [Write Hooks](write_hooks.md) — React to client writes
-- [Policies](policies.md) — Configure timeouts and retry queues
+- [Building Applications](building_applications.md) for manual handlers, shared state, and transport setup
+- [Macros](macros.md) for generated maps and routing
+- [Policies](policies.md) for retry, deadlines, and queue behavior

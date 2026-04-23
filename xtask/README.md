@@ -147,7 +147,7 @@ rust_features: "c-server,full"
 codegen:
   config: mbus-ffi/examples/my_demo/my_device.yaml
   out_dir: mbus-ffi/src/c/server_gen
-  header: mbus-ffi/include/mbus_server_app.h
+  header: target/mbus-ffi/include/mbus_server_app.h
 
 run:
   default_mode: self-test
@@ -175,7 +175,7 @@ Generate the C header from a YAML device config:
 ```bash
 cargo run -p xtask -- gen-server-app \
   --config mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
-  --emit-c-header mbus-ffi/include/mbus_server_app.h
+  --emit-c-header target/mbus-ffi/include/mbus_server_app.h
 ```
 
 The Rust dispatcher (`generated_server.rs`) is **not** written by this command — it is
@@ -186,7 +186,7 @@ Flags: `--check` (verify without writing), `--dry-run` (print what would be writ
 
 ### `check-server-gen`
 
-Verify that the checked-in C header (`mbus_server_app.h`) matches the current YAML config (used in CI):
+Verify that the generated C header (`mbus_server_app.h`) matches the current YAML config (used in CI):
 
 ```bash
 cargo run -p xtask -- check-server-gen
@@ -197,7 +197,7 @@ cargo run -p xtask -- check-server-gen
 ## FFI Header Commands
 
 ### `gen-header`
-Regenerate `mbus_ffi.h` and `mbus_ffi_feature_gated.h`:
+Regenerate `modbus_rs_client.h` and `modbus_rs_client_feature_gated.h`:
 
 ```bash
 cargo run -p xtask -- gen-header
@@ -211,7 +211,7 @@ cargo run -p xtask -- check-header
 ```
 
 ### `gen-feature-header` / `check-feature-header`
-Regenerate or verify only `mbus_ffi_feature_gated.h`.
+Regenerate or verify only `modbus_rs_client_feature_gated.h`.
 
 ---
 

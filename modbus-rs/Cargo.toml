@@ -9,7 +9,7 @@ homepage = "https://github.com/Raghava-Ch/modbus-rs"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Feature-gated, low-footprint Modbus client stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
+description = "Feature-gated, low-footprint Modbus client and server stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
 
 [dependencies]
 mbus-core = { workspace = true }
@@ -30,14 +30,15 @@ mbus-server = { version = "0.7.0", path = "../mbus-server" }
 [build-dependencies]
 
 [features]
-# By default, all Modbus client services are enabled.
+# By default, Modbus client and server services are enabled.
 # To reduce binary size or exclude unused functionality,
 # disable default features and enable only the services you need.
 # These features are re-exported from the `mbus-core` crate.
 default = [
     "client",
+    "server",
     "serial-rtu",
-    "tcp",
+    "network-tcp",
     "coils",
     "holding-registers",
     "input-registers",
@@ -48,15 +49,22 @@ default = [
 ]
 client = ["mbus-client"]
 server = ["dep:mbus-server"]
-async-server-tcp = ["async", "mbus-async?/server-tcp"]
-async-server-serial = ["async", "mbus-async?/server-serial"]
-serial-rtu = ["mbus-serial", "mbus-async?/serial-rtu"]
+serial-rtu = [
+    "mbus-serial",
+    "mbus-async?/serial-rtu",
+    "mbus-async?/server-serial",
+]
 serial-ascii = [
     "mbus-serial",
     "mbus-core/serial-ascii",
     "mbus-async?/serial-ascii",
+    "mbus-async?/server-serial",
 ]
-tcp = ["mbus-network", "mbus-async?/tcp"]
+network-tcp = [
+    "mbus-network",
+    "mbus-async?/network-tcp",
+    "mbus-async?/server-tcp",
+]
 coils = ["mbus-core/coils", "mbus-async?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
 holding-registers = ["registers"]
@@ -80,7 +88,7 @@ traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
 
 # Convenience feature for no_std / embedded targets.
 # Enables the client state machine and all protocol model features.
-# Does NOT pull in any transport (tcp, serial-rtu, serial-ascii) or async,
+# Does NOT pull in any transport (network-tcp, serial-rtu, serial-ascii) or async,
 # so it compiles on targets without std.
 # Pair with your own Transport implementation.
 no-std = [
@@ -107,12 +115,12 @@ required-features = ["async", "serial-rtu"]
 [[example]]
 name = "modbus_rs_client_traffic_sync_tcp"
 path = "examples/client/network-tcp/sync/traffic.rs"
-required-features = ["traffic", "client", "tcp", "coils"]
+required-features = ["traffic", "client", "network-tcp", "coils"]
 
 [[example]]
 name = "modbus_rs_client_traffic_async_tcp"
 path = "examples/client/network-tcp/async/traffic.rs"
-required-features = ["async", "traffic", "tcp", "coils"]
+required-features = ["async", "traffic", "network-tcp", "coils"]
 
 [[example]]
 name = "modbus_rs_client_tcp_coils"
@@ -172,7 +180,8 @@ name = "modbus_rs_server_async_tcp_demo"
 path = "examples/server/network-tcp/async/demo.rs"
 required-features = [
     "server",
-    "async-server-tcp",
+    "async",
+    "network-tcp",
     "coils",
     "holding-registers",
     "input-registers",
@@ -183,16 +192,32 @@ name = "modbus_rs_server_async_tcp_traffic"
 path = "examples/server/network-tcp/async/traffic.rs"
 required-features = [
     "server",
-    "async-server-tcp",
+    "async",
+    "network-tcp",
     "coils",
     "holding-registers",
     "traffic",
 ]
 
 [[example]]
+name = "modbus_rs_server_async_fifo_file_record_demo"
+path = "examples/server/network-tcp/async/fifo_file_record_demo.rs"
+required-features = ["server", "async", "network-tcp", "fifo", "file-record"]
+
+[[example]]
 name = "modbus_rs_server_std_transport_client_demo"
 path = "examples/server/network-tcp/sync/shared_state.rs"
-required-features = ["tcp", "coils", "holding-registers", "input-registers"]
+required-features = [
+    "network-tcp",
+    "coils",
+    "holding-registers",
+    "input-registers",
+]
+
+[[example]]
+name = "fifo_file_record_demo"
+path = "examples/server/network-tcp/sync/fifo_file_record_demo.rs"
+required-features = ["server", "network-tcp", "fifo", "file-record"]
 
 [[example]]
 name = "modbus_rs_server_serial_rtu_demo"

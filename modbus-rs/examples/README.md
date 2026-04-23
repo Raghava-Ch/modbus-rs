@@ -23,7 +23,9 @@ This avoids collisions like `coils_example` between client and server samples an
 
 ## Current Registered Example Targets
 
-Current `modbus-rs` package targets are client-focused and use `modbus_rs_client_*` names.
+Most `modbus-rs` package targets use the `modbus_rs_client_*` and
+`modbus_rs_server_*` prefixes. A few focused utility demos, such as
+`fifo_file_record_demo`, intentionally use shorter names.
 See `modbus-rs/Cargo.toml` `[[example]]` entries for the canonical list.
 
 ### Real-world HVAC Server (mbus-network server transport)

@@ -213,7 +213,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_message_count();
 
-        let transport_type = self.transport.transport_type();
+        let transport_type = T::TRANSPORT_TYPE;
         match self.parse_adu(&adu, transport_type) {
             Ok(Some(req)) => {
                 let txn_id = req.txn_id();
@@ -403,7 +403,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         if matches!(resp, ModbusResponse::NoResponse) {
             return Ok(());
         }
-        let tt = self.transport.transport_type();
+        let tt = T::TRANSPORT_TYPE;
         let frame = resp
             .encode(txn_id, unit, tt)
             .map_err(AsyncServerError::Transport)?;
@@ -430,7 +430,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         if matches!(resp, ModbusResponse::NoResponse) {
             return Ok(());
         }
-        let transport_type = self.transport.transport_type();
+        let transport_type = T::TRANSPORT_TYPE;
         let adu = resp
             .encode(txn_id, unit, transport_type)
             .map_err(AsyncServerError::Transport)?;

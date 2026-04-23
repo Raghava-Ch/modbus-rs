@@ -48,6 +48,7 @@ type Inner = ClientServices<WasmWsTransport, WasmAppRouter, PIPELINE>;
 // ── WasmModbusClient ──────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
+/// Browser-facing Modbus client that communicates over a WebSocket transport.
 pub struct WasmModbusClient {
     inner: Rc<RefCell<Inner>>,
     pending: PendingMap,

@@ -66,9 +66,8 @@ impl TokioTcpTransport {
 }
 
 impl AsyncTransport for TokioTcpTransport {
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdTcp
-    }
+    const SUPPORTS_BROADCAST_WRITES: bool = false;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 
     fn is_connected(&self) -> bool {
         self.connected

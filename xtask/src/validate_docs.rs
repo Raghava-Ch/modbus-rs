@@ -15,15 +15,9 @@
 //! |---|---|
 //! | `<!-- validate: run -->` | Execute the command instead of just compile‐checking |
 //! | `<!-- validate: skip -->` | Skip the block entirely |
-//! | `<!-- validate: compile -->` | Force compile‐check (useful for snippets without `fn main`) |
+//! | `<!-- validate: no_run -->` | Compile-check the block without running it |
 //!
-//! Rust fence modifiers (after the language tag):
-//!
-//! | Tag | Effect |
-//! |---|---|
-//! | ` ```rust ` | Compile‐check **only** if the block contains `fn main` |
-//! | ` ```rust,no_run ` | Always compile‐check, never run |
-//! | ` ```rust,ignore ` | Skip entirely |
+//! Rust fence modifiers do not control xtask validation. Only HTML markers do.
 
 use std::collections::HashSet;
 use std::fs;
@@ -83,7 +77,6 @@ struct CodeBlock {
     file: PathBuf,
     line: usize,
     lang: String,
-    tags: Vec<String>,
     code: String,
     /// A `<!-- validate: XXX -->` on the line immediately before the fence.
     marker: Option<String>,
@@ -150,7 +143,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
         // Try to detect an opening fence
         if let Some((fence_ch, fence_n, info)) = detect_open_fence(trimmed) {
             let block_line = i + 1; // 1-based
-            let (lang, tags) = parse_info_string(info);
+            let lang = parse_info_string(info);
             let marker = pending_marker.take();
             let mut code = String::new();
             i += 1;
@@ -169,7 +162,6 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
                 file: file.to_path_buf(),
                 line: block_line,
                 lang,
-                tags,
                 code,
                 marker,
             });
@@ -184,7 +176,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
     blocks
 }
 
-/// Parse `<!-- validate: run|skip|compile -->` from a line.
+/// Parse `<!-- validate: run|skip|no_run -->` from a line.
 fn extract_marker(line: &str) -> Option<String> {
     let inner = line.strip_prefix("<!--")?.strip_suffix("-->")?.trim();
     let value = inner.strip_prefix("validate:")?.trim();
@@ -217,15 +209,13 @@ fn is_close_fence(line: &str, fence_ch: char, min: usize) -> bool {
     n >= min && line[n..].trim().is_empty()
 }
 
-/// Split `"rust,no_run"` → `("rust", ["no_run"])`.
-fn parse_info_string(info: &str) -> (String, Vec<String>) {
+/// Split `"rust,anything"` and return only the language token (`"rust"`).
+fn parse_info_string(info: &str) -> String {
     if info.is_empty() {
-        return (String::new(), Vec::new());
+        return String::new();
     }
     let parts: Vec<&str> = info.split(',').map(str::trim).collect();
-    let lang = parts[0].to_lowercase();
-    let tags = parts[1..].iter().map(|s| s.trim().to_lowercase()).collect();
-    (lang, tags)
+    parts[0].to_lowercase()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -480,18 +470,13 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
         if block.lang != "rust" {
             continue;
         }
-        if block.tags.iter().any(|t| t == "ignore") {
-            skipped += 1;
-            continue;
-        }
         if block.marker.as_deref() == Some("skip") {
             skipped += 1;
             continue;
         }
 
         let has_main = block.code.contains("fn main");
-        let force =
-            block.tags.iter().any(|t| t == "no_run") || block.marker.as_deref() == Some("compile");
+        let force = block.marker.as_deref() == Some("no_run");
 
         if has_main || force {
             compilable.push(block);
@@ -550,7 +535,8 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                     "modbus-rs",
                     "--example",
                     &name,
-                    "--all-features",
+                    "--features",
+                    "async,serial-ascii,logging,diagnostics-stats",
                 ])
                 .output();
 
@@ -726,7 +712,7 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
 
     let (compilable, skipped_n) = classify_rust_blocks(&all_blocks);
     println!(
-        "Compilable: {} (fn main / no_run / forced), Skipped: {}\n",
+        "Compilable: {} (fn main / validate:no_run), Skipped: {}\n",
         compilable.len(),
         skipped_n
     );

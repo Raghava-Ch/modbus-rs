@@ -2,8 +2,12 @@
 
 `mbus-serial` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
-It provides a standard serial transport implementation for Modbus RTU and Modbus ASCII,
+It provides serial transport implementations for Modbus RTU and Modbus ASCII,
 built on top of the shared transport abstractions in `mbus-core`.
+
+- Native std sync transport (`Transport`) via `serialport`
+- Native std async transport (`AsyncTransport`) via `tokio-serial` (feature-gated)
+- Browser Web Serial transport for `wasm32` (feature-gated)
 
 If you want an all-in-one entry point, use `modbus-rs`.
 If you need direct access to serial transport internals, use `mbus-serial` directly.
@@ -15,27 +19,29 @@ If you need direct access to serial transport internals, use `mbus-serial` direc
 - Implements `Transport` from `mbus-core`.
 - Connects to real serial ports via the `serialport` crate.
 - Supports both RTU (`StdRtuTransport`) and ASCII (`StdAsciiTransport`) modes.
+- Provides async tokio serial transports (`TokioRtuTransport`, `TokioAsciiTransport`) behind the `async` feature.
+- Provides wasm Web Serial transports (`WasmRtuTransport`, `WasmAsciiTransport`) for `wasm32` targets behind the `wasm` feature.
 
 This crate does not implement high-level request/response orchestration by itself.
 That logic lives in `mbus-client`.
 
 ## What Is Included
 
-- `StdRtuTransport` / `StdAsciiTransport`: concrete serial implementations of `modbus_rs::Transport`.
-- Serial connection handling (open/close/check connection).
-- ADU send/receive support.
-- Error mapping from I/O errors to `TransportError`.
-- Utility function to enumerate serial ports.
+- `StdSerialTransport`, `StdRtuTransport`, `StdAsciiTransport` (native sync `Transport` impls)
+- `TokioRtuTransport`, `TokioAsciiTransport` (native async `AsyncTransport` impls, `async` feature)
+- `WasmRtuTransport`, `WasmAsciiTransport` (browser wasm transports, `wasm` feature + `wasm32` target)
+- Serial connection handling (open/close/check connection)
+- ADU send/receive support
+- Error mapping from I/O errors to `TransportError` / `MbusError`
+- Utility function to enumerate serial ports on native targets (`available_ports`)
 
 ## Public API Surface
 
-The crate currently re-exports:
+The crate re-exports, depending on target/features:
 
-- `StdSerialTransport`, `StdRtuTransport`, `StdAsciiTransport`
-
-from:
-
-- `management::std_serial`
+- Native (non-wasm): `StdSerialTransport`, `StdRtuTransport`, `StdAsciiTransport`
+- Native + `async`: `TokioRtuTransport`, `TokioAsciiTransport`
+- `wasm32` + `wasm`: `WasmRtuTransport`, `WasmAsciiTransport`
 
 ## Usage
 
@@ -97,12 +103,19 @@ fn list_ports() {
 }
 ```
 
+## Feature Flags
+
+- `logging`: enables `log` facade diagnostics in serial transports
+- `async`: enables tokio-backed async serial transports (`TokioRtuTransport`, `TokioAsciiTransport`)
+- `wasm`: enables Web Serial support for `wasm32` targets (`WasmRtuTransport`, `WasmAsciiTransport`)
+
 ## Configuration Notes
 
 - Use `StdRtuTransport::new()` with `SerialMode::Rtu` configs and `StdAsciiTransport::new()` with `SerialMode::Ascii` configs.
   If they do not match, `connect` returns `TransportError::InvalidConfiguration`.
 - `stop_bits` must be `1` or `2`.
 - `response_timeout_ms` controls serial read timeout behavior.
+- Async transport uses `Tokio*Transport::new(&config)` and validates mode similarly via `MbusError::InvalidConfiguration`.
 
 ## Logging
 

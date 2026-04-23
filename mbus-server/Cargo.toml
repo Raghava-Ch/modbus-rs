@@ -29,19 +29,33 @@ default = [
     "discrete-inputs",
     "fifo",
     "file-record",
-    "diagnostics"
+    "diagnostics",
 ]
 
-coils = ["mbus-core/coils"]      # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
-holding-registers = ["mbus-core/registers"]  # Enables holding-register services (FC 0x03, 0x06, 0x10)
-input-registers = ["mbus-core/registers"]    # Enables input-register service (FC 0x04)
-registers = ["holding-registers", "input-registers"]  # Backward-compat alias
-discrete-inputs = ["mbus-core/discrete-inputs"] # Enables Modbus Discrete Input (FC 0x02) services
-fifo = ["mbus-core/fifo"]     # Enables Modbus FIFO Queue (FC 0x18) services
-file-record = ["mbus-core/file-record"]    # Enables Modbus File Record (FC 0x14, 0x15) services
-diagnostics = ["mbus-core/diagnostics"]     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
-diagnostics-stats = ["diagnostics"]  # Enables server statistics tracking for FC 0x08 diagnostics counters
-serial-ascii = ["mbus-core/serial-ascii"]   # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
+coils = ["mbus-core/coils"] # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
+holding-registers = [
+    "mbus-core/registers",
+] # Enables holding-register services (FC 0x03, 0x06, 0x10)
+input-registers = [
+    "mbus-core/registers",
+] # Enables input-register service (FC 0x04)
+registers = ["holding-registers", "input-registers"] # Backward-compat alias
+discrete-inputs = [
+    "mbus-core/discrete-inputs",
+] # Enables Modbus Discrete Input (FC 0x02) services
+fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
+file-record = [
+    "mbus-core/file-record",
+] # Enables Modbus File Record (FC 0x14, 0x15) services
+diagnostics = [
+    "mbus-core/diagnostics",
+] # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
+diagnostics-stats = [
+    "diagnostics",
+] # Enables server statistics tracking for FC 0x08 diagnostics counters
+serial-ascii = [
+    "mbus-core/serial-ascii",
+] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
 logging = ["dep:log"]
 traffic = []
 

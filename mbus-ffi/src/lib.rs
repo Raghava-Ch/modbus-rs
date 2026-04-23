@@ -29,13 +29,13 @@
 //! ```text
 //! MBUS_SERVER_APP_CONFIG=/path/to/server_app.yaml cargo build -p mbus-ffi --features c-server
 //! ```
-#![cfg_attr(all(not(doc), not(has_unwind)), no_std)]
+#![cfg_attr(all(not(doc), not(has_unwind), not(target_arch = "wasm32")), no_std)]
 #![warn(missing_docs)]
 
-#[cfg(all(not(doc), not(has_unwind)))]
+#[cfg(all(not(doc), not(has_unwind), not(target_arch = "wasm32")))]
 use core::panic::PanicInfo;
 
-#[cfg(all(not(doc), not(has_unwind)))]
+#[cfg(all(not(doc), not(has_unwind), not(target_arch = "wasm32")))]
 #[panic_handler]
 fn panic_handler(_info: &PanicInfo) -> ! {
     loop {}

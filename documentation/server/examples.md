@@ -30,6 +30,20 @@ cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
 
 ---
 
+### TCP FIFO + File Record Demo
+
+Demonstrates a sync server app that routes FC18 through `fifo(...)` and
+FC14/FC15 through `file_record(...)` using `#[modbus_app(...)]`.
+
+```bash
+cargo run -p modbus-rs --example fifo_file_record_demo \
+    --features server,network-tcp,fifo,file-record
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/sync/fifo_file_record_demo.rs](../../modbus-rs/examples/server/network-tcp/sync/fifo_file_record_demo.rs)
+
+---
+
 ## Async TCP Server Examples
 
 ### Async TCP Demo Server
@@ -40,7 +54,7 @@ so connected clients observe updating data.
 
 ```bash
 cargo run -p modbus-rs --example modbus_rs_server_async_tcp_demo \
-    --features server,async-server-tcp,coils,holding-registers,input-registers
+    --features server,async,network-tcp,coils,holding-registers,input-registers
 ```
 
 **Source:** [modbus-rs/examples/server/network-tcp/async/demo.rs](../../modbus-rs/examples/server/network-tcp/async/demo.rs)
@@ -54,10 +68,25 @@ Demonstrates implementing [`AsyncTrafficNotifier`] to intercept all raw ADU fram
 
 ```bash
 cargo run -p modbus-rs --example modbus_rs_server_async_tcp_traffic \
-    --features server,async-server-tcp,coils,holding-registers,traffic
+    --features server,async,network-tcp,coils,holding-registers,traffic
 ```
 
 **Source:** [modbus-rs/examples/server/network-tcp/async/traffic.rs](../../modbus-rs/examples/server/network-tcp/async/traffic.rs)
+
+---
+
+### Async TCP FIFO + File Record Demo
+
+Demonstrates a full async TCP server that routes FC18 through `fifo(...)` and
+FC14/FC15 through `file_record(...)` using `#[async_modbus_app(...)]`, with a
+background task that updates the served data.
+
+```bash
+cargo run -p modbus-rs --example modbus_rs_server_async_fifo_file_record_demo \
+    --features server,async,network-tcp,fifo,file-record
+```
+
+**Source:** [modbus-rs/examples/server/network-tcp/async/fifo_file_record_demo.rs](../../modbus-rs/examples/server/network-tcp/async/fifo_file_record_demo.rs)
 
 ---
 

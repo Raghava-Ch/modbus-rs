@@ -4,11 +4,11 @@
 It runs on no_std and std targets (MCUs, RTOS, Windows, Linux, macOS), supports TCP/RTU/ASCII, provides sync and async APIs, and uses feature gating to keep binaries minimal.
 Advanced reliability features include configurable retry, backoff, and jitter, with optional native C and WASM bindings via `mbus-ffi`.
 
-It re-exports the core protocol crate, client services, and optional TCP/Serial transport
+It re-exports the core protocol crate, client and server services, and optional TCP/Serial transport
 implementations behind feature flags so you can choose between convenience and minimal
 binary size.
 
-## Basic Async Usage Example
+## Basic Async Client Usage Example
 
 ```rust
 use anyhow::Result;
@@ -35,6 +35,63 @@ async fn main() -> Result<()> {
 	Ok(())
 }
 ```
+
+## Basic Async Server Usage Example
+
+<!-- validate: no_run -->
+```rust
+use anyhow::Result;
+use modbus_rs::mbus_async::server::AsyncTcpServer;
+use modbus_rs::{async_modbus_app, CoilsModel, HoldingRegistersModel};
+use modbus_rs::UnitIdOrSlaveAddr;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Debug, Default, CoilsModel)]
+struct Coils {
+    #[coil(addr = 0)] enabled: bool,
+    #[coil(addr = 1)] alarm: bool,
+}
+
+#[derive(Debug, Default, HoldingRegistersModel)]
+struct Regs {
+    #[reg(addr = 0)] setpoint: u16,
+    #[reg(addr = 1)] feedback: u16,
+}
+
+#[derive(Default)]
+#[async_modbus_app]
+struct App {
+    #[coils]
+    coils: Coils,
+    #[holding_registers]
+    regs: Regs,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let app = Arc::new(Mutex::new(App::default()));
+    AsyncTcpServer::serve_shared("0.0.0.0:5502", app, UnitIdOrSlaveAddr::new(1)?).await?;
+    Ok(())
+}
+```
+## Documentation
+
+Additional workspace documentation is available in the `documentation/` folder:
+
+- [documentation/README.md](../documentation/README.md) — top-level navigation
+- [documentation/migration_guide.md](../documentation/migration_guide.md) — version-to-version migration notes
+
+### Client docs
+
+- [documentation/client/README.md](../documentation/client/README.md)
+- [documentation/client/quick_start.md](../documentation/client/quick_start.md)
+
+### Server docs
+
+- [documentation/server/README.md](../documentation/server/README.md)
+- [documentation/server/quick_start.md](../documentation/server/quick_start.md)
+
 
 ## What This Crate Is
 
@@ -67,7 +124,9 @@ Depending on enabled features, this crate re-exports:
 - all public items from `mbus-core`
 - all public items from `mbus-network`
 - all public items from `mbus-serial`
-- the `mbus_client` crate
+- `ClientServices`, `SerialClientServices` from `mbus-client`
+- `ServerServices`, `ResilienceConfig`, `ForwardingApp`, `modbus_app`, `async_modbus_app`, model derive traits, and all FC handler traits from `mbus-server` (behind `server` feature)
+- `mbus_async` module re-export (behind `async` feature)
 - `heapless`
 
 ## Feature Flags
@@ -85,7 +144,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = ["no-std"]
 
 This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
 
-Features that **require std**: `tcp`, `serial-rtu`, `serial-ascii`, `async`, `logging`.  
+Features that **require std**: `network-tcp`, `serial-rtu`, `serial-ascii`, `async`, `logging`.  
 Features that are **no_std compatible**: `client`, `coils`, `registers`, `holding-registers`, `input-registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`.
 
 ---
@@ -97,8 +156,10 @@ Features that are **no_std compatible**: `client`, `coils`, `registers`, `holdin
   resilience configuration, and derive-based server helpers
 - `serial-rtu`: enables `mbus-serial` for RTU transport use cases _(requires std)_
 - `serial-ascii`: enables `mbus-serial` for ASCII transport use cases _(requires std)_
-- `tcp`: enables `mbus-network` _(requires std)_
-- `async`: enables `mbus-async` async facade re-export (`modbus_rs::mbus_async`) _(requires std)_
+- `network-tcp`: enables `mbus-network` _(requires std)_
+- `async`: enables native async runtime and APIs via Tokio (`modbus_rs::mbus_async`) _(requires std)_
+- `async` + `network-tcp`: enables async TCP client and server paths
+- `async` + `serial-rtu`/`serial-ascii`: enables async serial client and server paths
 - `coils`
 - `registers`
 - `holding-registers` (alias of `registers`; useful when matching server-side naming)
@@ -113,24 +174,106 @@ Features that are **no_std compatible**: `client`, `coils`, `registers`, `holdin
 
 Default behavior:
 
-- `default` enables `client`, `serial-rtu`, `tcp`, and all function-group features.
-- `server`, `serial-ascii`, `async`, and `traffic` are opt-in.
+- `default` enables `client`, `server`, `serial-rtu`, `network-tcp`, and all function-group features.
+- `serial-ascii`, `async`, and `traffic` are opt-in.
 - `no-std` is opt-in; use it with `default-features = false` on embedded targets.
 
-Example: only enable client + TCP + coil support:
+Example: only enable sync client + TCP + coil support:
 
 ```toml
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
   "client",
-  "tcp",
+	"network-tcp",
   "coils"
 ] }
 ```
 
 For more feature combinations, see [documentation/feature_flags.md](../documentation/feature_flags.md).
 
-### Async Setup
+### Server Setup
+
+Enable the server runtime with the `server` feature. Sync servers also need a transport feature (`network-tcp`, `serial-rtu`, or `serial-ascii`). Async servers use `async` plus a transport feature.
+
+```toml
+[dependencies]
+# Sync TCP server
+modbus-rs = { version = "0.7.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
+
+# Async TCP server
+modbus-rs = { version = "0.7.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+Using `#[modbus_app]` derive macro (sync server):
+
+<!-- validate: no_run -->
+```rust
+use modbus_rs::{
+    ServerServices, ResilienceConfig, StdTcpServerTransport,
+    modbus_app, ServerCoilHandler, ServerHoldingRegisterHandler,
+    ServerExceptionHandler, CoilsModel, HoldingRegistersModel,
+};
+use modbus_rs::{ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr};
+
+#[derive(Debug, Default, CoilsModel)]
+struct Coils {
+    #[coil(addr = 0)] run_enable: bool,
+    #[coil(addr = 1)] pump_enable: bool,
+}
+
+#[derive(Debug, Default, HoldingRegistersModel)]
+struct Regs {
+    #[reg(addr = 0)] setpoint: u16,
+    #[reg(addr = 1)] mode: u16,
+}
+
+#[modbus_app]
+struct App {
+	#[coils]
+	coils: Coils,
+	#[holding_registers]
+	regs: Regs,
+}
+
+// `#[modbus_app]` generates the required server handler impls.
+// Then pass App to ServerServices with a StdTcpServerTransport per accepted connection.
+```
+
+Using `#[async_modbus_app]` (async TCP server with shared state):
+
+<!-- validate: no_run -->
+```rust
+use modbus_rs::mbus_async::server::AsyncTcpServer;
+use modbus_rs::{async_modbus_app, CoilsModel, HoldingRegistersModel};
+use modbus_rs::UnitIdOrSlaveAddr;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Debug, Default, CoilsModel)]
+struct Coils { #[coil(addr = 0)] enabled: bool }
+
+#[derive(Debug, Default, HoldingRegistersModel)]
+struct Regs { #[reg(addr = 0)] setpoint: u16 }
+
+#[derive(Default)]
+#[async_modbus_app]
+struct App {
+	#[coils]
+	coils: Coils,
+	#[holding_registers]
+	regs: Regs,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let app = Arc::new(Mutex::new(App::default()));
+    AsyncTcpServer::serve_shared("0.0.0.0:5502", app, UnitIdOrSlaveAddr::new(1)?).await?;
+    Ok(())
+}
+```
+
+### Async Client Setup
 
 Enable async APIs with the `async` feature and add Tokio:
 
@@ -138,7 +281,7 @@ Enable async APIs with the `async` feature and add Tokio:
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
 	"async",
-	"tcp",
+	"network-tcp",
 	"coils"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -167,7 +310,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
 	"client",
-	"tcp",
+	"network-tcp",
 	"coils",
 	"traffic"
 ] }
@@ -185,7 +328,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = ["tcp", "logging"] }
+modbus-rs = { version = "0.7.0", default-features = false, features = ["network-tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -204,16 +347,18 @@ modbus-rs = "0.7.0"
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
   "client",
-  "tcp",
+  "network-tcp",
   "registers"
 ] }
 ```
 
 ### WASM browser setup (independent `mbus-ffi` crate)
 
+Use `mbus-ffi` directly for browser/WASM. `modbus-rs` does not re-export the WASM bindings.
+
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = ["client", "tcp", "coils"] }
+mbus-ffi = { version = "0.7.0", default-features = false, features = ["wasm", "full"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:
@@ -233,7 +378,7 @@ Bindings are implemented in the `mbus-ffi` crate and distributed separately from
 	- crate docs and usage: [../mbus-ffi/README.md](../mbus-ffi/README.md)
 	- browser smoke pages: `mbus-ffi/examples/network_smoke.html` and `mbus-ffi/examples/serial_smoke.html`
 - Native C bindings:
-	- C header: `mbus-ffi/include/mbus_ffi.h`
+	- generated headers: `target/mbus-ffi/include/`
 	- C client smoke example: `mbus-ffi/examples/c_client_demo/`
 	- C server — hand-written handlers: `mbus-ffi/examples/c_server_demo/`
 	- C server — YAML-driven codegen: `mbus-ffi/examples/c_server_demo_yaml/`
@@ -250,7 +395,7 @@ cd mbus-ffi
 python3 -m http.server 8089
 ```
 
-## Basic Usage Example
+## Basic Sync Client Usage Example With Custom Transport
 
 ```rust
 use modbus_rs::{
@@ -316,7 +461,22 @@ fn main() -> Result<(), MbusError> {
 
 ## Examples
 
-### TCP examples
+### Server examples — TCP
+
+- [server/network-tcp/sync/demo.rs](examples/server/network-tcp/sync/demo.rs) — sync multi-client TCP server with `#[modbus_app]`
+- [server/network-tcp/sync/shared_state.rs](examples/server/network-tcp/sync/shared_state.rs) — sync server + client in-process demo
+- [server/network-tcp/sync/fifo_file_record_demo.rs](examples/server/network-tcp/sync/fifo_file_record_demo.rs) — sync FIFO/file-record routing via `fifo(...)` and `file_record(...)`
+- [server/network-tcp/async/demo.rs](examples/server/network-tcp/async/demo.rs) — async TCP server with `#[async_modbus_app]` and shared state
+- [server/network-tcp/async/traffic.rs](examples/server/network-tcp/async/traffic.rs) — async TCP server with traffic hooks
+- [server/network-tcp/async/fifo_file_record_demo.rs](examples/server/network-tcp/async/fifo_file_record_demo.rs) — async FIFO/file-record routing with live background updates
+
+### Server examples — Serial
+
+- [server/serial-rtu/sync/demo.rs](examples/server/serial-rtu/sync/demo.rs) — sync RTU server
+- [server/serial-rtu/sync/manual_app_no_macros.rs](examples/server/serial-rtu/sync/manual_app_no_macros.rs) — sync RTU server without derive macros
+- [server/serial-ascii/sync/demo.rs](examples/server/serial-ascii/sync/demo.rs) — sync ASCII server
+
+### TCP Client examples
 
 - [coils_example.rs](examples/modbus-rs/client/tcp/coils_example.rs)
 - [registers_example.rs](examples/modbus-rs/client/tcp/registers_example.rs)
@@ -343,20 +503,38 @@ fn main() -> Result<(), MbusError> {
 Run examples from the workspace root:
 
 ```bash
-# TCP
-cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-features --features client,tcp,coils
-cargo run -p modbus-rs --example modbus_rs_client_tcp_registers --no-default-features --features client,tcp,registers
-cargo run -p modbus-rs --example modbus_rs_client_tcp_discrete_inputs --no-default-features --features client,tcp,discrete-inputs
-cargo run -p modbus-rs --example modbus_rs_client_tcp_device_id --no-default-features --features client,tcp,diagnostics
+# Sync TCP server
+cargo run -p modbus-rs --example modbus_rs_server_tcp_demo --features server,network-tcp,coils,holding-registers,input-registers
+
+# Async TCP server
+cargo run -p modbus-rs --example modbus_rs_server_async_tcp_demo --features server,async,network-tcp,coils,holding-registers,input-registers
+
+# Sync TCP FIFO/file-record server
+cargo run -p modbus-rs --example fifo_file_record_demo --features server,network-tcp,fifo,file-record
+
+# Async TCP FIFO/file-record server
+cargo run -p modbus-rs --example modbus_rs_server_async_fifo_file_record_demo --features server,async,network-tcp,fifo,file-record
+
+# Sync RTU server
+cargo run -p modbus-rs --example modbus_rs_server_serial_rtu_demo --features server,serial-rtu,coils,holding-registers,input-registers
+
+# Sync ASCII server
+cargo run -p modbus-rs --example modbus_rs_server_serial_ascii_demo --features server,serial-ascii,coils,holding-registers,input-registers
+
+# TCP client examples
+cargo run -p modbus-rs --example modbus_rs_client_tcp_coils --no-default-features --features client,network-tcp,coils
+cargo run -p modbus-rs --example modbus_rs_client_tcp_registers --no-default-features --features client,network-tcp,registers
+cargo run -p modbus-rs --example modbus_rs_client_tcp_discrete_inputs --no-default-features --features client,network-tcp,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_tcp_device_id --no-default-features --features client,network-tcp,diagnostics
 # Source-only showcase example (not currently exposed as a Cargo example target):
-# cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
-cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter --no-default-features --features client,tcp,coils
-cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,logging
-cargo run -p modbus-rs --example modbus_rs_client_traffic_sync_tcp --no-default-features --features client,tcp,coils,traffic
+# cargo run -p modbus-rs --example modbus_rs_client_showcase_feature_facades --no-default-features --features client,network-tcp,coils,registers,discrete-inputs,diagnostics,fifo,file-record
+cargo run -p modbus-rs --example modbus_rs_client_tcp_backoff_jitter --no-default-features --features client,network-tcp,coils
+cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features network-tcp,logging
+cargo run -p modbus-rs --example modbus_rs_client_traffic_sync_tcp --no-default-features --features client,network-tcp,coils,traffic
 
 # Async
-cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,client,tcp,coils,registers,discrete-inputs
-cargo run -p modbus-rs --example modbus_rs_client_traffic_async_tcp --no-default-features --features async,tcp,coils,traffic
+cargo run -p modbus-rs --example modbus_rs_client_async_tcp --no-default-features --features async,client,network-tcp,coils,registers,discrete-inputs
+cargo run -p modbus-rs --example modbus_rs_client_traffic_async_tcp --no-default-features --features async,network-tcp,coils,traffic
 
 # Serial RTU
 cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils --no-default-features --features client,serial-rtu,coils
@@ -375,6 +553,9 @@ cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-defaul
 - `modbus-rs`: top-level convenience crate
 - `mbus-core`: shared protocol and transport abstractions
 - `mbus-client`: client state machine and service modules
+- `mbus-server`: server runtime, FC handlers, resilience engine
+- `mbus-macros`: proc-macros (`#[modbus_app]`, `#[async_modbus_app]`, `#[derive(CoilsModel)]`, etc.)
+- `mbus-async`: native async client and server via Tokio
 - `mbus-network`: standard TCP transport helper crate
 - `mbus-serial`: standard serial transport helper crate
 
@@ -396,14 +577,6 @@ Run WASM browser feature tests:
 cd mbus-ffi;
 wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
 ```
-
-## Documentation
-
-Additional workspace documentation is available in the `documentation/` folder:
-
-- [documentation/quick_start.md](../documentation/quick_start.md)
-- [documentation/architecture.md](../documentation/architecture.md)
-- [documentation/feature_flags.md](../documentation/feature_flags.md)
 
 ## Notes
 

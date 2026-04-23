@@ -9,7 +9,7 @@ Control binary size and functionality by enabling only what you need.
 | Feature | std default | no-std default | Requires std | Description |
 |---------|:-----------:|:--------------:|:---:|-------------|
 | `client` | ✅ | ✅ | — | `mbus-client` state machine (no_std compatible) |
-| `tcp` | ✅ | ❌ | ✅ | TCP transport (`StdTcpTransport`) |
+| `network-tcp` | ✅ | ❌ | ✅ | TCP transport (`StdTcpTransport`) |
 | `serial-rtu` | ✅ | ❌ | ✅ | Serial RTU transport (`StdRtuTransport`) |
 | `serial-ascii` | ❌ | ❌ | ✅ | Serial ASCII transport (`StdAsciiTransport`) |
 | `async` | ❌ | ❌ | ✅ | Tokio async facade (`AsyncTcpClient`, `AsyncSerialClient`) |
@@ -27,14 +27,18 @@ Control binary size and functionality by enabling only what you need.
 
 ## Common Configurations
 
-### Full Default (Everything)
+### Full Default (Top-Level Crate Defaults)
 
 ```toml
 [dependencies]
 modbus-rs = "0.7.0"
 ```
 
-Includes: `client`, `tcp`, `serial-rtu`, all function codes. Requires std.
+Includes: `client`, `server`, `network-tcp`, `serial-rtu`, and all function-code model
+features. This is the full top-level `modbus-rs` default profile and requires std.
+
+If you are building a client-only binary, use `default-features = false` and explicitly
+enable only the client features you need.
 
 ---
 
@@ -68,7 +72,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "client",
-    "tcp",
+    "network-tcp",
     "coils"
 ] }
 ```
@@ -96,7 +100,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "client",
-    "tcp",
+    "network-tcp",
     "serial-rtu",
     "coils",
     "registers"
@@ -111,7 +115,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 [dependencies]
 modbus-rs = { version = "0.7.0", default-features = false, features = [
     "async",
-    "tcp",
+    "network-tcp",
     "coils",
     "registers"
 ] }
@@ -152,9 +156,9 @@ fn main() {
 
 ### Transport Features
 
-> **Requires std.** Transport features (`tcp`, `serial-rtu`, `serial-ascii`, `async`) depend on OS primitives and are not available on `no_std` targets. Use `default-features = false` and omit them for embedded builds.
+> **Requires std.** Transport features (`network-tcp`, `serial-rtu`, `serial-ascii`, `async`) depend on OS primitives and are not available on `no_std` targets. Use `default-features = false` and omit them for embedded builds.
 
-#### `tcp`
+#### `network-tcp`
 
 Enables `StdTcpTransport` using `std::net::TcpStream`.
 

@@ -5,7 +5,7 @@ rust_features: "c-server,full"
 
 codegen:
   config: mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml
-  header: mbus-ffi/include/mbus_server_app.h
+  header: target/mbus-ffi/include/mbus_server_app.h
 
 run:
   default_mode: server
