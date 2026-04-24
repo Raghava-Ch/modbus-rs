@@ -20,8 +20,8 @@ pub trait InputRegisterMap {
 
 use mbus_macros::InputRegistersModel;
 
-#[reg(allow_gaps)]
 #[derive(Default, InputRegistersModel)]
+#[reg(allow_gaps)]
 struct SparseInputRegs {
     #[reg(addr = 0)]
     phase_a: u16,

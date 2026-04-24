@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-publish = false
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Server app code-generation utilities shared by mbus-ffi build.rs and xtask"
 readme = "README.md"
 
