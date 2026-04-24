@@ -1,0 +1,11 @@
+name: c_server_demo
+description: "Hand-written Modbus TCP server demo (no codegen)"
+binary: c_server_demo
+rust_features: "c-server,full"
+
+run:
+  default_mode: self-test
+  modes:
+    self-test:
+      args: []
+      description: "In-process self-test (no network needed)"

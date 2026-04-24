@@ -184,7 +184,7 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     }
                 };
 
-                let reader = match WasmSerialTransport::call_method0(&readable, "getReader") {
+                let reader = match WasmSerialTransport::<ASCII>::call_method0(&readable, "getReader") {
                     Ok(reader) => reader,
                     Err(_) => {
                         shared.borrow_mut().connected = false;
@@ -197,8 +197,8 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                         break;
                     }
 
-                    let read_result = match WasmSerialTransport::call_method0(&reader, "read")
-                        .and_then(WasmSerialTransport::promise_from)
+                    let read_result = match WasmSerialTransport::<ASCII>::call_method0(&reader, "read")
+                        .and_then(WasmSerialTransport::<ASCII>::promise_from)
                     {
                         Ok(promise) => JsFuture::from(promise).await,
                         Err(_) => {
@@ -231,7 +231,7 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     shared.borrow_mut().rx_buf.extend(bytes);
                 }
 
-                let _ = WasmSerialTransport::call_method0(&reader, "releaseLock");
+                let _ = WasmSerialTransport::<ASCII>::call_method0(&reader, "releaseLock");
                 TimeoutFuture::new(5).await;
             }
 
@@ -271,7 +271,7 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     }
                 };
 
-                let writer = match WasmSerialTransport::call_method0(&writable, "getWriter") {
+                let writer = match WasmSerialTransport::<ASCII>::call_method0(&writable, "getWriter") {
                     Ok(writer) => writer,
                     Err(_) => {
                         shared.borrow_mut().connected = false;
@@ -281,8 +281,8 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
 
                 let data = Uint8Array::from(frame.as_slice());
                 let write_result =
-                    match WasmSerialTransport::call_method1(&writer, "write", &data.into())
-                        .and_then(WasmSerialTransport::promise_from)
+                    match WasmSerialTransport::<ASCII>::call_method1(&writer, "write", &data.into())
+                        .and_then(WasmSerialTransport::<ASCII>::promise_from)
                     {
                         Ok(promise) => JsFuture::from(promise).await,
                         Err(_) => {
@@ -293,11 +293,11 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
 
                 if write_result.is_err() {
                     shared.borrow_mut().connected = false;
-                    let _ = WasmSerialTransport::call_method0(&writer, "releaseLock");
+                    let _ = WasmSerialTransport::<ASCII>::call_method0(&writer, "releaseLock");
                     break;
                 }
 
-                let _ = WasmSerialTransport::call_method0(&writer, "releaseLock");
+                let _ = WasmSerialTransport::<ASCII>::call_method0(&writer, "releaseLock");
             }
 
             shared.borrow_mut().writer_running = false;
@@ -347,8 +347,8 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
                 state.connected = opened;
             }
             if opened {
-                WasmSerialTransport::spawn_reader_task(port_for_reader, shared.clone());
-                WasmSerialTransport::spawn_writer_task(port_for_writer, shared);
+                WasmSerialTransport::<ASCII>::spawn_reader_task(port_for_reader, shared.clone());
+                WasmSerialTransport::<ASCII>::spawn_writer_task(port_for_writer, shared);
             }
         });
 

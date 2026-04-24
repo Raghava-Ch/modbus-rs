@@ -16,6 +16,8 @@
 //! ## Features
 //!
 //! - **Pipelining**: Supports multiple concurrent outstanding requests (configurable via const generics).
+//!   Queue depth tuning tip: use `ClientServices::<_, _, N>` where `N` is your max in-flight request count.
+//!   Start with `N=2..4` on small MCUs, `N=8+` on host-class targets, then tune from runtime latency.
 //! - **Reliability**: Built-in support for automatic retries and configurable response timeouts.
 //! - **Memory Safety**: Uses `heapless` for all internal buffering, ensuring zero dynamic
 //!   allocation and suitability for hard real-time or embedded systems.
@@ -77,6 +79,8 @@
 //! let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.1.10", 502)?);
 //!
 //! // 3. Create the service (N=5 allows 5 concurrent requests)
+//! // Queue-depth sizing: pick N for your peak in-flight request count.
+//! // Embedded targets often start at N=2..4; host apps often use N=8+.
 //! let mut client = ClientServices::<_, _, 5>::new(transport, MyDevice, config)?;
 //! client.connect()?;
 //!

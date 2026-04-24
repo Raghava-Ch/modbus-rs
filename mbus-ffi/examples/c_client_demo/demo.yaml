@@ -1,0 +1,11 @@
+name: c_client_demo
+description: "Modbus TCP/Serial client C FFI smoke test"
+binary: c_smoke_test
+rust_features: "c,full"
+
+run:
+  default_mode: serial-pty
+  modes:
+    serial-pty:
+      args: ["--serial-pty"]
+      description: "In-process PTY loopback, no hardware needed"

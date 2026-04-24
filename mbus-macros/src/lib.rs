@@ -88,6 +88,8 @@ struct SelectedAppFields {
     input_registers: Vec<Ident>,
     coils: WritableGroupConfig,
     discrete_inputs: Vec<Ident>,
+    fifo: Vec<Ident>,
+    file_record: Vec<Ident>,
 }
 
 /// Parse `group_name(field1, field2, ..., on_batch_write = fn, on_write_N = fn, ...)`.
@@ -223,7 +225,7 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
             .ok_or_else(|| {
                 Error::new_spanned(
                     &meta,
-                    "expected a group name in #[modbus_app(...)]; allowed groups: holding_registers, input_registers, coils",
+                    "expected a group name in #[modbus_app(...)]; allowed groups: holding_registers, input_registers, coils, discrete_inputs, fifo, file_record",
                 )
             })?;
         match path_ident.as_str() {
@@ -237,10 +239,16 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
             "discrete_inputs" => {
                 selected.discrete_inputs = parse_group_idents(meta, "discrete_inputs")?
             }
+            "fifo" => {
+                selected.fifo = parse_group_idents(meta, "fifo")?
+            }
+            "file_record" => {
+                selected.file_record = parse_group_idents(meta, "file_record")?
+            }
             _ => {
                 return Err(Error::new_spanned(
                     meta,
-                    "invalid #[modbus_app(...)] syntax; expected #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...))]",
+                    "invalid #[modbus_app(...)] syntax; expected #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...), fifo(...), file_record(...))]",
                 ));
             }
         }
@@ -1682,15 +1690,20 @@ fn expand_modbus_app_struct(
         "discrete_inputs",
         "discrete_inputs",
     )?;
+    let fifo_fields = collect_group_fields(&selected_fields.fifo, "fifo", "fifo")?;
+    let file_record_fields =
+        collect_group_fields(&selected_fields.file_record, "file_record", "file_record")?;
 
     if hr_fields.is_empty()
         && ir_fields.is_empty()
         && coil_fields.is_empty()
         && discrete_input_fields.is_empty()
+        && fifo_fields.is_empty()
+        && file_record_fields.is_empty()
     {
         return Err(Error::new_spanned(
             &input.ident,
-            "no modbus_app fields selected; use #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...))] or helper field attributes",
+            "no modbus_app fields selected; use #[modbus_app(holding_registers(...), input_registers(...), coils(...), discrete_inputs(...), fifo(...), file_record(...))] or helper field attributes",
         ));
     }
 
@@ -1920,6 +1933,114 @@ fn expand_modbus_app_struct(
         }
     } else {
         quote! {}
+    };
+
+    // ---------------------------------------------------------------------------
+    // Build FIFO and FileRecord impl tokens before the final quote.
+    // If group fields were provided, generate a routing impl.
+    // Otherwise, emit an empty default impl (trait methods return InvalidFunctionCode).
+    // ---------------------------------------------------------------------------
+
+    let fifo_impl = if !fifo_fields.is_empty() {
+        let fifo_arms: Vec<proc_macro2::TokenStream> = fifo_fields
+            .iter()
+            .map(|(field_ident, field_ty)| {
+                quote! {
+                    _ if pointer_address == <#field_ty as ::mbus_server::FifoQueue>::POINTER_ADDRESS => {
+                        <#field_ty as ::mbus_server::FifoQueue>::read_fifo_queue(
+                            &mut self.#field_ident, out,
+                        )
+                    }
+                }
+            })
+            .collect();
+        quote! {
+            impl #generics ::mbus_server::app::ServerFifoHandler for #struct_name #generics #where_clause {
+                fn read_fifo_queue_request(
+                    &mut self,
+                    txn_id: u16,
+                    unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                    pointer_address: u16,
+                    out: &mut [u8],
+                ) -> ::core::result::Result<u8, ::mbus_core::errors::MbusError> {
+                    let _ = (txn_id, unit_id_or_slave_addr);
+                    match pointer_address {
+                        #(#fifo_arms)*
+                        _ => ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidAddress),
+                    }
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl #generics ::mbus_server::app::ServerFifoHandler for #struct_name #generics #where_clause {}
+        }
+    };
+
+    let file_record_impl = if !file_record_fields.is_empty() {
+        let read_arms: Vec<proc_macro2::TokenStream> = file_record_fields
+            .iter()
+            .map(|(field_ident, field_ty)| {
+                quote! {
+                    _ if file_number == <#field_ty as ::mbus_server::FileRecord>::FILE_NUMBER => {
+                        <#field_ty as ::mbus_server::FileRecord>::read_record(
+                            &mut self.#field_ident, record_number, record_length, out,
+                        )
+                    }
+                }
+            })
+            .collect();
+        let write_arms: Vec<proc_macro2::TokenStream> = file_record_fields
+            .iter()
+            .map(|(field_ident, field_ty)| {
+                quote! {
+                    _ if file_number == <#field_ty as ::mbus_server::FileRecord>::FILE_NUMBER => {
+                        <#field_ty as ::mbus_server::FileRecord>::write_record(
+                            &mut self.#field_ident, record_number, record_length, record_data,
+                        )
+                    }
+                }
+            })
+            .collect();
+        quote! {
+            impl #generics ::mbus_server::app::ServerFileRecordHandler for #struct_name #generics #where_clause {
+                fn read_file_record_request(
+                    &mut self,
+                    txn_id: u16,
+                    unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                    file_number: u16,
+                    record_number: u16,
+                    record_length: u16,
+                    out: &mut [u8],
+                ) -> ::core::result::Result<u8, ::mbus_core::errors::MbusError> {
+                    let _ = (txn_id, unit_id_or_slave_addr);
+                    match file_number {
+                        #(#read_arms)*
+                        _ => ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidFunctionCode),
+                    }
+                }
+
+                fn write_file_record_request(
+                    &mut self,
+                    txn_id: u16,
+                    unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
+                    file_number: u16,
+                    record_number: u16,
+                    record_length: u16,
+                    record_data: &[u16],
+                ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
+                    let _ = (txn_id, unit_id_or_slave_addr);
+                    match file_number {
+                        #(#write_arms)*
+                        _ => ::core::result::Result::Err(::mbus_core::errors::MbusError::InvalidFunctionCode),
+                    }
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl #generics ::mbus_server::app::ServerFileRecordHandler for #struct_name #generics #where_clause {}
+        }
     };
 
     Ok(quote! {
@@ -2216,12 +2337,10 @@ fn expand_modbus_app_struct(
             }
         }
 
-        // Empty impls for split traits not covered by the macro's
-        // model-driven generation above.
+        // Routing impls for FIFO and FileRecord (generated above as variables).
+        #fifo_impl
 
-        impl #generics ::mbus_server::app::ServerFifoHandler for #struct_name #generics #where_clause {}
-
-        impl #generics ::mbus_server::app::ServerFileRecordHandler for #struct_name #generics #where_clause {}
+        #file_record_impl
 
         impl #generics ::mbus_server::app::ServerDiagnosticsHandler for #struct_name #generics #where_clause {}
     })
@@ -2481,6 +2600,8 @@ fn expand_async_modbus_app_struct(
         },
         input_registers: selected_fields.input_registers.clone(),
         discrete_inputs: selected_fields.discrete_inputs.clone(),
+        fifo: selected_fields.fifo.clone(),
+        file_record: selected_fields.file_record.clone(),
     };
     // Generate sync split-trait impls (hook-free).
     let sync_tokens = expand_modbus_app_struct(input, &sync_fields)?;

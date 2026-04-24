@@ -58,14 +58,14 @@ Set to `0` for no retries.
 
 Controls the delay before each retry attempt.
 
-### None (Immediate)
+### Immediate
 
 Retry immediately with no delay:
 
 ```rust
 use modbus_rs::BackoffStrategy;
 
-config.retry_backoff_strategy = BackoffStrategy::None;
+config.retry_backoff_strategy = BackoffStrategy::Immediate;
 ```
 
 **Use case:** Fast local network where delays hurt responsiveness.
@@ -92,7 +92,7 @@ Delay increases linearly each retry:
 
 ```rust
 config.retry_backoff_strategy = BackoffStrategy::Linear {
-    base_delay_ms: 100,
+    initial_delay_ms: 100,
     increment_ms: 100,
     max_delay_ms: 500,
 };
@@ -151,15 +151,15 @@ A 200ms delay becomes 160ms–240ms randomly.
 
 ---
 
-### Absolute Jitter
+### Bounded Millisecond Jitter
 
 Add 0 to N ms randomly:
 
 ```rust
-config.retry_jitter_strategy = JitterStrategy::Absolute { max_jitter_ms: 50 };
+config.retry_jitter_strategy = JitterStrategy::BoundedMs { max_jitter_ms: 50 };
 ```
 
-A 200ms delay becomes 200ms–250ms randomly.
+A 200ms delay becomes 150ms-250ms randomly.
 
 **Use case:** When you want a random offset, not percentage.
 
@@ -182,7 +182,7 @@ config.retry_random_fn = Some(my_random_u32);
 
 **On embedded:** Use your hardware RNG or PRNG.
 
-If `retry_random_fn` is `None` and jitter is enabled, a deterministic fallback is used (not recommended for thundering herd prevention).
+If `retry_random_fn` is `None` and jitter is enabled, no jitter is applied.
 
 ---
 
@@ -216,21 +216,17 @@ let config = ModbusConfig::Tcp(config);
 
 ---
 
-## Serial Turnaround Time
+## Serial Timing Notes
 
-For serial transports, there's an additional parameter:
-
-```rust
-config.inter_character_timeout_ms = 5;  // RTU: time to detect frame end
-config.turnaround_delay_ms = 50;        // Delay between TX and RX
-```
-
-These are rarely needed but useful for slow devices or noisy lines.
+Serial timing behavior is transport-implementation specific. The shared
+`ModbusSerialConfig` includes request timeout, retry attempts, backoff, and jitter.
+Use `response_timeout_ms` and retry policies first; tune transport-specific behavior
+in your serial transport implementation only when needed.
 
 ---
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Development](sync.md)
 - [Architecture](architecture.md)
 - [Examples](examples.md) — `backoff_jitter` examples

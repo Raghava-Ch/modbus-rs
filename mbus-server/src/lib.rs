@@ -195,12 +195,57 @@ pub trait InputRegisterMap {
     fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, MbusError>;
 }
 
+/// Trait implemented by user FIFO queue fields routed by `#[modbus_app]`.
+///
+/// Each field declared in `fifo(...)` must implement this trait.  The macro routes
+/// FC18 `Read FIFO Queue` requests to the field whose `POINTER_ADDRESS` matches.
+pub trait FifoQueue {
+    /// The Modbus pointer address (FC18) this queue responds to.
+    const POINTER_ADDRESS: u16;
+
+    /// Fills `out` with the FIFO data for this queue.
+    ///
+    /// Must write `out[0..1]` as `fifo_count` (big-endian `u16`) and
+    /// `out[2..2 + fifo_count * 2]` as the register values in big-endian order.
+    /// Returns `Ok(2 + fifo_count * 2)`.
+    fn read_fifo_queue(&mut self, out: &mut [u8]) -> Result<u8, MbusError>;
+}
+
+/// Trait implemented by user file record fields routed by `#[modbus_app]`.
+///
+/// Each field declared in `file_record(...)` must implement this trait.  The macro
+/// routes FC14/FC15 sub-requests to the field whose `FILE_NUMBER` matches.
+pub trait FileRecord {
+    /// The Modbus file number (FC14/FC15) this record responds to.
+    const FILE_NUMBER: u16;
+
+    /// Reads `record_length` words starting at `record_number` into `out`.
+    ///
+    /// Returns the number of bytes written (`record_length * 2`).
+    fn read_record(
+        &mut self,
+        record_number: u16,
+        record_length: u16,
+        out: &mut [u8],
+    ) -> Result<u8, MbusError>;
+
+    /// Writes `record_length` words from `data` starting at `record_number`.
+    fn write_record(
+        &mut self,
+        record_number: u16,
+        record_length: u16,
+        data: &[u16],
+    ) -> Result<(), MbusError>;
+}
+
 /// Common trait imports for ergonomic `mbus-server` usage.
 pub mod prelude {
     #[cfg(feature = "coils")]
     pub use crate::CoilMap;
     #[cfg(feature = "discrete-inputs")]
     pub use crate::DiscreteInputMap;
+    pub use crate::FileRecord;
+    pub use crate::FifoQueue;
     #[cfg(feature = "holding-registers")]
     pub use crate::HoldingRegisterMap;
     #[cfg(feature = "input-registers")]

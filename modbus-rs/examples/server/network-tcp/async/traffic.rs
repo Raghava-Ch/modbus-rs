@@ -11,7 +11,7 @@
 //! Run:
 //! ```text
 //! cargo run --example modbus_rs_server_async_tcp_traffic \
-//!     --features "server,async-server-tcp,coils,holding-registers,traffic"
+//!     --features "server,async,network-tcp,coils,holding-registers,traffic"
 //! ```
 //!
 //! Then poke it with any Modbus client, e.g.:

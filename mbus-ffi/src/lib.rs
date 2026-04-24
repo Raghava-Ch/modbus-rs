@@ -7,18 +7,35 @@
 //! - `WasmSerialModbusClient` for Web Serial (RTU/ASCII)
 //! - `request_serial_port` and `WasmSerialPortHandle` helpers
 //!
-//! Native C FFI (feature `c`, non-wasm targets):
+//! Native C FFI — client (feature `c`, non-wasm targets):
 //! - `mbus_tcp_client_new` / `mbus_serial_client_new` — create clients, return an ID
 //! - `mbus_tcp_poll` / `mbus_serial_poll` — drive the request/response state machine
 //! - Per-operation request functions (coils, registers, discrete inputs, etc.)
 //! - Response data delivered via C function-pointer callbacks in `MbusCallbacks`
-#![cfg_attr(all(not(doc), not(has_unwind)), no_std)]
+//!
+//! Native C FFI — server (feature `c-server`, non-wasm targets):
+//! There are two server integration approaches:
+//!
+//! **Approach 1 — hand-written handlers** (`c_server_demo`):
+//! Wire FC callbacks directly in `main.c` via `mbus_tcp_server_new`.
+//! No code generation required.
+//!
+//! **Approach 2 — YAML-driven codegen** (`c_server_demo_yaml`):
+//! Declare the device register/coil map in a YAML file.  `build.rs` reads
+//! `MBUS_SERVER_APP_CONFIG` at compile time and generates a type-safe Rust
+//! dispatcher into `$OUT_DIR` (never tracked in git).  `gen-server-app` produces
+//! the matching C header (`mbus_server_app.h`).
+//!
+//! ```text
+//! MBUS_SERVER_APP_CONFIG=/path/to/server_app.yaml cargo build -p mbus-ffi --features c-server
+//! ```
+#![cfg_attr(all(not(doc), not(has_unwind), not(target_arch = "wasm32")), no_std)]
 #![warn(missing_docs)]
 
-#[cfg(all(not(doc), not(has_unwind)))]
+#[cfg(all(not(doc), not(has_unwind), not(target_arch = "wasm32")))]
 use core::panic::PanicInfo;
 
-#[cfg(all(not(doc), not(has_unwind)))]
+#[cfg(all(not(doc), not(has_unwind), not(target_arch = "wasm32")))]
 #[panic_handler]
 fn panic_handler(_info: &PanicInfo) -> ! {
     loop {}

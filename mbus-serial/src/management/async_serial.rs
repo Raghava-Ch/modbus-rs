@@ -128,9 +128,8 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
 }
 
 impl<const ASCII: bool> AsyncTransport for TokioSerialTransport<ASCII> {
-    fn transport_type(&self) -> TransportType {
-        TransportType::StdSerial(Self::MODE)
-    }
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(Self::MODE);
 
     fn is_connected(&self) -> bool {
         true // serial ports are always "connected" while the port is open

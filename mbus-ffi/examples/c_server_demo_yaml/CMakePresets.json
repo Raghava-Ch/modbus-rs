@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (auto-detect compiler)",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {}
+    },
+    {
+      "name": "macos",
+      "displayName": "macOS — Apple Clang + static libmbus_ffi",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang"
+      }
+    },
+    {
+      "name": "macos-static",
+      "displayName": "macOS — Apple Clang + static libmbus_ffi (build-static/)",
+      "binaryDir": "${sourceDir}/build-static",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/clang"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "macos",
+      "configurePreset": "macos"
+    },
+    {
+      "name": "macos-static",
+      "configurePreset": "macos-static"
+    }
+  ]
+}

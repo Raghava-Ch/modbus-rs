@@ -1,18 +1,18 @@
 [package]
 name = "integration_tests"
-version = "0.7.0"
-edition = "2021"
+version = "0.8.0"
+edition = "2024"
 publish = false
 
 [dependencies]
-modbus-rs = { version = "0.7.0", path = "../modbus-rs", features = [
+modbus-rs = { version = "0.8.0", path = "../modbus-rs", features = [
     "async",
     "serial-ascii",
 ] }
-mbus-core = { version = "0.7.0", path = "../mbus-core", features = ["async"] }
-mbus-server = { version = "0.7.0", path = "../mbus-server" }
-mbus-async = { version = "0.7.0", path = "../mbus-async", optional = true }
-mbus-macros = { version = "0.7.0", path = "../mbus-macros", optional = true }
+mbus-core = { version = "0.8.0", path = "../mbus-core", features = ["async"] }
+mbus-server = { version = "0.8.0", path = "../mbus-server" }
+mbus-async = { version = "0.8.0", path = "../mbus-async", optional = true }
+mbus-macros = { version = "0.8.0", path = "../mbus-macros", optional = true }
 
 heapless = { workspace = true }
 anyhow = { workspace = true }

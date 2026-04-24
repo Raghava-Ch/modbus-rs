@@ -205,6 +205,6 @@ All internal buffers are stack-allocated:
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Development](sync.md)
 - [Policies](policies.md) — Retry and timeout configuration
 - [Async Development](async.md) — Async wrapper architecture

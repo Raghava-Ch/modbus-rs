@@ -1,6 +1,6 @@
 # Server Function Codes Reference
 
-Complete reference for all Modbus function codes supported by `mbus-server`.
+Current Modbus function-code coverage for `mbus-server`.
 
 ---
 
@@ -11,78 +11,62 @@ Complete reference for all Modbus function codes supported by `mbus-server`.
 | `0x01` | Read Coils | `coils` | `read_coils_request` | Read |
 | `0x02` | Read Discrete Inputs | `discrete-inputs` | `read_discrete_inputs_request` | Read |
 | `0x03` | Read Holding Registers | `holding-registers` | `read_multiple_holding_registers_request` | Read |
-| `0x04` | Read Input Registers | `input-registers` | `read_input_registers_request` | Read |
-| `0x05` | Write Single Coil | `coils` | `write_single_coil_request` | Write* |
-| `0x06` | Write Single Register | `holding-registers` | `write_single_register_request` | Write* |
+| `0x04` | Read Input Registers | `input-registers` | `read_multiple_input_registers_request` | Read |
+| `0x05` | Write Single Coil | `coils` | `write_single_coil_request` | Write |
+| `0x06` | Write Single Register | `holding-registers` | `write_single_register_request` | Write |
 | `0x07` | Read Exception Status | `diagnostics` | `read_exception_status_request` | Read |
 | `0x08` | Diagnostics | `diagnostics` | `diagnostics_request` | R/W |
 | `0x0B` | Get Comm Event Counter | `diagnostics` | `get_comm_event_counter_request` | Read |
 | `0x0C` | Get Comm Event Log | `diagnostics` | `get_comm_event_log_request` | Read |
-| `0x0F` | Write Multiple Coils | `coils` | `write_multiple_coils_request` | Write* |
-| `0x10` | Write Multiple Registers | `holding-registers` | `write_multiple_registers_request` | Write* |
+| `0x0F` | Write Multiple Coils | `coils` | `write_multiple_coils_request` | Write |
+| `0x10` | Write Multiple Registers | `holding-registers` | `write_multiple_registers_request` | Write |
 | `0x11` | Report Server ID | `diagnostics` | `report_server_id_request` | Read |
 | `0x14` | Read File Record | `file-record` | `read_file_record_request` | Read |
-| `0x15` | Write File Record | `file-record` | `write_file_record_request` | Write* |
+| `0x15` | Write File Record | `file-record` | `write_file_record_request` | Write |
 | `0x16` | Mask Write Register | `holding-registers` | `mask_write_register_request` | Write |
 | `0x17` | Read/Write Multiple Registers | `holding-registers` | `read_write_multiple_registers_request` | R/W |
 | `0x18` | Read FIFO Queue | `fifo` | `read_fifo_queue_request` | Read |
-| `0x2B` | Read Device Identification | `diagnostics` | `read_device_identification_request` | Read |
+| `0x2B / 0x0E` | Read Device Identification | `diagnostics` | `read_device_identification_request` | Read |
 
-\* Broadcast-capable (Serial only)
+`mbus-server` receives FC `0x2B` as Encapsulated Interface Transport and currently
+routes only MEI `0x0E` to the application callback. Other MEI types are rejected by the stack.
 
 ---
 
-## Callback Signatures
+## Read Callback Shape
 
-### FC01: Read Coils
+Most read-style callbacks write encoded payload bytes into an output buffer and return the
+number of bytes written:
 
 ```rust
-fn read_coils_request(
+fn read_...(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    start_address: u16,
+    address: u16,
     quantity: u16,
-) -> Result<Coils, MbusError>;
+    out: &mut [u8],
+) -> Result<u8, MbusError>;
 ```
 
-### FC02: Read Discrete Inputs
+This applies to:
 
-```rust
-fn read_discrete_inputs_request(
-    &mut self,
-    txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    quantity: u16,
-) -> Result<DiscreteInputs, MbusError>;
-```
+- FC01 `read_coils_request`
+- FC02 `read_discrete_inputs_request`
+- FC03 `read_multiple_holding_registers_request`
+- FC04 `read_multiple_input_registers_request`
+- FC18 `read_fifo_queue_request`
+- FC14 `read_file_record_request`
+- FC17 `read_write_multiple_registers_request` for the read portion
 
-### FC03: Read Holding Registers
+For coil and discrete-input reads, `out` contains packed bits. For register-style reads,
+`out` contains big-endian `u16` words.
 
-```rust
-fn read_multiple_holding_registers_request(
-    &mut self,
-    txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    quantity: u16,
-) -> Result<Registers, MbusError>;
-```
+---
 
-### FC04: Read Input Registers
+## Write Callback Shape
 
-```rust
-fn read_input_registers_request(
-    &mut self,
-    txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    quantity: u16,
-) -> Result<Registers, MbusError>;
-```
-
-### FC05: Write Single Coil
+Single-write callbacks mutate application state directly and return `Result<(), MbusError>`:
 
 ```rust
 fn write_single_coil_request(
@@ -92,11 +76,7 @@ fn write_single_coil_request(
     address: u16,
     value: bool,
 ) -> Result<(), MbusError>;
-```
 
-### FC06: Write Single Register
-
-```rust
 fn write_single_register_request(
     &mut self,
     txn_id: u16,
@@ -106,31 +86,28 @@ fn write_single_register_request(
 ) -> Result<(), MbusError>;
 ```
 
-### FC0F: Write Multiple Coils
+Multi-write callbacks receive already-decoded payloads:
 
 ```rust
 fn write_multiple_coils_request(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    coils: &Coils,
+    starting_address: u16,
+    quantity: u16,
+    values: &[u8],
 ) -> Result<(), MbusError>;
-```
 
-### FC10: Write Multiple Registers
-
-```rust
 fn write_multiple_registers_request(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    start_address: u16,
-    registers: &Registers,
+    starting_address: u16,
+    values: &[u16],
 ) -> Result<(), MbusError>;
 ```
 
-### FC16: Mask Write Register
+Additional write-capable callbacks:
 
 ```rust
 fn mask_write_register_request(
@@ -140,115 +117,71 @@ fn mask_write_register_request(
     address: u16,
     and_mask: u16,
     or_mask: u16,
-) -> Result<u16, MbusError>;  // Returns resulting value
-```
+) -> Result<(), MbusError>;
 
-### FC17: Read/Write Multiple Registers
-
-```rust
-fn read_write_multiple_registers_request(
+fn write_file_record_request(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    read_start: u16,
-    read_quantity: u16,
-    write_start: u16,
-    write_registers: &Registers,
-) -> Result<Registers, MbusError>;
-```
-
-### FC18: Read FIFO Queue
-
-```rust
-fn read_fifo_queue_request(
-    &mut self,
-    txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    pointer_address: u16,
-) -> Result<FifoQueue, MbusError>;  // Up to 31 u16 values
-```
-
-### FC2B: Read Device Identification
-
-```rust
-fn read_device_identification_request(
-    &mut self,
-    txn_id: u16,
-    uid: UnitIdOrSlaveAddr,
-    object_id: u8,
-    output: &mut DeviceIdentification,
+    file_number: u16,
+    record_number: u16,
+    record_length: u16,
+    record_data: &[u16],
 ) -> Result<(), MbusError>;
 ```
 
 ---
 
-## Broadcast Writes (Serial Only)
+## Diagnostics Callback Shape
 
-FC05, FC06, FC0F, FC10, FC15 may arrive as broadcast frames when `enable_broadcast_writes = true`.
+`ServerDiagnosticsHandler` uses a few specialized return shapes:
 
 ```rust
-fn write_single_coil_request(
+fn read_exception_status_request(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    address: u16,
-    value: bool,
-) -> Result<(), MbusError> {
-    if uid.is_broadcast() {
-        // Slave address 0 - broadcast write
-        // Apply the change but no response will be sent
-    }
-    
-    self.coils[address as usize] = value;
-    Ok(())
-}
-```
+) -> Result<u8, MbusError>;
 
-- Broadcast requests have `uid.is_broadcast() == true`
-- No response is ever sent for broadcast writes
-- TCP broadcast frames (unit ID `0`) are always discarded
-
----
-
-## Exception Handling
-
-When a callback returns `Err(MbusError::*)`, the server sends an exception response.
-
-### Error to Exception Mapping
-
-| `MbusError` | `ExceptionCode` |
-|-------------|-----------------|
-| `InvalidAddress` | `IllegalDataAddress` |
-| `InvalidData` | `IllegalDataValue` |
-| `TooManyRequests` | `ServerDeviceFailure` |
-| `NotEnabled` | `IllegalFunction` |
-| `ReservedSubFunction(_)` | `IllegalFunction` |
-| `DeviceBusy` | `ServerDeviceBusy` |
-| other | `ServerDeviceFailure` |
-
-### Exception Callback
-
-```rust
-fn on_exception(
+fn diagnostics_request(
     &mut self,
     txn_id: u16,
     uid: UnitIdOrSlaveAddr,
-    function_code: FunctionCode,
-    exception_code: ExceptionCode,
-    error: MbusError,
-) {
-    eprintln!(
-        "Exception: FC{:02X} → {:?} ({})",
-        function_code as u8, exception_code, error
-    );
-}
+    sub_function: DiagnosticSubFunction,
+    data: u16,
+) -> Result<u16, MbusError>;
+
+fn get_comm_event_counter_request(
+    &mut self,
+    txn_id: u16,
+    uid: UnitIdOrSlaveAddr,
+) -> Result<(u16, u16), MbusError>;
+
+fn get_comm_event_log_request(
+    &mut self,
+    txn_id: u16,
+    uid: UnitIdOrSlaveAddr,
+    out_events: &mut [u8],
+) -> Result<(u16, u16, u16, u8), MbusError>;
+
+fn report_server_id_request(
+    &mut self,
+    txn_id: u16,
+    uid: UnitIdOrSlaveAddr,
+    out_server_id: &mut [u8],
+) -> Result<(u8, u8), MbusError>;
+
+fn read_device_identification_request(
+    &mut self,
+    txn_id: u16,
+    uid: UnitIdOrSlaveAddr,
+    read_device_id_code: u8,
+    start_object_id: u8,
+    out: &mut [u8],
+) -> Result<(u8, u8, bool, u8), MbusError>;
 ```
 
----
-
-## FC08: Diagnostics Sub-functions
-
-### Handled by Stack (with `diagnostics-stats`)
+With `diagnostics-stats`, the stack auto-handles the FC08 counter-oriented sub-functions:
 
 | Sub-function | Name |
 |-------------|------|
@@ -263,39 +196,54 @@ fn on_exception(
 | `0x0012` | Bus Character Overrun Count |
 | `0x0014` | Clear Overrun Counter/Flag |
 
-### Handled by App Callback
-
-| Sub-function | Name |
-|-------------|------|
-| `0x0000` | Return Query Data |
-| All others | Custom handling |
+Other FC08 sub-functions continue to flow through `diagnostics_request`.
 
 ---
 
-## FC2B: Device Identification
+## Broadcast Writes
 
-Required objects (conformity class `0x01`):
+Serial broadcast writes are supported only when
+`ResilienceConfig::enable_broadcast_writes = true`.
 
-| Object ID | Name |
-|-----------|------|
-| `0x00` | Vendor Name |
-| `0x01` | Product Code |
-| `0x02` | Major Minor Revision |
+- Broadcast address is `0`
+- Only write-oriented requests are processed
+- No response is sent
+- TCP unit id `0` is still discarded
 
-Optional objects:
+Your callback can detect the case with `uid.is_broadcast()`.
 
-| Object ID | Name |
-|-----------|------|
-| `0x03` | Vendor URL |
-| `0x04` | Product Name |
-| `0x05` | Model Name |
-| `0x06` | User Application Name |
-| `0x80`+ | Private/vendor-specific |
+---
+
+## Exceptions
+
+Returning `Err(MbusError::...)` causes the server to build a Modbus exception response and
+then invoke `ServerExceptionHandler::on_exception(...)`.
+
+```rust
+fn on_exception(
+    &mut self,
+    txn_id: u16,
+    uid: UnitIdOrSlaveAddr,
+    function_code: FunctionCode,
+    exception_code: ExceptionCode,
+    error: MbusError,
+)
+```
+
+Common outcomes are:
+
+- unsupported or disabled handlers map to `IllegalFunction`
+- invalid address windows map to `IllegalDataAddress`
+- invalid quantities, values, or malformed sub-function payloads map to `IllegalDataValue`
+- internal queue-pressure or transport-side failures surface as server-side exceptions
+
+If you need exact per-service behavior, use the service modules in `mbus-server/src/services` as
+the source of truth.
 
 ---
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Policies](policies.md)
 - [Macros](macros.md)

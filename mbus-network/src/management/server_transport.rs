@@ -7,17 +7,17 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::time::Duration;
 
-/// Transport adapter for an already-accepted TCP connection.
+/// `std`-backed server-side TCP transport.
 ///
-/// This is intended for server-side runtimes that accept client sockets via
-/// `TcpListener`, then pass each `TcpStream` to Modbus server services.
+/// Wraps a `TcpStream` obtained from `TcpListener::accept` and implements
+/// [`Transport`] for use with Modbus server services.
 #[derive(Debug)]
-pub struct AcceptedTcpTransport {
+pub struct StdTcpServerTransport {
     stream: TcpStream,
     connected: bool,
 }
 
-impl AcceptedTcpTransport {
+impl StdTcpServerTransport {
     /// Creates a new transport from an accepted TCP stream.
     pub fn new(stream: TcpStream) -> Self {
         Self {
@@ -39,7 +39,7 @@ impl AcceptedTcpTransport {
     }
 }
 
-impl Transport for AcceptedTcpTransport {
+impl Transport for StdTcpServerTransport {
     type Error = TransportError;
     const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
 

@@ -7,7 +7,9 @@ Modbus server runtime for Rust — derive-based data models with compile-time ad
 
 ## Features
 
-- **Derive macros** — `CoilsModel`, `HoldingRegistersModel`, `DiscreteInputsModel`
+- **Derive macros** — `CoilsModel`, `HoldingRegistersModel`, `InputRegistersModel`, `DiscreteInputsModel`
+- **FIFO service** — `fifo` feature (FC18 Read FIFO Queue)
+- **File Record service** — `file-record` feature (FC14 Read File Record, FC15 Write File Record)
 - **Compile-time checks** — address overlap detection, range validation
 - **Write hooks** — approve/reject writes per field or batch
 - **All standard FCs** — 19 function codes supported
@@ -32,8 +34,15 @@ struct App {
     regs: Registers,
 }
 
-// FC03 read_holding_registers is now auto-implemented
+// `#[modbus_app]` auto-implements enabled handler traits for selected maps.
+// For `holding_registers(regs)`, this includes FC03/FC06/FC10/FC16/FC17 handlers.
+// Additional groups are also supported:
+// - `fifo(queue_a, queue_b)` routes FC18 by `FifoQueue::POINTER_ADDRESS`
+// - `file_record(files)` routes FC14/FC15 by `FileRecord::FILE_NUMBER`
 ```
+
+If you want macro-generated FIFO or file-record routing, each listed field must
+implement `FifoQueue` or `FileRecord` respectively.
 
 ### Optional Traffic Callbacks (`traffic` feature)
 
@@ -74,15 +83,18 @@ impl TrafficNotifier for App {
 
 ## Documentation
 
-📖 **[Full Documentation](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/server)**
+Use the workspace docs for full server guides:
 
-| Topic | Link |
-|-------|------|
-| Quick Start | [documentation/server/quick_start.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/quick_start.md) |
-| Derive Macros | [documentation/server/macros.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/macros.md) |
-| Write Hooks | [documentation/server/write_hooks.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/write_hooks.md) |
-| Function Codes | [documentation/server/function_codes.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/function_codes.md) |
-| Architecture | [documentation/server/architecture.md](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/architecture.md) |
+- [README.md](../documentation/server/README.md) — server docs entry point
+- [quick_start.md](../documentation/server/quick_start.md)
+- [macros.md](../documentation/server/macros.md)
+- [write_hooks.md](../documentation/server/write_hooks.md)
+- [function_codes.md](../documentation/server/function_codes.md)
+- [feature_flags.md](../documentation/server/feature_flags.md)
+- [examples.md](../documentation/server/examples.md)
+- [architecture.md](../documentation/server/architecture.md)
+- [policies.md](../documentation/server/policies.md)
+- [building_applications.md](../documentation/server/building_applications.md)
 
 ## Supported Function Codes
 
@@ -99,7 +111,7 @@ impl TrafficNotifier for App {
 | `0x17` | Read/Write Multiple | `holding-registers` |
 | `0x2B` | Device Identification | `diagnostics` |
 
-[See all 19 FCs →](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/server/function_codes.md)
+[See all 19 FCs ->](../documentation/server/function_codes.md)
 
 ## Related Crates
 

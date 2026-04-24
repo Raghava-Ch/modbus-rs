@@ -1,0 +1,13 @@
+[package]
+name = "mbus-codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Server app code-generation utilities shared by mbus-ffi build.rs and xtask"
+readme = "README.md"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"

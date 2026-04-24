@@ -25,8 +25,8 @@ To increase maximum clients, set both environment variables explicitly:
 MBUS_MAX_TCP_CLIENTS=10 MBUS_MAX_SERIAL_CLIENTS=10 cargo build -p mbus-ffi --features c,full
 ```
 
-- `MBUS_MAX_TCP_CLIENTS`: valid range `1..=127`
-- `MBUS_MAX_SERIAL_CLIENTS`: valid range `1..=126`
+- `MBUS_MAX_TCP_CLIENTS`: valid range `1..=255`
+- `MBUS_MAX_SERIAL_CLIENTS`: valid range `1..=255`
 
 ### Build & Link
 `mbus-ffi` supports compiling directly to shared (`.so`/`.dylib`) and static (`.a`) libraries:
@@ -36,26 +36,45 @@ cargo build --release -p mbus-ffi --features c,full
 
 *Note: Even in strict `no_std` environments, standard LLVM targets like `target/debug` on mac/linux will naturally map underlying memory routines (`memcpy`, `memmove`) strictly via system libc. When targeting explicit embedded system triples like `thumbv7em-none-eabihf`, compiler built-ins will resolve them.*
 
-### Automatic `mbus_ffi.h` Header Generation
-We utilize `cbindgen` to define memory-perfect opaque wrappers for external model parsing:
+### Automatic C Header Generation
+We use `cbindgen` to emit the public C headers from the current Rust API surface.
+
+Client header:
 ```bash
-cbindgen --config mbus-ffi/cbindgen.toml --crate mbus-ffi --output mbus-ffi/include/mbus_ffi.h
+cbindgen --config mbus-ffi/cbindgen_client.toml --crate mbus-ffi --output target/mbus-ffi/include/modbus_rs_client.h
+```
+
+Server header:
+
+```bash
+cbindgen --config mbus-ffi/cbindgen_server.toml --crate mbus-ffi --output target/mbus-ffi/include/modbus_rs_server.h
+```
+
+The workspace also provides xtask helpers for the client headers:
+
+```bash
+cargo run -p xtask -- gen-header
+cargo run -p xtask -- gen-feature-header
 ```
 
 ### Header / Feature Compatibility
-`mbus_ffi.h` is generated from the Rust API shape of the enabled feature set.
-The checked-in header is intended for native C builds with:
+`modbus_rs_client.h` is generated from the Rust API shape of the enabled feature set.
+The generated header is intended for native C builds with:
 
 ```bash
 --features c,full
 ```
+
+For native server builds, `modbus_rs_server.h` is generated from the `c-server`
+API surface, while YAML-driven server apps additionally emit
+`target/mbus-ffi/include/mbus_server_app.h` from the device config.
 
 ### C API Quick Start (Transport Polling)
 
 Instead of passing system sockets, you attach your exact runtime logic using POSIX or embedded UART controls directly via `MbusTransportCallbacks`:
 
 ```c
-#include "mbus_ffi.h"
+#include "modbus_rs_client.h"
 
 // 1. Setup specific connection rules
 struct MbusTcpConfig config = {0};
@@ -88,20 +107,21 @@ while(1) {
 }
 ```
 
-*For a full operational POSIX socket example and a self-contained serial PTY smoke path, view `mbus-ffi/examples/c_smoke_cmake/main.c`.*
+*For a full operational POSIX socket example and a self-contained serial PTY smoke path, view `mbus-ffi/examples/c_client_demo/main.c`.*
 
 ### C Smoke Example
-Build the smoke example with xtask:
+Build the client smoke demo with xtask:
 
 ```bash
-cargo run -p xtask -- build-c-smoke
+cargo run -p xtask -- build-c-demo --demo c_client_demo
 ```
 
-This configures and builds the CMake target, then runs a PTY-backed serial RTU smoke test via CTest.
+This configures and builds the CMake target for `mbus-ffi/examples/c_client_demo`,
+then runs its registered CTest cases.
 The smoke binary also supports manual execution:
 
 ```bash
-cd mbus-ffi/examples/c_smoke_cmake/build
+cd mbus-ffi/examples/c_client_demo/build
 ./c_smoke_test --serial-pty
 ./c_smoke_test --tcp 127.0.0.1 502
 ```
@@ -116,7 +136,7 @@ The FFI layer has three distinct test paths:
 
 1. Rust-side unit tests inside `mbus-ffi`
 2. Native C binding-layer tests compiled from `mbus-ffi/tests/c_api/test_binding_layer.c`
-3. Higher-level native smoke tests under `examples/c_smoke_cmake`
+3. Higher-level native smoke tests under `examples/c_client_demo`
 
 #### Rust-side FFI tests
 
@@ -140,7 +160,7 @@ cargo build -p mbus-ffi --features c,full
 Then compile the standalone C binding test source:
 
 ```bash
-cc -I mbus-ffi/include mbus-ffi/tests/c_api/test_binding_layer.c -L target/debug -lmbus_ffi -o /tmp/test_binding_layer
+cc -I target/mbus-ffi/include mbus-ffi/tests/c_api/test_binding_layer.c -L target/debug -lmbus_ffi -o /tmp/test_binding_layer
 ```
 
 Run it against the freshly built shared library:
@@ -168,40 +188,110 @@ If you already have the CMake-based test harness built under `mbus-ffi/tests/c_a
 
 #### Native C smoke test
 
-Run the end-to-end smoke path with xtask:
+Build or run the end-to-end client smoke demo with xtask:
 
 ```bash
-cargo run -p xtask -- build-c-smoke
+cargo run -p xtask -- build-c-demo --demo c_client_demo
+cargo run -p xtask -- run-c-demo --demo c_client_demo --mode serial-pty
 ```
 
-This builds `mbus-ffi` with `--features c,full`, configures the CMake smoke project,
-builds the `c_smoke_test` in ./mbus-ffi/examples/c_smoke_cmake/main.c, and runs the registered CTest cases.
+This builds `mbus-ffi` with the demo's declared feature set, configures the CMake
+project in `mbus-ffi/examples/c_client_demo`, builds `c_smoke_test`, and can run
+the PTY-backed smoke path without external hardware.
 
-Use this path for a higher-level native integration check in addition to the direct C binding-layer tests above.
+### C Server — Two Integration Approaches
+
+There are two ways to build a Modbus TCP server with the C FFI.
+
+#### Approach 1: Hand-Written Handlers (`c_server_demo`)
+
+All FC callbacks are wired directly in `main.c` without any code generation.
+This is the simplest starting point when the register layout is small or fixed.
+
+```bash
+# Build and self-test
+cargo run -p xtask -- build-c-demo --demo c_server_demo
+
+# Static link
+cargo run -p xtask -- build-c-demo --demo c_server_demo --static
+```
+
+Source: `mbus-ffi/examples/c_server_demo/main.c`.
+It creates a Modbus TCP server via `mbus_tcp_server_new`, registers FC01/FC05/FC03
+callbacks, runs an in-process self-test with synthetic ADUs, and validates responses.
+
+#### Approach 2: YAML-Driven Code Generation (`c_server_demo_yaml`)
+
+The device register/coil map is declared in a YAML file.  `build.rs` generates a
+type-safe Rust dispatcher into `$OUT_DIR` at compile time (never tracked in git),
+and `gen-server-app` regenerates the matching C header.
+
+```bash
+# Build, generate C header, compile, and self-test
+MBUS_SERVER_APP_CONFIG=mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
+	cargo run -p xtask -- build-c-demo --demo c_server_demo_yaml --static --features c-server
+```
+
+Or through xtask (sets the env var automatically from `demo.yaml`):
+
+```bash
+cargo run -p xtask -- build-c-demo --demo c_server_demo_yaml --static
+```
+
+Source: `mbus-ffi/examples/c_server_demo_yaml/`.
+Full walkthrough: [`examples/c_server_demo_yaml/README.md`](examples/c_server_demo_yaml/README.md).
+
+When `MBUS_SERVER_APP_CONFIG` is not set, `build.rs` falls back to the bundled
+`examples/c_server_demo_yaml/mbus_server_app.example.yaml` when building inside
+this workspace. That fallback exists to keep workspace builds and tests working;
+external `mbus-ffi` consumers should set `MBUS_SERVER_APP_CONFIG` explicitly.
+
+#### Choosing an approach
+
+| | Hand-written | YAML-driven |
+|---|---|---|
+| Register map changes | Edit C callbacks directly | Edit YAML → rebuild auto-updates C header and Rust dispatcher |
+| Generated files in git | None | None |
+| Rust dispatcher source | Written by hand | Generated by `build.rs` into `$OUT_DIR` |
+| Write-notification hooks | Your C function, wired manually | Declared in YAML, called by generated dispatcher |
+| Best for | Quick integration / small maps | Production devices with many registers |
 
 ---
 
 ## Thread Safety
 
 The C FFI layer is designed to be thread-safe, but it requires the **host application** to provide
-four lock/unlock symbols that the Rust library resolves at **link time**:
+lock/unlock symbols that the Rust library resolves at **link time**.
+
+For the client FFI, define:
 
 ```c
-// Declared in mbus_ffi.h — you must define all four in your C/C++ project.
+// Required by the native client pool and client operations.
 void mbus_pool_lock(void);
 void mbus_pool_unlock(void);
 void mbus_client_lock(MbusClientId id);
 void mbus_client_unlock(MbusClientId id);
 ```
 
+For the server FFI, define:
+
+```c
+// Required by the native server pool and server operations.
+void mbus_pool_lock(void);
+void mbus_pool_unlock(void);
+void mbus_server_lock(MbusServerId id);
+void mbus_server_unlock(MbusServerId id);
+```
+
 These are **not** function pointers in `MbusTransportCallbacks` — they are ordinary `extern` symbols
 that the linker expects to find in your object files, exactly like implementing `malloc` for a
-bare-metal libc. The header declares them; your application defines them.
+bare-metal libc. Your application defines them and the Rust FFI resolves them at link time.
 
 | Symbol | Called when |
 |---|---|
-| `mbus_pool_lock` / `mbus_pool_unlock` | Any operation that allocates or frees a client slot |
+| `mbus_pool_lock` / `mbus_pool_unlock` | Any operation that allocates or frees a client or server slot |
 | `mbus_client_lock(id)` / `mbus_client_unlock(id)` | Any operation that reads or mutates a specific client |
+| `mbus_server_lock(id)` / `mbus_server_unlock(id)` | Any operation that polls, connects, disconnects, or mutates a specific server |
 
 **Single-threaded** — define them as no-ops:
 ```c
@@ -209,17 +299,22 @@ void mbus_pool_lock(void)  {}
 void mbus_pool_unlock(void) {}
 void mbus_client_lock(MbusClientId id)   { (void)id; }
 void mbus_client_unlock(MbusClientId id) { (void)id; }
+void mbus_server_lock(MbusServerId id)   { (void)id; }
+void mbus_server_unlock(MbusServerId id) { (void)id; }
 ```
 
 **Multi-threaded** — back them with real mutexes:
 ```c
 static pthread_mutex_t g_pool_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_client_mutex[256] = { [0 ... 255] = PTHREAD_MUTEX_INITIALIZER };
+static pthread_mutex_t g_server_mutex[256] = { [0 ... 255] = PTHREAD_MUTEX_INITIALIZER };
 
 void mbus_pool_lock(void)   { pthread_mutex_lock(&g_pool_mutex); }
 void mbus_pool_unlock(void) { pthread_mutex_unlock(&g_pool_mutex); }
 void mbus_client_lock(MbusClientId id)   { pthread_mutex_lock(&g_client_mutex[id]); }
 void mbus_client_unlock(MbusClientId id) { pthread_mutex_unlock(&g_client_mutex[id]); }
+void mbus_server_lock(MbusServerId id)   { pthread_mutex_lock(&g_server_mutex[id & 0xFFu]); }
+void mbus_server_unlock(MbusServerId id) { pthread_mutex_unlock(&g_server_mutex[id & 0xFFu]); }
 ```
 
 ### Callbacks fire inside the client lock
@@ -232,6 +327,11 @@ Consequence: **do not call any `mbus_tcp_*` / `mbus_serial_*` API from inside a
 callback** — the attempt to re-acquire the same client lock will deadlock or return
 `MBUS_ERR_BUSY`. Queue follow-up requests in a user-owned buffer and enqueue
 them after `poll` returns.
+
+For the server FFI, hold `mbus_server_lock(id)` around `mbus_tcp_server_poll`,
+`mbus_tcp_server_connect`, `mbus_tcp_server_disconnect`, and the corresponding
+serial server calls. Use `mbus_pool_lock` / `mbus_pool_unlock` for server
+allocation and free paths.
 
 ---
 
@@ -313,7 +413,7 @@ Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under the GNU General Public License v3.0 (GPLv3).
 
-For details, refer to the [LICENSE](./LICENSE) file or the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
+For details, refer to the [LICENSE](../LICENSE) file or the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
 This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 

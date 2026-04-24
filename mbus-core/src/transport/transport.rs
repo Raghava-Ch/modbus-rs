@@ -1,7 +1,10 @@
-//! The core `Transport` and `TimeKeeper` traits.
+//! The core `Transport`, `AsyncTransport`, and `TimeKeeper` traits.
 
 use crate::{data_unit::common::MAX_ADU_FRAME_LEN, errors::MbusError};
 use heapless::Vec;
+
+#[cfg(feature = "async")]
+use core::future::Future;
 
 use super::{config::ModbusConfig, error::TransportType};
 
@@ -101,4 +104,81 @@ pub trait TimeKeeper {
     ///
     /// In a real `no_std` environment, this would come from a hardware timer.
     fn current_millis(&self) -> u64;
+}
+
+/// Async transport abstraction for Modbus communication.
+///
+/// This trait is the async parallel of the sync [`Transport`] trait.
+/// Implementations live in `mbus-network` (`TokioTcpTransport`) and `mbus-serial`
+/// (`TokioRtuTransport`, `TokioAsciiTransport`) behind their respective `async` feature flags.
+///
+/// # Compile-time metadata
+///
+/// Unlike the sync trait, async transport metadata is exposed as associated constants
+/// instead of runtime methods. This eliminates instance borrows when the protocol stack
+/// needs to know transport family for framing or broadcast decisions.
+///
+/// - [`SUPPORTS_BROADCAST_WRITES`](AsyncTransport::SUPPORTS_BROADCAST_WRITES) — set to
+///   `true` only for transports that can safely apply Modbus broadcast writes
+///   (address `0`) with no response (typically Serial RTU/ASCII).
+/// - [`TRANSPORT_TYPE`](AsyncTransport::TRANSPORT_TYPE) — declares the transport family
+///   for framing decisions (TCP vs RTU vs ASCII ADU layout).
+///
+/// Concrete implementations bind their transport family at the type level (often via
+/// const generics for serial RTU/ASCII), so per-instance variance is intentionally
+/// not supported.
+///
+/// # Framing contract
+///
+/// Unlike the sync `Transport::recv()` which returns whatever bytes are available,
+/// `AsyncTransport::recv()` **must not return until exactly one complete ADU is ready**:
+///
+/// - **TCP**: reads the 6-byte MBAP prefix, parses the length field, then reads exactly that
+///   many remaining bytes. Always returns a complete, valid-length frame.
+/// - **Serial RTU**: accumulates bytes and returns when the inter-frame silence timer fires
+///   (3.5 character times). The timer resets on every received byte.
+///   The timer is only started after the first byte arrives — silence before any data
+///   is not treated as a frame boundary.
+/// - **Serial ASCII**: accumulates bytes until the `\r\n` terminator is found.
+///
+/// # Send bounds
+///
+/// Both `send` and `recv` return futures that are `Send`, enabling their use with
+/// `tokio::spawn` without boxing. Implementations using `async fn` syntax are accepted
+/// by the compiler as long as all captured state is `Send`.
+#[cfg(feature = "async")]
+pub trait AsyncTransport: Send {
+    /// Compile-time capability flag for Serial-style broadcast write semantics.
+    ///
+    /// Set this to `true` for transport implementations that can safely apply
+    /// Modbus broadcast writes (address `0`) with no response. Most transports
+    /// should keep the default `false`.
+    const SUPPORTS_BROADCAST_WRITES: bool = false;
+
+    /// Compile-time transport type metadata.
+    ///
+    /// Every implementation must declare its transport family here. The value is
+    /// used by the protocol stack for framing decisions (e.g. TCP vs RTU vs ASCII
+    /// ADU layout, broadcast eligibility) and is authoritative for the lifetime
+    /// of the type.
+    const TRANSPORT_TYPE: TransportType;
+
+    /// Send a complete Modbus ADU frame over the transport.
+    ///
+    /// Implementations must ensure all bytes are written before returning.
+    fn send<'a>(
+        &'a mut self,
+        adu: &'a [u8],
+    ) -> impl Future<Output = Result<(), MbusError>> + Send + 'a;
+
+    /// Receive exactly one complete Modbus ADU frame.
+    ///
+    /// Suspends the caller until a full frame is available. See the
+    /// [framing contract](AsyncTransport#framing-contract) for details per transport type.
+    fn recv(
+        &mut self,
+    ) -> impl Future<Output = Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError>> + Send + '_;
+
+    /// Whether the transport currently has an active connection.
+    fn is_connected(&self) -> bool;
 }

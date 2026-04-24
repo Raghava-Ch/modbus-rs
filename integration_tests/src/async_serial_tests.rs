@@ -32,6 +32,9 @@ impl<const ASCII: bool> MockAsyncSerialTransport<ASCII> {
 }
 
 impl<const ASCII: bool> mbus_core::transport::AsyncTransport for MockAsyncSerialTransport<ASCII> {
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
+
     async fn send(&mut self, adu: &[u8]) -> Result<(), MbusError> {
         self.sent_frames
             .lock()
@@ -56,10 +59,6 @@ impl<const ASCII: bool> mbus_core::transport::AsyncTransport for MockAsyncSerial
         out.extend_from_slice(&frame)
             .map_err(|_| MbusError::BufferTooSmall)?;
         Ok(out)
-    }
-
-    fn transport_type(&self) -> TransportType {
-        TransportType::CustomSerial(Self::MODE)
     }
 
     fn is_connected(&self) -> bool {

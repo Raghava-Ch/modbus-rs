@@ -1,70 +1,59 @@
 # Server Architecture
 
-Understanding the internal design of the Modbus server stack.
+High-level structure of the synchronous server stack.
 
 ---
 
 ## Overview
 
+```text
+Your App <-> ServerServices <-> Transport
+             |
+             +-> framing, exception mapping, retry queue, request queue
+             |
+             +-> mbus-core protocol types and encoders
 ```
-┌──────────────────┐      ┌─────────────────────┐       ┌──────────────────┐
-│  Your App        │◀────▶│  ServerServices     │──────▶│  Transport       │
-│                  │      │  (mbus-server)      │       │  (mbus-network / │
-│  ModbusAppHandler│      │  request dispatch,  │       │   mbus-serial)   │
-│  or #[modbus_app]│      │  retry queue,       │       └──────────────────┘
-│                  │      │  timeout tracking   │
-└──────────────────┘      └─────────────────────┘
-                               │
-                               ▼
-                      ┌─────────────────────┐
-                      │  mbus-core          │
-                      │  protocol types,    │
-                      │  ADU/PDU framing,   │
-                      │  error model        │
-                      └─────────────────────┘
-```
+
+`ServerServices` is the orchestrator. It owns the transport, owns the application handler, receives frames, dispatches them, and manages retries or queueing when resilience features are enabled.
 
 ---
 
-## Design Principles
+## Design Characteristics
 
-| Principle | Implementation |
-|-----------|----------------|
-| **No heap allocation** | All buffers use `heapless` with compile-time capacity |
-| **No internal threads** | Progress driven entirely by `poll()` calls |
-| **No blocking I/O** | Transport `recv()` is non-blocking |
-| **Transport-agnostic** | Swap TCP/Serial/Mock via generic parameter |
-| **no_std compatible** | Core library works on bare-metal |
+| Property | Notes |
+|----------|-------|
+| Fixed-capacity buffers | Uses `heapless` rather than heap allocation |
+| Poll-driven | No internal worker thread; progress happens inside `poll()` |
+| Transport-agnostic | Works over TCP, RTU, ASCII, or a custom `Transport` |
+| Split trait dispatch | Each functional area is isolated behind its own trait |
+| `no_std` oriented internals | The core and server crates stay compatible with constrained targets |
 
 ---
 
-## Crate Responsibilities
+## Main Roles
 
 ### `mbus-core`
 
-- Protocol types: `FunctionCode`, `ExceptionCode`, `Pdu`, `Adu`
-- Transport trait definition
-- Config structs: `ModbusTcpConfig`, `ModbusSerialConfig`
-- Error types: `MbusError`
-- Wire encoding/decoding
+Provides:
+
+- protocol enums such as `FunctionCode`
+- ADU and PDU framing helpers
+- error types such as `MbusError` and `ExceptionCode`
+- transport configuration and addressing types
 
 ### `mbus-server`
 
-- `ServerServices` — request/response orchestrator
-- `ModbusAppHandler` trait — callback interface
-- Derive macros: `CoilsModel`, `HoldingRegistersModel`, etc.
-- `modbus_app` procedural macro
-- Retry queue for failed sends
-- Priority queue (optional)
+Provides:
 
-### `mbus-network`
+- `ServerServices`
+- split handler traits such as `ServerCoilHandler` and `ServerDiagnosticsHandler`
+- resilience infrastructure
+- derive-backed map traits and the `modbus_app` macros
 
-- `StdTcpTransport` — TCP server transport
+### Transport crates
 
-### `mbus-serial`
-
-- `StdRtuTransport` — Serial RTU transport
-- `StdAsciiTransport` — Serial ASCII transport
+- `mbus-network` provides TCP transports
+- `mbus-serial` provides RTU and ASCII transports
 
 ---
 
@@ -74,145 +63,111 @@ Understanding the internal design of the Modbus server stack.
 sequenceDiagram
     participant T as Transport
     participant S as ServerServices
-    participant A as App (ModbusAppHandler)
-    
-    T->>S: recv() returns frame
-    S->>S: Parse ADU
-    S->>S: Extract PDU & function code
-    S->>A: Dispatch to callback
-    A->>A: Validate & process
-    A-->>S: Return Result<Response, MbusError>
-    alt Success
-        S->>S: Build response ADU
-        S->>T: send() response
-    else Error
-        S->>S: Build exception ADU
-        S->>T: send() exception
-        S->>A: on_exception() callback
+    participant A as App
+
+    T->>S: recv()
+    S->>S: parse ADU and PDU
+    S->>S: filter by unit/slave address
+    S->>A: invoke split handler callback
+    A-->>S: Result<u8, MbusError> or Result<(), MbusError>
+    alt success
+        S->>S: build response ADU
+        S->>T: send()
+    else error
+        S->>S: build exception ADU
+        S->>T: send exception
+        S->>A: on_exception(...)
     end
 ```
 
----
-
-## Dispatch Table
-
-Function codes are dispatched to callbacks:
-
-| FC | Callback | Feature |
-|----|----------|---------|
-| `0x01` | `read_coils_request` | `coils` |
-| `0x02` | `read_discrete_inputs_request` | `discrete-inputs` |
-| `0x03` | `read_multiple_holding_registers_request` | `holding-registers` |
-| `0x04` | `read_input_registers_request` | `input-registers` |
-| `0x05` | `write_single_coil_request` | `coils` |
-| `0x06` | `write_single_register_request` | `holding-registers` |
-| `0x07` | `read_exception_status_request` | `diagnostics` |
-| `0x08` | `diagnostics_request` | `diagnostics` |
-| `0x0B` | `get_comm_event_counter_request` | `diagnostics` |
-| `0x0C` | `get_comm_event_log_request` | `diagnostics` |
-| `0x0F` | `write_multiple_coils_request` | `coils` |
-| `0x10` | `write_multiple_registers_request` | `holding-registers` |
-| `0x11` | `report_server_id_request` | `diagnostics` |
-| `0x14` | `read_file_record_request` | `file-record` |
-| `0x15` | `write_file_record_request` | `file-record` |
-| `0x16` | `mask_write_register_request` | `holding-registers` |
-| `0x17` | `read_write_multiple_registers_request` | `holding-registers` |
-| `0x18` | `read_fifo_queue_request` | `fifo` |
-| `0x2B` | `read_device_identification_request` | `diagnostics` |
+The important current detail is that read handlers usually return a byte count after filling an output buffer, rather than returning a higher-level response object.
 
 ---
 
-## Retry Queue
+## Dispatch Surface
 
-Failed `send()` calls are queued for retry:
+`ModbusAppHandler` is a composed trait, but real implementations usually come from the split traits:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Retry Queue (const generic capacity)                   │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │
-│  │ Response│ │ Response│ │ Response│ │ Response│        │
-│  │ Frame 1 │ │ Frame 2 │ │ Frame 3 │ │ Frame 4 │        │
-│  │ retry=0 │ │ retry=1 │ │ retry=0 │ │ retry=2 │        │
-│  │ ts=1000 │ │ ts=1050 │ │ ts=1100 │ │ ts=900  │        │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘        │
-└─────────────────────────────────────────────────────────┘
-```
+- `ServerCoilHandler`
+- `ServerDiscreteInputHandler`
+- `ServerHoldingRegisterHandler`
+- `ServerInputRegisterHandler`
+- `ServerFifoHandler`
+- `ServerFileRecordHandler`
+- `ServerDiagnosticsHandler`
+- `ServerExceptionHandler`
+- `TrafficNotifier` when the feature is enabled
 
-- `max_send_retries` controls retry budget per response
-- `response_retry_interval_ms` controls minimum delay between attempts
-- Oldest responses are retried first
-- Stale responses (past `request_deadline_ms`) are dropped
+Function-code routing currently covers:
 
----
-
-## Priority Queue (Optional)
-
-When `enable_priority_queue = true`:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Priority Queue                                         │
-│  ┌─────────────┐                                        │
-│  │ Maintenance │  FC08, FC0B, FC0C, FC11, FC2B          │
-│  ├─────────────┤                                        │
-│  │ Write       │  FC05, FC06, FC0F, FC10, FC16, FC15    │
-│  ├─────────────┤                                        │
-│  │ Read        │  FC01, FC02, FC03, FC04, FC18, FC14    │
-│  ├─────────────┤                                        │
-│  │ Other       │  everything else                       │
-│  └─────────────┘                                        │
-└─────────────────────────────────────────────────────────┘
-```
-
-Higher priority requests are dispatched first, reducing I/O latency for critical operations.
+| Category | Function codes |
+|----------|----------------|
+| Coil access | FC01, FC05, FC0F |
+| Discrete inputs | FC02 |
+| Holding registers | FC03, FC06, FC10, FC16, FC17 |
+| Input registers | FC04 |
+| Diagnostics | FC07, FC08, FC0B, FC0C, FC11, FC2B/0x0E |
+| File and FIFO | FC14, FC15, FC18 |
 
 ---
 
-## Derive Macro Architecture
+## Queueing And Retries
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  #[derive(CoilsModel)]                                  │
-│  struct MyCoils { ... }                                 │
-│                    │                                    │
-│                    ▼                                    │
-│  Generated: impl CoilMap for MyCoils                    │
-│  - encode(&self, range) -> Coils                        │
-│  - decode(&mut self, coils)                             │
-│  - addresses() -> &[u16]                                │
-└─────────────────────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│  #[modbus_app(coils(coils))]                            │
-│  struct App { coils: MyCoils }                          │
-│                    │                                    │
-│                    ▼                                    │
-│  Generated: impl ServerCoilHandler for App              │
-│  + impl ServerExceptionHandler, etc.                    │
-│  - read_coils_request() { self.coils.encode(...) }      │
-│  - write_single_coil_request() { self.coils.decode(..) }│
-│  - on_write_X() hooks routed to App methods             │
-└─────────────────────────────────────────────────────────┘
-```
+When configured, `ServerServices` keeps two fixed-capacity queues:
+
+- a request queue for priority-ordered dispatch
+- a response queue for failed sends that should be retried
+
+Relevant knobs live in `ResilienceConfig`:
+
+- `enable_priority_queue`
+- `max_send_retries`
+- `timeouts.response_retry_interval_ms`
+- `timeouts.request_deadline_ms`
+- `timeouts.overflow_policy`
+
+Request priorities currently classify FC14 and FC18 as reads, FC15 and FC17 as writes, and FC2B as maintenance.
 
 ---
 
-## Memory Layout
+## Macro Architecture
 
-All internal buffers are stack-allocated:
+The derive macros generate map traits, and `#[modbus_app]` turns those maps into server trait impls.
 
-| Buffer | Size | Notes |
-|--------|------|-------|
-| ADU frame | 260 bytes | 513 bytes with `serial-ascii` |
-| Retry queue | `QUEUE_DEPTH * ~300 bytes` | Per pending response |
-| Priority queue | Same | When enabled |
-| Response buffer | 260 bytes | Shared |
+```text
+#[derive(CoilsModel)]
+    -> impl CoilMap
+       - encode(address, quantity, out)
+       - write_single(...)
+       - write_many_from_packed(...)
+
+#[derive(HoldingRegistersModel)]
+    -> impl HoldingRegisterMap
+       - encode(address, quantity, out)
+       - write_single(...)
+       - write_many(...)
+
+#[modbus_app(...)]
+    -> impl ServerCoilHandler / ServerHoldingRegisterHandler / ...
+```
+
+For `fifo(...)` and `file_record(...)`, the macro does selector-based routing instead of range routing:
+
+- FIFO uses `POINTER_ADDRESS`
+- file record uses `FILE_NUMBER`
+
+---
+
+## Memory Footprint
+
+The server keeps its internal protocol buffers on fixed-capacity storage. Queue depth directly affects memory usage because queued requests and responses both scale with the `QUEUE_DEPTH` const generic.
+
+The default constructor uses `QUEUE_DEPTH = 8`.
 
 ---
 
 ## See Also
 
-- [Building Applications](building_applications.md)
-- [Policies](policies.md) — Timeout and queue configuration
-- [Macros](macros.md) — Derive macro details
+- [Sync Server Applications](sync.md)
+- [Policies](policies.md)
+- [Macros](macros.md)

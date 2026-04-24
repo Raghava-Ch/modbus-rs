@@ -175,14 +175,12 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             TaskCommand::Disconnect => return,
         };
 
-        // Resolve txn_id and ttype before taking a mutable transport borrow.
-        let ttype = match &self.transport {
-            Some(t) => t.transport_type(),
-            None => {
-                let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
-                return;
-            }
-        };
+        // Bail early if disconnected; transport-family metadata is compile-time.
+        if self.transport.is_none() {
+            let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
+            return;
+        }
+        let ttype = T::TRANSPORT_TYPE;
         let txn_id = self.advance_txn_id();
         let frame = match encode_request(txn_id, &params, ttype) {
             Ok(f) => f,
@@ -228,10 +226,10 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
 
     /// Matches a received frame to its pending entry and resolves the request.
     fn process_frame(&mut self, frame: &HVec<u8, MAX_ADU_FRAME_LEN>) {
-        let ttype = match &self.transport {
-            Some(t) => t.transport_type(),
-            None => return,
-        };
+        if self.transport.is_none() {
+            return;
+        }
+        let ttype = T::TRANSPORT_TYPE;
 
         let (decoded_txn_id, _unit, inner) = match decode_response(frame, ttype) {
             Ok(v) => v,

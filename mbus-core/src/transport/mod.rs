@@ -30,11 +30,6 @@
 
 pub mod checksum;
 
-#[cfg(feature = "async")]
-pub mod async_transport;
-#[cfg(feature = "async")]
-pub use async_transport::AsyncTransport;
-
 mod config;
 mod error;
 mod retry;
@@ -47,5 +42,7 @@ pub use config::{
 };
 pub use error::{TransportError, TransportType};
 pub use retry::{BackoffStrategy, JitterStrategy, RetryRandomFn};
+#[cfg(feature = "async")]
+pub use transport::AsyncTransport;
 pub use transport::{TimeKeeper, Transport};
 pub use unit_id::{UidSaddrFrom, UnitIdOrSlaveAddr};

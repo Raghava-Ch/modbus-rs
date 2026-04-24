@@ -199,6 +199,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
     /// Returns `Ok(None)` for both wrong-unit frames and framing errors (caller
     /// should `continue` to the next loop iteration). Returns `Err` only for
     /// fatal transport errors.
+    #[cfg_attr(not(feature = "traffic"), allow(unused_variables))]
     async fn recv_request<APP: AsyncAppHandler>(
         &mut self,
         app: &mut APP,
@@ -212,7 +213,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_message_count();
 
-        let transport_type = self.transport.transport_type();
+        let transport_type = T::TRANSPORT_TYPE;
         match self.parse_adu(&adu, transport_type) {
             Ok(Some(req)) => {
                 let txn_id = req.txn_id();
@@ -343,6 +344,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
 
     /// Dispatches a known request to the app, updates statistics, fires traffic
     /// hooks, and sends the encoded response back to the client.
+    #[cfg_attr(not(feature = "traffic"), allow(unused_variables))]
     async fn dispatch_and_send<APP: AsyncAppHandler>(
         &mut self,
         app: &mut APP,
@@ -365,6 +367,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
     }
 
     /// Updates diagnostics-stats counters based on the response type.
+    #[cfg_attr(not(feature = "diagnostics-stats"), allow(unused_variables))]
     fn update_response_stats(&mut self, resp: &ModbusResponse) {
         #[cfg(feature = "diagnostics-stats")]
         match resp {
@@ -389,6 +392,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
 
     /// Encodes `resp` and writes it to the transport, firing traffic hooks on
     /// success or error. Skips silently for `NoResponse`.
+    #[cfg_attr(not(feature = "traffic"), allow(unused_variables))]
     async fn send_response<APP: AsyncAppHandler>(
         &mut self,
         app: &mut APP,
@@ -399,7 +403,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         if matches!(resp, ModbusResponse::NoResponse) {
             return Ok(());
         }
-        let tt = self.transport.transport_type();
+        let tt = T::TRANSPORT_TYPE;
         let frame = resp
             .encode(txn_id, unit, tt)
             .map_err(AsyncServerError::Transport)?;
@@ -426,7 +430,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         if matches!(resp, ModbusResponse::NoResponse) {
             return Ok(());
         }
-        let transport_type = self.transport.transport_type();
+        let transport_type = T::TRANSPORT_TYPE;
         let adu = resp
             .encode(txn_id, unit, transport_type)
             .map_err(AsyncServerError::Transport)?;

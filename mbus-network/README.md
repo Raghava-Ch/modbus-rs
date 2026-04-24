@@ -2,8 +2,12 @@
 
 `mbus-network` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
 
-It provides a standard Modbus TCP transport implementation that plugs into the
+It provides Modbus TCP transport implementations that plug into the
 shared transport abstractions from `mbus-core`.
+
+- Native std sync transport (`Transport`) for client and server use
+- Native async tokio transport (`AsyncTransport`) behind the `async` feature
+- Browser WebSocket transport for `wasm32` behind the `wasm` feature
 
 If you want a single top-level API, use `modbus-rs`.
 If you need direct transport-level control, use `mbus-network` directly.
@@ -15,6 +19,8 @@ If you need direct transport-level control, use `mbus-network` directly.
 - Implements `Transport` from `mbus-core` using `std::net::TcpStream`.
 - Handles connection setup, send, receive, and disconnect for Modbus TCP.
 - Maps I/O failures into `TransportError`.
+- Exposes async TCP transport for `mbus-async` behind `async` feature.
+- Exposes wasm WebSocket transport for browser targets behind `wasm` feature.
 
 This crate does not implement request orchestration or function-code services.
 That logic is provided by `mbus-client`.
@@ -22,19 +28,20 @@ That logic is provided by `mbus-client`.
 ## What Is Included
 
 - `StdTcpTransport`: concrete transport implementation for Modbus TCP.
+- `StdTcpServerTransport`: server-side wrapper around accepted `TcpStream`.
+- `TokioTcpTransport`: async TCP transport (`async` feature).
+- `WasmWsTransport`: wasm/browser WebSocket transport (`wasm` feature on `wasm32`).
 - Timeout setup from `ModbusTcpConfig`.
 - Basic DNS resolution and connect flow.
 - Non-blocking receive pass that returns currently available bytes.
 
 ## Public API Surface
 
-The crate currently re-exports:
+The crate re-exports, depending on target/features:
 
-- `StdTcpTransport`
-
-from:
-
-- `management::std_transport`
+- Native (non-wasm): `StdTcpTransport`, `StdTcpServerTransport`
+- Native + `async`: `TokioTcpTransport`
+- `wasm32` + `wasm`: `WasmWsTransport`
 
 ## Usage
 
@@ -42,7 +49,7 @@ from:
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 ### 2) Create TCP config and connect transport
@@ -70,6 +77,12 @@ fn connect_tcp() -> Result<(), MbusError> {
 - `connection_timeout_ms` and `response_timeout_ms` from `ModbusTcpConfig` are
 	applied to the underlying stream.
 
+## Feature Flags
+
+- `logging`: enables `log` facade diagnostics
+- `async`: enables tokio-backed `TokioTcpTransport` (`AsyncTransport`)
+- `wasm`: enables browser `WasmWsTransport` on `wasm32` targets
+
 ## Logging
 
 `mbus-network` supports optional logging via the `log` facade.
@@ -81,15 +94,14 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-network = { version = "0.7.0", features = ["logging"] }
+mbus-network = { version = "0.8.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
 ## Receive Behavior
 
-- `recv()` returns bytes currently available from the socket.
-- A full Modbus ADU may arrive in multiple chunks.
-- Higher-level logic should buffer and frame messages as needed.
+- Sync (`StdTcpTransport`, `StdTcpServerTransport`): `recv()` returns bytes currently available from the socket; framing is handled by higher-level logic.
+- Async (`TokioTcpTransport`): `recv()` reads MBAP prefix + exact remaining bytes and returns one complete Modbus TCP ADU.
 
 ## Typical Integration Pattern
 
