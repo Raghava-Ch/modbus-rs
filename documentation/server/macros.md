@@ -260,6 +260,6 @@ struct App {
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Write Hooks](write_hooks.md)
 - [Function Codes](function_codes.md)

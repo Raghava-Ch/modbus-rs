@@ -17,14 +17,14 @@ Get your first Modbus client running in 5 minutes.
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 ### Minimal TCP Client (Coils Only)
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "network-tcp",
     "coils"
@@ -35,7 +35,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "serial-rtu",
     "registers"
@@ -240,6 +240,6 @@ For testing or embedded systems without system time, you can return a fixed valu
 ## Next Steps
 
 - [Examples Reference](examples.md) — Find an example for your use case
-- [Building Applications](building_applications.md) — Production-ready setup
+- [Sync Development](sync.md) — Production-ready poll-driven setup
 - [Feature Flags](feature_flags.md) — Minimize binary size
 - [Async Development](async.md) — Use Tokio async APIs

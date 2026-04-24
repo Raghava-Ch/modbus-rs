@@ -10,7 +10,7 @@ If you are fine with the top-level default stack, this is enough:
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 That default includes both client and server support. For a smaller TCP-only server build,
@@ -18,7 +18,7 @@ disable defaults and opt in explicitly:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",
@@ -132,7 +132,7 @@ impl modbus_rs::ServerCoilHandler for MyApp {
 }
 ```
 
-For full examples, see [Examples](examples.md) and [Building Applications](building_applications.md).
+For full examples, see [Examples](examples.md), [Sync Server Applications](sync.md), and [Async Server Applications](async.md).
 
 ---
 
@@ -159,6 +159,6 @@ cargo run -p modbus-rs --example modbus_rs_server_std_transport_client_demo
 
 ## Next Steps
 
-- [Building Applications](building_applications.md) for manual handlers, shared state, and transport setup
+- [Sync Server Applications](sync.md) for manual handlers, shared state, and transport setup
 - [Macros](macros.md) for generated maps and routing
 - [Policies](policies.md) for retry, deadlines, and queue behavior

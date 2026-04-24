@@ -238,5 +238,5 @@ fn on_registers_written(&mut self, _start: u16, _qty: u16, _values: &[u16]) -> R
 ## See Also
 
 - [Macros](macros.md)
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Function Codes](function_codes.md)

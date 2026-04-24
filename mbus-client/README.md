@@ -132,7 +132,7 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-mbus-client = { version = "0.7.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.8.0", default-features = false, features = ["coils"] }
 ```
 
 ## Traffic Callbacks (optional `traffic` feature)

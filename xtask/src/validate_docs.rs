@@ -489,16 +489,89 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
 }
 
 /// Compile-check a list of Rust code blocks by writing temp files into
-/// `modbus-rs/examples/` and running individual `cargo check` calls.
+/// `target/doc-validate/examples/` and running individual `cargo check` calls
+/// against a minimal scratch package that lives entirely inside `target/`.
 ///
-/// Temp files are cleaned up even on failure.
+/// The scratch package is never part of the main workspace and its files are
+/// cleaned up even on failure. `modbus-rs/examples/` is never touched.
+///
 /// Returns: (passed, failed, failures, warnings).
 fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>, Vec<String>) {
     if blocks.is_empty() {
         return (0, 0, Vec::new(), Vec::new());
     }
 
-    let examples_dir = root.join("modbus-rs").join("examples");
+    // ── Bootstrap the scratch package ────────────────────────────────
+    let scratch_dir      = root.join("target").join("doc-validate");
+    let scratch_examples = scratch_dir.join("examples");
+    let scratch_manifest = scratch_dir.join("Cargo.toml");
+
+    if let Err(e) = fs::create_dir_all(&scratch_examples) {
+        return (0, 0, vec![format!("cannot create scratch dir: {e}")], Vec::new());
+    }
+
+    // Use absolute paths so the manifest is location-independent.
+    let modbus_rs_path   = root.join("modbus-rs");
+    let mbus_core_path   = root.join("mbus-core");
+    let mbus_client_path = root.join("mbus-client");
+    let mbus_server_path = root.join("mbus-server");
+    let mbus_async_path  = root.join("mbus-async");
+    let manifest_src = format!(
+        // [workspace] prevents Cargo from walking up and inheriting the root workspace.
+        "[workspace]\n\
+         \n\
+         [package]\n\
+         name    = \"doc-validate\"\n\
+         version = \"0.0.1\"\n\
+         edition = \"2024\"\n\
+         publish = false\n\
+         \n\
+         # ── modbus-rs umbrella crate (features matching the old cargo-check approach) ──\n\
+         [dependencies.modbus-rs]\n\
+         path             = \"{modbus_rs}\"\n\
+         default-features = true\n\
+         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\"]\n\
+         \n\
+         # ── workspace members referenced directly in doc snippets ────\n\
+         [dependencies.mbus-core]\n\
+         path = \"{mbus_core}\"\n\
+         \n\
+         [dependencies.mbus-client]\n\
+         path = \"{mbus_client}\"\n\
+         \n\
+         [dependencies.mbus-server]\n\
+         path = \"{mbus_server}\"\n\
+         default-features = false\n\
+         \n\
+         [dependencies.mbus-async]\n\
+         path = \"{mbus_async}\"\n\
+         default-features = false\n\
+         features = [\"network-tcp\", \"serial-rtu\", \"serial-ascii\"]\n\
+         \n\
+         # ── external crates that modbus-rs dev-deps expose to its examples ──\n\
+         [dependencies.tokio]\n\
+         version  = \"1\"\n\
+         features = [\"macros\", \"rt-multi-thread\", \"time\"]\n\
+         \n\
+         [dependencies.anyhow]\n\
+         version = \"1.0\"\n\
+         \n\
+         [dependencies.heapless]\n\
+         version = \"0.8\"\n\
+         \n\
+         [dependencies.env_logger]\n\
+         version = \"0.11\"\n",
+        modbus_rs   = modbus_rs_path.display(),
+        mbus_core   = mbus_core_path.display(),
+        mbus_client = mbus_client_path.display(),
+        mbus_server = mbus_server_path.display(),
+        mbus_async  = mbus_async_path.display(),
+    );
+
+    if let Err(e) = fs::write(&scratch_manifest, &manifest_src) {
+        return (0, 0, vec![format!("cannot write scratch Cargo.toml: {e}")], Vec::new());
+    }
+
     let mut temp_files: Vec<PathBuf> = Vec::new();
     let mut passed = 0u32;
     let mut failed = 0u32;
@@ -509,7 +582,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
     let result = (|| -> Result<(), String> {
         for (i, block) in blocks.iter().enumerate() {
             let name = format!("_dv_{:03}", i);
-            let path = examples_dir.join(format!("{name}.rs"));
+            let path = scratch_examples.join(format!("{name}.rs"));
 
             // Build the temp file content
             let mut content = String::from(
@@ -531,12 +604,10 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                 .current_dir(root)
                 .args([
                     "check",
-                    "-p",
-                    "modbus-rs",
+                    "--manifest-path",
+                    scratch_manifest.to_str().unwrap_or(""),
                     "--example",
                     &name,
-                    "--features",
-                    "async,serial-ascii,logging,diagnostics-stats",
                 ])
                 .output();
 
@@ -651,7 +722,39 @@ fn cross_reference(
 //  Orchestrator
 // ═══════════════════════════════════════════════════════════════════════
 
-pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
+/// Parse `--file <path>` arguments.  Each `--file` value may be absolute or
+/// relative to the repository root.  Returns an empty vec when no filter is set.
+fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<Vec<PathBuf>, String> {
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut i = 0usize;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--file" | "-f" => {
+                i += 1;
+                let raw = args
+                    .get(i)
+                    .ok_or_else(|| "--file requires a path argument".to_string())?;
+                let p = PathBuf::from(raw);
+                let resolved = if p.is_absolute() { p } else { root.join(p) };
+                if !resolved.exists() {
+                    return Err(format!(
+                        "--file '{}' does not exist",
+                        resolved.display()
+                    ));
+                }
+                files.push(resolved);
+            }
+            other => return Err(format!("unknown validate-docs flag: {other}")),
+        }
+        i += 1;
+    }
+    Ok(files)
+}
+
+pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
+    let file_filter = parse_validate_docs_args(root, args)?;
+    let filtered = !file_filter.is_empty();
+
     println!("\n╔═══════════════════════════════════════════╗");
     println!(
         "║   {}        ║",
@@ -660,8 +763,24 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
     println!("╚═══════════════════════════════════════════╝\n");
 
     // ── Phase 1: Scan ────────────────────────────────────────────────
-    let md_files = scan_md_files(root);
-    println!("Scanned {} markdown files\n", md_files.len());
+    let md_files: Vec<PathBuf> = if filtered {
+        file_filter.clone()
+    } else {
+        scan_md_files(root)
+    };
+
+    if filtered {
+        println!("Scanning {} selected file(s):\n", md_files.len());
+        for f in &md_files {
+            println!(
+                "  {}",
+                f.strip_prefix(root).unwrap_or(f).display()
+            );
+        }
+        println!();
+    } else {
+        println!("Scanned {} markdown files\n", md_files.len());
+    }
 
     // ── Phase 2: Parse ───────────────────────────────────────────────
     let mut all_blocks: Vec<CodeBlock> = Vec::new();
@@ -726,39 +845,45 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         section("── Cross-Reference ────────────────────────────")
     );
 
-    let toml_examples = parse_cargo_toml_examples(root);
-    println!(
-        "Cargo.toml has {} [[example]] entries, docs reference {} unique examples\n",
-        toml_examples.len(),
-        doc_example_names.len()
-    );
+    let (undocumented, phantom) = if filtered {
+        println!("  (skipped — cross-reference requires a full scan; remove --file to enable)\n");
+        (Vec::new(), Vec::new())
+    } else {
+        let toml_examples = parse_cargo_toml_examples(root);
+        println!(
+            "Cargo.toml has {} [[example]] entries, docs reference {} unique examples\n",
+            toml_examples.len(),
+            doc_example_names.len()
+        );
 
-    let (undocumented, phantom) = cross_reference(&toml_examples, &doc_example_names);
+        let (undocumented, phantom) = cross_reference(&toml_examples, &doc_example_names);
 
-    if !undocumented.is_empty() {
-        println!(
-            "  {} Undocumented examples (in Cargo.toml but not in any .md):",
-            warn("⚠")
-        );
-        for name in &undocumented {
-            println!("    - {name}");
+        if !undocumented.is_empty() {
+            println!(
+                "  {} Undocumented examples (in Cargo.toml but not in any .md):",
+                warn("⚠")
+            );
+            for name in &undocumented {
+                println!("    - {name}");
+            }
         }
-    }
-    if !phantom.is_empty() {
-        println!(
-            "  {} Phantom examples (in docs but not in Cargo.toml):",
-            warn("⚠")
-        );
-        for name in &phantom {
-            println!("    - {name}");
+        if !phantom.is_empty() {
+            println!(
+                "  {} Phantom examples (in docs but not in Cargo.toml):",
+                warn("⚠")
+            );
+            for name in &phantom {
+                println!("    - {name}");
+            }
         }
-    }
-    if undocumented.is_empty() && phantom.is_empty() {
-        println!(
-            "  {} All examples are documented and all doc references are valid",
-            ok("✓")
-        );
-    }
+        if undocumented.is_empty() && phantom.is_empty() {
+            println!(
+                "  {} All examples are documented and all doc references are valid",
+                ok("✓")
+            );
+        }
+        (undocumented, phantom)
+    };
 
     // ── Summary ──────────────────────────────────────────────────────
     println!("\n╔═══════════════════════════════════════════╗");

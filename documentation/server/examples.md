@@ -157,6 +157,6 @@ Note: `modbus_rs_client_tcp_coils` is currently hardcoded to a fixed host/port a
 
 ## See Also
 
-- [Building Applications](building_applications.md) — Full development guide
+- [Sync Server Applications](sync.md) — Full poll-driven development guide
 - [Feature Flags](feature_flags.md) — Customize your build
 - [Macros](macros.md) — Derive macro reference

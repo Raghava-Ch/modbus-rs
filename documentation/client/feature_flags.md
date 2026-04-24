@@ -31,7 +31,7 @@ Control binary size and functionality by enabling only what you need.
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 Includes: `client`, `server`, `network-tcp`, `serial-rtu`, and all function-code model
@@ -48,7 +48,7 @@ For targets without std (bare-metal MCUs, RTOS). You bring your own `Transport` 
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = ["no-std"] }
+modbus-rs = { version = "0.8.0", default-features = false, features = ["no-std"] }
 ```
 
 Includes: `client` state machine + all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`). No transport, no OS.
@@ -57,7 +57,7 @@ Pickup only the FC models you need to keep code size minimal:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "coils",
     "registers",
@@ -70,7 +70,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "network-tcp",
     "coils"
@@ -85,7 +85,7 @@ Binary size: ~50% smaller than full default.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "serial-rtu",
     "registers"
@@ -98,7 +98,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "network-tcp",
     "serial-rtu",
@@ -113,7 +113,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "async",
     "network-tcp",
     "coils",
@@ -128,7 +128,7 @@ tokio = { version = "1", features = ["full"] }
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["traffic"] }
+modbus-rs = { version = "0.8.0", features = ["traffic"] }
 ```
 
 ---
@@ -137,7 +137,7 @@ modbus-rs = { version = "0.7.0", features = ["traffic"] }
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["logging"] }
+modbus-rs = { version = "0.8.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -226,7 +226,11 @@ See [Async Development](async.md).
 
 #### `traffic`
 
-Enables `TrafficNotifier` trait for raw frame observability.
+Enables raw frame observability via `TrafficNotifier`.
+
+Important: this is a trait-surface feature, not just a log toggle. Enabling `traffic`
+can require your application type to implement additional notifier traits in code paths
+that compile successfully without it.
 
 ```rust
 impl TrafficNotifier for App {
@@ -257,7 +261,7 @@ The core library is `no_std` compatible. For embedded targets:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "client",
     "coils"
 ] }
@@ -267,6 +271,6 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Development](sync.md)
 - [Architecture](architecture.md)
 - [Async Development](async.md)

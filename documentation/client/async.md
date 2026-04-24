@@ -10,7 +10,7 @@ Enable the `async` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["async"] }
+modbus-rs = { version = "0.8.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -223,7 +223,7 @@ Enable with `traffic` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", features = ["async", "traffic"] }
+modbus-rs = { version = "0.8.0", features = ["async", "traffic"] }
 ```
 
 ```rust
@@ -273,6 +273,6 @@ Both `AsyncTcpClient` and `AsyncSerialClient` expose the same request API (featu
 
 ## See Also
 
-- [Building Applications](building_applications.md) — Sync client details
+- [Sync Development](sync.md) — Poll-driven sync client details
 - [Feature Flags](feature_flags.md) — Enable `async` feature
 - [Architecture](architecture.md) — Internal design

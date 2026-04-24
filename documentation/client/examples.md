@@ -232,6 +232,6 @@ cargo run -p modbus-rs --example modbus_rs_client_tcp_coils -- 127.0.0.1 502 1
 
 ## See Also
 
-- [Building Applications](building_applications.md) — Full development guide
+- [Sync Development](sync.md) — Full poll-driven development guide
 - [Feature Flags](feature_flags.md) — Customize your build
 - [Async Development](async.md) — Tokio async APIs

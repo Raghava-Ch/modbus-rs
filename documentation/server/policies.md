@@ -130,6 +130,6 @@ This depth controls both the buffered request queue and the pending response que
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Architecture](architecture.md)
 - [Function Codes](function_codes.md)

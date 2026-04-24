@@ -36,7 +36,7 @@ If you use `default-features = false`, none of the above are enabled until you l
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 This includes client and server support.
@@ -45,7 +45,7 @@ This includes client and server support.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",
@@ -57,7 +57,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "server",
     "serial-rtu",
     "coils",
@@ -71,7 +71,7 @@ modbus-rs = { version = "0.7.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",

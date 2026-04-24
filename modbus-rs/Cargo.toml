@@ -1,6 +1,6 @@
 [package]
 name = "modbus-rs"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license.workspace = true
@@ -25,7 +25,7 @@ heapless = { workspace = true }
 anyhow = "1.0.102"
 env_logger = "0.11"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
-mbus-server = { version = "0.7.0", path = "../mbus-server" }
+mbus-server = { version = "0.8.0", path = "../mbus-server" }
 
 [build-dependencies]
 
@@ -39,6 +39,7 @@ default = [
     "server",
     "serial-rtu",
     "network-tcp",
+    "async",
     "coils",
     "holding-registers",
     "input-registers",
@@ -47,23 +48,30 @@ default = [
     "file-record",
     "diagnostics",
 ]
+# Internal sentinel: set by any feature that requires std. The no_std cfg_attr in
+# lib.rs checks only this flag, so adding a new std-requiring feature is a single
+# line change here rather than a lib.rs edit.
+std-required = []
 client = ["mbus-client"]
-server = ["dep:mbus-server"]
+server = ["dep:mbus-server", "std-required"]
 serial-rtu = [
     "mbus-serial",
     "mbus-async?/serial-rtu",
     "mbus-async?/server-serial",
+    "std-required",
 ]
 serial-ascii = [
     "mbus-serial",
     "mbus-core/serial-ascii",
     "mbus-async?/serial-ascii",
     "mbus-async?/server-serial",
+    "std-required",
 ]
 network-tcp = [
     "mbus-network",
     "mbus-async?/network-tcp",
     "mbus-async?/server-tcp",
+    "std-required",
 ]
 coils = ["mbus-core/coils", "mbus-async?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
@@ -82,8 +90,9 @@ logging = [
     "mbus-network?/logging",
     "mbus-serial?/logging",
     "mbus-client?/logging",
+    "std-required",
 ]
-async = ["dep:mbus-async"]
+async = ["dep:mbus-async", "std-required"]
 traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
 
 # Convenience feature for no_std / embedded targets.

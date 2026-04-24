@@ -312,4 +312,4 @@ Check that:
 
 - [C/FFI Bindings](c_bindings.md) — Native C integration
 - [Feature Flags](feature_flags.md) — Build options
-- [Building Applications](building_applications.md) — Rust client guide
+- [Sync Development](sync.md) — Rust sync client guide

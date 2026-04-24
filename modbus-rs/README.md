@@ -139,7 +139,7 @@ For **embedded / no_std** targets, disable defaults and use the `no-std` conveni
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = ["no-std"] }
+modbus-rs = { version = "0.8.0", default-features = false, features = ["no-std"] }
 ```
 
 This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
@@ -182,14 +182,16 @@ Example: only enable sync client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
   "client",
 	"network-tcp",
   "coils"
 ] }
 ```
 
-For more feature combinations, see [documentation/feature_flags.md](../documentation/feature_flags.md).
+For more feature combinations:
+- Server: [documentation/server/feature_flags.md](../documentation/server/feature_flags.md).
+- Client: [documentation/client/feature_flags.md](../documentation/client/feature_flags.md).
 
 ### Server Setup
 
@@ -198,10 +200,10 @@ Enable the server runtime with the `server` feature. Sync servers also need a tr
 ```toml
 [dependencies]
 # Sync TCP server
-modbus-rs = { version = "0.7.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.8.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
 
 # Async TCP server
-modbus-rs = { version = "0.7.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.8.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -279,7 +281,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
 	"async",
 	"network-tcp",
 	"coils"
@@ -308,7 +310,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
 	"client",
 	"network-tcp",
 	"coils",
@@ -328,7 +330,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = ["network-tcp", "logging"] }
+modbus-rs = { version = "0.8.0", default-features = false, features = ["network-tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -338,14 +340,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.7.0", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
   "client",
   "network-tcp",
   "registers"
@@ -358,7 +360,7 @@ Use `mbus-ffi` directly for browser/WASM. `modbus-rs` does not re-export the WAS
 
 ```toml
 [dependencies]
-mbus-ffi = { version = "0.7.0", default-features = false, features = ["wasm", "full"] }
+mbus-ffi = { version = "0.8.0", default-features = false, features = ["wasm", "full"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:
@@ -478,27 +480,27 @@ fn main() -> Result<(), MbusError> {
 
 ### TCP Client examples
 
-- [coils_example.rs](examples/modbus-rs/client/tcp/coils_example.rs)
-- [registers_example.rs](examples/modbus-rs/client/tcp/registers_example.rs)
-- [discrete_inputs_example.rs](examples/modbus-rs/client/tcp/discrete_inputs_example.rs)
-- [device_id_example.rs](examples/modbus-rs/client/tcp/device_id_example.rs)
-- [feature_facades_showcase.rs](examples/modbus-rs/client/showcase/feature_facades_showcase.rs)
-- [tcp_backoff_jitter_example.rs](examples/modbus-rs/client/tcp/tcp_backoff_jitter_example.rs)
-- [logging_example.rs](examples/modbus-rs/client/tcp/logging_example.rs)
-- [traffic_sync_example.rs](examples/modbus-rs/client/traffic/traffic_sync_example.rs) (`traffic` feature)
-- [traffic_async_tcp_example.rs](examples/modbus-rs/client/traffic/traffic_async_tcp_example.rs) (`async,traffic` features)
+- [coils.rs](examples/client/network-tcp/sync/coils.rs)
+- [registers.rs](examples/client/network-tcp/sync/registers.rs)
+- [discrete_inputs.rs](examples/client/network-tcp/sync/discrete_inputs.rs)
+- [device_id.rs](examples/client/network-tcp/sync/device_id.rs)
+- [backoff_jitter.rs](examples/client/network-tcp/sync/backoff_jitter.rs)
+- [logging.rs](examples/client/network-tcp/sync/logging.rs)
+- [traffic.rs](examples/client/network-tcp/sync/traffic.rs) (`traffic` feature)
+- [tcp.rs](examples/client/network-tcp/async/tcp.rs) (`async` feature)
+- [traffic.rs](examples/client/network-tcp/async/traffic.rs) (`async,traffic` features)
 
 ### Serial RTU examples
 
-- [coils_serial_example.rs](examples/modbus-rs/client/serial/coils_serial_example.rs)
-- [registers_serial_example.rs](examples/modbus-rs/client/serial/registers_serial_example.rs)
-- [discrete_inputs_serial_example.rs](examples/modbus-rs/client/serial/discrete_inputs_serial_example.rs)
-- [device_id_serial_example.rs](examples/modbus-rs/client/serial/device_id_serial_example.rs)
-- [serial_rtu_backoff_jitter_example.rs](examples/modbus-rs/client/serial/serial_rtu_backoff_jitter_example.rs)
+- [coils.rs](examples/client/serial-rtu/sync/coils.rs)
+- [registers.rs](examples/client/serial-rtu/sync/registers.rs)
+- [discrete_inputs.rs](examples/client/serial-rtu/sync/discrete_inputs.rs)
+- [device_id.rs](examples/client/serial-rtu/sync/device_id.rs)
+- [backoff_jitter.rs](examples/client/serial-rtu/sync/backoff_jitter.rs)
 
 ### Serial ASCII examples
 
-- [ascii_serial_example.rs](examples/modbus-rs/client/serial/ascii_serial_example.rs)
+- [coils.rs](examples/client/serial-ascii/sync/coils.rs)
 
 Run examples from the workspace root:
 

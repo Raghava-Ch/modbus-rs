@@ -14,7 +14,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 ```rust
@@ -27,6 +27,31 @@ client.coils().read_coils(1, unit_id, 0, 16)?;
 loop { client.poll(); }
 ```
 
+## Minimal Install Profiles
+
+Use `default-features = false` and opt into only the features you need.
+
+### Minimal TCP Client
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.8.0", default-features = false, features = ["client", "network-tcp", "coils"] }
+```
+
+### Minimal Embedded / no_std Client
+
+```toml
+[dependencies]
+modbus-rs = { version = "0.8.0", default-features = false, features = ["client", "coils", "registers"] }
+```
+
+### Core-only (protocol + models)
+
+```toml
+[dependencies]
+mbus-core = { version = "0.8.0", default-features = false, features = ["coils", "registers"] }
+```
+
 📖 **[Full Documentation →](documentation/README.md)**
 
 ---
@@ -35,10 +60,10 @@ loop { client.poll(); }
 
 | Section | Quick Links |
 |---------|-------------|
-| **Client** | [Quick Start](documentation/client/quick_start.md) · [Examples](documentation/client/examples.md) · [Building Apps](documentation/client/building_applications.md) · [Async](documentation/client/async.md) |
-| **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) |
+| **Client** | [Quick Start](documentation/client/quick_start.md) · [Examples](documentation/client/examples.md) · [Building Apps](documentation/client/building_applications.md) · [Sync](documentation/client/sync.md) · [Async](documentation/client/async.md) · [Policies](documentation/client/policies.md) |
+| **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Building Apps](documentation/server/building_applications.md) · [Sync](documentation/server/sync.md) · [Async](documentation/server/async.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) · [Function Codes](documentation/server/function_codes.md) |
 | **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) |
-| **Reference** | [Feature Flags](documentation/client/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
+| **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
 
 ---
 
@@ -67,7 +92,7 @@ loop { client.poll(); }
 | `network-tcp` | Modbus TCP transport (default) |
 | `serial-rtu` | Serial RTU transport (default) |
 | `serial-ascii` | Serial ASCII transport |
-| `async` | Native async runtime via Tokio for client and server APIs |
+| `async` | Native async runtime via Tokio for client and server APIs (default) |
 | `coils` | FC01, FC05, FC0F (default) |
 | `registers` | FC03, FC04, FC06, FC10 (default) |
 | `discrete-inputs` | FC02 (default) |

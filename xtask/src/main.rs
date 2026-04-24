@@ -1,5 +1,6 @@
 //! Workspace maintenance commands for header generation/verification and C smoke build checks.
 
+mod check_doc_links;
 mod demo_manifest;
 mod gen_server_app;
 mod validate_docs;
@@ -598,7 +599,15 @@ fn print_help() {
     println!();
     println!("VALIDATION COMMANDS");
     println!("  check-feature-matrix");
-    println!("  validate-docs");
+    println!("  check-doc-links [--file/-f <path>] ...");
+    println!("      Validate that every local markdown link resolves to an existing file.");
+    println!("      --file/-f can be repeated to restrict to specific files.");
+    println!("      Paths may be relative to the repo root or absolute.");
+    println!("  validate-docs [--file/-f <path>] ...");
+    println!("      Validate all docs, or restrict to specific files with --file.");
+    println!("      --file/-f can be repeated: --file a.md --file b.md");
+    println!("      Paths may be relative to the repo root or absolute.");
+    println!("      Cross-reference check is skipped when --file is used.");
     println!("  check-release");
     println!();
 }
@@ -624,7 +633,8 @@ fn main() -> ExitCode {
         "check-server-gen" => cmd_check_server_gen(&root),
         "gen-server-app"   => cmd_gen_server_app(&root, &remaining_args),
         "check-feature-matrix" => cmd_check_feature_matrix(&root),
-        "validate-docs" => validate_docs::cmd_validate_docs(&root),
+        "validate-docs" => validate_docs::cmd_validate_docs(&root, &remaining_args),
+        "check-doc-links" => check_doc_links::cmd_check_doc_links(&root, &remaining_args),
         "check-release" => cmd_check_release(&root),
         "help" | "--help" | "-h" => {
             print_help();

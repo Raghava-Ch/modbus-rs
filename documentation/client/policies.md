@@ -227,6 +227,6 @@ in your serial transport implementation only when needed.
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Development](sync.md)
 - [Architecture](architecture.md)
 - [Examples](examples.md) — `backoff_jitter` examples

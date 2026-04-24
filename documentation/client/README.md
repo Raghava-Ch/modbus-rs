@@ -8,7 +8,7 @@ This section covers everything you need to build Modbus client applications with
 
 | Getting Started | Building | Reference |
 |-----------------|----------|-----------|
-| [Quick Start](quick_start.md) | [Building Applications](building_applications.md) | [Architecture](architecture.md) |
+| [Quick Start](quick_start.md) | [Sync Development](sync.md) | [Architecture](architecture.md) |
 | [Examples](examples.md) | [Feature Flags](feature_flags.md) | [Policies](policies.md) |
 
 ---
@@ -17,7 +17,7 @@ This section covers everything you need to build Modbus client applications with
 
 | Environment | Documentation |
 |-------------|---------------|
-| **Sync Rust** (poll-driven) | [Building Applications](building_applications.md) |
+| **Sync Rust** (poll-driven) | [Sync Development](sync.md) |
 | **Async Rust** (Tokio) | [Async Development](async.md) |
 | **C/C++ Native** | [C/FFI Bindings](c_bindings.md) |
 | **Browser/WASM** (WebSocket + Web Serial) | [WASM Development](wasm.md) |
@@ -28,9 +28,9 @@ This section covers everything you need to build Modbus client applications with
 
 | Transport | Feature Flag | Documentation |
 |-----------|--------------|---------------|
-| Modbus TCP | `network-tcp` | [Building Applications](building_applications.md#tcp-transport) |
-| Serial RTU | `serial-rtu` | [Building Applications](building_applications.md#serial-rtu-transport) |
-| Serial ASCII | `serial-ascii` | [Building Applications](building_applications.md#serial-ascii-transport) |
+| Modbus TCP | `network-tcp` | [Sync Development](sync.md#tcp-transport) |
+| Serial RTU | `serial-rtu` | [Sync Development](sync.md#serial-rtu-transport) |
+| Serial ASCII | `serial-ascii` | [Sync Development](sync.md#serial-ascii-transport) |
 
 ---
 
@@ -70,7 +70,7 @@ This section covers everything you need to build Modbus client applications with
 
 ### Development Guides
 
-- **[Building Applications](building_applications.md)** — Complete guide to building client apps
+- **[Sync Development](sync.md)** — Poll-driven sync client APIs
 - **[Async Development](async.md)** — Tokio-based async client APIs
 - **[C/FFI Bindings](c_bindings.md)** — Native C client integration
 - **[WASM Development](wasm.md)** — Browser WebSocket client
@@ -87,4 +87,4 @@ This section covers everything you need to build Modbus client applications with
 
 1. Start with [Quick Start](quick_start.md) to run your first client
 2. Review [Examples](examples.md) for your use case
-3. Read [Building Applications](building_applications.md) for production setup
+3. Read [Sync Development](sync.md) for poll-driven production setup or [Async Development](async.md) for Tokio-based APIs

@@ -66,7 +66,7 @@ Example with selective features:
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.7.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.8.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 If you need the async transport trait definitions from `transport`, enable `async`
@@ -74,7 +74,7 @@ explicitly:
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.7.0", default-features = false, features = ["registers", "async"] }
+mbus-core = { version = "0.8.0", default-features = false, features = ["registers", "async"] }
 ```
 
 ## no_std

@@ -227,6 +227,37 @@ cargo run -p xtask -- check-feature-matrix
 ### `validate-docs`
 Validate code examples in Markdown docs.  Disable colors with `NO_COLOR=1`.
 
+```bash
+# Validate all markdown docs
+cargo run -p xtask -- validate-docs
+
+# Validate only selected files
+cargo run -p xtask -- validate-docs --file README.md
+cargo run -p xtask -- validate-docs -f documentation/client/async.md -f documentation/server/async.md
+```
+
+Notes:
+- `--file` / `-f` is repeatable
+- Paths may be relative to the repo root or absolute
+- Cross-reference checks are skipped when `--file` is used
+
+### `check-doc-links`
+Validate that local Markdown links point to existing files.
+
+```bash
+# Check links across all markdown docs
+cargo run -p xtask -- check-doc-links
+
+# Check only selected files
+cargo run -p xtask -- check-doc-links --file README.md
+cargo run -p xtask -- check-doc-links -f documentation/README.md -f mbus-ffi/README.md
+```
+
+`check-doc-links` ignores:
+- External links (`http://`, `https://`, `mailto:`)
+- Anchor-only links (`#section`)
+- Links inside fenced code blocks
+
 ### `check-release`
 Run the full release gate: `check-header` → `check-server-gen` → `build-c-smoke` → `build-c-demo --demo c_server_demo` → `check-feature-matrix`.
 

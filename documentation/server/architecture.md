@@ -168,6 +168,6 @@ The default constructor uses `QUEUE_DEPTH = 8`.
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Policies](policies.md)
 - [Macros](macros.md)

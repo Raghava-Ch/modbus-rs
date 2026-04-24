@@ -8,8 +8,17 @@ This section covers everything you need to build Modbus server applications with
 
 | Getting Started | Building | Reference |
 |-----------------|----------|-----------|
-| [Quick Start](quick_start.md) | [Building Applications](building_applications.md) | [Architecture](architecture.md) |
+| [Quick Start](quick_start.md) | [Sync Server Applications](sync.md) | [Architecture](architecture.md) |
 | [Examples](examples.md) | [Feature Flags](feature_flags.md) | [Policies](policies.md) |
+
+---
+
+## Development Environments
+
+| Environment | Documentation |
+|-------------|---------------|
+| **Sync Rust** (poll-driven) | [Sync Server Applications](sync.md) |
+| **Async Rust** (Tokio) | [Async Server Applications](async.md) |
 
 ---
 
@@ -17,7 +26,7 @@ This section covers everything you need to build Modbus server applications with
 
 | Concept | Documentation |
 |---------|---------------|
-| **Data Models** | [Building Applications](building_applications.md#data-models) |
+| **Data Models** | [Sync Server Applications](sync.md#data-models) |
 | **Write Hooks** | [Write Hooks](write_hooks.md) |
 | **Derive Macros** | [Macros](macros.md) |
 | **Function Codes** | [Function Codes](function_codes.md) |
@@ -28,9 +37,9 @@ This section covers everything you need to build Modbus server applications with
 
 | Transport | Feature Flag | Documentation |
 |-----------|--------------|---------------|
-| Modbus TCP | `network-tcp` | [Building Applications](building_applications.md#tcp-transport) |
-| Serial RTU | `serial-rtu` | [Building Applications](building_applications.md#serial-rtu-transport) |
-| Serial ASCII | `serial-ascii` | [Building Applications](building_applications.md#serial-ascii-transport) |
+| Modbus TCP | `network-tcp` | [Sync Server Applications](sync.md#tcp) |
+| Serial RTU | `serial-rtu` | [Sync Server Applications](sync.md#serial-rtu) |
+| Serial ASCII | `serial-ascii` | [Sync Server Applications](sync.md#serial-ascii) |
 
 ---
 
@@ -72,7 +81,8 @@ See [Function Codes Reference](function_codes.md) for complete details.
 
 ### Development Guides
 
-- **[Building Applications](building_applications.md)** — Complete guide to building server apps
+- **[Sync Server Applications](sync.md)** — Poll-driven sync server APIs
+- **[Async Server Applications](async.md)** — Tokio-based async server APIs and patterns
 - **[Write Hooks](write_hooks.md)** — React to client writes
 - **[Macros](macros.md)** — Derive macros for data models
 
@@ -89,4 +99,4 @@ See [Function Codes Reference](function_codes.md) for complete details.
 
 1. Start with [Quick Start](quick_start.md) to run your first server
 2. Review [Examples](examples.md) for your use case
-3. Read [Building Applications](building_applications.md) for production setup
+3. Read [Sync Server Applications](sync.md) for poll-driven production setup or [Async Server Applications](async.md) for Tokio-based servers

@@ -269,4 +269,4 @@ Source: [mbus-ffi/examples/c_client_demo/main.c](../../mbus-ffi/examples/c_clien
 
 - [WASM Development](wasm.md) — Browser WebSocket client
 - [Feature Flags](feature_flags.md) — FFI build options
-- [Building Applications](building_applications.md) — Rust client guide
+- [Sync Development](sync.md) — Rust sync client guide

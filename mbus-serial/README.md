@@ -49,7 +49,7 @@ The crate re-exports, depending on target/features:
 
 ```toml
 [dependencies]
-modbus-rs = "0.7.0"
+modbus-rs = "0.8.0"
 ```
 
 ### 2) Create serial config and transport
@@ -128,7 +128,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-serial = { version = "0.7.0", features = ["logging"] }
+mbus-serial = { version = "0.8.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 

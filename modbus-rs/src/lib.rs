@@ -1,17 +1,9 @@
 // When none of the std-requiring features are enabled this crate is no_std compatible.
 // The doc build is excluded so rustdoc can use std freely for link resolution.
-#![cfg_attr(
-    not(any(
-        doc,
-        feature = "network-tcp",
-        feature = "serial-rtu",
-        feature = "serial-ascii",
-        feature = "async",
-        feature = "logging",
-        feature = "server",
-    )),
-    no_std
-)]
+// `std-required` is an internal umbrella feature implied by every feature that needs std
+// (network-tcp, serial-rtu, serial-ascii, async, logging, server). Adding a new
+// std-requiring feature only requires adding `"std-required"` to its entry in Cargo.toml.
+#![cfg_attr(not(any(doc, feature = "std-required")), no_std)]
 
 pub use heapless;
 

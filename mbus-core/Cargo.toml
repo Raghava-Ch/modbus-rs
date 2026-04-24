@@ -1,6 +1,6 @@
 [package]
 name = "mbus-core"
-version = "0.7.0"
+version = "0.8.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -12,7 +12,6 @@ description = "Modbus core functionalities to provide modbus-rs project"
 
 [dependencies]
 heapless = { workspace = true }
-bitfields = { workspace = true }
 
 [features]
 # By default, all Modbus client services are enabled.

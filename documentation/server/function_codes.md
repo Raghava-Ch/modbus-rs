@@ -244,6 +244,6 @@ the source of truth.
 
 ## See Also
 
-- [Building Applications](building_applications.md)
+- [Sync Server Applications](sync.md)
 - [Policies](policies.md)
 - [Macros](macros.md)

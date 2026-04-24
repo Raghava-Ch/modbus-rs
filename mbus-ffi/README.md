@@ -413,7 +413,7 @@ Copyright (C) 2025 Raghava Challari
 
 This project is currently licensed under the GNU General Public License v3.0 (GPLv3).
 
-For details, refer to the [LICENSE](./LICENSE) file or the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
+For details, refer to the [LICENSE](../LICENSE) file or the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
 This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 
