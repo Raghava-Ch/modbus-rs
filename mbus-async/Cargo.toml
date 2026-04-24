@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Async (Tokio) facade for the modbus-rs client stack"
+description = "Native async Modbus client and server stack for Tokio-based applications"
 
 [dependencies]
 mbus-core = { workspace = true, features = ["async"] }

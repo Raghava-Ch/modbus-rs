@@ -8,7 +8,7 @@ repository.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Modbus core functionalities to provide modbus-rs project"
+description = "Protocol types, errors, function codes, and transport traits for the modbus-rs workspace"
 
 [dependencies]
 heapless = { workspace = true }

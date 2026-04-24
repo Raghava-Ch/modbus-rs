@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Provides network transport layer functionalities for modbus-rs project"
+description = "TCP and network transport implementations for modbus-rs, including sync, Tokio, server, and WASM adapters"
 
 [dependencies]
 mbus-core = { workspace = true }

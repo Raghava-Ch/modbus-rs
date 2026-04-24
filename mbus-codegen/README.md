@@ -1,11 +1,13 @@
 # mbus-codegen
 
-Internal code-generation library for the `mbus-ffi` server-app layer.
+Code-generation library for the `mbus-ffi` server-app layer.
 
-This crate is an implementation detail of the workspace — it is not published to crates.io
-and has no public-facing API contract. Its sole purpose is to give `mbus-ffi/build.rs` and
-`xtask` a single shared source of truth for server-app code generation so that the logic
-does not have to be duplicated across a build script and a CLI tool.
+This crate exists to give `mbus-ffi/build.rs` and `xtask` a single shared source of truth
+for server-app code generation so that the logic does not have to be duplicated across a
+build script and a CLI tool.
+
+It is primarily a support crate for the workspace rather than an end-user-facing library,
+but it is publishable because `mbus-ffi` depends on it as a build-dependency.
 
 ---
 
