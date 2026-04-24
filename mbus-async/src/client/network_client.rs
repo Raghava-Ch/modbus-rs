@@ -6,15 +6,20 @@
 //! to `AsyncClientCore`.
 
 use std::ops::Deref;
+#[cfg(feature = "network-tcp")]
 use std::time::Duration;
 
 #[cfg(feature = "network-tcp")]
 use mbus_core::transport::ModbusTcpConfig;
 #[cfg(feature = "network-tcp")]
 use mbus_network::TokioTcpTransport;
+#[cfg(feature = "network-tcp")]
 use tokio::sync::{mpsc, watch};
 
-use super::{AsyncClientCore, AsyncError};
+use super::AsyncClientCore;
+#[cfg(feature = "network-tcp")]
+use super::AsyncError;
+#[cfg(feature = "network-tcp")]
 use crate::client::task::{ClientTask, ConnectFactory};
 
 /// Async Modbus TCP client facade.

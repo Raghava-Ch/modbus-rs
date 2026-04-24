@@ -1,0 +1,45 @@
+[package]
+name = "mbus-client-async"
+version = "0.8.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Role-focused async Modbus client facade re-exported from mbus-async"
+
+[dependencies]
+mbus-async = { version = "0.8.0", path = "../mbus-async", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = [
+    "network-tcp",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
+full = ["default", "traffic"]
+network-tcp = ["mbus-async/network-tcp"]
+serial-rtu = ["mbus-async/serial-rtu"]
+serial-ascii = ["mbus-async/serial-ascii"]
+coils = ["mbus-async/coils"]
+registers = ["mbus-async/registers"]
+discrete-inputs = ["mbus-async/discrete-inputs"]
+fifo = ["mbus-async/fifo"]
+file-record = ["mbus-async/file-record"]
+diagnostics = ["mbus-async/diagnostics"]
+logging = ["mbus-async/logging"]
+traffic = ["mbus-async/traffic"]
+
+[[example]]
+name = "quick_async_client"
+required-features = ["network-tcp", "coils"]

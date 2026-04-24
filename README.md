@@ -74,12 +74,20 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | [`modbus-rs`](modbus-rs/) | Top-level convenience crate — start here |
 | [`mbus-client`](mbus-client/) | Client state machine and request services |
 | [`mbus-server`](mbus-server/) | Server runtime with derive macros |
+| [`mbus-client-async`](mbus-client-async/) | Role-focused async client facade crate |
+| [`mbus-server-async`](mbus-server-async/) | Role-focused async server facade crate |
 | [`mbus-core`](mbus-core/) | Shared protocol types and transport trait |
-| [`mbus-async`](mbus-async/) | Native async client and server via Tokio |
+| [`mbus-async`](mbus-async/) | Combined async client+server crate (still supported) |
 | [`mbus-macros`](mbus-macros/) | Proc macros: `#[modbus_app]`, `#[derive(CoilsModel)]`, etc. |
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
 | [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings |
+
+### Direct Async Crate Selection
+
+- Use [`mbus-client-async`](mbus-client-async/) for async client-only dependencies.
+- Use [`mbus-server-async`](mbus-server-async/) for async server-only dependencies.
+- Use [`mbus-async`](mbus-async/) if you want a combined async client+server dependency.
 
 ---
 

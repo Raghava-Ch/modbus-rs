@@ -141,13 +141,16 @@ When `traffic` is enabled, apps can implement `TrafficNotifier` to observe raw A
 
 <!-- validate: no_run -->
 ```rust
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 use mbus_client::app::{TrafficDirection, TrafficNotifier};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 struct App;
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl TrafficNotifier for App {
   fn on_tx_frame(
@@ -254,6 +257,7 @@ use modbus_rs::{
   ClientServices, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusTcpConfig,
   RequestErrorNotifier, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr,
 };
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "coils")]
 use modbus_rs::{CoilResponse, Coils};
 
@@ -277,6 +281,7 @@ impl RequestErrorNotifier for App {
   fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
   fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
@@ -289,6 +294,7 @@ impl TimeKeeper for App {
     fn current_millis(&self) -> u64 { 0 }
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl modbus_rs::TrafficNotifier for App {}
 
@@ -300,10 +306,12 @@ fn main() -> Result<(), MbusError> {
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
   client.connect()?;
 
-    #[cfg(feature = "coils")]
+    #[allow(unexpected_cfgs)]
+#[cfg(feature = "coils")]
     client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
 
-    #[cfg(feature = "coils")]
+    #[allow(unexpected_cfgs)]
+#[cfg(feature = "coils")]
     client.with_coils(|coils| {
       coils.read_single_coil(2, UnitIdOrSlaveAddr::new(1)?, 0)?;
       coils.write_single_coil(3, UnitIdOrSlaveAddr::new(1)?, 0, true)?;
