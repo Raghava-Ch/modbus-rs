@@ -560,7 +560,30 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
          version = \"0.8\"\n\
          \n\
          [dependencies.env_logger]\n\
-         version = \"0.11\"\n",
+         version = \"0.11\"\n\
+         \n\
+         # Features declared so markdown snippets using #[cfg(feature = \"...\")]\n\
+         # do not trigger unexpected_cfgs warnings in this scratch crate.\n\
+         [features]\n\
+         traffic = []\n\
+         coils = []\n\
+         registers = []\n\
+         diagnostics = []\n\
+         file-record = []\n\
+         discrete-inputs = []\n\
+         serial-rtu = []\n\
+         serial-ascii = []\n\
+         network-tcp = []\n\
+         server-tcp = []\n\
+         server-serial = []\n\
+         async = []\n\
+         logging = []\n\
+         diagnostics-stats = []\n\
+         holding-registers = []\n\
+         input-registers = []\n\
+         fifo = []\n\
+         client = []\n\
+         server = []\n",
         modbus_rs   = modbus_rs_path.display(),
         mbus_core   = mbus_core_path.display(),
         mbus_client = mbus_client_path.display(),
@@ -663,32 +686,41 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
 
 /// Read all `[[example]] name = "…"` entries from `modbus-rs/Cargo.toml`.
 fn parse_cargo_toml_examples(root: &Path) -> Vec<String> {
-    let path = root.join("modbus-rs/Cargo.toml");
-    let Ok(content) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
-
     let mut names = Vec::new();
-    let mut in_example_block = false;
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == "[[example]]" {
-            in_example_block = true;
+    let manifests = [
+        root.join("modbus-rs/Cargo.toml"),
+        root.join("mbus-client-async/Cargo.toml"),
+        root.join("mbus-server-async/Cargo.toml"),
+    ];
+
+    for path in manifests {
+        let Ok(content) = fs::read_to_string(path) else {
             continue;
-        }
-        if in_example_block && trimmed.starts_with("name") {
-            if let Some(name) = trimmed.split('"').nth(1) {
-                names.push(name.to_string());
+        };
+
+        let mut in_example_block = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed == "[[example]]" {
+                in_example_block = true;
+                continue;
             }
-            in_example_block = false;
-        }
-        // A blank line or new section header ends the block
-        if in_example_block && (trimmed.is_empty() || trimmed.starts_with('[')) {
-            in_example_block = false;
+            if in_example_block && trimmed.starts_with("name") {
+                if let Some(name) = trimmed.split('"').nth(1) {
+                    names.push(name.to_string());
+                }
+                in_example_block = false;
+            }
+            // A blank line or new section header ends the block
+            if in_example_block && (trimmed.is_empty() || trimmed.starts_with('[')) {
+                in_example_block = false;
+            }
         }
     }
 
+    names.sort();
+    names.dedup();
     names
 }
 

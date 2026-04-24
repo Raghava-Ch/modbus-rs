@@ -292,13 +292,16 @@ tokio = { version = "1", features = ["full"] }
 
 ```rust
 use modbus_rs::mbus_async::AsyncTcpClient;
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 use modbus_rs::mbus_async::AsyncClientNotifier;
 use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 struct FrameLogger;
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl AsyncClientNotifier for FrameLogger {
     fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
@@ -318,7 +321,8 @@ impl AsyncClientNotifier for FrameLogger {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let client = AsyncTcpClient::new("127.0.0.1", 502)?;
-    #[cfg(feature = "traffic")]
+    #[allow(unexpected_cfgs)]
+#[cfg(feature = "traffic")]
     client.set_traffic_notifier(FrameLogger);
     client.connect().await?;
     let _ = client.read_multiple_coils(1, 0, 8).await?;

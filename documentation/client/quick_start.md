@@ -88,6 +88,7 @@ impl TimeKeeper for App {
     }
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl modbus_rs::TrafficNotifier for App {}
 
@@ -149,6 +150,7 @@ impl TimeKeeper for App {
     fn current_millis(&self) -> u64 { 0 }
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl modbus_rs::TrafficNotifier for App {}
 
