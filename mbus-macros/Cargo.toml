@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Derive macros for mbus-server mapping models"
+description = "Derive and attribute macros for mbus-server and mbus-async app and mapping models"
 
 [lib]
 proc-macro = true
