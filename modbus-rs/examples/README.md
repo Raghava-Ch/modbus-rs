@@ -23,12 +23,14 @@ This avoids collisions like `coils_example` between client and server samples an
 
 ## Current Registered Example Targets
 
-Current `modbus-rs` package targets are client-focused and use `modbus_rs_client_*` names.
+Most `modbus-rs` package targets use the `modbus_rs_client_*` and
+`modbus_rs_server_*` prefixes. A few focused utility demos, such as
+`fifo_file_record_demo`, intentionally use shorter names.
 See `modbus-rs/Cargo.toml` `[[example]]` entries for the canonical list.
 
 ### Real-world HVAC Server (mbus-network server transport)
 
-This example is a server-only Modbus TCP application that uses `AcceptedTcpTransport` from `mbus-network` with `mbus-server` macros (`HoldingRegistersModel`, `CoilsModel`, `modbus_app`).
+This example is a server-only Modbus TCP application that uses `StdTcpServerTransport` from `mbus-network` with `mbus-server` macros (`HoldingRegistersModel`, `CoilsModel`, `modbus_app`).
 
 Run:
 

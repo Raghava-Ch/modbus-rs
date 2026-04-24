@@ -159,6 +159,7 @@ pub(crate) enum ClientRequest {
 
 impl ClientRequest {
     /// Returns the target unit id or slave address for this request.
+    #[allow(dead_code)]
     pub(crate) fn unit(&self) -> UnitIdOrSlaveAddr {
         match self {
             #[cfg(feature = "coils")]

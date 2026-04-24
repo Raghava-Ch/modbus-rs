@@ -26,6 +26,7 @@ pub mod fifo;
 #[cfg(feature = "file-record")]
 pub mod file_record;
 pub mod framing;
+mod log_compat;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;
 pub mod resilience;
@@ -46,41 +47,8 @@ use resilience::{
     ResilienceConfig, ResponseQueue,
 };
 
-// ---------------------------------------------------------------------------
-// Internal logging macros
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "logging")]
-macro_rules! server_log_debug {
-    ($($arg:tt)*) => {
-        log::debug!($($arg)*)
-    };
-}
-
-#[cfg(not(feature = "logging"))]
-macro_rules! server_log_debug {
-    ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
-    }};
-}
-
-#[cfg(feature = "logging")]
-macro_rules! server_log_trace {
-    ($($arg:tt)*) => {
-        log::trace!($($arg)*)
-    };
-}
-
-#[cfg(not(feature = "logging"))]
-macro_rules! server_log_trace {
-    ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
-    }};
-}
-
-// Make macros visible to child modules (register/).
-pub(crate) use server_log_debug;
-pub(crate) use server_log_trace;
+// Keep logging shims centralized and reusable across services submodules.
+pub(crate) use log_compat::{server_log_debug, server_log_trace};
 
 // ---------------------------------------------------------------------------
 // ServerServices struct

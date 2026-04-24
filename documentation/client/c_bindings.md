@@ -34,7 +34,7 @@ cargo build -p mbus-ffi --release
    - Windows: `target/release/mbus_ffi.dll`
 
 3. Copy the header file:
-   - [mbus-ffi/include/mbus_ffi.h](../../mbus-ffi/include/mbus_ffi.h)
+    - `target/mbus-ffi/include/modbus_rs_client.h`
 
 ---
 
@@ -48,73 +48,102 @@ cargo run -p xtask -- gen-feature-header
 ```
 
 This produces:
-- `mbus_ffi.h` — Base header
-- `mbus_ffi_feature_gated.h` — Full header with all features
+- `modbus_rs_client.h` — Base header
+- `modbus_rs_client_feature_gated.h` — Feature-gated header
 
 ---
 
-## C API Quick Start
+## C API Quick Start (Current API)
 
 ### Include Header
 
 ```c
-#include "mbus_ffi.h"
+#include "modbus_rs_client.h"
 ```
 
-### Create Client
+The native C API is ID-based (not pointer-based):
+
+- Create a client with `mbus_tcp_client_new(...)` or `mbus_serial_client_new(...)`.
+- You receive an opaque `MbusClientId`.
+- Queue requests with `mbus_tcp_*` / `mbus_serial_*` functions.
+- Drive state with `mbus_tcp_poll(id)` / `mbus_serial_poll(id)`.
+- Handle responses via callbacks from `MbusCallbacks`.
+
+Minimal TCP flow:
 
 ```c
-MbusClient* client = mbus_client_new_tcp("192.168.1.10", 502, NULL);
-if (!client) {
-    fprintf(stderr, "Failed to create client\n");
-    return 1;
+#include "modbus_rs_client.h"
+
+static void on_read_coils(const MbusReadCoilsCtx *ctx) {
+    (void)ctx;
+}
+
+int main(void) {
+    MbusTransportCallbacks transport = {0};
+    MbusCallbacks callbacks = {0};
+    callbacks.on_read_coils = on_read_coils;
+
+    MbusTcpConfig cfg = {
+        .host = "192.168.1.10",
+        .port = 502,
+        .response_timeout_ms = 2000,
+        .retry_attempts = 1,
+    };
+
+    MbusClientId id = mbus_tcp_client_new(&cfg, &transport, &callbacks);
+    if (id == MBUS_INVALID_CLIENT_ID) {
+        return 1;
+    }
+
+    if (mbus_tcp_connect(id) != MbusOk) {
+        mbus_tcp_client_free(id);
+        return 1;
+    }
+
+    MbusStatusCode st = mbus_tcp_read_coils(id, /*txn*/1, /*unit*/1, /*addr*/0, /*qty*/16);
+    if (st != MbusOk) {
+        mbus_tcp_disconnect(id);
+        mbus_tcp_client_free(id);
+        return 1;
+    }
+
+    while (mbus_tcp_has_pending_requests(id)) {
+        mbus_tcp_poll(id);
+    }
+
+    mbus_tcp_disconnect(id);
+    mbus_tcp_client_free(id);
+    return 0;
 }
 ```
 
-### Connect
-
-```c
-MbusError err = mbus_client_connect(client);
-if (err != MBUS_ERROR_NONE) {
-    fprintf(stderr, "Connect failed: %d\n", err);
-    mbus_client_free(client);
-    return 1;
-}
-```
-
-### Read Coils
-
-```c
-uint16_t txn_id;
-err = mbus_client_read_coils(client, 1, 0, 16, &txn_id);
-if (err != MBUS_ERROR_NONE) {
-    fprintf(stderr, "Read coils failed: %d\n", err);
-}
-```
-
-### Poll and Handle Response
+### Poll and Handle Responses
 
 ```c
 // TCP variant
-while (mbus_tcp_has_pending_requests(client_id)) {
-    mbus_tcp_poll(client_id);
+while (mbus_tcp_has_pending_requests(id)) {
+    mbus_tcp_poll(id);
     usleep(10000); // 10ms
 }
 
 // Serial variant
-while (mbus_serial_has_pending_requests(client_id)) {
-    mbus_serial_poll(client_id);
+while (mbus_serial_has_pending_requests(id)) {
+    mbus_serial_poll(id);
     usleep(10000); // 10ms
 }
 ```
 
 This reduces unnecessary polling when there are no in-flight requests.
 
-### Cleanup
+### Status Strings
+
+Use `mbus_status_str(...)` to print a human-readable status:
 
 ```c
-mbus_client_disconnect(client);
-mbus_client_free(client);
+MbusStatusCode st = mbus_tcp_connect(id);
+if (st != MbusOk) {
+    fprintf(stderr, "connect failed: %s\n", mbus_status_str(st));
+}
 ```
 
 ---
@@ -133,7 +162,7 @@ MbusSerialConfig config = {
     .retry_attempts = 3,
 };
 
-MbusClient* client = mbus_client_new_serial(&config, NULL);
+MbusClientId id = mbus_serial_client_new(&config, &transport, &callbacks);
 ```
 
 ---
@@ -152,7 +181,7 @@ find_library(MBUS_FFI_LIB mbus_ffi
 )
 
 # Include header
-include_directories(${CMAKE_SOURCE_DIR}/../mbus-ffi/include)
+include_directories(${CMAKE_SOURCE_DIR}/../target/mbus-ffi/include)
 
 add_executable(my_app main.c)
 target_link_libraries(my_app ${MBUS_FFI_LIB})
@@ -170,34 +199,18 @@ make
 
 ## Error Handling
 
-All functions return `MbusError` enum:
+Native C functions return `MbusStatusCode`.
 
-```c
-typedef enum {
-    MBUS_ERROR_NONE = 0,
-    MBUS_ERROR_TIMEOUT,
-    MBUS_ERROR_CONNECTION_LOST,
-    MBUS_ERROR_INVALID_RESPONSE,
-    MBUS_ERROR_EXCEPTION_RESPONSE,
-    // ...
-} MbusError;
-```
-
-Use `mbus_error_to_string()` for human-readable messages:
-
-```c
-MbusError err = mbus_client_connect(client);
-if (err != MBUS_ERROR_NONE) {
-    fprintf(stderr, "Error: %s\n", mbus_error_to_string(err));
-}
-```
+- `MbusOk` means the request was accepted/queued.
+- Response or protocol failures are delivered later via callbacks.
+- Use `mbus_status_str(code)` for text output.
 
 ---
 
 ## Thread Safety
 
-- A single `MbusClient*` is **NOT** thread-safe
-- Create separate clients per thread, or use external synchronization
+- A single `MbusClientId` is not re-entrant from callbacks.
+- Define required lock hooks (`mbus_pool_lock/unlock`, `mbus_client_lock/unlock`) in your C app.
 - Callback functions are called from the thread that calls `mbus_tcp_poll()` / `mbus_serial_poll()`
 
 ---
@@ -206,31 +219,32 @@ if (err != MBUS_ERROR_NONE) {
 
 | Function | Allocates | Free With |
 |----------|-----------|-----------|
-| `mbus_client_new_tcp` | Yes | `mbus_client_free` |
-| `mbus_client_new_serial` | Yes | `mbus_client_free` |
+| `mbus_tcp_client_new` | Yes | `mbus_tcp_client_free` |
+| `mbus_serial_client_new` | Yes | `mbus_serial_client_free` |
 | Response buffers | Internal | Automatically managed |
 
 ---
 
 ## Callback API
 
-For asynchronous notification:
+Requests are asynchronous: queue functions return quickly, and results are delivered
+through function pointers in `MbusCallbacks`.
+
+The callback signatures use context structs (for example `MbusReadCoilsCtx`),
+and failure callbacks report `MbusStatusCode`.
+
+For exact callback field names and signatures, refer to:
+
+- `target/mbus-ffi/include/modbus_rs_client.h`
+- [mbus-ffi/examples/c_client_demo/main.c](../../mbus-ffi/examples/c_client_demo/main.c)
+
+Skeleton:
 
 ```c
-void on_coils_response(uint16_t txn_id, uint8_t unit_id, const uint8_t* values, uint16_t quantity) {
-    printf("Coils response: txn=%d, qty=%d\n", txn_id, quantity);
-}
+MbusCallbacks callbacks = {0};
+/* assign callbacks.on_read_coils, callbacks.on_request_failed, ... */
 
-void on_error(uint16_t txn_id, uint8_t unit_id, MbusError error) {
-    fprintf(stderr, "Request %d failed: %s\n", txn_id, mbus_error_to_string(error));
-}
-
-MbusCallbacks callbacks = {
-    .on_coils_response = on_coils_response,
-    .on_error = on_error,
-};
-
-MbusClient* client = mbus_client_new_tcp("192.168.1.10", 502, &callbacks);
+MbusClientId id = mbus_tcp_client_new(&cfg, &transport, &callbacks);
 ```
 
 ---
@@ -241,13 +255,13 @@ A pre-built C example is available:
 
 ```bash
 # Build
-cargo run -p xtask -- build-c-smoke
+cargo run -p xtask -- build-c-demo --demo c_client_demo
 
 # Run (serial PTY loopback)
-./mbus-ffi/examples/c_smoke_cmake/build/c_smoke_test --serial-pty
+cargo run -p xtask -- run-c-demo --demo c_client_demo --mode serial-pty
 ```
 
-Source: [mbus-ffi/examples/c_smoke_cmake/main.c](../../mbus-ffi/examples/c_smoke_cmake/main.c)
+Source: [mbus-ffi/examples/c_client_demo/main.c](../../mbus-ffi/examples/c_client_demo/main.c)
 
 ---
 
@@ -255,4 +269,4 @@ Source: [mbus-ffi/examples/c_smoke_cmake/main.c](../../mbus-ffi/examples/c_smoke
 
 - [WASM Development](wasm.md) — Browser WebSocket client
 - [Feature Flags](feature_flags.md) — FFI build options
-- [Building Applications](building_applications.md) — Rust client guide
+- [Sync Development](sync.md) — Rust sync client guide

@@ -15,7 +15,7 @@ use js_sys::{Function, Promise, Reflect};
 use mbus_client::services::ClientServices;
 use mbus_client::services::coil::Coils;
 use mbus_client::services::file_record::SubRequest;
-use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
@@ -23,16 +23,81 @@ use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
     SerialMode, UnitIdOrSlaveAddr,
 };
-use mbus_serial::WasmSerialTransport;
+use mbus_serial::{WasmAsciiTransport, WasmRtuTransport};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
 use super::app::{PendingHandle, PendingMap, WasmAppRouter};
 
 const PIPELINE: usize = 1;
-type Inner = ClientServices<WasmSerialTransport, WasmAppRouter, PIPELINE>;
+
+enum WasmRuntimeSerialTransport {
+    Rtu(WasmRtuTransport),
+    Ascii(WasmAsciiTransport),
+}
+
+impl WasmRuntimeSerialTransport {
+    fn new(mode: SerialMode) -> Self {
+        match mode {
+            SerialMode::Rtu => Self::Rtu(WasmRtuTransport::new()),
+            SerialMode::Ascii => Self::Ascii(WasmAsciiTransport::new()),
+        }
+    }
+
+    fn attach_port(&mut self, port: JsValue) {
+        match self {
+            Self::Rtu(transport) => transport.attach_port(port),
+            Self::Ascii(transport) => transport.attach_port(port),
+        }
+    }
+}
+
+impl mbus_core::transport::Transport for WasmRuntimeSerialTransport {
+    type Error = mbus_core::transport::TransportError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: mbus_core::transport::TransportType =
+        mbus_core::transport::TransportType::CustomSerial(SerialMode::Rtu);
+
+    fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
+        match self {
+            Self::Rtu(transport) => transport.connect(config),
+            Self::Ascii(transport) => transport.connect(config),
+        }
+    }
+
+    fn disconnect(&mut self) -> Result<(), Self::Error> {
+        match self {
+            Self::Rtu(transport) => transport.disconnect(),
+            Self::Ascii(transport) => transport.disconnect(),
+        }
+    }
+
+    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+        match self {
+            Self::Rtu(transport) => transport.send(adu),
+            Self::Ascii(transport) => transport.send(adu),
+        }
+    }
+
+    fn recv(&mut self) -> Result<heapless::Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+        match self {
+            Self::Rtu(transport) => transport.recv(),
+            Self::Ascii(transport) => transport.recv(),
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        match self {
+            Self::Rtu(transport) => transport.is_connected(),
+            Self::Ascii(transport) => transport.is_connected(),
+        }
+    }
+}
+
+type Inner = ClientServices<WasmRuntimeSerialTransport, WasmAppRouter, PIPELINE>;
 
 #[wasm_bindgen]
+/// Opaque handle around a browser `SerialPort` object granted by Web Serial.
 pub struct WasmSerialPortHandle {
     port: JsValue,
 }
@@ -91,6 +156,7 @@ pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
 }
 
 #[wasm_bindgen]
+/// Browser-facing Modbus client that communicates over Web Serial RTU or ASCII.
 pub struct WasmSerialModbusClient {
     inner: Rc<RefCell<Inner>>,
     pending: PendingMap,
@@ -138,7 +204,7 @@ impl WasmSerialModbusClient {
             _ => return Err(JsValue::from_str("data_bits must be one of 5, 6, 7, or 8")),
         };
 
-        let mut transport = WasmSerialTransport::new(serial_mode);
+        let mut transport = WasmRuntimeSerialTransport::new(serial_mode);
         transport.attach_port(port_handle.clone_port());
 
         let pending: PendingMap = Rc::new(RefCell::new(HashMap::new()));

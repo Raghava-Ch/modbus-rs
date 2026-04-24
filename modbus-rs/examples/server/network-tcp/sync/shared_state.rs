@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr};
-use mbus_network::AcceptedTcpTransport;
+use mbus_network::StdTcpServerTransport;
 use mbus_server::{
     CoilsModel, ForwardingApp, HoldingRegistersModel, InputRegistersModel, ModbusAppAccess,
     ResilienceConfig, ServerServices, modbus_app,
@@ -200,7 +200,7 @@ fn run_server_loop(host: &str, port: u16, unit: UnitIdOrSlaveAddr) -> Result<()>
                 // ForwardingApp removes per-callback delegation boilerplate.
                 let app = ForwardingApp::new(shared.clone());
                 thread::spawn(move || {
-                    let transport = AcceptedTcpTransport::new(stream);
+                    let transport = StdTcpServerTransport::new(stream);
                     let mut server = ServerServices::new(
                         transport,
                         app,

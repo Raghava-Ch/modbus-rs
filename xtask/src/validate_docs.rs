@@ -15,15 +15,9 @@
 //! |---|---|
 //! | `<!-- validate: run -->` | Execute the command instead of just compile‐checking |
 //! | `<!-- validate: skip -->` | Skip the block entirely |
-//! | `<!-- validate: compile -->` | Force compile‐check (useful for snippets without `fn main`) |
+//! | `<!-- validate: no_run -->` | Compile-check the block without running it |
 //!
-//! Rust fence modifiers (after the language tag):
-//!
-//! | Tag | Effect |
-//! |---|---|
-//! | ` ```rust ` | Compile‐check **only** if the block contains `fn main` |
-//! | ` ```rust,no_run ` | Always compile‐check, never run |
-//! | ` ```rust,ignore ` | Skip entirely |
+//! Rust fence modifiers do not control xtask validation. Only HTML markers do.
 
 use std::collections::HashSet;
 use std::fs;
@@ -83,7 +77,6 @@ struct CodeBlock {
     file: PathBuf,
     line: usize,
     lang: String,
-    tags: Vec<String>,
     code: String,
     /// A `<!-- validate: XXX -->` on the line immediately before the fence.
     marker: Option<String>,
@@ -150,7 +143,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
         // Try to detect an opening fence
         if let Some((fence_ch, fence_n, info)) = detect_open_fence(trimmed) {
             let block_line = i + 1; // 1-based
-            let (lang, tags) = parse_info_string(info);
+            let lang = parse_info_string(info);
             let marker = pending_marker.take();
             let mut code = String::new();
             i += 1;
@@ -169,7 +162,6 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
                 file: file.to_path_buf(),
                 line: block_line,
                 lang,
-                tags,
                 code,
                 marker,
             });
@@ -184,7 +176,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
     blocks
 }
 
-/// Parse `<!-- validate: run|skip|compile -->` from a line.
+/// Parse `<!-- validate: run|skip|no_run -->` from a line.
 fn extract_marker(line: &str) -> Option<String> {
     let inner = line.strip_prefix("<!--")?.strip_suffix("-->")?.trim();
     let value = inner.strip_prefix("validate:")?.trim();
@@ -217,15 +209,25 @@ fn is_close_fence(line: &str, fence_ch: char, min: usize) -> bool {
     n >= min && line[n..].trim().is_empty()
 }
 
-/// Split `"rust,no_run"` → `("rust", ["no_run"])`.
-fn parse_info_string(info: &str) -> (String, Vec<String>) {
+/// Split `"rust,anything"` and return only the language token (`"rust"`).
+fn parse_info_string(info: &str) -> String {
     if info.is_empty() {
-        return (String::new(), Vec::new());
+        return String::new();
     }
     let parts: Vec<&str> = info.split(',').map(str::trim).collect();
-    let lang = parts[0].to_lowercase();
-    let tags = parts[1..].iter().map(|s| s.trim().to_lowercase()).collect();
-    (lang, tags)
+    parts[0].to_lowercase()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Helper — Extract warnings from compiler output
+// ═══════════════════════════════════════════════════════════════════════
+
+fn extract_warnings(stderr: &str) -> Vec<String> {
+    stderr
+        .lines()
+        .filter(|l| l.contains("warning:"))
+        .map(|l| l.trim().to_string())
+        .collect()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -349,7 +351,8 @@ fn parse_cargo_cmd(cmd: &str, file: &Path, line: usize, should_run: bool) -> Opt
 
 /// Validate each unique `cargo --example` command by running `cargo check`
 /// (or `cargo run` if `<!-- validate: run -->` was set).
-fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<String>) {
+/// Returns: (passed, failed, failures, warnings).
+fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<String>, Vec<String>) {
     let mut seen = HashSet::new();
     let mut unique: Vec<&CargoCmd> = Vec::new();
 
@@ -369,6 +372,7 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut failures = Vec::new();
+    let mut warnings = Vec::new();
 
     for cmd in &unique {
         let feat_display = if cmd.features.is_empty() {
@@ -411,6 +415,19 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
             Ok(o) if o.status.success() => {
                 println!("{}", ok("✓"));
                 passed += 1;
+                
+                // Capture warnings even on success
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let block_warnings = extract_warnings(&stderr);
+                for w in block_warnings {
+                    warnings.push(format!(
+                        "{} ({}:{}): {}",
+                        cmd.example,
+                        rel.display(),
+                        cmd.line,
+                        w,
+                    ));
+                }
             }
             Ok(o) => {
                 println!("{}", err("✗"));
@@ -437,7 +454,7 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
         }
     }
 
-    (passed, failed, failures)
+    (passed, failed, failures, warnings)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -453,18 +470,13 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
         if block.lang != "rust" {
             continue;
         }
-        if block.tags.iter().any(|t| t == "ignore") {
-            skipped += 1;
-            continue;
-        }
         if block.marker.as_deref() == Some("skip") {
             skipped += 1;
             continue;
         }
 
         let has_main = block.code.contains("fn main");
-        let force =
-            block.tags.iter().any(|t| t == "no_run") || block.marker.as_deref() == Some("compile");
+        let force = block.marker.as_deref() == Some("no_run");
 
         if has_main || force {
             compilable.push(block);
@@ -477,25 +489,100 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
 }
 
 /// Compile-check a list of Rust code blocks by writing temp files into
-/// `modbus-rs/examples/` and running individual `cargo check` calls.
+/// `target/doc-validate/examples/` and running individual `cargo check` calls
+/// against a minimal scratch package that lives entirely inside `target/`.
 ///
-/// Temp files are cleaned up even on failure.
-fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>) {
+/// The scratch package is never part of the main workspace and its files are
+/// cleaned up even on failure. `modbus-rs/examples/` is never touched.
+///
+/// Returns: (passed, failed, failures, warnings).
+fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>, Vec<String>) {
     if blocks.is_empty() {
-        return (0, 0, Vec::new());
+        return (0, 0, Vec::new(), Vec::new());
     }
 
-    let examples_dir = root.join("modbus-rs").join("examples");
+    // ── Bootstrap the scratch package ────────────────────────────────
+    let scratch_dir      = root.join("target").join("doc-validate");
+    let scratch_examples = scratch_dir.join("examples");
+    let scratch_manifest = scratch_dir.join("Cargo.toml");
+
+    if let Err(e) = fs::create_dir_all(&scratch_examples) {
+        return (0, 0, vec![format!("cannot create scratch dir: {e}")], Vec::new());
+    }
+
+    // Use absolute paths so the manifest is location-independent.
+    let modbus_rs_path   = root.join("modbus-rs");
+    let mbus_core_path   = root.join("mbus-core");
+    let mbus_client_path = root.join("mbus-client");
+    let mbus_server_path = root.join("mbus-server");
+    let mbus_async_path  = root.join("mbus-async");
+    let manifest_src = format!(
+        // [workspace] prevents Cargo from walking up and inheriting the root workspace.
+        "[workspace]\n\
+         \n\
+         [package]\n\
+         name    = \"doc-validate\"\n\
+         version = \"0.0.1\"\n\
+         edition = \"2024\"\n\
+         publish = false\n\
+         \n\
+         # ── modbus-rs umbrella crate (features matching the old cargo-check approach) ──\n\
+         [dependencies.modbus-rs]\n\
+         path             = \"{modbus_rs}\"\n\
+         default-features = true\n\
+         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\"]\n\
+         \n\
+         # ── workspace members referenced directly in doc snippets ────\n\
+         [dependencies.mbus-core]\n\
+         path = \"{mbus_core}\"\n\
+         \n\
+         [dependencies.mbus-client]\n\
+         path = \"{mbus_client}\"\n\
+         \n\
+         [dependencies.mbus-server]\n\
+         path = \"{mbus_server}\"\n\
+         default-features = false\n\
+         \n\
+         [dependencies.mbus-async]\n\
+         path = \"{mbus_async}\"\n\
+         default-features = false\n\
+         features = [\"network-tcp\", \"serial-rtu\", \"serial-ascii\"]\n\
+         \n\
+         # ── external crates that modbus-rs dev-deps expose to its examples ──\n\
+         [dependencies.tokio]\n\
+         version  = \"1\"\n\
+         features = [\"macros\", \"rt-multi-thread\", \"time\"]\n\
+         \n\
+         [dependencies.anyhow]\n\
+         version = \"1.0\"\n\
+         \n\
+         [dependencies.heapless]\n\
+         version = \"0.8\"\n\
+         \n\
+         [dependencies.env_logger]\n\
+         version = \"0.11\"\n",
+        modbus_rs   = modbus_rs_path.display(),
+        mbus_core   = mbus_core_path.display(),
+        mbus_client = mbus_client_path.display(),
+        mbus_server = mbus_server_path.display(),
+        mbus_async  = mbus_async_path.display(),
+    );
+
+    if let Err(e) = fs::write(&scratch_manifest, &manifest_src) {
+        return (0, 0, vec![format!("cannot write scratch Cargo.toml: {e}")], Vec::new());
+    }
+
     let mut temp_files: Vec<PathBuf> = Vec::new();
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut failures: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
 
     // Ensure cleanup runs no matter what
     let result = (|| -> Result<(), String> {
         for (i, block) in blocks.iter().enumerate() {
             let name = format!("_dv_{:03}", i);
-            let path = examples_dir.join(format!("{name}.rs"));
+            let path = scratch_examples.join(format!("{name}.rs"));
 
             // Build the temp file content
             let mut content = String::from(
@@ -517,11 +604,10 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                 .current_dir(root)
                 .args([
                     "check",
-                    "-p",
-                    "modbus-rs",
+                    "--manifest-path",
+                    scratch_manifest.to_str().unwrap_or(""),
                     "--example",
                     &name,
-                    "--all-features",
                 ])
                 .output();
 
@@ -529,6 +615,13 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                 Ok(o) if o.status.success() => {
                     println!("{}", ok("✓"));
                     passed += 1;
+                    
+                    // Capture warnings even on success
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    let block_warnings = extract_warnings(&stderr);
+                    for w in block_warnings {
+                        warnings.push(format!("{}:{}: {}", rel.display(), block.line, w));
+                    }
                 }
                 Ok(o) => {
                     println!("{}", err("✗"));
@@ -561,7 +654,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
         failures.push(format!("internal error: {e}"));
     }
 
-    (passed, failed, failures)
+    (passed, failed, failures, warnings)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -629,7 +722,39 @@ fn cross_reference(
 //  Orchestrator
 // ═══════════════════════════════════════════════════════════════════════
 
-pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
+/// Parse `--file <path>` arguments.  Each `--file` value may be absolute or
+/// relative to the repository root.  Returns an empty vec when no filter is set.
+fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<Vec<PathBuf>, String> {
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut i = 0usize;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--file" | "-f" => {
+                i += 1;
+                let raw = args
+                    .get(i)
+                    .ok_or_else(|| "--file requires a path argument".to_string())?;
+                let p = PathBuf::from(raw);
+                let resolved = if p.is_absolute() { p } else { root.join(p) };
+                if !resolved.exists() {
+                    return Err(format!(
+                        "--file '{}' does not exist",
+                        resolved.display()
+                    ));
+                }
+                files.push(resolved);
+            }
+            other => return Err(format!("unknown validate-docs flag: {other}")),
+        }
+        i += 1;
+    }
+    Ok(files)
+}
+
+pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
+    let file_filter = parse_validate_docs_args(root, args)?;
+    let filtered = !file_filter.is_empty();
+
     println!("\n╔═══════════════════════════════════════════╗");
     println!(
         "║   {}        ║",
@@ -638,8 +763,24 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
     println!("╚═══════════════════════════════════════════╝\n");
 
     // ── Phase 1: Scan ────────────────────────────────────────────────
-    let md_files = scan_md_files(root);
-    println!("Scanned {} markdown files\n", md_files.len());
+    let md_files: Vec<PathBuf> = if filtered {
+        file_filter.clone()
+    } else {
+        scan_md_files(root)
+    };
+
+    if filtered {
+        println!("Scanning {} selected file(s):\n", md_files.len());
+        for f in &md_files {
+            println!(
+                "  {}",
+                f.strip_prefix(root).unwrap_or(f).display()
+            );
+        }
+        println!();
+    } else {
+        println!("Scanned {} markdown files\n", md_files.len());
+    }
 
     // ── Phase 2: Parse ───────────────────────────────────────────────
     let mut all_blocks: Vec<CodeBlock> = Vec::new();
@@ -679,7 +820,7 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         doc_example_names.len()
     );
 
-    let (cargo_pass, cargo_fail, cargo_failures) = validate_cargo_commands(root, &cargo_cmds);
+    let (cargo_pass, cargo_fail, cargo_failures, cargo_warnings) = validate_cargo_commands(root, &cargo_cmds);
     total_fail += cargo_fail;
 
     // ── Phase 4: Rust code blocks ────────────────────────────────────
@@ -690,12 +831,12 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
 
     let (compilable, skipped_n) = classify_rust_blocks(&all_blocks);
     println!(
-        "Compilable: {} (fn main / no_run / forced), Skipped: {}\n",
+        "Compilable: {} (fn main / validate:no_run), Skipped: {}\n",
         compilable.len(),
         skipped_n
     );
 
-    let (rust_pass, rust_fail, rust_failures) = validate_rust_blocks(root, &compilable);
+    let (rust_pass, rust_fail, rust_failures, rust_warnings) = validate_rust_blocks(root, &compilable);
     total_fail += rust_fail;
 
     // ── Phase 5: Cross-reference ─────────────────────────────────────
@@ -704,39 +845,45 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         section("── Cross-Reference ────────────────────────────")
     );
 
-    let toml_examples = parse_cargo_toml_examples(root);
-    println!(
-        "Cargo.toml has {} [[example]] entries, docs reference {} unique examples\n",
-        toml_examples.len(),
-        doc_example_names.len()
-    );
+    let (undocumented, phantom) = if filtered {
+        println!("  (skipped — cross-reference requires a full scan; remove --file to enable)\n");
+        (Vec::new(), Vec::new())
+    } else {
+        let toml_examples = parse_cargo_toml_examples(root);
+        println!(
+            "Cargo.toml has {} [[example]] entries, docs reference {} unique examples\n",
+            toml_examples.len(),
+            doc_example_names.len()
+        );
 
-    let (undocumented, phantom) = cross_reference(&toml_examples, &doc_example_names);
+        let (undocumented, phantom) = cross_reference(&toml_examples, &doc_example_names);
 
-    if !undocumented.is_empty() {
-        println!(
-            "  {} Undocumented examples (in Cargo.toml but not in any .md):",
-            warn("⚠")
-        );
-        for name in &undocumented {
-            println!("    - {name}");
+        if !undocumented.is_empty() {
+            println!(
+                "  {} Undocumented examples (in Cargo.toml but not in any .md):",
+                warn("⚠")
+            );
+            for name in &undocumented {
+                println!("    - {name}");
+            }
         }
-    }
-    if !phantom.is_empty() {
-        println!(
-            "  {} Phantom examples (in docs but not in Cargo.toml):",
-            warn("⚠")
-        );
-        for name in &phantom {
-            println!("    - {name}");
+        if !phantom.is_empty() {
+            println!(
+                "  {} Phantom examples (in docs but not in Cargo.toml):",
+                warn("⚠")
+            );
+            for name in &phantom {
+                println!("    - {name}");
+            }
         }
-    }
-    if undocumented.is_empty() && phantom.is_empty() {
-        println!(
-            "  {} All examples are documented and all doc references are valid",
-            ok("✓")
-        );
-    }
+        if undocumented.is_empty() && phantom.is_empty() {
+            println!(
+                "  {} All examples are documented and all doc references are valid",
+                ok("✓")
+            );
+        }
+        (undocumented, phantom)
+    };
 
     // ── Summary ──────────────────────────────────────────────────────
     println!("\n╔═══════════════════════════════════════════╗");
@@ -773,12 +920,43 @@ pub fn cmd_validate_docs(root: &Path) -> Result<(), String> {
         }
     }
 
+    // ── Warnings section (bold) ──────────────────────────────────────
+    let total_warnings = cargo_warnings.len() + rust_warnings.len();
+    if total_warnings > 0 {
+        println!("\n");
+        println!(
+            "  {} {} documentation examples have warnings:",
+            warn("⚠"),
+            warn(&format!("BOLD: {} total", total_warnings))
+        );
+        
+        if !cargo_warnings.is_empty() {
+            println!("\n    {} Cargo example warnings ({}):",
+                warn("⚠"),
+                cargo_warnings.len()
+            );
+            for w in &cargo_warnings {
+                println!("      {} {w}", warn("⚠"));
+            }
+        }
+        
+        if !rust_warnings.is_empty() {
+            println!("\n    {} Rust block warnings ({}):",
+                warn("⚠"),
+                rust_warnings.len()
+            );
+            for w in &rust_warnings {
+                println!("      {} {w}", warn("⚠"));
+            }
+        }
+    }
+
     println!();
 
     if total_fail > 0 {
         Err(format!("{total_fail} validation(s) failed"))
     } else {
-        println!("{} All validations passed!\n", ok("✓"));
+        println!("{} All validations passed! ({} warnings found)\n", ok("✓"), total_warnings);
         Ok(())
     }
 }

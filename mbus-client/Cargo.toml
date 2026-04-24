@@ -1,6 +1,6 @@
 [package]
 name = "mbus-client"
-version = "0.7.0"
+version = "0.8.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -26,15 +26,25 @@ default = [
     "discrete-inputs",
     "fifo",
     "file-record",
-    "diagnostics"
+    "diagnostics",
 ]
 
-coils = ["mbus-core/coils"]      # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
-registers = ["mbus-core/registers"]  # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
-discrete-inputs = ["mbus-core/discrete-inputs"] # Enables Modbus Discrete Input (FC 0x02) services
-fifo = ["mbus-core/fifo"]     # Enables Modbus FIFO Queue (FC 0x18) services
-file-record = ["mbus-core/file-record"]    # Enables Modbus File Record (FC 0x14, 0x15) services
-diagnostics = ["mbus-core/diagnostics"]     # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
-serial-ascii = ["mbus-core/serial-ascii"]   # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
+coils = ["mbus-core/coils"] # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
+registers = [
+    "mbus-core/registers",
+] # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
+discrete-inputs = [
+    "mbus-core/discrete-inputs",
+] # Enables Modbus Discrete Input (FC 0x02) services
+fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
+file-record = [
+    "mbus-core/file-record",
+] # Enables Modbus File Record (FC 0x14, 0x15) services
+diagnostics = [
+    "mbus-core/diagnostics",
+] # Enables Modbus Diagnostics (FC 0x08) and Encapsulated Interface Transport (FC 0x2B) services
+serial-ascii = [
+    "mbus-core/serial-ascii",
+] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
 logging = ["dep:log"]
 traffic = []

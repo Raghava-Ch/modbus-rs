@@ -1,0 +1,45 @@
+schema_version: 1
+
+device:
+  name: PumpController
+  unit_id: 1
+  response_timeout_ms: 1000
+
+hooks:
+  on_write_coil: ~
+  on_write_holding: ~
+
+memory_map:
+  coils:
+    - name: pump_run
+      address: 0
+      access: rw
+      on_write: app_on_write_pump_run
+    - name: alarm_ack
+      address: 1
+      access: wo
+      on_write: app_on_write_alarm_ack
+
+  discrete_inputs:
+    - name: fault_active
+      address: 0
+      access: ro
+
+  holding_registers:
+    - name: speed_setpoint
+      address: 0
+      access: rw
+      on_write: app_on_write_speed_setpoint
+    - name: pressure_limit
+      address: 1
+      access: rw
+      on_write: app_on_write_pressure_limit
+
+  input_registers:
+    - name: pressure_actual
+      address: 0
+      access: ro
+    - name: temperature_actual
+      address: 1
+      access: ro
+

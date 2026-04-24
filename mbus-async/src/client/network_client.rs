@@ -8,9 +8,9 @@
 use std::ops::Deref;
 use std::time::Duration;
 
-#[cfg(feature = "tcp")]
+#[cfg(feature = "network-tcp")]
 use mbus_core::transport::ModbusTcpConfig;
-#[cfg(feature = "tcp")]
+#[cfg(feature = "network-tcp")]
 use mbus_network::TokioTcpTransport;
 use tokio::sync::{mpsc, watch};
 
@@ -43,7 +43,7 @@ impl AsyncTcpClient<9> {
     /// Deprecated constructor alias.
     ///
     /// Use [`AsyncTcpClient::new`] and then call `client.connect().await?`.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     #[deprecated(note = "use AsyncTcpClient::new(...) and then client.connect().await")]
     pub fn connect(host: &str, port: u16) -> Result<Self, AsyncError> {
         Self::new(host, port)
@@ -52,7 +52,7 @@ impl AsyncTcpClient<9> {
     /// Deprecated constructor alias.
     ///
     /// Use [`AsyncTcpClient::new`] and then call `client.connect().await?`.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     #[deprecated(note = "use AsyncTcpClient::new(...) and then client.connect().await")]
     pub fn connect_with_poll_interval(
         host: &str,
@@ -66,7 +66,7 @@ impl AsyncTcpClient<9> {
     ///
     /// Uses the default pipeline depth of 9. Call [`AsyncClientCore::connect`]
     /// on the returned client before sending requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new(host: &str, port: u16) -> Result<Self, AsyncError> {
         Self::new_with_pipeline(host, port)
     }
@@ -77,7 +77,7 @@ impl AsyncTcpClient<9> {
     /// The poll interval is ignored in the async implementation.
     /// Uses the default pipeline depth of 9. Call [`AsyncClientCore::connect`]
     /// on the returned client before sending requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new_with_poll_interval(
         host: &str,
         port: u16,
@@ -91,7 +91,7 @@ impl AsyncTcpClient<9> {
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new_with_config(
         tcp_config: ModbusTcpConfig,
         _poll_interval: Duration,
@@ -110,7 +110,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     ///
     /// Use [`AsyncTcpClient::new_with_pipeline`] and then call
     /// `client.connect().await?`.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     #[deprecated(
         note = "use AsyncTcpClient::new_with_pipeline(...) and then client.connect().await"
     )]
@@ -122,7 +122,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     ///
     /// Use [`AsyncTcpClient::new_with_pipeline_and_poll_interval`] and then
     /// call `client.connect().await?`.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     #[deprecated(
         note = "use AsyncTcpClient::new_with_pipeline_and_poll_interval(...) and then client.connect().await"
     )]
@@ -138,7 +138,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new_with_pipeline(host: &str, port: u16) -> Result<Self, AsyncError> {
         Self::from_connect_fn(make_tcp_factory(host.to_string(), port))
     }
@@ -150,7 +150,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new_with_pipeline_and_poll_interval(
         host: &str,
         port: u16,
@@ -164,7 +164,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     ///
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     pub fn new_with_config_and_pipeline(
         tcp_config: ModbusTcpConfig,
         _poll_interval: Duration,
@@ -178,7 +178,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     /// Internal constructor: wires a `ConnectFactory` into a spawned
     /// [`ClientTask`] and wraps the resulting channels in an
     /// [`AsyncClientCore`].
-    #[cfg(feature = "tcp")]
+    #[cfg(feature = "network-tcp")]
     fn from_connect_fn(connect_fn: ConnectFactory<TokioTcpTransport>) -> Result<Self, AsyncError> {
         let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
         let (cmd_tx, cmd_rx) = mpsc::channel(64);
@@ -210,7 +210,7 @@ impl<const N: usize> AsyncTcpClient<N> {
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
 /// Builds a [`ConnectFactory`] that resolves a TCP connection to `host:port`.
-#[cfg(feature = "tcp")]
+#[cfg(feature = "network-tcp")]
 fn make_tcp_factory(host: String, port: u16) -> ConnectFactory<TokioTcpTransport> {
     Box::new(move || {
         let h = host.clone();

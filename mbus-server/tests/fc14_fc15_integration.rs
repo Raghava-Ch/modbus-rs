@@ -301,6 +301,24 @@ fn fc14_app_error_maps_to_illegal_data_address() {
 }
 
 #[test]
+fn fc14_record_number_overflow_returns_exception_without_callback() {
+    // record_number + (record_length - 1) overflows u16 and should be rejected
+    // before the app callback is invoked.
+    let payload = fc14_payload(&[(1, 0xFFFF, 2)]);
+    let request = build_request(41, unit_id(1), FunctionCode::ReadFileRecord, &payload);
+    let (app, h) = make_app(Mode::Ok);
+
+    let response = run_once(request, app);
+
+    assert_eq!(response[7], 0x94);
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalDataAddress
+    );
+    assert_eq!(h.read_count.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn fc15_single_sub_request_success_echoes_request() {
     let payload = fc15_payload(&[(1, 5, &[0xAAAA, 0xBBBB])]);
     let request = build_request(5, unit_id(1), FunctionCode::WriteFileRecord, &payload);
@@ -372,4 +390,22 @@ fn fc15_unexpected_app_error_maps_to_server_device_failure() {
         ExceptionCode::ServerDeviceFailure
     );
     assert_eq!(h.write_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn fc15_record_number_overflow_returns_exception_without_callback() {
+    // record_number + (record_length - 1) overflows u16 and should be rejected
+    // before the app callback is invoked.
+    let payload = fc15_payload(&[(1, 0xFFFF, &[0x1111, 0x2222])]);
+    let request = build_request(42, unit_id(1), FunctionCode::WriteFileRecord, &payload);
+    let (app, h) = make_app(Mode::Ok);
+
+    let response = run_once(request, app);
+
+    assert_eq!(response[7], 0x95);
+    assert_eq!(
+        decode_exception(response[8]),
+        ExceptionCode::IllegalDataAddress
+    );
+    assert_eq!(h.write_count.load(Ordering::SeqCst), 0);
 }

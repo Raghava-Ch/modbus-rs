@@ -1,10 +1,5 @@
 use core::ffi::c_void;
 
-use heapless::Vec;
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::{ModbusConfig, SerialMode, Transport, TransportType};
-
 use super::error::MbusStatusCode;
 
 /// C callback: open / connect the transport.
@@ -53,183 +48,193 @@ pub struct MbusTransportCallbacks {
     pub on_is_connected: Option<unsafe extern "C" fn(userdata: *mut c_void) -> u8>,
 }
 
-pub(super) struct CTcpTransport {
-    callbacks: MbusTransportCallbacks,
-}
+#[cfg(any(feature = "c", feature = "c-server"))]
+pub(crate) use c_impl::{CAsciiTransport, CRtuTransport, CTcpTransport, validate_transport_callbacks};
 
-impl CTcpTransport {
-    pub(super) fn new(callbacks: MbusTransportCallbacks) -> Self {
-        Self { callbacks }
-    }
-}
+/// Implementation types — only compiled when the `c` or `c-server` feature is active.
+#[cfg(any(feature = "c", feature = "c-server"))]
+mod c_impl {
+    use heapless::Vec;
+    use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+    use mbus_core::errors::MbusError;
+    use mbus_core::transport::{ModbusConfig, SerialMode, Transport, TransportType};
 
-pub(super) struct CSerialTransport<const ASCII: bool = false> {
-    callbacks: MbusTransportCallbacks,
-}
+    use super::MbusTransportCallbacks;
+    use crate::c::error::MbusStatusCode;
 
-impl<const ASCII: bool> CSerialTransport<ASCII> {
-    const MODE: SerialMode = if ASCII {
-        SerialMode::Ascii
-    } else {
-        SerialMode::Rtu
-    };
-
-    pub(super) fn new(callbacks: MbusTransportCallbacks) -> Self {
-        Self { callbacks }
-    }
-}
-
-pub(super) type CRtuTransport = CSerialTransport<false>;
-pub(super) type CAsciiTransport = CSerialTransport<true>;
-
-pub(super) fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
-    callbacks.on_connect.is_some()
-        && callbacks.on_disconnect.is_some()
-        && callbacks.on_send.is_some()
-        && callbacks.on_recv.is_some()
-        && callbacks.on_is_connected.is_some()
-}
-
-/// Shared helper: connect via C callback.
-fn c_connect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
-    let cb = callbacks
-        .on_connect
-        .ok_or(MbusError::InvalidConfiguration)?;
-    let status = unsafe { cb(callbacks.userdata) };
-    status_to_result(status)
-}
-
-/// Shared helper: disconnect via C callback.
-fn c_disconnect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
-    let cb = callbacks
-        .on_disconnect
-        .ok_or(MbusError::InvalidConfiguration)?;
-    let status = unsafe { cb(callbacks.userdata) };
-    status_to_result(status)
-}
-
-/// Shared helper: send via C callback.
-fn c_send(callbacks: &MbusTransportCallbacks, adu: &[u8]) -> Result<(), MbusError> {
-    let cb = callbacks.on_send.ok_or(MbusError::InvalidConfiguration)?;
-    let len = u16::try_from(adu.len()).map_err(|_| MbusError::BufferTooSmall)?;
-    let status = unsafe { cb(adu.as_ptr(), len, callbacks.userdata) };
-    status_to_result(status)
-}
-
-/// Shared helper: recv via C callback.
-fn c_recv(callbacks: &MbusTransportCallbacks) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let cb = callbacks.on_recv.ok_or(MbusError::InvalidConfiguration)?;
-
-    let mut buf = [0u8; MAX_ADU_FRAME_LEN];
-    let mut out_len: u16 = 0;
-    let cap = u16::try_from(MAX_ADU_FRAME_LEN).map_err(|_| MbusError::BufferTooSmall)?;
-
-    let status = unsafe {
-        cb(
-            buf.as_mut_ptr(),
-            cap,
-            &mut out_len as *mut u16,
-            callbacks.userdata,
-        )
-    };
-    if status != MbusStatusCode::MbusOk {
-        return Err(status_to_error(status));
+    pub struct CTcpTransport {
+        pub(crate) callbacks: MbusTransportCallbacks,
     }
 
-    let out_len_usize = out_len as usize;
-    if out_len_usize == 0 {
-        return Err(MbusError::Timeout);
-    }
-    if out_len_usize > MAX_ADU_FRAME_LEN {
-        return Err(MbusError::BufferTooSmall);
+    impl CTcpTransport {
+        pub fn new(callbacks: MbusTransportCallbacks) -> Self {
+            Self { callbacks }
+        }
     }
 
-    let mut out: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-    out.extend_from_slice(&buf[..out_len_usize])
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    Ok(out)
-}
-
-/// Shared helper: is_connected via C callback.
-fn c_is_connected(callbacks: &MbusTransportCallbacks) -> bool {
-    match callbacks.on_is_connected {
-        Some(cb) => unsafe { cb(callbacks.userdata) != 0 },
-        None => false,
-    }
-}
-
-impl Transport for CTcpTransport {
-    type Error = MbusError;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomTcp;
-
-    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
-        c_connect(&self.callbacks)
+    pub struct CSerialTransport<const ASCII: bool = false> {
+        pub(crate) callbacks: MbusTransportCallbacks,
     }
 
-    fn disconnect(&mut self) -> Result<(), Self::Error> {
-        c_disconnect(&self.callbacks)
+    impl<const ASCII: bool> CSerialTransport<ASCII> {
+        pub const MODE: SerialMode = if ASCII {
+            SerialMode::Ascii
+        } else {
+            SerialMode::Rtu
+        };
+
+        pub fn new(callbacks: MbusTransportCallbacks) -> Self {
+            Self { callbacks }
+        }
     }
 
-    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
-        c_send(&self.callbacks, adu)
+    pub type CRtuTransport = CSerialTransport<false>;
+    pub type CAsciiTransport = CSerialTransport<true>;
+
+    pub fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
+        callbacks.on_connect.is_some()
+            && callbacks.on_disconnect.is_some()
+            && callbacks.on_send.is_some()
+            && callbacks.on_recv.is_some()
+            && callbacks.on_is_connected.is_some()
     }
 
-    fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
-        c_recv(&self.callbacks)
+    fn c_connect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
+        let cb = callbacks
+            .on_connect
+            .ok_or(MbusError::InvalidConfiguration)?;
+        let status = unsafe { cb(callbacks.userdata) };
+        status_to_result(status)
     }
 
-    fn is_connected(&self) -> bool {
-        c_is_connected(&self.callbacks)
-    }
-}
-
-impl<const ASCII: bool> Transport for CSerialTransport<ASCII> {
-    type Error = MbusError;
-    const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
-
-    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
-        c_connect(&self.callbacks)
+    fn c_disconnect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
+        let cb = callbacks
+            .on_disconnect
+            .ok_or(MbusError::InvalidConfiguration)?;
+        let status = unsafe { cb(callbacks.userdata) };
+        status_to_result(status)
     }
 
-    fn disconnect(&mut self) -> Result<(), Self::Error> {
-        c_disconnect(&self.callbacks)
+    fn c_send(callbacks: &MbusTransportCallbacks, adu: &[u8]) -> Result<(), MbusError> {
+        let cb = callbacks.on_send.ok_or(MbusError::InvalidConfiguration)?;
+        let len = u16::try_from(adu.len()).map_err(|_| MbusError::BufferTooSmall)?;
+        let status = unsafe { cb(adu.as_ptr(), len, callbacks.userdata) };
+        status_to_result(status)
     }
 
-    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
-        c_send(&self.callbacks, adu)
+    fn c_recv(callbacks: &MbusTransportCallbacks) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let cb = callbacks.on_recv.ok_or(MbusError::InvalidConfiguration)?;
+
+        let mut buf = [0u8; MAX_ADU_FRAME_LEN];
+        let mut out_len: u16 = 0;
+        let cap = u16::try_from(MAX_ADU_FRAME_LEN).map_err(|_| MbusError::BufferTooSmall)?;
+
+        let status = unsafe {
+            cb(
+                buf.as_mut_ptr(),
+                cap,
+                &mut out_len as *mut u16,
+                callbacks.userdata,
+            )
+        };
+        if status != MbusStatusCode::MbusOk {
+            return Err(status_to_error(status));
+        }
+
+        let out_len_usize = out_len as usize;
+        if out_len_usize == 0 {
+            return Err(MbusError::Timeout);
+        }
+        if out_len_usize > MAX_ADU_FRAME_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+
+        let mut out: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+        out.extend_from_slice(&buf[..out_len_usize])
+            .map_err(|_| MbusError::BufferTooSmall)?;
+        Ok(out)
     }
 
-    fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
-        c_recv(&self.callbacks)
+    fn c_is_connected(callbacks: &MbusTransportCallbacks) -> bool {
+        match callbacks.on_is_connected {
+            Some(cb) => unsafe { cb(callbacks.userdata) != 0 },
+            None => false,
+        }
     }
 
-    fn is_connected(&self) -> bool {
-        c_is_connected(&self.callbacks)
-    }
-}
+    impl Transport for CTcpTransport {
+        type Error = MbusError;
+        const TRANSPORT_TYPE: TransportType = TransportType::CustomTcp;
 
-fn status_to_result(status: MbusStatusCode) -> Result<(), MbusError> {
-    if status == MbusStatusCode::MbusOk {
-        Ok(())
-    } else {
-        Err(status_to_error(status))
-    }
-}
+        fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+            c_connect(&self.callbacks)
+        }
 
-fn status_to_error(status: MbusStatusCode) -> MbusError {
-    match status {
-        MbusStatusCode::MbusErrParseError => MbusError::ParseError,
-        MbusStatusCode::MbusErrBasicParseError => MbusError::BasicParseError,
-        MbusStatusCode::MbusErrTimeout => MbusError::Timeout,
-        MbusStatusCode::MbusErrIoError => MbusError::IoError,
-        MbusStatusCode::MbusErrConnectionFailed => MbusError::ConnectionFailed,
-        MbusStatusCode::MbusErrConnectionClosed => MbusError::ConnectionClosed,
-        MbusStatusCode::MbusErrConnectionLost => MbusError::ConnectionLost,
-        MbusStatusCode::MbusErrBufferTooSmall => MbusError::BufferTooSmall,
-        MbusStatusCode::MbusErrSendFailed => MbusError::SendFailed,
-        MbusStatusCode::MbusErrInvalidConfiguration => MbusError::InvalidConfiguration,
-        MbusStatusCode::MbusErrInvalidTransport => MbusError::InvalidTransport,
-        _ => MbusError::Unexpected,
+        fn disconnect(&mut self) -> Result<(), Self::Error> {
+            c_disconnect(&self.callbacks)
+        }
+
+        fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+            c_send(&self.callbacks, adu)
+        }
+
+        fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+            c_recv(&self.callbacks)
+        }
+
+        fn is_connected(&self) -> bool {
+            c_is_connected(&self.callbacks)
+        }
+    }
+
+    impl<const ASCII: bool> Transport for CSerialTransport<ASCII> {
+        type Error = MbusError;
+        const SUPPORTS_BROADCAST_WRITES: bool = true;
+        const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
+
+        fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+            c_connect(&self.callbacks)
+        }
+
+        fn disconnect(&mut self) -> Result<(), Self::Error> {
+            c_disconnect(&self.callbacks)
+        }
+
+        fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
+            c_send(&self.callbacks, adu)
+        }
+
+        fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+            c_recv(&self.callbacks)
+        }
+
+        fn is_connected(&self) -> bool {
+            c_is_connected(&self.callbacks)
+        }
+    }
+
+    fn status_to_result(status: MbusStatusCode) -> Result<(), MbusError> {
+        if status == MbusStatusCode::MbusOk {
+            Ok(())
+        } else {
+            Err(status_to_error(status))
+        }
+    }
+
+    fn status_to_error(status: MbusStatusCode) -> MbusError {
+        match status {
+            MbusStatusCode::MbusErrParseError => MbusError::ParseError,
+            MbusStatusCode::MbusErrBasicParseError => MbusError::BasicParseError,
+            MbusStatusCode::MbusErrTimeout => MbusError::Timeout,
+            MbusStatusCode::MbusErrIoError => MbusError::IoError,
+            MbusStatusCode::MbusErrConnectionFailed => MbusError::ConnectionFailed,
+            MbusStatusCode::MbusErrConnectionClosed => MbusError::ConnectionClosed,
+            MbusStatusCode::MbusErrConnectionLost => MbusError::ConnectionLost,
+            MbusStatusCode::MbusErrBufferTooSmall => MbusError::BufferTooSmall,
+            MbusStatusCode::MbusErrSendFailed => MbusError::SendFailed,
+            MbusStatusCode::MbusErrInvalidConfiguration => MbusError::InvalidConfiguration,
+            MbusStatusCode::MbusErrInvalidTransport => MbusError::InvalidTransport,
+            _ => MbusError::Unexpected,
+        }
     }
 }

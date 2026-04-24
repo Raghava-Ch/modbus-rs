@@ -1,7 +1,10 @@
 [package]
 name = "xtask"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 publish = false
 
 [dependencies]
+mbus-codegen = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"

@@ -4,9 +4,9 @@ use modbus_rs::{ModbusConfig, ModbusTcpConfig, StdTcpTransport, Transport};
 fn main() -> Result<()> {
     // Initialize a logger backend for the `log` facade.
     // Example run:
-    // RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,logging
+    // RUST_LOG=debug cargo run -p modbus-rs --example logging_example --no-default-features --features network-tcp,logging
     // Filter only internal client state-machine events:
-    // RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features tcp,client,logging
+    // RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example logging_example --no-default-features --features network-tcp,client,logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let mut transport = StdTcpTransport::new();

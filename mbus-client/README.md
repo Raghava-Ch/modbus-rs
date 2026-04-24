@@ -1,6 +1,13 @@
 # mbus-client
 
 Modbus client state machine for Rust — poll-driven, no_std compatible, zero heap allocation.
+`mbus-client` is a helper crate for [modbus-rs](https://crates.io/crates/modbus-rs).
+
+Ready-made transport implementations are available in:
+- [mbus-network](https://crates.io/crates/mbus-network) for TCP
+- [mbus-serial](https://crates.io/crates/mbus-serial) for Serial RTU/ASCII
+
+These crates target standard desktop platforms (Windows, Linux, and macOS).
 
 [![crates.io](https://img.shields.io/crates/v/mbus-client)](https://crates.io/crates/mbus-client)
 [![docs.rs](https://docs.rs/mbus-client/badge.svg)](https://docs.rs/mbus-client)
@@ -16,20 +23,58 @@ Modbus client state machine for Rust — poll-driven, no_std compatible, zero he
 ## Quick Start
 
 ```rust
-use mbus_client::{ClientServices, ModbusTcpConfig, StdTcpTransport};
+use mbus_client::{
+  app::{CoilResponse, RequestErrorNotifier},
+  services::{ClientServices, coil::Coils},
+};
+use mbus_core::{
+  data_unit::common::MAX_ADU_FRAME_LEN,
+  errors::MbusError,
+  transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr},
+};
+use heapless::Vec;
 
-let config = ModbusTcpConfig::new("192.168.1.10", 502)?;
-let mut client = ClientServices::<_, _, 4>::new(
-    StdTcpTransport::new(),
-    app,
-    config.into()
-)?;
+struct App;
+impl RequestErrorNotifier for App {
+  fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
+}
+impl CoilResponse for App {
+  fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
+  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
+}
+impl TimeKeeper for App {
+  fn current_millis(&self) -> u64 { 0 }
+}
 
-client.connect()?;
-client.coils().read_coils(1, unit_id, 0, 16)?;
+struct MockTransport;
+impl Transport for MockTransport {
+  type Error = MbusError;
+  const TRANSPORT_TYPE: TransportType = TransportType::StdTcp;
+  const SUPPORTS_BROADCAST_WRITES: bool = false;
+  fn connect(&mut self, _: &ModbusConfig) -> Result<(), Self::Error> { Ok(()) }
+  fn disconnect(&mut self) -> Result<(), Self::Error> { Ok(()) }
+  fn send(&mut self, _: &[u8]) -> Result<(), Self::Error> { Ok(()) }
+  fn recv(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> { Ok(Vec::new()) }
+  fn is_connected(&self) -> bool { true }
+}
 
-loop {
+fn main() -> Result<(), MbusError> {
+  let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.1.10", 502)?);
+  let mut client = ClientServices::<_, _, 4>::new(MockTransport, App, config)?;
+
+  client.connect()?;
+  client
+    .coils()
+    .read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 16)?;
+
+  loop {
     client.poll();  // Drive state machine
+    break;
+  }
+
+  Ok(())
 }
 ```
 
@@ -87,20 +132,23 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-mbus-client = { version = "0.7.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.8.0", default-features = false, features = ["coils"] }
 ```
 
 ## Traffic Callbacks (optional `traffic` feature)
 
 When `traffic` is enabled, apps can implement `TrafficNotifier` to observe raw ADU frames:
 
-<!-- validate: compile -->
+<!-- validate: no_run -->
 ```rust
+#[cfg(feature = "traffic")]
 use mbus_client::app::{TrafficDirection, TrafficNotifier};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(feature = "traffic")]
 struct App;
 
+#[cfg(feature = "traffic")]
 impl TrafficNotifier for App {
   fn on_tx_frame(
     &mut self,
@@ -185,7 +233,7 @@ Examples of logged events:
 Typical filtering example:
 
 ```bash
-RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features tcp,client,logging
+RUST_LOG=mbus_client=trace cargo run -p modbus-rs --example modbus_rs_client_tcp_logging --no-default-features --features network-tcp,client,logging
 ```
 
 ## Usage Pattern
@@ -314,7 +362,7 @@ cargo check -p mbus-client --no-default-features --features registers,discrete-i
 
 ## License
 
-This crate is licensed under **GPL-3.0-only**.
+This crate is licensed under **GPL-3.0**.
 
 If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 

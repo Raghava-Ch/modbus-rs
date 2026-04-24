@@ -1,11 +1,10 @@
 # mbus-async
 
-A pure-async Tokio client for Modbus TCP and serial.
+A pure-async Tokio facade for Modbus client communication, with optional async server adapters.
 
-`mbus-async` drives Modbus communication natively in a Tokio task — no worker threads, no
-poll loops. Each request is a `Future` that resolves when the server responds. The transport
-layer is owned by a background Tokio task and communicates with the public API through lock-free
-channels.
+`mbus-async` drives Modbus communication natively in Tokio tasks. Each request is a `Future`
+that resolves when the server responds. The transport layer is owned by a background Tokio task
+and communicates with the public API through Tokio channels (`mpsc`, `oneshot`, and `watch`).
 
 ## TCP Quick Start
 
@@ -13,7 +12,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6", features = ["async"] }
+modbus-rs = { version = "0.8.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -43,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6", default-features = false, features = [
+modbus-rs = { version = "0.8.0", default-features = false, features = [
     "async", "serial-rtu", "coils", "registers"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -97,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
 │  ClientTask  (Tokio task — tokio::spawn)                        │
 │                                                                 │
 │  tokio::select! {                                               │
-│    frame  ← transport.recv_frame()   (TCP / serial)            │
+│    frame  ← transport.recv_frame()   (TCP / serial)             │
 │    cmd    ← mpsc::Receiver<TaskCommand>                         │
 │  }                                                              │
 │                                                                 │
@@ -111,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-1. `new()` / `new_rtu()` spawns a Tokio task (`tokio::spawn(task.run())`).
+1. `new()` / `new_rtu()` creates a client and spawns a Tokio task (`tokio::spawn(task.run())`).
 2. Each request method creates a `oneshot` channel, enqueues a `TaskCommand::Request`, and
    `await`s the oneshot receiver.
 3. The task drives `tokio::select!` between receiving frames from the transport and receiving
@@ -129,16 +128,21 @@ Serial is always depth 1 (request/reply protocol).
 
 | Feature | Default | Enables |
 |---|---|---|
-| `tcp` | ✓ | `AsyncTcpClient` via `mbus-network` |
-| `serial-rtu` | ✓ | `AsyncSerialClient` with RTU framing |
-| `serial-ascii` | ✓ | `AsyncSerialClient` with ASCII framing |
+| `network-tcp` | ✓ | `AsyncTcpClient` via `mbus-network` |
+| `serial-rtu` |  | `AsyncSerialClient` with RTU framing |
+| `serial-ascii` |  | `AsyncSerialClient` with ASCII framing |
 | `coils` | ✓ | Coil read/write methods |
 | `registers` | ✓ | Register read/write/mask methods |
 | `discrete-inputs` | ✓ | Discrete input read methods |
 | `fifo` | ✓ | FIFO queue read methods |
 | `file-record` | ✓ | File record read/write methods |
 | `diagnostics` | ✓ | Device identification, diagnostics, event log, etc. |
-| `traffic` | | Dedicated-thread raw TX/RX frame callback API |
+| `traffic` |  | Raw TX/RX frame callback API from the background async task |
+| `diagnostics-stats` |  | Async server diagnostics counters (depends on `diagnostics`) |
+| `logging` |  | Enables `log` integration in this crate |
+| `server-tcp` |  | `server::AsyncTcpServer` via `mbus-network` async transport |
+| `server-serial` |  | `server::AsyncRtuServer` and `server::AsyncAsciiServer` |
+| `full` |  | `default` + `traffic` |
 
 
 ## Available Methods
@@ -280,18 +284,22 @@ Enable `traffic` when you need raw frame observability in async apps:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.6", default-features = false, features = [
-    "async", "traffic", "tcp", "coils"
+modbus-rs = { version = "0.8.0", default-features = false, features = [
+    "async", "traffic", "network-tcp", "coils"
 ] }
 tokio = { version = "1", features = ["full"] }
 ```
 
 ```rust
-use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::mbus_async::AsyncTcpClient;
+#[cfg(feature = "traffic")]
+use modbus_rs::mbus_async::AsyncClientNotifier;
 use modbus_rs::{MbusError, UnitIdOrSlaveAddr};
 
+#[cfg(feature = "traffic")]
 struct FrameLogger;
 
+#[cfg(feature = "traffic")]
 impl AsyncClientNotifier for FrameLogger {
     fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
         println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
@@ -310,6 +318,7 @@ impl AsyncClientNotifier for FrameLogger {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+    #[cfg(feature = "traffic")]
     client.set_traffic_notifier(FrameLogger);
     client.connect().await?;
     let _ = client.read_multiple_coils(1, 0, 8).await?;
@@ -319,7 +328,7 @@ async fn main() -> anyhow::Result<()> {
 
 ## License
 
-This crate is licensed under **GPL-3.0-only** — see the repository root [LICENSE](../LICENSE).
+This crate is licensed under **GPL-3.0** — see the repository root [LICENSE](../LICENSE).
 
 If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
 

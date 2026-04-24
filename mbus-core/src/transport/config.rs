@@ -59,7 +59,7 @@ pub enum BaudRate {
 }
 
 /// Configuration parameters for establishing a Modbus Serial connection.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64> {
     /// The path to the serial port (e.g., "/dev/ttyUSB0" or "COM1").
     pub port_path: heapless::String<PORT_PATH_LEN>,
@@ -131,7 +131,7 @@ impl ModbusTcpConfig {
 }
 
 /// Top-level configuration for Modbus communication, supporting different transport layers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ModbusConfig {
     /// Configuration for Modbus TCP/IP.
     Tcp(ModbusTcpConfig),
