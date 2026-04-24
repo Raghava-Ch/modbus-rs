@@ -407,6 +407,7 @@ use modbus_rs::{
 
 use modbus_rs::heapless::Vec;
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "coils")]
 use modbus_rs::{CoilResponse, Coils};
 
@@ -430,6 +431,7 @@ impl RequestErrorNotifier for App {
 	fn request_failed(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: MbusError) {}
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
 	fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
@@ -442,6 +444,7 @@ impl TimeKeeper for App {
 	fn current_millis(&self) -> u64 { 0 }
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]
 impl modbus_rs::TrafficNotifier for App {}
 
@@ -453,7 +456,8 @@ fn main() -> Result<(), MbusError> {
 	let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
 	client.connect()?;
 
-	#[cfg(feature = "coils")]
+	#[allow(unexpected_cfgs)]
+#[cfg(feature = "coils")]
 	client.coils().read_multiple_coils(1, UnitIdOrSlaveAddr::new(1)?, 0, 8)?;
 
 	client.poll();

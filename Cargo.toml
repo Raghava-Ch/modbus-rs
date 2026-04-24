@@ -6,6 +6,8 @@ members = [
     "mbus-serial",
     "mbus-network",
     "mbus-macros",
+    "mbus-client-async",
+    "mbus-server-async",
     "modbus-rs",
     "integration_tests",
     "mbus-client",
@@ -37,6 +39,8 @@ mbus-serial = { version = "0.8.0", path = "./mbus-serial" }
 mbus-network= { version = "0.8.0", path = "./mbus-network" }
 mbus-client = { version = "0.8.0", path = "./mbus-client" }
 mbus-async = { version = "0.8.0", path = "./mbus-async" }
+mbus-client-async = { version = "0.8.0", path = "./mbus-client-async" }
+mbus-server-async = { version = "0.8.0", path = "./mbus-server-async" }
 mbus-ffi    = { version = "0.8.0", path = "./mbus-ffi" }
 mbus-server = { version = "0.8.0", path = "./mbus-server" }
 mbus-macros = { version = "0.8.0", path = "./mbus-macros" }

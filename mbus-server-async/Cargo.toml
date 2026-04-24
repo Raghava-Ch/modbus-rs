@@ -1,0 +1,52 @@
+[package]
+name = "mbus-server-async"
+version = "0.8.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Role-focused async Modbus server facade re-exported from mbus-async"
+
+[dependencies]
+mbus-async = { version = "0.8.0", path = "../mbus-async", default-features = false }
+
+[dev-dependencies]
+mbus-core = { workspace = true }
+mbus-server = { workspace = true }
+heapless = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = [
+    "server-tcp",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
+full = ["default", "traffic"]
+server-tcp = ["mbus-async/server-tcp"]
+server-serial = ["mbus-async/server-serial"]
+coils = ["mbus-async/coils"]
+registers = ["mbus-async/registers"]
+discrete-inputs = ["mbus-async/discrete-inputs"]
+fifo = ["mbus-async/fifo"]
+file-record = ["mbus-async/file-record"]
+diagnostics = ["mbus-async/diagnostics"]
+diagnostics-stats = ["mbus-async/diagnostics-stats"]
+logging = ["mbus-async/logging"]
+traffic = ["mbus-async/traffic"]
+
+[[example]]
+name = "quick_async_server"
+required-features = ["server-tcp", "coils", "registers"]
+
+[[example]]
+name = "macro_async_server"
+required-features = ["server-tcp", "coils", "registers"]
