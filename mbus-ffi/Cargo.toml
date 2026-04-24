@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Provides WASM and FFI functionalities for modbus-rs project"
+description = "Native C FFI and browser WASM bindings for modbus-rs client APIs, with optional generated server bindings"
 
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]

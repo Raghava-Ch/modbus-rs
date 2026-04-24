@@ -27,7 +27,7 @@ homepage = "https://github.com/Raghava-Ch"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Modbus client stack for embedded and std environments with TCP, RTU, and ASCII transport support"
+description = "Feature-gated Modbus client and server stack for embedded and std targets with TCP, RTU, ASCII, async, and optional C/WASM bindings"
 
 [workspace.dependencies]
 # Shared dependencies across workspace

@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Provides serial transport layer functionalities for modbus-rs project"
+description = "Serial RTU and ASCII transport implementations for modbus-rs, including sync, Tokio, and WASM adapters"
 
 [dependencies]
 mbus-core = { workspace = true }
