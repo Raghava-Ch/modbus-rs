@@ -42,7 +42,6 @@
     This page uses hard-coded addresses from <code>0</code> and intentionally keeps the UI minimal.
     Unsupported functions may fail depending on the target device.
   </p>
-
   <div class="row">
     <label for="ws">WebSocket URL</label>
     <input id="ws" value="ws://127.0.0.1:8080" />
@@ -84,7 +83,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmModbusClient } from "../pkg/mbus_ffi.js";
+    import init, { WasmModbusClient } from "../../pkg/mbus_ffi.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {
@@ -153,6 +152,26 @@
       }
     };
 
+    const withTransportRecovery = async (name, run, retries = 1) => {
+      try {
+        return await run();
+      } catch (err) {
+        const text = String(err);
+        if (retries > 0 && text.includes("NoRetriesLeft")) {
+          if (client) {
+            const restarted = client.reconnect();
+            log(`RETRY ${name}: ${text} -> reconnect=${restarted}, retrying once`);
+          }
+          await sleep(500);
+          return withTransportRecovery(name, run, retries - 1);
+        }
+        throw err;
+      }
+    };
+
+    const runRobust = async (name, run) =>
+      withTransportRecovery(name, () => withBusyRetry(name, run, 2), 1);
+
     let client = null;
 
     await init();
@@ -167,7 +186,8 @@
         const tick = Number(document.getElementById("tick").value);
 
         client = new WasmModbusClient(ws, unitId, timeout, retries, tick);
-        log(`Client created for ${ws}, unit=${unitId}.`);
+        const reconnectStarted = client.reconnect();
+        log(`Client created for ${ws}, unit=${unitId}. reconnect=${reconnectStarted}`);
       } catch (err) {
         log(`Connect setup error: ${String(err)}`);
       }
@@ -202,8 +222,8 @@
 
       const steps = [
         ["is_connected", async () => client.is_connected()],
-        ["read_input_registers", async () => withBusyRetry("read_input_registers", () => client.read_input_registers(addr, qty), 2)],
-        ["read_single_input_register", async () => withBusyRetry("read_single_input_register", () => client.read_single_input_register(addr), 2)],
+        ["read_input_registers", async () => runRobust("read_input_registers", () => client.read_input_registers(addr, qty))],
+        ["read_single_input_register", async () => runRobust("read_single_input_register", () => client.read_single_input_register(addr))],
       ];
 
       log(`Running isolated FC04 checks from address ${addr}, qty ${qty}...`);
@@ -228,29 +248,29 @@
 
       const steps = [
         ["is_connected", async () => client.is_connected()],
-        ["read_coils", async () => client.read_coils(0, 8)],
-        ["read_single_coil", async () => client.read_single_coil(0)],
-        ["write_single_coil", async () => client.write_single_coil(0, true)],
-        ["write_multiple_coils", async () => client.write_multiple_coils(0, 8, new Uint8Array([0x0F]))],
-        ["read_discrete_inputs", async () => client.read_discrete_inputs(0, 8)],
-        ["read_single_discrete_input", async () => client.read_single_discrete_input(0)],
-        ["read_holding_registers", async () => client.read_holding_registers(0, 2)],
-        ["read_single_holding_register", async () => client.read_single_holding_register(0)],
-        ["write_single_register", async () => client.write_single_register(0, 1)],
-        ["write_multiple_registers", async () => client.write_multiple_registers(0, 2, new Uint16Array([1, 2]))],
-        ["read_write_multiple_registers", async () => client.read_write_multiple_registers(0, 1, 0, 2, new Uint16Array([3, 4]))],
-        ["mask_write_register", async () => client.mask_write_register(0, 0xFFFF, 0x0001)],
-        ["read_input_registers", async () => withBusyRetry("read_input_registers", () => client.read_input_registers(0, 10))],
-        ["read_single_input_register", async () => withBusyRetry("read_single_input_register", () => client.read_single_input_register(0))],
-        ["read_fifo_queue", async () => client.read_fifo_queue(0)],
-        ["read_file_record", async () => client.read_file_record(1, 0, 1)],
-        ["write_file_record", async () => client.write_file_record(1, 0, new Uint16Array([1]))],
-        ["read_exception_status", async () => client.read_exception_status()],
-        ["diagnostics", async () => client.diagnostics(0, new Uint16Array([0]))],
-        ["get_comm_event_counter", async () => client.get_comm_event_counter()],
-        ["get_comm_event_log", async () => client.get_comm_event_log()],
-        ["report_server_id", async () => client.report_server_id()],
-        ["read_device_identification", async () => client.read_device_identification(1, 0)],
+        ["read_coils", async () => runRobust("read_coils", () => client.read_coils(0, 8))],
+        ["read_single_coil", async () => runRobust("read_single_coil", () => client.read_single_coil(0))],
+        ["write_single_coil", async () => runRobust("write_single_coil", () => client.write_single_coil(0, true))],
+        ["write_multiple_coils", async () => runRobust("write_multiple_coils", () => client.write_multiple_coils(0, 8, new Uint8Array([0x0F])))],
+        ["read_discrete_inputs", async () => runRobust("read_discrete_inputs", () => client.read_discrete_inputs(0, 8))],
+        ["read_single_discrete_input", async () => runRobust("read_single_discrete_input", () => client.read_single_discrete_input(0))],
+        ["read_holding_registers", async () => runRobust("read_holding_registers", () => client.read_holding_registers(0, 2))],
+        ["read_single_holding_register", async () => runRobust("read_single_holding_register", () => client.read_single_holding_register(0))],
+        ["write_single_register", async () => runRobust("write_single_register", () => client.write_single_register(0, 1))],
+        ["write_multiple_registers", async () => runRobust("write_multiple_registers", () => client.write_multiple_registers(0, 2, new Uint16Array([1, 2])))],
+        ["read_write_multiple_registers", async () => runRobust("read_write_multiple_registers", () => client.read_write_multiple_registers(0, 1, 0, 2, new Uint16Array([3, 4])))],
+        ["mask_write_register", async () => runRobust("mask_write_register", () => client.mask_write_register(0, 0xFFFF, 0x0001))],
+        ["read_input_registers", async () => runRobust("read_input_registers", () => client.read_input_registers(0, 10))],
+        ["read_single_input_register", async () => runRobust("read_single_input_register", () => client.read_single_input_register(0))],
+        ["read_fifo_queue", async () => runRobust("read_fifo_queue", () => client.read_fifo_queue(0))],
+        ["read_file_record", async () => runRobust("read_file_record", () => client.read_file_record(1, 0, 1))],
+        ["write_file_record", async () => runRobust("write_file_record", () => client.write_file_record(1, 0, new Uint16Array([1])))],
+        ["read_exception_status", async () => runRobust("read_exception_status", () => client.read_exception_status())],
+        ["diagnostics", async () => runRobust("diagnostics", () => client.diagnostics(0, new Uint16Array([0])))],
+        ["get_comm_event_counter", async () => runRobust("get_comm_event_counter", () => client.get_comm_event_counter())],
+        ["get_comm_event_log", async () => runRobust("get_comm_event_log", () => client.get_comm_event_log())],
+        ["report_server_id", async () => runRobust("report_server_id", () => client.report_server_id())],
+        ["read_device_identification", async () => runRobust("read_device_identification", () => client.read_device_identification(1, 0))],
       ];
 
       log("Running minimal full smoke from address 0...");

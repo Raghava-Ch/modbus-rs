@@ -1,7 +1,10 @@
 #![cfg(target_arch = "wasm32")]
 
-use js_sys::{Array, Function, Reflect, Uint8Array, Uint16Array};
-use mbus_ffi::{WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle};
+use js_sys::{Array, Function, Object, Reflect, Uint8Array, Uint16Array};
+use mbus_ffi::{
+    WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, WasmSerialServer,
+    WasmSerialServerConfig, WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
@@ -24,6 +27,8 @@ if (!globalThis.__fakeWsInstalled) {
       this.onerror = null;
       this.onmessage = null;
       globalThis.__fakeWsRegistry.set(url, this);
+            const created = globalThis.__fakeWsCreateCount.get(url) ?? 0;
+            globalThis.__fakeWsCreateCount.set(url, created + 1);
     }
 
     send(data) {
@@ -47,6 +52,7 @@ if (!globalThis.__fakeWsInstalled) {
   }
 
   globalThis.__fakeWsRegistry = new Map();
+    globalThis.__fakeWsCreateCount = new Map();
   globalThis.WebSocket = FakeWebSocket;
 
   globalThis.__fake_ws_open = (url) => {
@@ -54,7 +60,7 @@ if (!globalThis.__fakeWsInstalled) {
     if (!ws) return false;
     ws.readyState = 1;
     if (ws.onopen) {
-      ws.onopen(new Event('open'));
+            ws.onopen(new Event('open'));
     }
     return true;
   };
@@ -64,7 +70,7 @@ if (!globalThis.__fakeWsInstalled) {
     if (!ws) return false;
     ws.readyState = 3;
     if (ws.onclose) {
-      ws.onclose(new Event('close'));
+            ws.onclose(new Event('close'));
     }
     return true;
   };
@@ -75,7 +81,7 @@ if (!globalThis.__fakeWsInstalled) {
     const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const ab = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
     if (ws.onmessage) {
-      ws.onmessage(new MessageEvent('message', { data: ab }));
+            ws.onmessage(new MessageEvent('message', { data: ab }));
       return true;
     }
     return false;
@@ -87,6 +93,10 @@ if (!globalThis.__fakeWsInstalled) {
     const i = idx ?? 0;
     return ws.sent[i] ?? null;
   };
+
+    globalThis.__fake_ws_created_count = (url) => {
+        return globalThis.__fakeWsCreateCount.get(url) ?? 0;
+    };
 
   globalThis.__fake_ws_clear = (url) => {
     const ws = globalThis.__fakeWsRegistry.get(url);
@@ -1025,4 +1035,353 @@ async fn e2e_serial_client_read_device_id_invalid_code_rejects() {
         result.is_err(),
         "invalid read_device_id_code should reject immediately"
     );
+}
+
+// ── Server bindings tests (phase 2 adapter integration) ─────────────────────
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_dispatch_rejects_when_stopped() {
+    install_fake_websocket();
+    let url = "ws://server-dispatch-stopped";
+
+    let cfg = WasmTcpGatewayConfig::new(url);
+    let handler = Function::new_with_args("req", "return req;");
+    let server = WasmTcpServer::new(cfg, handler).expect("server creation failed");
+
+    let req = Object::new();
+    let err = server
+        .dispatch_request(req.into())
+        .await
+        .expect_err("dispatch should fail while server is stopped");
+    let msg = err.as_string().unwrap_or_default();
+    assert!(msg.contains("not running"), "unexpected error: {msg}");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_dispatch_and_transport_passthrough() {
+    install_fake_websocket();
+    let url = "ws://server-dispatch-passthrough";
+
+    let cfg = WasmTcpGatewayConfig::new(url);
+    let handler = Function::new_with_args(
+        "req",
+        "return Promise.resolve({ ok: true, payload: req.payload ?? 0 });",
+    );
+    let server = WasmTcpServer::new(cfg, handler).expect("server creation failed");
+
+    server.start().expect("server start failed");
+    assert!(server.is_running(), "server should report running");
+    assert!(
+        server.transport_connecting(),
+        "transport should report connecting before open event"
+    );
+    assert!(
+        !server.transport_connected(),
+        "transport should not report connected before open event"
+    );
+
+    open_fake_ws(url);
+    assert!(
+        server.transport_connected(),
+        "delegated wasm websocket transport should be open after open event"
+    );
+    assert!(
+        !server.transport_connecting(),
+        "transport should stop reporting connecting once opened"
+    );
+
+    let req = Object::new();
+    let _ = Reflect::set(
+        &req,
+        &JsValue::from_str("payload"),
+        &JsValue::from_f64(42.0),
+    );
+
+    let out = server
+        .dispatch_request(req.into())
+        .await
+        .expect("dispatch should resolve");
+    let ok = Reflect::get(&out, &JsValue::from_str("ok"))
+        .expect("ok field missing")
+        .as_bool()
+        .unwrap_or(false);
+    let payload = Reflect::get(&out, &JsValue::from_str("payload"))
+        .expect("payload field missing")
+        .as_f64()
+        .unwrap_or(-1.0);
+    assert!(ok);
+    assert_eq!(payload as u8, 42);
+
+    server
+        .send_frame(&[0xAA, 0x55, 0x01])
+        .expect("send_frame should delegate to network transport");
+    let sent = get_sent_frame(url, 0).to_vec();
+    assert_eq!(sent, vec![0xAA, 0x55, 0x01]);
+
+    emit_fake_ws(url, &[0x11, 0x22, 0x33]);
+    let recv = server
+        .recv_frame()
+        .expect("recv_frame should delegate to network transport");
+    assert_eq!(recv, vec![0x11, 0x22, 0x33]);
+
+    server.stop().expect("server stop failed");
+    assert!(!server.is_running(), "server should report stopped");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_start_is_idempotent() {
+    install_fake_websocket();
+    let url = "ws://server-start-idempotent";
+
+    let handler = Function::new_with_args("req", "return req;");
+    let server =
+        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+
+    server.start().expect("first start should succeed");
+    let created_1 = call_global_1("__fake_ws_created_count", &JsValue::from_str(url))
+        .as_f64()
+        .unwrap_or(-1.0) as u32;
+    assert_eq!(created_1, 1, "first start should create one websocket");
+
+    server.start().expect("second start should be no-op and succeed");
+    let created_2 = call_global_1("__fake_ws_created_count", &JsValue::from_str(url))
+        .as_f64()
+        .unwrap_or(-1.0) as u32;
+    assert_eq!(
+        created_2, 1,
+        "repeated start should not create a second websocket"
+    );
+
+    assert!(server.is_running(), "server should remain running");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_serial_server_attach_start_dispatch_stop() {
+    let cfg = WasmSerialServerConfig::rtu();
+    let handler = Function::new_with_args("req", "return Promise.resolve(req);");
+    let server = WasmSerialServer::new(cfg, handler).expect("serial server creation failed");
+
+    assert_eq!(server.mode(), WasmServerTransportKind::SerialRtu);
+
+    let start_without_port = server.start();
+    assert!(
+        start_without_port.is_err(),
+        "starting serial server without attached port must fail"
+    );
+
+    server.attach_serial_port(make_fake_serial_port());
+    server
+        .start()
+        .expect("serial server start should succeed with fake port");
+    assert!(server.is_running(), "serial server should report running");
+    assert!(
+        server.transport_connected(),
+        "delegated serial transport should report opening/connected"
+    );
+
+    let req = Object::new();
+    let _ = Reflect::set(
+        &req,
+        &JsValue::from_str("kind"),
+        &JsValue::from_str("readHoldingRegisters"),
+    );
+    let out = server
+        .dispatch_request(req.into())
+        .await
+        .expect("serial dispatch should resolve");
+    let kind = Reflect::get(&out, &JsValue::from_str("kind"))
+        .expect("kind field missing")
+        .as_string()
+        .unwrap_or_default();
+    assert_eq!(kind, "readHoldingRegisters");
+
+    server.stop().expect("serial server stop failed");
+    assert!(!server.is_running(), "serial server should report stopped");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_dispatch_callback_semantics() {
+    install_fake_websocket();
+    let url = "ws://server-dispatch-semantics";
+
+    // Covers both sync return and rejected Promise paths deterministically.
+    let handler = Function::new_with_args(
+        "req",
+        "if (req && req.fail) { return Promise.reject('intentional-failure'); }\nreturn { mode: 'sync', value: req.value ?? 0 };",
+    );
+    let server =
+        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+    server.start().expect("server start failed");
+
+    let ok_req = Object::new();
+    let _ = Reflect::set(&ok_req, &JsValue::from_str("value"), &JsValue::from_f64(7.0));
+    let ok_out = server
+        .dispatch_request(ok_req.into())
+        .await
+        .expect("sync callback return should resolve");
+    let mode = Reflect::get(&ok_out, &JsValue::from_str("mode"))
+        .expect("mode missing")
+        .as_string()
+        .unwrap_or_default();
+    let value = Reflect::get(&ok_out, &JsValue::from_str("value"))
+        .expect("value missing")
+        .as_f64()
+        .unwrap_or(-1.0);
+    assert_eq!(mode, "sync");
+    assert_eq!(value as u8, 7);
+
+    let fail_req = Object::new();
+    let _ = Reflect::set(&fail_req, &JsValue::from_str("fail"), &JsValue::from_bool(true));
+    let err = server
+        .dispatch_request(fail_req.into())
+        .await
+        .expect_err("rejected Promise should propagate as dispatch error");
+    let msg = err.as_string().unwrap_or_default();
+    assert!(
+        msg.contains("intentional-failure"),
+        "unexpected rejected message: {msg}"
+    );
+
+    server.stop().expect("server stop failed");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_lifecycle_and_frame_flow_deterministic() {
+    install_fake_websocket();
+    let url = "ws://server-lifecycle-flow";
+
+    let handler = Function::new_with_args("req", "return req;");
+    let server =
+        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+
+    assert_eq!(server.ws_url(), url);
+    assert!(!server.is_running(), "server starts in stopped state");
+
+    server.start().expect("server start failed");
+    assert!(server.is_running(), "server should be running after start");
+    assert!(
+        server.transport_connecting(),
+        "transport should report connecting immediately after start"
+    );
+    assert!(
+        !server.transport_connected(),
+        "transport should not report connected until websocket opens"
+    );
+
+    open_fake_ws(url);
+    assert!(
+        server.transport_connected(),
+        "transport should report connected once websocket opens"
+    );
+
+    server
+        .send_frame(&[0x10, 0x11])
+        .expect("first frame send should succeed");
+    server
+        .send_frame(&[0x22, 0x23, 0x24])
+        .expect("second frame send should succeed");
+
+    assert_eq!(get_sent_frame(url, 0).to_vec(), vec![0x10, 0x11]);
+    assert_eq!(get_sent_frame(url, 1).to_vec(), vec![0x22, 0x23, 0x24]);
+
+    emit_fake_ws(url, &[0xA1, 0xA2]);
+    let recv_1 = server.recv_frame().expect("first recv should succeed");
+    assert_eq!(recv_1, vec![0xA1, 0xA2]);
+
+    emit_fake_ws(url, &[0xB1, 0xB2, 0xB3]);
+    let recv_2 = server.recv_frame().expect("second recv should succeed");
+    assert_eq!(recv_2, vec![0xB1, 0xB2, 0xB3]);
+
+    server.stop().expect("server stop failed");
+    assert!(!server.is_running(), "server should report stopped");
+
+    let req = Object::new();
+    let err = server
+        .dispatch_request(req.into())
+        .await
+        .expect_err("dispatch must reject after stop");
+    assert!(
+        err.as_string().unwrap_or_default().contains("not running"),
+        "dispatch should fail with not-running error"
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_serial_server_ascii_mode_and_stopped_dispatch_rejects() {
+    let cfg = WasmSerialServerConfig::ascii();
+    let handler = Function::new_with_args("req", "return req;");
+    let server = WasmSerialServer::new(cfg, handler).expect("serial ascii server creation failed");
+
+    assert_eq!(server.mode(), WasmServerTransportKind::SerialAscii);
+
+    let req = Object::new();
+    let err = server
+        .dispatch_request(req.into())
+        .await
+        .expect_err("dispatch should fail while serial server is stopped");
+    let msg = err.as_string().unwrap_or_default();
+    assert!(msg.contains("not running"), "unexpected error: {msg}");
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_wasm_tcp_server_status_snapshot_and_last_error_observability() {
+    install_fake_websocket();
+    let url = "ws://server-observability";
+
+    let handler = Function::new_with_args("req", "return req;");
+    let server =
+        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+
+    let snap0 = server.status_snapshot();
+    assert_eq!(snap0.transport(), WasmServerTransportKind::TcpGateway);
+    assert!(!snap0.running());
+    assert_eq!(snap0.dispatched_requests(), 0);
+    assert_eq!(snap0.sent_frames(), 0);
+    assert_eq!(snap0.received_frames(), 0);
+    assert!(!snap0.last_error_present());
+    assert_eq!(server.last_error_message(), None);
+
+    let stopped_req = Object::new();
+    let _ = server
+        .dispatch_request(stopped_req.into())
+        .await
+        .expect_err("stopped dispatch should fail");
+    let snap1 = server.status_snapshot();
+    assert!(snap1.last_error_present());
+    assert!(
+        server
+            .last_error_message()
+            .unwrap_or_default()
+            .contains("not running")
+    );
+
+    server.clear_last_error();
+    assert_eq!(server.last_error_message(), None);
+    assert!(!server.status_snapshot().last_error_present());
+
+    server.start().expect("server start failed");
+    assert!(server.status_snapshot().running());
+
+    server
+        .send_frame(&[0x01, 0x02])
+        .expect("send_frame should succeed");
+    emit_fake_ws(url, &[0xA0, 0xA1]);
+    let recv = server.recv_frame().expect("recv_frame should succeed");
+    assert_eq!(recv, vec![0xA0, 0xA1]);
+
+    let req = Object::new();
+    let _ = Reflect::set(
+        &req,
+        &JsValue::from_str("phase"),
+        &JsValue::from_str("dispatch"),
+    );
+    let _ = server
+        .dispatch_request(req.into())
+        .await
+        .expect("dispatch should succeed");
+
+    let snap2 = server.status_snapshot();
+    assert_eq!(snap2.sent_frames(), 1);
+    assert_eq!(snap2.received_frames(), 1);
+    assert_eq!(snap2.dispatched_requests(), 1);
 }

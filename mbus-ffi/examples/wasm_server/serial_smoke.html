@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mbus-ffi WASM Serial Server Smoke</title>
+  <style>
+    body {
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 840px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.4;
+      background: #312e81;
+      color: #eef2ff;
+    }
+    .row { margin: 0.6rem 0; }
+    label { display: inline-block; min-width: 230px; }
+    input, select, textarea {
+      width: 360px;
+      max-width: 100%;
+      padding: 0.35rem;
+      background: #4338ca;
+      color: #eef2ff;
+      border: 1px solid #c7d2fe;
+    }
+    textarea {
+      min-height: 120px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    button {
+      margin-right: 0.5rem;
+      margin-bottom: 0.4rem;
+      padding: 0.45rem 0.8rem;
+      background: #3730a3;
+      color: #eef2ff;
+      border: 1px solid #c7d2fe;
+      cursor: pointer;
+    }
+    pre {
+      border: 1px solid #a5b4fc;
+      border-radius: 6px;
+      background: #1e1b4b;
+      padding: 0.8rem;
+      min-height: 220px;
+      white-space: pre-wrap;
+    }
+    .hint { color: #dbeafe; }
+  </style>
+</head>
+<body>
+  <h1>mbus-ffi WASM Serial Server Smoke</h1>
+
+  <p class="hint">
+    Requires Chromium-based browser + HTTPS/localhost + user gesture for serial permission.
+  </p>
+  <p class="hint">
+    Build package first in <code>mbus-ffi</code>:
+    <br />
+    <code>wasm-pack build --target web --features wasm,full</code>
+  </p>
+
+  <div class="row">
+    <label for="mode">Serial Server Mode</label>
+    <select id="mode">
+      <option value="rtu">RTU</option>
+      <option value="ascii">ASCII</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label for="requestJson">Dispatch Request JSON</label>
+    <textarea id="requestJson">{"kind":"readCoils","unit_id":1,"address":0,"quantity":8}</textarea>
+  </div>
+
+  <div class="row">
+    <label for="frameHex">Frame Hex (send_frame)</label>
+    <input id="frameHex" value="010300000002C40B" />
+  </div>
+
+  <div class="row">
+    <button id="btnCreate">Create Server</button>
+    <button id="btnPickPort">Attach Browser Serial Port</button>
+    <button id="btnStart">Start</button>
+    <button id="btnStop">Stop</button>
+    <button id="btnStatus">Status</button>
+    <button id="btnDispatch">Dispatch Request</button>
+    <button id="btnSend">Send Frame</button>
+    <button id="btnRecv">Recv Frame</button>
+    <button id="btnRunAll">Run Full Smoke</button>
+    <button id="btnClear">Clear Log</button>
+  </div>
+
+  <h3>Log</h3>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import init, { WasmSerialServer, WasmSerialServerConfig } from "../../pkg/mbus_ffi.js";
+
+    const logEl = document.getElementById("log");
+    const log = (msg) => {
+      const ts = new Date().toISOString().slice(11, 23);
+      logEl.textContent += `[${ts}] ${msg}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const parseJson = (text) => {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON: ${String(e)}`);
+      }
+    };
+
+    const hexToBytes = (hexRaw) => {
+      const hex = hexRaw.replace(/\s+/g, "").toLowerCase();
+      if (!hex.length) return new Uint8Array(0);
+      if (hex.length % 2 !== 0) throw new Error("Hex length must be even");
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i += 1) {
+        const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        if (Number.isNaN(byte)) throw new Error("Invalid hex byte");
+        out[i] = byte;
+      }
+      return out;
+    };
+
+    const formatValue = (value) => {
+      if (value == null) return String(value);
+      if (ArrayBuffer.isView(value)) return JSON.stringify(Array.from(value));
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    };
+
+    let server = null;
+    let attached = false;
+
+    await init();
+    log("WASM initialized.");
+
+    const ensureServer = () => {
+      if (!server) {
+        log("Server not created. Click Create Server first.");
+        return false;
+      }
+      return true;
+    };
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      logEl.textContent = "";
+    });
+
+    document.getElementById("btnCreate").addEventListener("click", () => {
+      try {
+        const mode = document.getElementById("mode").value;
+        const cfg = mode === "ascii" ? WasmSerialServerConfig.ascii() : WasmSerialServerConfig.rtu();
+
+        const onRequest = (req) => {
+          const response = {
+            ok: true,
+            mode,
+            received: req,
+            at: new Date().toISOString(),
+          };
+          return Promise.resolve(response);
+        };
+
+        server = new WasmSerialServer(cfg, onRequest);
+        attached = false;
+        log(`Server created. mode=${mode}, enum=${server.mode()}`);
+      } catch (err) {
+        log(`Create ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnPickPort").addEventListener("click", async () => {
+      if (!ensureServer()) return;
+      if (!navigator.serial || !navigator.serial.requestPort) {
+        log("Web Serial API unavailable in this browser/context.");
+        return;
+      }
+      try {
+        const port = await navigator.serial.requestPort();
+        server.attach_serial_port(port);
+        attached = true;
+        log("Serial port attached to server.");
+      } catch (err) {
+        log(`Attach port ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnStart").addEventListener("click", () => {
+      if (!ensureServer()) return;
+      try {
+        server.start();
+        log("start() OK");
+      } catch (err) {
+        log(`start() ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnStop").addEventListener("click", () => {
+      if (!ensureServer()) return;
+      try {
+        server.stop();
+        log("stop() OK");
+      } catch (err) {
+        log(`stop() ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnStatus").addEventListener("click", () => {
+      if (!ensureServer()) return;
+      log(`attached=${attached} is_running=${server.is_running()} transport_connected=${server.transport_connected()} mode=${server.mode()}`);
+    });
+
+    document.getElementById("btnDispatch").addEventListener("click", async () => {
+      if (!ensureServer()) return;
+      try {
+        const req = parseJson(document.getElementById("requestJson").value);
+        const out = await server.dispatch_request(req);
+        log(`dispatch_request OK: ${formatValue(out)}`);
+      } catch (err) {
+        log(`dispatch_request ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnSend").addEventListener("click", () => {
+      if (!ensureServer()) return;
+      try {
+        const bytes = hexToBytes(document.getElementById("frameHex").value);
+        server.send_frame(bytes);
+        log(`send_frame OK (${bytes.length} bytes)`);
+      } catch (err) {
+        log(`send_frame ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnRecv").addEventListener("click", () => {
+      if (!ensureServer()) return;
+      try {
+        const out = server.recv_frame();
+        log(`recv_frame OK: ${formatValue(out)}`);
+      } catch (err) {
+        log(`recv_frame ERROR: ${String(err)}`);
+      }
+    });
+
+    document.getElementById("btnRunAll").addEventListener("click", async () => {
+      if (!ensureServer()) return;
+      const req = parseJson(document.getElementById("requestJson").value);
+      const steps = [
+        ["status-before", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
+        ["dispatch-before-start", async () => server.dispatch_request(req)],
+        ["start", async () => { server.start(); return "ok"; }],
+        ["status-after-start", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
+        ["dispatch-after-start", async () => server.dispatch_request(req)],
+        ["send_frame", async () => {
+          const bytes = hexToBytes(document.getElementById("frameHex").value);
+          server.send_frame(bytes);
+          return `sent ${bytes.length} bytes`;
+        }],
+        ["recv_frame", async () => server.recv_frame()],
+        ["stop", async () => { server.stop(); return "ok"; }],
+        ["status-after-stop", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
+      ];
+
+      log("Running serial server smoke...");
+      for (const [name, run] of steps) {
+        try {
+          const out = await run();
+          log(`OK   ${name}: ${formatValue(out)}`);
+        } catch (err) {
+          log(`SKIP ${name}: ${String(err)}`);
+        }
+        await sleep(400);
+      }
+      log("Serial server smoke complete.");
+    });
+  </script>
+</body>
+</html>

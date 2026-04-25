@@ -340,8 +340,36 @@ allocation and free paths.
 `mbus-ffi` securely exports internal modbus logic to JavaScript via `wasm-pack`, exposing:
 - `WasmModbusClient` (WebSocket transport mapper)
 - `WasmSerialModbusClient` + `request_serial_port()` (Web Serial hardware mapper)
+- `WasmTcpServer` + `WasmTcpGatewayConfig` (WASM server binding over network transport)
+- `WasmSerialServer` + `WasmSerialServerConfig` (WASM server binding over serial transport)
 
 All APIs are Promise-based and are designed specifically for browser runtimes (`wasm32`). Building native targets does not interact with Javascript wrappers.
+
+### WASM Server Transport Ownership Boundary
+
+WASM transport implementations are owned by transport crates only:
+- `mbus-network` owns the WASM websocket transport implementation.
+- `mbus-serial` owns the WASM Web Serial transport implementation.
+
+`mbus-ffi` server bindings orchestrate lifecycle and JS callback bridging; they do not reimplement transport I/O.
+
+### WASM Server Protocol Contract (Current vs Planned)
+
+Current contractual surface (available now):
+
+- `WasmTcpServer` / `WasmSerialServer` lifecycle: `start()`, `stop()`, `is_running()`
+- JS callback bridge via `dispatch_request(...)` (direct value or Promise return)
+- Raw frame passthrough helpers: `send_frame(...)`, `recv_frame(...)`
+- WebSocket readiness helpers (TCP server): `transport_connecting()`, `transport_connected()`
+- Transport ownership remains in `mbus-network` and `mbus-serial`
+
+Not part of the current server binding contract (planned later):
+
+- Built-in Modbus function-code dispatcher/routing inside `WasmTcpServer` / `WasmSerialServer`
+- Guaranteed typed FC response helpers at the WASM server binding layer
+- Fully managed end-to-end server request loop owned by `mbus-ffi`
+
+This separation is intentional for phase stability: current bindings provide lifecycle + bridge + transport plumbing, while higher-level protocol handling is integrated incrementally.
 
 ### Build WASM Package
 ```bash
@@ -386,10 +414,62 @@ const client = new WasmSerialModbusClient(
 const ok = await client.read_single_coil(0);
 ```
 
+### Quick Start (WASM Server Bindings)
+
+```javascript
+import init, {
+	WasmTcpServer,
+	WasmTcpGatewayConfig,
+	WasmSerialServer,
+	WasmSerialServerConfig,
+} from "./pkg/mbus_ffi.js";
+
+await init();
+
+const tcpServer = new WasmTcpServer(
+	new WasmTcpGatewayConfig("ws://127.0.0.1:8080"),
+	(req) => Promise.resolve({ ok: true, echo: req })
+);
+await tcpServer.start();
+
+const serialServer = new WasmSerialServer(
+	WasmSerialServerConfig.rtu(),
+	(req) => Promise.resolve(req)
+);
+// Attach browser SerialPort object from navigator.serial.requestPort() before start.
+```
+
+### Server Observability (Status + Last Error)
+
+Use `status_snapshot()` for lightweight counters and lifecycle state, and
+`last_error_message()` / `clear_last_error()` to track and reset the latest
+binding-level failure.
+
+```javascript
+const snap = tcpServer.status_snapshot();
+console.log({
+	transport: snap.transport(),
+	running: snap.running(),
+	connected: snap.transport_connected(),
+	dispatched: snap.dispatched_requests(),
+	sent: snap.sent_frames(),
+	received: snap.received_frames(),
+	hasError: snap.last_error_present(),
+});
+
+const lastErr = tcpServer.last_error_message();
+if (lastErr !== undefined) {
+	console.warn("server last error:", lastErr);
+	tcpServer.clear_last_error();
+}
+```
+
 ### Example Web Pages
 Use the browser examples under `mbus-ffi/examples`:
 - `network_smoke.html` (WebSocket/TCP path)
 - `serial_smoke.html` (Web Serial path, full serial API smoke runner)
+- `network_server_smoke.html` (WASM TCP server lifecycle + dispatch + frame passthrough)
+- `serial_server_smoke.html` (WASM Serial server lifecycle + dispatch + frame passthrough)
 
 Serve the examples over localhost:
 ```bash
@@ -398,7 +478,7 @@ python3 -m http.server 8089
 ```
 
 ## Supported Modbus Operations
-Both FFI wrappers expose the same internal client services configured by feature flags:
+Client-side WASM/FFI wrappers expose internal client services configured by feature flags:
 - `coils`: read single/multiple, write single/multiple
 - `registers`: read holding/input, write single/multiple, mask write, read-write multiple
 - `discrete-inputs`: read single/multiple
@@ -406,6 +486,37 @@ Both FFI wrappers expose the same internal client services configured by feature
 - `file-record`: read/write
 - `diagnostics`: exception status, diagnostics, comm event counter/log, report server id, read device ID
 - `full`: Enables all Modbus service features.
+
+## WASM Test Coverage
+
+WASM browser tests are in `mbus-ffi/tests/wasm_e2e.rs` and cover:
+- Promise behavior and typed payload mapping for client APIs.
+- WASM server lifecycle/dispatch surface (`WasmTcpServer`, `WasmSerialServer`).
+- Adapter passthrough to transport crates (`mbus-network`, `mbus-serial`).
+
+Run wasm-target checks:
+
+```bash
+cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm
+cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,full
+```
+
+Run browser E2E tests:
+
+```bash
+bash mbus-ffi/scripts/run_wasm_browser_tests.sh
+```
+
+Prerequisites for browser E2E test runs:
+
+- `wasm-pack` installed and available on `PATH`
+- Chromium-based browser installed (`google-chrome`, `chromium`, or `chromium-browser`)
+- `chromedriver` installed on `PATH` with major version matching local browser
+
+Notes:
+
+- The script enforces these prerequisites before executing tests.
+- Canonical command target is fixed to `wasm-pack test --headless --chrome --features wasm,full --test wasm_e2e`.
 
 ## Licensing
 

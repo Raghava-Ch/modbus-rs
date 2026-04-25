@@ -194,6 +194,54 @@ Web Serial is currently supported in Chromium-based browsers under secure contex
 
 ---
 
+## WASM Server Bindings (Phase 1/2 Surface)
+
+`mbus-ffi` now exposes browser-facing server binding types:
+
+- `WasmTcpServer` + `WasmTcpGatewayConfig`
+- `WasmSerialServer` + `WasmSerialServerConfig`
+
+Current scope:
+
+- Lifecycle controls: `start()`, `stop()`, `is_running()`
+- Request bridge: `dispatch_request(...)` through JS callback handler
+- Adapter passthrough helpers: `send_frame(...)`, `recv_frame(...)`
+- WebSocket handshake helpers on `WasmTcpServer`: `transport_connecting()` and `transport_connected()` (`transport_connected()` is true only after websocket OPEN)
+
+### Supported Protocol Surface (Contract)
+
+Current contractual server binding support:
+
+- Lifecycle APIs are stable (`start`, `stop`, `is_running`)
+- `dispatch_request(...)` callback bridge is stable (sync return or Promise return)
+- Raw frame transport passthrough helpers are stable (`send_frame`, `recv_frame`)
+
+Not currently contractual at server binding level:
+
+- Built-in Modbus FC request parsing/routing by `WasmTcpServer` / `WasmSerialServer`
+- Guaranteed typed FC helper APIs on server bindings
+- End-to-end managed protocol loop in `mbus-ffi` server layer
+
+Planned expansion (non-contractual roadmap intent):
+
+- Incremental typed protocol helpers and FC mapping on top of current bridge
+- More managed request/response orchestration while preserving transport ownership boundaries
+
+### Transport Ownership Boundary
+
+WASM transport implementations are not reimplemented in `mbus-ffi` server bindings:
+
+- `mbus-network` owns websocket WASM transport implementation
+- `mbus-serial` owns Web Serial WASM transport implementation
+
+`mbus-ffi` owns only binding orchestration (lifecycle + JS bridge + adapter wiring).
+
+Note:
+
+- Any behavior implemented only in example pages (for smoke/demo convenience) is not part of the stable binding contract unless documented in the API sections above.
+
+---
+
 ## API Reference
 
 ### Constructor
