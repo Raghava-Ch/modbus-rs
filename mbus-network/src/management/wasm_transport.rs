@@ -53,6 +53,22 @@ impl WasmWsTransport {
             _on_error: None,
         }
     }
+
+    /// Returns true only when the underlying websocket is fully OPEN.
+    pub fn is_open(&self) -> bool {
+        match &self.ws {
+            None => false,
+            Some(ws) => ws.ready_state() == WebSocket::OPEN,
+        }
+    }
+
+    /// Returns true while the websocket handshake is in CONNECTING state.
+    pub fn is_connecting(&self) -> bool {
+        match &self.ws {
+            None => false,
+            Some(ws) => ws.ready_state() == WebSocket::CONNECTING,
+        }
+    }
 }
 
 impl Transport for WasmWsTransport {

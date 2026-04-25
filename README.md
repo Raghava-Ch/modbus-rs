@@ -81,7 +81,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | [`mbus-macros`](mbus-macros/) | Proc macros: `#[modbus_app]`, `#[derive(CoilsModel)]`, etc. |
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
-| [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings |
+| [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings (client + phased server surface) |
 
 ### Direct Async Crate Selection
 
@@ -210,6 +210,33 @@ int main(void) {
 ```
 
 See [`mbus-ffi/`](mbus-ffi/) for the full C binding reference, build instructions, and server demo.
+
+### WASM Browser Bindings (via `mbus-ffi`)
+
+Build the WASM package and serve locally:
+
+```bash
+cd mbus-ffi
+wasm-pack build --target web --features wasm,full
+python3 -m http.server 8089
+```
+
+Run canonical browser E2E tests:
+
+```bash
+bash mbus-ffi/scripts/run_wasm_browser_tests.sh
+```
+
+Open the runnable smoke examples in a Chromium-based browser:
+
+| Example | What it exercises |
+|---|---|
+| [examples/network_smoke.html](mbus-ffi/examples/network_smoke.html) | WebSocket client (TCP proxy) |
+| [examples/serial_smoke.html](mbus-ffi/examples/serial_smoke.html) | Web Serial client (RTU/ASCII) |
+| [examples/network_server_smoke.html](mbus-ffi/examples/network_server_smoke.html) | WASM TCP server lifecycle + dispatch |
+| [examples/serial_server_smoke.html](mbus-ffi/examples/serial_server_smoke.html) | WASM Serial server lifecycle + dispatch |
+
+See [`mbus-ffi/README.md`](mbus-ffi/README.md) for the full WASM API reference and server binding architecture.
 
 ### Run examples
 

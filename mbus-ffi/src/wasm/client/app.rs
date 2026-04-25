@@ -12,18 +12,29 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use js_sys::{Array, Function, Object, Reflect, Uint8Array, Uint16Array};
+use js_sys::{Function, Object, Reflect, Uint8Array, Uint16Array};
+#[cfg(any(feature = "file-record", feature = "diagnostics"))]
+use js_sys::Array;
 use mbus_client::app::{
-    CoilResponse, DiagnosticsResponse, DiscreteInputResponse, FifoQueueResponse,
-    FileRecordResponse, RegisterResponse, RequestErrorNotifier,
+    CoilResponse, DiscreteInputResponse, RegisterResponse, RequestErrorNotifier,
 };
+#[cfg(feature = "diagnostics")]
+use mbus_client::app::DiagnosticsResponse;
+#[cfg(feature = "fifo")]
+use mbus_client::app::FifoQueueResponse;
+#[cfg(feature = "file-record")]
+use mbus_client::app::FileRecordResponse;
 use mbus_client::services::coil::Coils;
+#[cfg(feature = "diagnostics")]
 use mbus_client::services::diagnostic::DeviceIdentificationResponse;
 use mbus_client::services::discrete_input::DiscreteInputs;
+#[cfg(feature = "fifo")]
 use mbus_client::services::fifo_queue::FifoQueue;
+#[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequestParams;
 use mbus_client::services::register::Registers;
 use mbus_core::errors::MbusError;
+#[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 use mbus_core::transport::{TimeKeeper, UnitIdOrSlaveAddr};
 use wasm_bindgen::JsValue;

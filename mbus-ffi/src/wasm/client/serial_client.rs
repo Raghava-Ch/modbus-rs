@@ -14,10 +14,15 @@ use gloo_timers::future::sleep;
 use js_sys::{Function, Promise, Reflect};
 use mbus_client::services::ClientServices;
 use mbus_client::services::coil::Coils;
+#[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequest;
-use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+#[cfg(feature = "file-record")]
+use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 use mbus_core::errors::MbusError;
+#[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
+#[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
@@ -654,6 +659,7 @@ impl WasmSerialModbusClient {
     /// Read the FIFO queue pointed to by `address` (FC 24).
     ///
     /// Returns a `Promise` resolving with a `Uint16Array` or rejects on error.
+    #[cfg(feature = "fifo")]
     pub fn read_fifo_queue(&mut self, address: u16) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -678,6 +684,7 @@ impl WasmSerialModbusClient {
     ///
     /// Returns a `Promise` resolving with `Array<{ fileNumber, recordNumber, data: Uint16Array }>`
     /// or rejects on error.
+    #[cfg(feature = "file-record")]
     pub fn read_file_record(
         &mut self,
         file_number: u16,
@@ -711,6 +718,7 @@ impl WasmSerialModbusClient {
     ///
     /// `values` is a `Uint16Array` of register values to write.
     /// Returns a `Promise` resolving with `true` or rejects on error.
+    #[cfg(feature = "file-record")]
     pub fn write_file_record(
         &mut self,
         file_number: u16,
@@ -753,6 +761,7 @@ impl WasmSerialModbusClient {
     /// Read the exception status (FC 7).
     ///
     /// Returns a `Promise` resolving with a status `number` or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn read_exception_status(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -777,6 +786,7 @@ impl WasmSerialModbusClient {
     ///
     /// `sub_function` is one of the `DiagnosticSubFunction` u16 codes.
     /// Returns a `Promise` resolving with `{ subFunction, data: Uint16Array }` or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn diagnostics(&mut self, sub_function: u16, data: &[u16]) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -803,6 +813,7 @@ impl WasmSerialModbusClient {
     /// Read the communication event counter (FC 11).
     ///
     /// Returns a `Promise` resolving with `{ status, eventCount }` or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn get_comm_event_counter(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -827,6 +838,7 @@ impl WasmSerialModbusClient {
     ///
     /// Returns a `Promise` resolving with `{ status, eventCount, messageCount, events: Uint8Array }`
     /// or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn get_comm_event_log(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -850,6 +862,7 @@ impl WasmSerialModbusClient {
     /// Report Server ID (FC 17).
     ///
     /// Returns a `Promise` resolving with a `Uint8Array` (raw server ID data) or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn report_server_id(&mut self) -> Promise {
         let txn_id = self.alloc_txn();
         let (promise, resolve, reject) = make_promise();
@@ -876,6 +889,7 @@ impl WasmSerialModbusClient {
     /// `object_id`: 0x00=VendorName, 0x01=ProductCode, 0x02=Revision, etc.
     /// Returns a `Promise` resolving with `{ readDeviceIdCode, conformityLevel, moreFollows, objects }`
     /// or rejects on error.
+    #[cfg(feature = "diagnostics")]
     pub fn read_device_identification(
         &mut self,
         read_device_id_code: u8,
