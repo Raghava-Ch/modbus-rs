@@ -1,0 +1,3 @@
+[target.x86_64-pc-windows-msvc]
+# Explicitly link against the dynamic MSVC CRT to resolve c.lib linking issues
+rustflags = ["-l", "dylib=msvcrt", "-l", "dylib=user32"]
