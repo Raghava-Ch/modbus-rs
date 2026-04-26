@@ -1,0 +1,155 @@
+name: Release Python (modbus-rs)
+
+# Trigger: push a tag of the form `py-v*` (e.g. `py-v0.1.0`).
+# Run manually via workflow_dispatch for local testing.
+on:
+  push:
+    tags:
+      - "py-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Build manylinux wheels (Linux, x86_64 + aarch64) ────────────────────
+  linux:
+    name: Linux (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out ../dist --features python,full
+          manylinux: auto
+          working-directory: mbus-ffi
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist/*.whl
+
+  # ── Build macOS wheels (Intel + Apple Silicon) ───────────────────────────
+  macos:
+    name: macOS (${{ matrix.target }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheels
+        run: |
+          maturin build --release \
+            --target ${{ matrix.target }} \
+            --out ../dist \
+            --features python,full
+        working-directory: mbus-ffi
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist/*.whl
+
+  # ── Build Windows wheels (x86_64) ────────────────────────────────────────
+  windows:
+    name: Windows (x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheels
+        run: |
+          maturin build --release `
+            --target x86_64-pc-windows-msvc `
+            --out ../dist `
+            --features python,full
+        working-directory: mbus-ffi
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-x86_64
+          path: dist/*.whl
+
+  # ── Build sdist ───────────────────────────────────────────────────────────
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build sdist
+        run: |
+          maturin sdist \
+            --out ../dist
+        working-directory: mbus-ffi
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # ── Publish to PyPI ───────────────────────────────────────────────────────
+  publish:
+    name: Publish to PyPI
+    needs: [linux, macos, windows, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "wheels-*"
+          path: dist
+          merge-multiple: true
+
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

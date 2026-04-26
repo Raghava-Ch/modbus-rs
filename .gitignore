@@ -26,6 +26,8 @@ Cargo.lock
 # accidentally ends up in src/ during development.
 mbus-ffi/src/c/server_gen/generated_server.rs
 temp
+**.tmp.**
+**.tmp
 **.temp.**
 **.temp
 **/build/**
@@ -39,6 +41,13 @@ temp
 mbus-ffi/pkg
 mbus-ffi/include
 .cargo
+
+# Python local env/artifacts (generated, never commit)
+.venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+mbus-ffi/python/modbus_rs/_modbus_rs.cpython-*.so
 
 # CMake project ignores
 CMakeLists.txt.user

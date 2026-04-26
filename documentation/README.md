@@ -10,6 +10,7 @@ Welcome to the modbus-rs documentation. This guide covers both client and server
 |--------------|-------|
 | Build a Modbus **client** application | [Client Documentation](client/README.md) |
 | Build a Modbus **server** application | [Server Documentation](server/README.md) |
+| Build with **Python bindings** | [Python Bindings](python_bindings.md) |
 | Migrate from an older version | [Migration Guide](migration_guide.md) |
 
 ---
@@ -30,6 +31,7 @@ Everything you need to build Modbus client applications.
 | [Async Development](client/async.md) | Tokio-based async client APIs |
 | [C/FFI Development](client/c_bindings.md) | Native C client bindings |
 | [WASM Development](client/wasm.md) | Browser WebSocket client |
+| [Python Bindings](python_bindings.md) | Python client/server usage via mbus-ffi |
 
 ---
 
@@ -65,7 +67,7 @@ Everything you need to build Modbus server applications.
 | [`mbus-async`](../mbus-async/README.md) | Async facade | [Client Async](client/async.md) |
 | [`mbus-network`](../mbus-network/README.md) | TCP transport | [Client](client/building_applications.md) / [Server](server/building_applications.md) |
 | [`mbus-serial`](../mbus-serial/README.md) | Serial RTU/ASCII transports | [Client](client/building_applications.md) / [Server](server/building_applications.md) |
-| [`mbus-ffi`](../mbus-ffi/README.md) | C and WASM bindings | [C Bindings](client/c_bindings.md) / [WASM](client/wasm.md) |
+| [`mbus-ffi`](../mbus-ffi/README.md) | C, WASM, and Python bindings | [C Bindings](client/c_bindings.md) / [WASM](client/wasm.md) / [Python](python_bindings.md) |
 
 ### Additional Resources
 

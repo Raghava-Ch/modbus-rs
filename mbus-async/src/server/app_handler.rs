@@ -12,7 +12,7 @@ use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_PER_PDU};
-use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
+use mbus_core::transport::{checksum, SerialMode, TransportType, UnitIdOrSlaveAddr};
 use std::future::Future;
 
 /// Direction of a Modbus traffic event — mirrors [`mbus_server::TrafficDirection`] for
@@ -575,6 +575,18 @@ pub enum ModbusResponse {
         /// The exception code to send.
         code: ExceptionCode,
     },
+    /// A Modbus exception response for an unrecognised function code byte.
+    ///
+    /// Use this when the request arrived as [`ModbusRequest::Unknown`] and you
+    /// need to reply with the correct exception FC byte (`fc_byte | 0x80`).
+    /// Unlike [`Exception`], this variant accepts any raw `u8` function-code
+    /// byte and does not require a [`FunctionCode`] enum value.
+    ExceptionRaw {
+        /// The raw function-code byte from the unknown request.
+        fc_byte: u8,
+        /// The exception code to send.
+        code: ExceptionCode,
+    },
     /// Suppress — send no response (e.g. for broadcast writes on serial).
     NoResponse,
 }
@@ -628,6 +640,17 @@ impl ModbusResponse {
     /// Return a Modbus exception.
     pub fn exception(request_fc: FunctionCode, code: ExceptionCode) -> Self {
         ModbusResponse::Exception { request_fc, code }
+    }
+
+    /// Return a Modbus exception for an unrecognised raw function-code byte.
+    ///
+    /// This is the correct way to respond to [`ModbusRequest::Unknown`]
+    /// requests: the exception response uses `fc_byte | 0x80` as the
+    /// response function-code byte, matching the Modbus spec for any
+    /// function code — including vendor-specific ones not present in the
+    /// [`FunctionCode`] enum.
+    pub fn exception_raw(fc_byte: u8, code: ExceptionCode) -> Self {
+        ModbusResponse::ExceptionRaw { fc_byte, code }
     }
 
     /// Return `InvalidFunctionCode` exception for the given FC.
@@ -808,6 +831,9 @@ impl ModbusResponse {
             }
             ModbusResponse::Exception { request_fc, code } => {
                 encode_exception(request_fc, code, txn_id, unit, transport_type)
+            }
+            ModbusResponse::ExceptionRaw { fc_byte, code } => {
+                encode_exception_raw(fc_byte, code, txn_id, unit, transport_type)
             }
             ModbusResponse::NoResponse => Err(MbusError::Unexpected), // caller must check
         }
@@ -1148,6 +1174,64 @@ fn encode_exception(
         .ok_or(MbusError::InvalidFunctionCode)?;
     let pdu = Pdu::build_byte_payload(exception_fc, code as u8)?;
     compile_adu_frame(txn_id, unit.get(), pdu, tt)
+}
+
+/// Encode an exception response for an arbitrary (possibly vendor-specific)
+/// function-code byte that does not appear in the [`FunctionCode`] enum.
+///
+/// Follows the Modbus spec: the response function-code byte = `fc_byte | 0x80`.
+fn encode_exception_raw(
+    fc_byte: u8,
+    code: ExceptionCode,
+    txn_id: u16,
+    unit: UnitIdOrSlaveAddr,
+    tt: TransportType,
+) -> EncodeResult {
+    let exception_fc_byte = fc_byte | 0x80;
+    let code_byte = code as u8;
+    let unit_id = unit.get();
+    let mut frame: AduFrame = AduFrame::new();
+    match tt {
+        TransportType::StdTcp | TransportType::CustomTcp => {
+            // MBAP header: TID(2) + Protocol(2) + Length(2) + UnitID(1) + PDU(2) = 9 bytes
+            // Length field = 1 (unit) + 2 (PDU) = 3
+            frame.extend_from_slice(&txn_id.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
+            frame.extend_from_slice(&0u16.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
+            frame.extend_from_slice(&3u16.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
+            frame.push(unit_id).map_err(|_| MbusError::Unexpected)?;
+            frame.push(exception_fc_byte).map_err(|_| MbusError::Unexpected)?;
+            frame.push(code_byte).map_err(|_| MbusError::Unexpected)?;
+        }
+        TransportType::StdSerial(mode) | TransportType::CustomSerial(mode) => {
+            match mode {
+                SerialMode::Rtu => {
+                    let payload = [unit_id, exception_fc_byte, code_byte];
+                    frame.extend_from_slice(&payload).map_err(|_| MbusError::Unexpected)?;
+                    let crc = checksum::crc16(&payload);
+                    frame.extend_from_slice(&crc.to_le_bytes()).map_err(|_| MbusError::Unexpected)?;
+                }
+                SerialMode::Ascii => {
+                    let binary = [unit_id, exception_fc_byte, code_byte];
+                    let lrc = checksum::lrc(&binary);
+                    frame.push(b':').map_err(|_| MbusError::Unexpected)?;
+                    for &b in &binary {
+                        frame.push(raw_nibble_to_hex(b >> 4)).map_err(|_| MbusError::Unexpected)?;
+                        frame.push(raw_nibble_to_hex(b & 0x0F)).map_err(|_| MbusError::Unexpected)?;
+                    }
+                    frame.push(raw_nibble_to_hex(lrc >> 4)).map_err(|_| MbusError::Unexpected)?;
+                    frame.push(raw_nibble_to_hex(lrc & 0x0F)).map_err(|_| MbusError::Unexpected)?;
+                    frame.push(b'\r').map_err(|_| MbusError::Unexpected)?;
+                    frame.push(b'\n').map_err(|_| MbusError::Unexpected)?;
+                }
+            }
+        }
+    }
+    Ok(frame)
+}
+
+#[inline]
+fn raw_nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 { b'0' + nibble } else { b'A' + nibble - 10 }
 }
 
 /// Counts the `[id(1), len(1), value(N)...]` object triples in a FC2B/MEI 0x0E objects payload.

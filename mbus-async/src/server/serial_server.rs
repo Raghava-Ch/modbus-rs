@@ -1,6 +1,7 @@
 //! [`AsyncSerialServer`] — async Modbus serial server (RTU and ASCII).
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use std::future::Future;
 
 use super::app_handler::{AsyncAppHandler, AsyncServerError};
 use super::session::AsyncServerSession;
@@ -32,6 +33,36 @@ impl<T: mbus_core::transport::AsyncTransport + Send> AsyncSerialServer<T> {
         mut app: APP,
     ) -> Result<(), AsyncServerError> {
         self.session.run(&mut app).await
+    }
+
+    /// Run the server loop until either the port closes or `shutdown` resolves.
+    ///
+    /// If `shutdown` fires first, returns `Ok(())`.  If the port closes with an
+    /// error before the shutdown signal, that error is returned.
+    ///
+    /// In-flight request/response cycles complete normally; only the outer read
+    /// loop is interrupted.
+    ///
+    /// ```rust,ignore
+    /// let notify = Arc::new(tokio::sync::Notify::new());
+    /// let n = notify.clone();
+    /// server.run_with_shutdown(MyApp::default(), n.notified()).await?;
+    /// ```
+    pub async fn run_with_shutdown<APP, F>(
+        &mut self,
+        app: APP,
+        shutdown: F,
+    ) -> Result<(), AsyncServerError>
+    where
+        APP: AsyncAppHandler,
+        F: Future<Output = ()>,
+    {
+        let mut app = app;
+        tokio::select! {
+            biased;
+            _ = shutdown => Ok(()),
+            result = self.session.run(&mut app) => result,
+        }
     }
 
     // ── Constructors ─────────────────────────────────────────────────────────

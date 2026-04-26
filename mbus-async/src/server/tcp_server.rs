@@ -3,6 +3,7 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_network::TokioTcpTransport;
 use std::convert::Infallible;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -80,6 +81,55 @@ impl AsyncTcpServer {
         APP: AsyncAppHandler,
     {
         Self::serve(addr, app, unit).await
+    }
+
+    /// Bind and serve until the `shutdown` future resolves.
+    ///
+    /// Identical to [`serve`](Self::serve) but accepts a future that, when it
+    /// resolves, causes the accept loop to stop and this method to return
+    /// `Ok(())` rather than `Err(Infallible)`.
+    ///
+    /// In-flight sessions are **not** cancelled; they run to completion in
+    /// their own tokio tasks.  Only new connections are no longer accepted
+    /// after the shutdown signal fires.
+    ///
+    /// ```rust,ignore
+    /// let notify = Arc::new(tokio::sync::Notify::new());
+    /// let n = notify.clone();
+    /// AsyncTcpServer::serve_with_shutdown(
+    ///     "0.0.0.0:502",
+    ///     HvacApp::default(),
+    ///     unit_id(1),
+    ///     n.notified(),
+    /// ).await?;
+    /// ```
+    pub async fn serve_with_shutdown<APP, A, F>(
+        addr: A,
+        app: APP,
+        unit: UnitIdOrSlaveAddr,
+        shutdown: F,
+    ) -> Result<(), AsyncServerError>
+    where
+        A: ToSocketAddrs,
+        APP: AsyncAppHandler + Clone,
+        F: Future<Output = ()>,
+    {
+        let server = Self::bind(addr, unit).await?;
+        tokio::pin!(shutdown);
+        loop {
+            tokio::select! {
+                biased;
+                _ = &mut shutdown => return Ok(()),
+                result = server.accept() => {
+                    let (mut session, _peer) = result?;
+                    let app_instance = app.clone();
+                    tokio::spawn(async move {
+                        let mut app_instance = app_instance;
+                        let _ = session.run(&mut app_instance).await;
+                    });
+                }
+            }
+        }
     }
 
     // ── Advanced ─────────────────────────────────────────────────────────────

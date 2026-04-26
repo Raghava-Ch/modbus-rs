@@ -1,0 +1,40 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "modbus-rs"
+version = "0.8.0"
+description = "Fast, full-featured Modbus TCP + Serial bindings for Python — powered by Rust"
+readme = "PYPI_README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.10"
+keywords = ["modbus", "rtu", "tcp", "serial", "industrial", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: System :: Hardware",
+    "Topic :: System :: Networking",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/Raghava-Ch/modbus-rs"
+Repository = "https://github.com/Raghava-Ch/modbus-rs"
+Documentation = "https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation"
+
+[tool.maturin]
+manifest-path = "Cargo.toml"
+features = ["python", "full"]
+module-name = "modbus_rs._modbus_rs"
+python-source = "python"
+# Strip debug symbols in release builds to reduce wheel size.
+strip = true

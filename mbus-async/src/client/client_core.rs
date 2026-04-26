@@ -146,6 +146,22 @@ impl AsyncClientCore {
             .map_err(AsyncError::Mbus)
     }
 
+    /// Disconnects the underlying transport.
+    ///
+    /// Drains all in-flight and queued requests with
+    /// [`MbusError::ConnectionClosed`] and closes the transport.  After this
+    /// call, [`connect`](Self::connect) can be called to reconnect.
+    ///
+    /// This is an explicit, graceful disconnect.  The background task continues
+    /// running so the client can be reconnected later.  Dropping the client
+    /// handle entirely also stops the background task.
+    pub async fn disconnect(&self) -> Result<(), AsyncError> {
+        self.cmd_tx
+            .send(TaskCommand::Disconnect)
+            .await
+            .map_err(|_| AsyncError::WorkerClosed)
+    }
+
     /// Returns `true` when there are requests in-flight awaiting a response.
     ///
     /// This is a **synchronous** check — no `.await` required.

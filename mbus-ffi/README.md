@@ -1,6 +1,109 @@
 # mbus-ffi
 
-WASM/JS and Native C/C++ FFI bindings for the `modbus-rs` stack.
+WASM/JS, Native C/C++ FFI, and **Python** bindings for the `modbus-rs` stack.
+
+---
+
+## Python Bindings (`modbus-rs` on PyPI)
+
+The `python` feature compiles `mbus-ffi` into a Python extension module via
+[PyO3](https://pyo3.rs) and [Maturin](https://maturin.rs).
+PyPI package: **`modbus-rs`** · Import name: `modbus_rs`
+
+### Installation
+
+```bash
+pip install modbus-rs
+```
+
+### Quick Start — Synchronous TCP client
+
+```python
+import modbus_rs
+
+with modbus_rs.TcpClient("192.168.1.10", port=502, unit_id=1) as client:
+    regs = client.read_holding_registers(0, 10)
+    print(regs)                     # [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    client.write_register(0, 0xFF)
+    coils = client.read_coils(0, 8)
+    print(coils)                    # [False, False, ...]
+```
+
+### Quick Start — Asyncio TCP client
+
+```python
+import asyncio
+import modbus_rs
+
+async def main():
+    async with modbus_rs.AsyncTcpClient("192.168.1.10", unit_id=1) as client:
+        regs = await client.read_holding_registers(0, 10)
+        print(regs)
+
+asyncio.run(main())
+```
+
+### Quick Start — Serial client (RTU)
+
+```python
+import modbus_rs
+
+with modbus_rs.SerialClient("/dev/ttyUSB0", baud_rate=9600, unit_id=1) as client:
+    regs = client.read_holding_registers(0, 5)
+    print(regs)
+```
+
+### Quick Start — TCP server
+
+```python
+import asyncio
+import modbus_rs
+
+class MyApp(modbus_rs.ModbusApp):
+    def handle_read_holding_registers(self, address, count):
+        return [address + i for i in range(count)]
+
+    def handle_write_register(self, address, value):
+        pass  # accept silently
+
+async def main():
+    async with modbus_rs.AsyncTcpServer("0.0.0.0", MyApp(), port=5020, unit_id=1) as srv:
+        await srv.serve_forever()
+
+asyncio.run(main())
+```
+
+### Exception hierarchy
+
+```
+ModbusError
+├── ModbusTimeout
+├── ModbusConnectionError
+├── ModbusProtocolError
+│   └── ModbusDeviceException
+└── ModbusConfigError
+```
+
+### Building from source
+
+Requires a Rust toolchain and [Maturin](https://maturin.rs) (`pip install maturin`).
+
+```bash
+# install into an active venv (editable / dev mode)
+cd mbus-ffi && maturin develop --features python,full
+
+# build a release wheel
+cd mbus-ffi && maturin build --release --features python,full
+```
+
+### Running the Python test suite
+
+```bash
+pip install pytest pytest-asyncio
+pytest mbus-ffi/tests/python/ -v
+```
+
+---
 
 ## Position In Workspace
 
