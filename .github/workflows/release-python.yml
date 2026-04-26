@@ -29,9 +29,6 @@ jobs:
           args: --release --out ../dist --features python,full
           manylinux: auto
           working-directory: mbus-ffi
-          before-script-linux: |
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            yum install -y python3.11-devel
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -81,21 +78,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install maturin
-        run: pip install maturin
-
       - name: Build wheels
-        run: |
-          maturin build --release `
-            --target x86_64-pc-windows-msvc `
-            --out ../dist `
-            --features python,full
-        working-directory: mbus-ffi
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64
+          args: --release --out ../dist --features python,full
+          working-directory: mbus-ffi
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
