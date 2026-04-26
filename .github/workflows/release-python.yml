@@ -22,6 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -93,6 +98,8 @@ jobs:
             --out ../dist `
             --features python,full
         working-directory: mbus-ffi
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -106,6 +113,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin
+        run: pip install maturin
 
       - name: Set up Python
         uses: actions/setup-python@v5
