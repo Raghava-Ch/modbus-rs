@@ -22,11 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out ../dist --features python,full
+          args: --release --out ../dist --features python,full -i python3.11
           manylinux: auto
           working-directory: mbus-ffi
 
@@ -78,20 +82,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install build dependencies
         run: pip install maturin
 
       - name: Build wheels
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cd mbus-ffi
-          python -m maturin build --release --target x86_64-pc-windows-msvc --out ../dist --features python,full
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64
+          args: --release --out ../dist --features python,full
+          working-directory: mbus-ffi
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
