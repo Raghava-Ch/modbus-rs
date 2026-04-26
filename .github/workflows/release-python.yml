@@ -29,12 +29,6 @@ jobs:
           args: --release --out ../dist --features python,full
           manylinux: auto
           working-directory: mbus-ffi
-          before-script-linux: |
-            # Install Python 3.11 (manylinux2014 has python3.11 available)
-            yum install -y python3.11 python3.11-devel
-            # Use python3.11 as the primary interpreter
-            ln -sf /usr/bin/python3.11 /usr/bin/python3
-            python3 --version
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
