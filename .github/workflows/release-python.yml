@@ -29,6 +29,9 @@ jobs:
           args: --release --out ../dist --features python,full
           manylinux: auto
           working-directory: mbus-ffi
+          before-script-linux: |
+            yum install -y python3 python3-devel
+            python3 -c "import sysconfig; print(sysconfig.get_paths())"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -78,12 +81,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
+      - name: Set up Visual C++
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          target: x86_64
-          args: --release --out ../dist --features python,full
-          working-directory: mbus-ffi
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: pip install maturin
+
+      - name: Build wheels
+        run: |
+          cd mbus-ffi
+          python -m maturin build --release --target x86_64-pc-windows-msvc --out ../dist --features python,full
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
