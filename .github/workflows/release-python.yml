@@ -35,17 +35,24 @@ jobs:
           working-directory: mbus-ffi
           before-script-linux: |
             if command -v yum &>/dev/null; then
-              # x86_64 CentOS/manylinux container
+              # x86_64 CentOS manylinux container
               yum install -y systemd-devel
             else
-              # aarch64 Debian/Ubuntu cross container — need arm64 libudev
-              dpkg --add-architecture arm64 || true
+              # aarch64 Ubuntu cross-compilation container:
+              # archive.ubuntu.com does not serve arm64 — must use ports.ubuntu.com
+              sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+              dpkg --add-architecture arm64
+              . /etc/os-release
+              CODENAME=${VERSION_CODENAME:-jammy}
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main universe" >> /etc/apt/sources.list
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main universe" >> /etc/apt/sources.list
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-security main universe" >> /etc/apt/sources.list
               apt-get update -qq
-              apt-get install -y libudev-dev:arm64 || apt-get install -y libudev-dev
+              apt-get install -y --no-install-recommends libudev-dev:arm64
               export PKG_CONFIG_ALLOW_CROSS=1
-              export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
+              export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
             fi
-          docker-options: -e PKG_CONFIG_ALLOW_CROSS=1
+          docker-options: -e PKG_CONFIG_ALLOW_CROSS=1 -e PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
