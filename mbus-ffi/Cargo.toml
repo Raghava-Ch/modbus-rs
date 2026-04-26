@@ -51,11 +51,34 @@ full = [
 ## Convenience alias — enables every Modbus server feature at once (c-server must still be enabled)
 server-full = ["c-server"]
 
+## Enables Python bindings (PyO3 / Maturin) for the Modbus client + server stack.
+## Requires the `full` feature set; build with `--features python,full`.
+python = [
+    "dep:pyo3",
+    "dep:pyo3-async-runtimes",
+    "dep:tokio",
+    "dep:mbus-client-async",
+    "dep:mbus-server-async",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
+
 [dependencies]
 mbus-core = { workspace = true }
 mbus-client = { workspace = true }
 mbus-server = { workspace = true, optional = true }
 heapless = { workspace = true }
+
+## Python binding deps — only pulled in when `python` feature is enabled.
+pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
+pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"], optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+mbus-client-async = { version = "0.8.0", path = "../mbus-client-async", features = ["network-tcp", "serial-rtu", "serial-ascii", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-server-async = { version = "0.8.0", path = "../mbus-server-async", features = ["server-tcp", "server-serial", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)

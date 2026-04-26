@@ -63,3 +63,7 @@ pub use wasm::{
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(missing_docs)]
 pub mod c;
+
+#[cfg(feature = "python")]
+#[allow(missing_docs)]
+pub mod python;
