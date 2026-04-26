@@ -138,3 +138,12 @@ python3 async_client.py --host 127.0.0.1 --port 5020 --multi
 
 - Project docs: documentation/python_bindings.md
 - Full crate README (C/WASM/Python): mbus-ffi/README.md
+
+## License
+
+Copyright (C) 2026 Raghava Challari
+
+This project is currently licensed under GNU GPL v3.0.
+See [LICENSE](../LICENSE) for details.
+
+This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
