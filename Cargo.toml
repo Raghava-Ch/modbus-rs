@@ -14,6 +14,7 @@ members = [
     "mbus-async",
     "mbus-ffi",
     "mbus-server",
+    "mbus-gateway",
 ]
 resolver = "2"
 
@@ -44,6 +45,8 @@ mbus-server-async = { version = "0.8.0", path = "./mbus-server-async" }
 mbus-ffi    = { version = "0.8.0", path = "./mbus-ffi" }
 mbus-server = { version = "0.8.0", path = "./mbus-server" }
 mbus-macros = { version = "0.8.0", path = "./mbus-macros" }
+
+mbus-gateway = { version = "0.8.0", path = "./mbus-gateway" }
 
 heapless = { version = "0.8.0" }
 bitfields = { version = "1.0.0" }
