@@ -302,8 +302,11 @@ where
         let internal_txn = next_txn;
         next_txn = next_txn.wrapping_add(1);
 
+        // Apply optional unit-ID rewrite from the routing policy.
+        let downstream_unit = router.rewrite(unit);
+
         let downstream_type = DS::TRANSPORT_TYPE;
-        let ds_adu = match compile_adu_frame(internal_txn, unit.get(), msg.pdu.clone(), downstream_type) {
+        let ds_adu = match compile_adu_frame(internal_txn, downstream_unit.get(), msg.pdu.clone(), downstream_type) {
             Ok(adu) => adu,
             Err(e) => {
                 gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
