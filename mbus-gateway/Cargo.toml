@@ -16,6 +16,7 @@ mbus-core = { workspace = true, features = ["coils", "registers", "discrete-inpu
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
+mbus-serial  = { workspace = true, optional = true }
 tokio = { version = "1", features = ["net", "sync", "rt", "macros"], optional = true }
 
 [dev-dependencies]
@@ -29,6 +30,18 @@ default = ["async", "logging"]
 
 # Async Tokio gateway runtime (requires std and mbus-network/async)
 async = ["dep:mbus-network", "mbus-network/async", "mbus-core/async", "dep:tokio", "std-required"]
+
+# Sync TCP transport types: re-exports StdTcpTransport and StdTcpServerTransport from mbus-network.
+# Use for TCP-upstream → TCP-downstream gateways without the async runtime.
+network = ["dep:mbus-network", "std-required"]
+
+# Sync Modbus RTU serial transport: re-exports StdRtuTransport from mbus-serial.
+# Use for gateways where the downstream (or upstream) is an RS-485/RS-232 RTU bus.
+serial-rtu = ["dep:mbus-serial", "std-required"]
+
+# Sync Modbus ASCII serial transport: re-exports StdAsciiTransport from mbus-serial.
+# Use for gateways where the downstream (or upstream) is an ASCII-framed serial bus.
+serial-ascii = ["dep:mbus-serial", "std-required"]
 
 # log facade integration
 logging = ["dep:log", "std-required"]
