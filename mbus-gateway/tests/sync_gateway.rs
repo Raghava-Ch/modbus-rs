@@ -265,8 +265,51 @@ fn gateway_rewrites_txn_id_for_downstream() {
     assert_eq!(us_msg.transaction_id(), 0xABCD, "upstream response should use original txn_id");
 }
 
-/// Verify that `on_forward` and `on_response_returned` event callbacks fire
-/// correctly during a successful request-response cycle.
+/// Verify that when using `UnitIdRewriteRouter`, the downstream frame uses
+/// the rewritten unit ID but the upstream response restores the original.
+#[test]
+fn gateway_applies_unit_id_rewrite_for_downstream() {
+    use mbus_gateway::UnitIdRewriteRouter;
+
+    let request_adu = build_tcp_request(
+        0x0001, 5, // upstream unit 5
+        FunctionCode::ReadHoldingRegisters,
+        &[0x00, 0x00, 0x00, 0x01],
+    );
+
+    // Downstream device responds with unit ID 105 (5 + 100 offset).
+    let response_adu = build_tcp_request(
+        0x0000, 105,
+        FunctionCode::ReadHoldingRegisters,
+        &[0x02, 0x00, 0x42],
+    );
+
+    let upstream = MockTransport::tcp().with_rx(request_adu);
+    let downstream = MockTransport::tcp().with_rx(response_adu);
+
+    // Route unit 5 → channel 0, rewrite by +100.
+    let mut inner: UnitRouteTable<4> = UnitRouteTable::new();
+    inner.add(uid(5), 0).unwrap();
+    let router = UnitIdRewriteRouter::new(inner, 100);
+
+    let mut gw: GatewayServices<MockTransport, MockTransport, _, _, 1> =
+        GatewayServices::new(upstream, router, NoopEventHandler);
+    gw.add_downstream(DownstreamChannel::new(downstream)).unwrap();
+    gw.poll().unwrap();
+
+    // The downstream should have received unit ID 105 (5 + 100).
+    let ds_sent = gw.downstream(0).unwrap().transport().sent.clone();
+    assert_eq!(ds_sent.len(), 1);
+    let ds_msg = decompile_adu_frame(&ds_sent[0], TransportType::StdTcp).unwrap();
+    assert_eq!(ds_msg.unit_id_or_slave_addr().get(), 105, "downstream should use rewritten unit ID");
+
+    // The upstream response should still use the original upstream unit ID (5).
+    let us_sent = gw.upstream().sent.clone();
+    assert_eq!(us_sent.len(), 1);
+    let us_msg = decompile_adu_frame(&us_sent[0], TransportType::StdTcp).unwrap();
+    assert_eq!(us_msg.unit_id_or_slave_addr().get(), 5, "upstream response should use original unit ID");
+}
+
 #[test]
 fn gateway_event_callbacks_fire_on_success() {
     let request_adu = build_tcp_request(

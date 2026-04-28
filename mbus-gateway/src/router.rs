@@ -16,6 +16,19 @@ pub trait GatewayRoutingPolicy {
     ///
     /// Returns `Some(channel_idx)` when a route is found, `None` otherwise.
     fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize>;
+
+    /// Optionally rewrite the unit ID before building the downstream ADU.
+    ///
+    /// The default implementation is a no-op (returns `unit` unchanged).
+    /// Override this when the downstream device uses a different unit-ID
+    /// numbering scheme than the upstream client.
+    ///
+    /// [`GatewayServices::poll`](crate::services::GatewayServices::poll) calls
+    /// this automatically after a successful route lookup and uses the returned
+    /// unit ID when encoding the downstream frame.
+    fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
+        unit
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,8 +241,10 @@ impl GatewayRoutingPolicy for PassthroughRouter {
 /// before constructing the downstream ADU.
 ///
 /// The routing decision itself is delegated to the inner policy using the
-/// *original* unit ID.  The rewritten unit ID is only used when building the
-/// downstream frame (see [`rewrite`](UnitIdRewriteRouter::rewrite)).
+/// *original* unit ID.  The rewritten unit ID is used when building the
+/// downstream frame — [`GatewayServices::poll`](crate::services::GatewayServices::poll)
+/// and [`AsyncTcpGatewayServer`](crate::async_gateway::AsyncTcpGatewayServer) call
+/// `GatewayRoutingPolicy::rewrite()` automatically after a successful route lookup.
 ///
 /// Rewritten values are clamped to the valid unit-ID range `[1, 247]`.
 pub struct UnitIdRewriteRouter<R: GatewayRoutingPolicy> {
@@ -263,5 +278,10 @@ impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for UnitIdRewriteRouter<R> {
     /// Route using the *original* unit ID (before offset rewrite).
     fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize> {
         self.inner.route(unit)
+    }
+
+    /// Apply the additive offset to produce the downstream unit ID.
+    fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
+        UnitIdRewriteRouter::rewrite(self, unit)
     }
 }

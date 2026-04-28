@@ -61,7 +61,8 @@ let router = PassthroughRouter;
 
 Wraps any inner routing policy and also applies an additive offset to the
 downstream unit ID.  Routing decisions still use the **original** unit ID;
-only the downstream frame gets the rewritten ID.
+only the downstream frame gets the rewritten ID.  The rewrite is applied
+**automatically** by `GatewayServices::poll` and `AsyncTcpGatewayServer`.
 
 ```rust
 use mbus_gateway::{GatewayRoutingPolicy, UnitIdRewriteRouter, PassthroughRouter};
@@ -70,15 +71,10 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 // Route everything to channel 0, shift unit IDs by +100 on the downstream.
 let router = UnitIdRewriteRouter::new(PassthroughRouter, 100);
 
-// Use rewrite() to compute the downstream unit ID before calling compile_adu_frame:
+// Verify the rewrite calculation (unit 5 → downstream unit 105):
 let downstream_unit = router.rewrite(UnitIdOrSlaveAddr::new(5).unwrap());
 assert_eq!(downstream_unit.get(), 105);
 ```
-
-> **Note:** `GatewayServices` does **not** automatically apply the rewrite
-> offset — you need to either integrate `UnitIdRewriteRouter` at the transport
-> level or apply `rewrite()` before calling `compile_adu_frame`.  A future
-> release will integrate this transparently.
 
 ## Custom Policy
 

@@ -324,9 +324,13 @@ where
             }
         };
 
+        // Apply optional unit-ID rewrite from the routing policy (e.g.
+        // UnitIdRewriteRouter applies an additive offset here).
+        let downstream_unit = self.router.rewrite(unit);
+
         let downstream_type = DownstreamT::TRANSPORT_TYPE;
         let downstream_adu =
-            match compile_adu_frame(internal_txn, unit.get(), upstream_msg.pdu.clone(), downstream_type) {
+            match compile_adu_frame(internal_txn, downstream_unit.get(), upstream_msg.pdu.clone(), downstream_type) {
                 Ok(adu) => adu,
                 Err(e) => {
                     gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
