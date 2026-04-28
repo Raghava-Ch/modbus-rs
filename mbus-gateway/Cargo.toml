@@ -1,0 +1,40 @@
+[package]
+name = "mbus-gateway"
+version = "0.8.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+description = "Modbus gateway runtime — bridges upstream TCP/serial masters to downstream slave buses with PDU-level framing translation"
+
+[dependencies]
+mbus-core = { workspace = true, features = ["coils", "registers", "discrete-inputs", "diagnostics", "fifo", "file-record"] }
+heapless = { workspace = true }
+log = { workspace = true, optional = true }
+mbus-network = { workspace = true, optional = true }
+tokio = { version = "1", features = ["net", "sync", "rt", "macros"], optional = true }
+
+[dev-dependencies]
+mbus-network = { workspace = true, features = ["async"] }
+mbus-core = { workspace = true }
+tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread"] }
+
+[features]
+# Default: sync no_std core + async Tokio gateway + logging
+default = ["async", "logging"]
+
+# Async Tokio gateway runtime (requires std and mbus-network/async)
+async = ["dep:mbus-network", "mbus-network/async", "mbus-core/async", "dep:tokio", "std-required"]
+
+# log facade integration
+logging = ["dep:log", "std-required"]
+
+# Raw TX/RX frame callbacks in GatewayEventHandler
+traffic = []
+
+# Internal sentinel: set by any feature that requires std
+std-required = []
