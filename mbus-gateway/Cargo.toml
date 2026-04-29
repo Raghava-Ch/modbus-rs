@@ -24,10 +24,22 @@ tokio-tungstenite = { version = "0.26", optional = true }
 name = "ws_to_tcp"
 required-features = ["ws-server"]
 
+[[example]]
+name = "ws_to_tcp_production"
+required-features = ["ws-server"]
+
+[[example]]
+name = "ws_to_multi_downstream"
+required-features = ["ws-server"]
+
+[[example]]
+name = "ws_to_rtu"
+required-features = ["ws-server"]
+
 [dev-dependencies]
 mbus-network = { workspace = true, features = ["async"] }
 mbus-core = { workspace = true }
-tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread", "signal"] }
 
 [features]
 # Default: sync no_std core + async Tokio gateway + logging
