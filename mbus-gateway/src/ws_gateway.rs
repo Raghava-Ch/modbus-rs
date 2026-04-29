@@ -487,7 +487,7 @@ async fn perform_handshake(
 
                 // Echo the subprotocol back to the client.
                 response.headers_mut().insert(
-                    "sec-websocket-protocol",
+                    "Sec-WebSocket-Protocol",
                     HeaderValue::from_static("modbus"),
                 );
             }
