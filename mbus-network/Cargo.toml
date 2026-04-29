@@ -20,7 +20,10 @@ wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", features = ["net", "io-util"], optional = true }
+tokio = { version = "1", features = ["net", "io-util", "time"], optional = true }
+tokio-tungstenite = { version = "0.26", optional = true }
+futures-util = { version = "0.3", optional = true }
+bytes = { version = "1", optional = true }
 
 [dependencies.web-sys]
 version = "0.3"
@@ -40,3 +43,6 @@ default = []
 logging = ["dep:log"]
 wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
 async = ["dep:tokio", "mbus-core/async"]
+# WebSocket upstream transport for the gateway: wraps an accepted tokio-tungstenite
+# WebSocketStream as an AsyncTransport so AsyncWsGatewayServer can use run_async_session.
+ws-server = ["dep:tokio-tungstenite", "dep:futures-util", "dep:tokio", "dep:bytes", "mbus-core/async"]

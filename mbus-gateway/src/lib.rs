@@ -18,6 +18,7 @@
 //! | Feature        | Default | Description |
 //! |----------------|---------|-------------|
 //! | `async`        | ✓       | Async Tokio gateway runtime (`AsyncTcpGatewayServer`) |
+//! | `ws-server`    | ✗       | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients |
 //! | `logging`      | ✓       | `log` facade integration |
 //! | `network`      | ✗       | Re-exports `StdTcpTransport` + `StdTcpServerTransport` from `mbus-network` for sync TCP use |
 //! | `serial-rtu`   | ✗       | Re-exports `StdRtuTransport` from `mbus-serial` for sync RTU serial use |
@@ -124,6 +125,9 @@ pub mod txn_map;
 #[cfg(feature = "async")]
 pub mod async_gateway;
 
+#[cfg(feature = "ws-server")]
+pub mod ws_gateway;
+
 pub(crate) mod log_compat;
 
 pub use dispatcher::DownstreamChannel;
@@ -136,6 +140,9 @@ pub use txn_map::{SerialTxnMap, TxnMap};
 
 #[cfg(feature = "async")]
 pub use async_gateway::{AsyncGatewayError, AsyncTcpGatewayServer};
+
+#[cfg(feature = "ws-server")]
+pub use ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
 
 // ── Concrete transport re-exports ─────────────────────────────────────────────
 

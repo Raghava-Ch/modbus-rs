@@ -208,7 +208,12 @@ impl AsyncTcpGatewayServer {
 /// Receives upstream frames, routes them, forwards to a downstream channel
 /// (holding the mutex for the duration of the downstream request-response
 /// round trip), and sends the response back upstream.
-async fn run_async_session<UPSTREAM, ROUTER, DS>(
+///
+/// This function is `pub(crate)` so that [`AsyncWsGatewayServer`] can reuse
+/// the same session logic with a different upstream transport type.
+///
+/// [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
+pub(crate) async fn run_async_session<UPSTREAM, ROUTER, DS>(
     mut upstream: UPSTREAM,
     router: Arc<ROUTER>,
     downstreams: Arc<Vec<Arc<Mutex<DS>>>>,
@@ -380,7 +385,13 @@ where
 // Helper: send async Modbus exception response
 // ─────────────────────────────────────────────────────────────────────────────
 
-async fn send_async_exception<T: AsyncTransport>(
+/// Send a Modbus exception response back to an upstream client.
+///
+/// `pub(crate)` so that [`AsyncWsGatewayServer`] can reuse this helper when
+/// the routing or handshake phase fails before the session loop starts.
+///
+/// [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
+pub(crate) async fn send_async_exception<T: AsyncTransport>(
     upstream: &mut T,
     txn_id: u16,
     unit: UnitIdOrSlaveAddr,
