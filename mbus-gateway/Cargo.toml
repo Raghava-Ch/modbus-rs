@@ -17,7 +17,12 @@ heapless = { workspace = true }
 log = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 mbus-serial  = { workspace = true, optional = true }
-tokio = { version = "1", features = ["net", "sync", "rt", "macros"], optional = true }
+tokio = { version = "1", features = ["net", "sync", "rt", "macros", "time"], optional = true }
+tokio-tungstenite = { version = "0.26", optional = true }
+
+[[example]]
+name = "ws_to_tcp"
+required-features = ["ws-server"]
 
 [dev-dependencies]
 mbus-network = { workspace = true, features = ["async"] }
@@ -42,6 +47,13 @@ serial-rtu = ["dep:mbus-serial", "std-required"]
 # Sync Modbus ASCII serial transport: re-exports StdAsciiTransport from mbus-serial.
 # Use for gateways where the downstream (or upstream) is an ASCII-framed serial bus.
 serial-ascii = ["dep:mbus-serial", "std-required"]
+
+# WebSocket upstream gateway (WASM client → raw TCP/serial downstream).
+# Adds AsyncWsGatewayServer that accepts WebSocket connections from browser-side
+# WasmModbusClient instances and forwards requests to any AsyncTransport downstream.
+# Features: idle-timeout watchdog, session concurrency cap, origin allowlist,
+# Modbus WebSocket subprotocol negotiation.
+ws-server = ["dep:mbus-network", "mbus-network/ws-server", "mbus-core/async", "dep:tokio", "dep:tokio-tungstenite", "std-required"]
 
 # log facade integration
 logging = ["dep:log", "std-required"]
