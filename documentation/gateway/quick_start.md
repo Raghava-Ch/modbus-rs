@@ -1,7 +1,7 @@
 # Modbus Gateway — Quick Start
 
-This page walks you through the two ways to run a Modbus gateway:
-**sync (no_std compatible)** and **async (Tokio)**.
+This page walks you through the three ways to run a Modbus gateway:
+**sync (no_std compatible)**, **async TCP (Tokio)**, and **async WebSocket (Tokio, for WASM clients)**.
 
 ## Prerequisites
 
@@ -85,3 +85,54 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+## Async WebSocket: WASM upstream → TCP downstream
+
+Add the `ws-server` feature:
+
+```toml
+[dependencies]
+mbus-gateway = { version = "0.8.0", features = ["ws-server"] }
+mbus-network = { version = "0.8.0", features = ["async"] }
+```
+
+```rust,no_run
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
+use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
+use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_network::TokioTcpTransport;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to downstream Modbus TCP device
+    let ds = TokioTcpTransport::connect("192.168.1.10:502").await?;
+    let shared = Arc::new(Mutex::new(ds));
+
+    // Build route table
+    let mut router: UnitRouteTable<10> = UnitRouteTable::new();
+    for id in 1u8..=10 {
+        router.add(UnitIdOrSlaveAddr::new(id).unwrap(), 0).unwrap();
+    }
+
+    // Configure the WebSocket gateway
+    let config = WsGatewayConfig {
+        idle_timeout: Some(Duration::from_secs(30)),
+        max_sessions: 32,
+        require_modbus_subprotocol: true,
+        allowed_origins: vec!["https://hmi.example.com".to_string()],
+    };
+
+    // Listen for browser WebSocket connections on port 8502
+    // The browser WasmModbusClient connects to ws://localhost:8502
+    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared]).await?;
+    Ok(())
+}
+```
+
+The browser-side `WasmModbusClient` requires **no code changes** — it just
+points its WebSocket URL at `ws://<gateway-host>:8502` instead of connecting
+directly to the device.
+
+See [ws_gateway.md](ws_gateway.md) for the full WebSocket gateway reference.

@@ -54,6 +54,22 @@ Everything you need to build Modbus server applications.
 
 ---
 
+## Gateway Documentation
+
+Bridge upstream Modbus clients to downstream Modbus devices across different
+transports (TCP ↔ RTU, WebSocket ↔ TCP, etc.).
+
+| Document | Description |
+|----------|-------------|
+| [Quick Start](gateway/quick_start.md) | Sync, async TCP, and WebSocket gateway in minutes |
+| [WebSocket Gateway](gateway/ws_gateway.md) | `AsyncWsGatewayServer` — WASM client → raw TCP/RTU bridge |
+| [Architecture](gateway/architecture.md) | Request flow, transaction remapping, session model |
+| [Routing](gateway/routing.md) | `UnitRouteTable`, `RangeRouteTable`, custom policies |
+| [Feature Flags](gateway/feature_flags.md) | `async`, `ws-server`, `serial-rtu`, no_std usage |
+| [no_std Usage](gateway/no_std.md) | Embedded / bare-metal sync gateway core |
+
+---
+
 ## Cross-Reference
 
 ### Workspace Crates

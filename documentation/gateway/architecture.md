@@ -55,6 +55,42 @@ performs the same request-response cycle described above, but uses
 is shared as `Arc<Mutex<T>>` so only one in-flight request hits the downstream
 at a time per channel, preventing interleaving.
 
+### Async WebSocket (`AsyncWsGatewayServer`)
+
+`AsyncWsGatewayServer` is structurally identical to `AsyncTcpGatewayServer`
+with one difference: the upstream transport is a `WsUpstreamTransport` wrapping
+a `tokio-tungstenite` `WebSocketStream<TcpStream>` instead of a raw
+`TcpStream`.
+
+Before the session loop starts, the server:
+
+1. Accepts the TCP connection.
+2. Checks the session concurrency cap (`WsGatewayConfig::max_sessions`).
+3. Performs the HTTP→WebSocket upgrade handshake via
+   `tokio_tungstenite::accept_hdr_async`, validating the `Origin` and
+   `Sec-WebSocket-Protocol` headers.
+4. Wraps the resulting stream in `WsUpstreamTransport`.
+5. Optionally wraps that in `IdleTimeoutTransport` when
+   `WsGatewayConfig::idle_timeout` is set.
+6. Calls the same generic `run_async_session` loop used by
+   `AsyncTcpGatewayServer`.
+
+```
+Browser WASM              AsyncWsGatewayServer           Downstream
+─────────────             ────────────────────────       ──────────────
+WasmModbusClient  ──WS──►  WsUpstreamTransport
+                            (TRANSPORT_TYPE=CustomTcp)
+                                   │
+                                   ▼
+                            run_async_session()    ──────► Arc<Mutex<DS>>
+                            (same as TCP gateway)           (any AsyncTransport)
+```
+
+Because `WsUpstreamTransport` uses `TRANSPORT_TYPE = CustomTcp`, the session
+loop treats the upstream ADU bytes identically to Modbus TCP — MBAP framing
+is used throughout.  The WebSocket binary envelope is transparent to all
+framing, routing, and transaction-ID remapping logic.
+
 ## Transaction-ID Remapping (`TxnMap`)
 
 Upstream TCP clients each maintain their own transaction-ID counter.  If two
