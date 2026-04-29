@@ -9,6 +9,7 @@ The gateway acts as a **server** to upstream clients (e.g., SCADA over TCP) and 
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `async` | ✓ | Async Tokio gateway (`AsyncTcpGatewayServer`) |
+| `ws-server` | ✗ | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients |
 | `logging` | ✓ | `log` facade integration |
 | `traffic` | ✗ | Raw TX/RX frame callbacks in `GatewayEventHandler` |
 
@@ -182,3 +183,52 @@ Upstream (TCP/Serial)
 ```
 
 See `documentation/gateway/` for detailed architecture and usage documentation.
+
+## WebSocket Gateway (WASM client → raw TCP/serial)
+
+Enable the `ws-server` feature to add `AsyncWsGatewayServer`, which accepts
+WebSocket connections from browser-side WASM clients and forwards each Modbus
+request to any `AsyncTransport` downstream (TCP, RTU, ASCII):
+
+```toml
+[dependencies]
+mbus-gateway = { version = "0.8.0", features = ["ws-server"] }
+```
+
+```rust,no_run
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Mutex;
+use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig};
+use mbus_network::TokioTcpTransport;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let downstream = TokioTcpTransport::connect("192.168.1.10:502").await?;
+    let shared = Arc::new(Mutex::new(downstream));
+
+    let config = WsGatewayConfig {
+        idle_timeout: Some(Duration::from_secs(30)),
+        max_sessions: 32,
+        require_modbus_subprotocol: true,
+        allowed_origins: vec!["https://hmi.example.com".to_string()],
+    };
+
+    // Browser WasmModbusClient connects to ws://localhost:8502
+    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, PassthroughRouter, vec![shared]).await?;
+    Ok(())
+}
+```
+
+`WsGatewayConfig` options:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `idle_timeout` | `None` | Drop sessions silent for this long (zombie tab guard) |
+| `max_sessions` | `0` = unlimited | Reject excess connections at the handshake stage |
+| `require_modbus_subprotocol` | `false` | Enforce `Sec-WebSocket-Protocol: modbus` header |
+| `allowed_origins` | `[]` = allow all | CORS origin allowlist |
+
+See `documentation/gateway/ws_gateway.md` for the full reference including
+multi-downstream routing, RTU serial downstream, and graceful shutdown.
+
