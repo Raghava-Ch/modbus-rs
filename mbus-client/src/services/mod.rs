@@ -4,9 +4,9 @@
 //! bridge between the high-level application logic and the low-level transport protocols.
 //!
 //! ## Key Components
-//! - [`ClientServices`]: The main entry point for sending Modbus requests. It manages
+//! - `ClientServices`: The main entry point for sending Modbus requests. It manages
 //!   transaction state, handles timeouts, and performs automatic retries.
-//! - [`ExpectedResponse`]: A state tracking mechanism that maps outgoing requests to
+//! - `ExpectedResponse`: A state tracking mechanism that maps outgoing requests to
 //!   incoming responses using Transaction IDs (for TCP) or FIFO ordering (for Serial).
 //! - Sub-services: Specialized modules (coils, registers, etc.) that handle the
 //!   serialization and deserialization of specific Modbus function codes.
@@ -1491,7 +1491,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     /// requests have been resolved (responded to, timed out, or failed):
     ///
     /// ```rust,ignore
-    /// client.send_request(…)?;
+    /// client.send_request(/* ... */)?;
     /// while client.has_pending_requests() {
     ///     client.poll();
     /// }

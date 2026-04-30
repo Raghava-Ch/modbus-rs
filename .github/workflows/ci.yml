@@ -203,7 +203,7 @@ jobs:
         run: pip install maturin pytest pytest-asyncio
 
       - name: Build Python wheel
-        run: maturin build --features python,full
+        run: maturin build --features python,python-gateway,full
         working-directory: mbus-ffi
 
       - name: Install built wheel

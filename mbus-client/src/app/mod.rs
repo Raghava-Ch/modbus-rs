@@ -4,9 +4,9 @@
 //! application-level interaction with the Modbus protocol.
 //!
 //! It defines:
-//! - Response handling traits ([`CoilResponse`], [`RegisterResponse`], etc.) that
+//! - Response handling traits (`CoilResponse`, `RegisterResponse`, etc.) that
 //!   allow users to define custom logic for processing server responses.
-//! - Error notification mechanisms ([`RequestErrorNotifier`]).
+//! - Error notification mechanisms (`RequestErrorNotifier`).
 //! - Re-exports of core data structures used by the application layer for
 //!   convenient access.
 
