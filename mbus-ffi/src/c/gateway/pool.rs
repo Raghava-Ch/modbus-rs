@@ -6,12 +6,12 @@
 //! * Slots use `UnsafeCell<MaybeUninit<T>>` plus an `AtomicBool` borrow flag
 //!   to detect re-entrancy.
 //! * External serialisation is provided by the C application via
-//!   [`mbus_pool_lock`] / [`mbus_pool_unlock`] (creation/destruction) and
-//!   [`mbus_gateway_lock`] / [`mbus_gateway_unlock`] (per-instance polling).
+//!   `mbus_pool_lock` / `mbus_pool_unlock` (creation/destruction) and
+//!   `mbus_gateway_lock` / `mbus_gateway_unlock` (per-instance polling).
 //! * RAII drop guards ensure unlock-on-panic safety.
 //!
 //! v1 supports a single transport variant: TCP upstream ↔ TCP downstream
-//! (both using [`crate::c::transport::CTcpTransport`]). RTU / ASCII downstream
+//! (both using `crate::c::transport::CTcpTransport`). RTU / ASCII downstream
 //! variants will be added in subsequent revisions following the same template.
 
 use core::cell::UnsafeCell;

@@ -41,7 +41,7 @@ macro_rules! call_serial {
 
 /// Queue a Read Coils (FC 0x01) request.
 ///
-/// The response is delivered via [`MbusCallbacks::on_read_coils`].
+/// The response is delivered via `MbusCallbacks::on_read_coils`.
 #[cfg(feature = "coils")]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_coils(

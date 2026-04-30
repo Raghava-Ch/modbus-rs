@@ -4,7 +4,7 @@
 //! encompassing both the Protocol Data Unit (PDU) and the Application Data Unit (ADU).
 //!
 //! It is organized into two primary sub-modules:
-//! - [`common`]: Contains the transport-agnostic [`Pdu`] and the generic [`ModbusMessage`]
+//! - [`common`]: Contains the transport-agnostic [`common::Pdu`] and the generic [`common::ModbusMessage`]
 //!   structures used across TCP, RTU, and ASCII variants.
 //!
 //! The data unit logic is designed to be `no_std` compatible, leveraging `heapless`

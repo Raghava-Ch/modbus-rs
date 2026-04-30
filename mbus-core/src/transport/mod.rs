@@ -26,7 +26,7 @@
 //!
 //! ## Error Handling
 //! Errors are categorized into [`TransportError`], which can be seamlessly converted
-//! into the top-level [`MbusError`] used throughout the crate.
+//! into the top-level [`crate::errors::MbusError`] used throughout the crate.
 
 pub mod checksum;
 

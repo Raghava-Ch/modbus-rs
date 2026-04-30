@@ -4,7 +4,7 @@ use mbus_core::errors::MbusError;
 /// C-compatible status code returned by every `mbus_*` function.
 ///
 /// `MBUS_OK` (0) means the request was successfully queued. Actual response data
-/// is delivered later via the callbacks in [`MbusCallbacks`].
+/// is delivered later via the callbacks in `MbusCallbacks`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbusStatusCode {

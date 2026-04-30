@@ -1,6 +1,6 @@
 //! Native C FFI bindings for the Modbus gateway.
 //!
-//! All transports are **C-developer-provided** via [`MbusTransportCallbacks`]
+//! All transports are **C-developer-provided** via `MbusTransportCallbacks`
 //! — Rust never opens a socket or serial port. All locking is **C-developer-provided**
 //! via the `extern "C"` hooks (`mbus_pool_lock` / `mbus_pool_unlock` reused from
 //! the client pool, plus new `mbus_gateway_lock` / `mbus_gateway_unlock`
