@@ -16,11 +16,13 @@
 //! The serial port path (`/dev/ttyUSB0` on Linux, `COM3` on Windows) and baud
 //! rate are hard-coded below; adjust them for your hardware.
 
-#[cfg(all(feature = "network", feature = "serial-rtu"))]
 fn main() {
     use std::net::TcpListener;
 
-    use mbus_core::transport::{BaudRate, ModbusConfig, Parity, SerialConfig, UnitIdOrSlaveAddr};
+    use mbus_core::transport::{
+        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+        Parity, SerialMode, Transport,
+    };
     use mbus_gateway::{
         DownstreamChannel, GatewayServices, NoopEventHandler, RangeRouteTable, StdRtuTransport,
         StdTcpServerTransport,
@@ -29,9 +31,9 @@ fn main() {
     // ── Configuration ─────────────────────────────────────────────────────────
     const LISTEN_ADDR: &str = "0.0.0.0:5020";
     const SERIAL_PORT: &str = if cfg!(target_os = "windows") {
-        "COM3"
+        "COM2"
     } else {
-        "/dev/ttyUSB0"
+        "/dev/ttys005"
     };
 
     // ── Routing table: unit IDs 1–10 all go to downstream channel 0 ──────────
@@ -49,14 +51,21 @@ fn main() {
 
     // ── Downstream: open the RTU serial port ──────────────────────────────────
     let mut downstream = StdRtuTransport::new();
-    let serial_cfg = ModbusConfig::Serial(
-        SerialConfig::builder()
-            .port(SERIAL_PORT)
-            .baud_rate(BaudRate::Baud19200)
-            .parity(Parity::None)
-            .build()
-            .expect("valid serial config"),
-    );
+    let serial_cfg = ModbusConfig::Serial(ModbusSerialConfig {
+        port_path: SERIAL_PORT
+            .try_into()
+            .expect("serial port path too long"),
+        mode: SerialMode::Rtu,
+        baud_rate: BaudRate::Baud19200,
+        data_bits: DataBits::Eight,
+        stop_bits: 1,
+        parity: Parity::None,
+        response_timeout_ms: 1000,
+        retry_attempts: 0,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
+    });
     downstream
         .connect(&serial_cfg)
         .expect("serial port open failed");
@@ -80,13 +89,4 @@ fn main() {
             }
         }
     }
-}
-
-#[cfg(not(all(feature = "network", feature = "serial-rtu")))]
-fn main() {
-    eprintln!(
-        "This example requires the `network` and `serial-rtu` features.\n\
-         Re-run with: cargo run --example tcp_to_rtu \
-         --features network,serial-rtu -p mbus-gateway"
-    );
 }

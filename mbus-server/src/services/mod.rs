@@ -32,7 +32,9 @@ pub mod register;
 pub mod resilience;
 
 use crate::app::ModbusAppHandler;
-use heapless::{Deque, Vec};
+#[cfg(feature = "diagnostics")]
+use heapless::Deque;
+use heapless::Vec;
 use mbus_core::{
     data_unit::common::{
         self, AdditionalAddress, MAX_ADU_FRAME_LEN, ModbusMessage, SlaveAddress,
@@ -1411,7 +1413,7 @@ where
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "holding-registers"))]
 mod tests {
     use super::*;
     use crate::HoldingRegisterMap;

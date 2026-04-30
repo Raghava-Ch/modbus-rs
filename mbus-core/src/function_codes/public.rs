@@ -268,6 +268,7 @@ impl TryFrom<u8> for FunctionCode {
     type Error = MbusError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
+        #[allow(unused_imports)]
         use FunctionCode::*;
 
         match value {

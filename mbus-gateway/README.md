@@ -13,9 +13,22 @@ The gateway acts as a **server** to upstream clients (e.g., SCADA over TCP) and 
 | `logging` | ✓ | `log` facade integration |
 | `traffic` | ✗ | Raw TX/RX frame callbacks in `GatewayEventHandler` |
 
+## FFI Bindings
+
+C and Python bindings for the gateway live in the `mbus-ffi` crate:
+
+* **C / `no_std`** — enable the `c-gateway` feature on `mbus-ffi`. The
+  `cbindgen` build script writes the C header to
+  `target/mbus-ffi/include/modbus_rs_gateway.h`. A runnable demo lives at
+  `mbus-ffi/examples/c_gateway_demo/`.
+* **Python** — enable the `python-gateway` feature on `mbus-ffi` (build with
+  `maturin develop --features python,python-gateway,full`). The bindings
+  expose `modbus_rs.TcpGateway` (sync) and `modbus_rs.AsyncTcpGateway`
+  (asyncio); demos live in `mbus-ffi/examples/python_gateway/`.
+
 ## Quick Start — Sync Gateway (no_std-compatible)
 
-```rust,no_run
+```rust
 use mbus_gateway::{
     DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable,
 };
@@ -45,7 +58,8 @@ router.add(UnitIdOrSlaveAddr::new(2).unwrap(), 1).unwrap();
 
 ## Quick Start — Async Gateway (Tokio)
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use mbus_gateway::{AsyncTcpGatewayServer, PassthroughRouter};
@@ -171,9 +185,9 @@ Upstream (TCP/Serial)
         ▼
   ┌─────────────────────────────────┐
   │        GatewayServices          │
-  │   ┌──────────┐  ┌──────────┐   │
-  │   │ TxnMap   │  │  Router  │   │
-  │   └──────────┘  └──────────┘   │
+  │   ┌──────────┐  ┌──────────┐    │
+  │   │ TxnMap   │  │  Router  │    │
+  │   └──────────┘  └──────────┘    │
   └───────────────┬─────────────────┘
                   │  (by channel index)
         ┌─────────┴──────────┐
@@ -195,7 +209,8 @@ request to any `AsyncTransport` downstream (TCP, RTU, ASCII):
 mbus-gateway = { version = "0.8.0", features = ["ws-server"] }
 ```
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -232,3 +247,41 @@ async fn main() -> anyhow::Result<()> {
 See `documentation/gateway/ws_gateway.md` for the full reference including
 multi-downstream routing, RTU serial downstream, and graceful shutdown.
 
+
+## Security Hardening Checklist (production rollout)
+
+Modbus/TCP and Modbus over WebSocket carry no authentication, no integrity
+protection, and no confidentiality on their own. Treat any gateway exposed
+beyond an isolated control network as a privileged ingress point.
+
+For production deployments, audit the following:
+
+1. **Network exposure** — bind to a private interface (or behind a reverse
+   proxy) instead of `0.0.0.0` whenever possible. Use a host firewall to
+   restrict which clients may reach the gateway port.
+2. **TLS termination** — for `ws-server`, terminate TLS in front of the
+   gateway (e.g. nginx, Caddy, Envoy). The gateway speaks plain WebSocket
+   so the proxy can offload `wss://` and certificate management.
+3. **Origin allowlist** — set `WsGatewayConfig::allowed_origins` to the
+   explicit list of browser origins that may connect. An empty list means
+   "allow all" and should not be used in production.
+4. **Subprotocol enforcement** — set `require_modbus_subprotocol = true`
+   so handshakes without `Sec-WebSocket-Protocol: modbus` are rejected
+   early.
+5. **Session and idle limits** — set `max_sessions` to a value matching
+   your expected client count and `idle_timeout` to drop dead/zombie
+   sockets.
+6. **Downstream rate / scope** — pair the gateway with a routing policy
+   that filters unit IDs and (optionally) function codes per session.
+7. **Logging / observability** — wire the `tracing` events into your
+   log pipeline. The hardened sample at
+   [`examples/ws_to_tcp_production.rs`](examples/ws_to_tcp_production.rs)
+   shows a complete configuration including signal-driven graceful
+   shutdown.
+8. **Authentication** — Modbus has none; if you need authn/authz, place
+   it at the WebSocket handshake (reverse-proxy basic/OIDC or mTLS) and
+   reject unauthenticated upgrades before the gateway sees them.
+
+A complete production-ready WS gateway example with all of the above is
+available at
+[`mbus-gateway/examples/ws_to_tcp_production.rs`](examples/ws_to_tcp_production.rs).

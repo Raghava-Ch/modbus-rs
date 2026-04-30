@@ -18,8 +18,6 @@
 //! we accept whatever the server returns; validation happens in the typed
 //! extractors in `client_core`.
 
-use heapless::Vec;
-
 use mbus_core::{
     data_unit::common::{Pdu, decompile_adu_frame},
     errors::MbusError,
@@ -49,6 +47,8 @@ use mbus_core::{
         ConformityLevel, DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode,
     },
 };
+#[cfg(any(feature = "file-record", feature = "diagnostics"))]
+use heapless::Vec;
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 

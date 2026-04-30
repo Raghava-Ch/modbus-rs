@@ -37,7 +37,10 @@
 //!     GatewayServices, UnitRouteTable, NoopEventHandler, DownstreamChannel,
 //!     StdTcpServerTransport, StdRtuTransport,
 //! };
-//! use mbus_core::transport::{ModbusConfig, SerialConfig, UnitIdOrSlaveAddr};
+//! use mbus_core::transport::{
+//!     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+//!     Parity, SerialMode, Transport, UnitIdOrSlaveAddr,
+//! };
 //!
 //! // Route unit 1 → channel 0
 //! let mut router: UnitRouteTable<8> = UnitRouteTable::new();
@@ -48,7 +51,19 @@
 //! let upstream = StdTcpServerTransport::new(stream);
 //!
 //! let mut downstream = StdRtuTransport::new();
-//! let serial_cfg = ModbusConfig::Serial(SerialConfig::default());
+//! let serial_cfg = ModbusConfig::Serial(ModbusSerialConfig {
+//!     port_path: "/dev/ttyUSB0".try_into().unwrap(),
+//!     mode: SerialMode::Rtu,
+//!     baud_rate: BaudRate::Baud19200,
+//!     data_bits: DataBits::Eight,
+//!     stop_bits: 1,
+//!     parity: Parity::None,
+//!     response_timeout_ms: 1000,
+//!     retry_attempts: 0,
+//!     retry_backoff_strategy: BackoffStrategy::Immediate,
+//!     retry_jitter_strategy: JitterStrategy::None,
+//!     retry_random_fn: None,
+//! });
 //! downstream.connect(&serial_cfg).unwrap();
 //!
 //! let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _, 1> =

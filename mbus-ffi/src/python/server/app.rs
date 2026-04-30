@@ -19,14 +19,16 @@ use std::sync::Arc;
 ///
 /// Example::
 ///
-///     import modbus_rs
+/// ```python
+/// import modbus_rs
 ///
-///     class MyApp(modbus_rs.ModbusApp):
-///         def handle_read_holding_registers(self, address, count):
-///             return [address + i for i in range(count)]
+/// class MyApp(modbus_rs.ModbusApp):
+///     def handle_read_holding_registers(self, address, count):
+///         return [address + i for i in range(count)]
 ///
-///         def handle_write_register(self, address, value):
-///             pass  # store value
+///     def handle_write_register(self, address, value):
+///         pass  # store value
+/// ```
 #[pyclass(name = "ModbusApp", subclass)]
 pub struct ModbusApp;
 
@@ -134,9 +136,9 @@ impl ModbusApp {
         data: &[u8],
     ) -> PyResult<Vec<u16>> {
         let _ = (read_address, read_count, write_address, write_count, data);
-        Err(PyNotImplementedError::new_err(format!(
-            "handle_read_write_registers not implemented"
-        )))
+        Err(PyNotImplementedError::new_err(
+            "handle_read_write_registers not implemented",
+        ))
     }
 
     // ── FC18 — FIFO ─────────────────────────────────────────────────────────
@@ -220,6 +222,12 @@ impl PythonAppAdapter {
         }
     }
 }
+
+// When the `traffic` feature is enabled in the workspace build, `AsyncAppHandler`
+// requires `AsyncTrafficNotifier` as a super-trait. Provide an empty default
+// impl so the Python adapter remains usable in that build matrix.
+#[cfg(feature = "traffic")]
+impl mbus_server_async::AsyncTrafficNotifier for PythonAppAdapter {}
 
 impl AsyncAppHandler for PythonAppAdapter {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {

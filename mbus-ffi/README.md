@@ -22,6 +22,7 @@ pip install modbus-rs
 import modbus_rs
 
 with modbus_rs.TcpClient("192.168.1.10", port=502, unit_id=1) as client:
+    client.connect()
     regs = client.read_holding_registers(0, 10)
     print(regs)                     # [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     client.write_register(0, 0xFF)
@@ -49,6 +50,7 @@ asyncio.run(main())
 import modbus_rs
 
 with modbus_rs.SerialClient("/dev/ttyUSB0", baud_rate=9600, unit_id=1) as client:
+    client.connect()
     regs = client.read_holding_registers(0, 5)
     print(regs)
 ```
@@ -102,6 +104,34 @@ cd mbus-ffi && maturin build --release --features python,full
 pip install pytest pytest-asyncio
 pytest mbus-ffi/tests/python/ -v
 ```
+
+### Modbus TCP Gateway (`python-gateway` feature)
+
+Enable the optional `python-gateway` feature to expose `TcpGateway` (sync) and
+`AsyncTcpGateway` (asyncio) classes that bridge an upstream Modbus TCP listener
+to one or more downstream Modbus TCP servers.
+
+```bash
+cd mbus-ffi && maturin develop --features python,python-gateway,full
+```
+
+Minimal sync example:
+
+```python
+import modbus_rs
+
+gw = modbus_rs.TcpGateway("0.0.0.0:5020")
+ch = gw.add_tcp_downstream("192.168.1.10", 502)
+gw.add_unit_route(unit=1, channel=ch)
+gw.serve_forever()  # call gw.stop() from another thread to exit
+```
+
+Runnable demos: [`examples/python_gateway/sync_demo.py`](examples/python_gateway/sync_demo.py)
+and [`examples/python_gateway/async_demo.py`](examples/python_gateway/async_demo.py).
+
+> The `event_handler=GatewayEventHandler()` constructor argument is currently
+> accepted but not invoked — the underlying async gateway server has no event
+> hook surface yet. The class exists for forward compatibility.
 
 ---
 
@@ -232,6 +262,31 @@ cd mbus-ffi/examples/c_client_demo/build
 The `--serial-pty` mode is self-contained and does not require hardware. It creates a pseudo-terminal pair,
 opens the slave side through the FFI serial client, and serves a single RTU read-coils response from the
 master side so CI can exercise the serial path deterministically.
+
+### Modbus TCP Gateway (`c-gateway` feature)
+
+The `c-gateway` feature exposes a `no_std` C API that mirrors the
+client/server pool design: the application provides upstream and downstream
+transport callbacks (`MbusTransportCallbacks`) and `mbus_pool_lock` /
+`mbus_pool_unlock` plus `mbus_gateway_lock(id)` / `mbus_gateway_unlock(id)`
+routines, then drives the gateway with `mbus_gateway_poll(id)` from its event
+loop.
+
+```bash
+cargo build -p mbus-ffi --features c-gateway --no-default-features
+```
+
+A complete end-to-end CMake demo (POSIX sockets, in-process echo Modbus server,
+event logging) lives at [`examples/c_gateway_demo/main.c`](examples/c_gateway_demo/main.c).
+Build and run it with:
+
+```bash
+cd mbus-ffi/examples/c_gateway_demo
+mkdir build && cd build
+CC=/usr/bin/clang cmake ..   # macOS: avoid Homebrew llvm
+make
+./c_gateway_demo
+```
 
 ### Running FFI Tests
 

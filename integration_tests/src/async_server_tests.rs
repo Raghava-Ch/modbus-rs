@@ -71,7 +71,7 @@ impl TestApp {
                     );
                 }
                 // Pack bits, LSB of first byte = coil at `address`
-                let byte_count = (cnt + 7) / 8;
+                let byte_count = cnt.div_ceil(8);
                 let mut bytes = vec![0u8; byte_count];
                 for i in 0..cnt {
                     if self.coils[addr + i] {
@@ -194,7 +194,7 @@ impl TestApp {
                         mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                let byte_count = (cnt + 7) / 8;
+                let byte_count = cnt.div_ceil(8);
                 let mut bytes = vec![0u8; byte_count];
                 for i in 0..cnt {
                     if self.discrete_inputs[addr + i] {

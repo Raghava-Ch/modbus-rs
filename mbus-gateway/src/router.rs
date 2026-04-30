@@ -264,7 +264,7 @@ impl<R: GatewayRoutingPolicy> UnitIdRewriteRouter<R> {
     /// The result is clamped to `[1, 247]`.
     pub fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
         let raw = unit.get() as i16 + self.offset;
-        let clamped = raw.max(1).min(247) as u8;
+        let clamped = raw.clamp(1, 247) as u8;
         UnitIdOrSlaveAddr::new(clamped).unwrap_or(unit)
     }
 

@@ -178,8 +178,8 @@ impl ServerCoilHandler for FullApp {
             return Err(MbusError::InvalidAddress);
         }
 
-        let byte_count = (quantity as usize + 7) / 8;
-        for byte_idx in 0..byte_count {
+        let byte_count = (quantity as usize).div_ceil(8);
+        for (byte_idx, out_byte) in out.iter_mut().enumerate().take(byte_count) {
             let mut byte = 0u8;
             for bit in 0..8usize {
                 let coil_idx = start + byte_idx * 8 + bit;
@@ -187,7 +187,7 @@ impl ServerCoilHandler for FullApp {
                     byte |= 1 << bit;
                 }
             }
-            out[byte_idx] = byte;
+            *out_byte = byte;
         }
         Ok(byte_count as u8)
     }
@@ -249,8 +249,8 @@ impl ServerDiscreteInputHandler for FullApp {
             return Err(MbusError::InvalidAddress);
         }
 
-        let byte_count = (quantity as usize + 7) / 8;
-        for byte_idx in 0..byte_count {
+        let byte_count = (quantity as usize).div_ceil(8);
+        for (byte_idx, out_byte) in out.iter_mut().enumerate().take(byte_count) {
             let mut byte = 0u8;
             for bit in 0..8usize {
                 let idx = start + byte_idx * 8 + bit;
@@ -258,7 +258,7 @@ impl ServerDiscreteInputHandler for FullApp {
                     byte |= 1 << bit;
                 }
             }
-            out[byte_idx] = byte;
+            *out_byte = byte;
         }
         Ok(byte_count as u8)
     }

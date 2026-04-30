@@ -218,11 +218,35 @@ Regenerate or verify only `modbus_rs_client_feature_gated.h`.
 ## Validation Commands
 
 ### `check-feature-matrix`
-Run feature and package checks across the workspace:
+Run a coarse workspace-wide feature check (`--all-features` + doc tests):
 
 ```bash
 cargo run -p xtask -- check-feature-matrix
 ```
+
+### `check-feature-subsets`
+Run the full per-feature subset matrix — `cargo check`, `cargo clippy -D warnings`, `cargo build`, and `cargo test` over every meaningful single-feature and combined-feature slice across `mbus-core`, `mbus-client`, `mbus-server`, `mbus-async`, `mbus-gateway`, and `mbus-ffi`.
+
+```bash
+# Fast mode: check + clippy only (~54 steps, skips build and test)
+cargo run -p xtask -- check-feature-subsets --fast
+
+# Full mode: check + clippy + build + test (~70 steps)
+cargo run -p xtask -- check-feature-subsets
+```
+
+Use `--fast` for quick pre-push sweeps; omit it in nightly or release pipelines to also run the build and integration test slices.
+
+**Covered combinations include** (non-exhaustive):
+
+| Crate | Feature slices |
+|-------|---------------|
+| `mbus-core` | `coils`, `registers`, `diagnostics`, `coils,registers` |
+| `mbus-client` | `coils`, `registers`, `diagnostics`, `coils,registers,traffic` |
+| `mbus-server` | each FC feature in isolation + `coils,holding-registers`; all examples; focused integration tests |
+| `mbus-async` | `network-tcp,coils`, `network-tcp,registers`, `+traffic`, `+coils+registers` |
+| `mbus-gateway` | no-features, `network`, `serial-rtu`, `async`, `ws-server`, `network,serial-rtu` |
+| `mbus-ffi` | `c,coils,registers`; `c,c-server,full`; `c,c-gateway,full` |
 
 ### `validate-docs`
 Validate code examples in Markdown docs.  Disable colors with `NO_COLOR=1`.

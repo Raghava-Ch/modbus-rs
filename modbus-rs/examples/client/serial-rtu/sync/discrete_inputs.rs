@@ -94,7 +94,7 @@ fn main() -> Result<()> {
     println!("Connecting to Serial Port: {}", port_path);
 
     let transport = StdRtuTransport::new();
-    let app = ClientApp::default();
+    let app = ClientApp;
 
     let serial_config = ModbusSerialConfig {
         port_path: heapless::String::<64>::from_str(port_path).unwrap(),

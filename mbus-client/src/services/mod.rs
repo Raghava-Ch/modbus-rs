@@ -37,6 +37,7 @@ use crate::app::TrafficNotifier;
 use diagnostic::ReadDeviceIdCode;
 use heapless::Vec;
 use mbus_core::data_unit::common::{ModbusMessage, SlaveAddress, derive_length_from_bytes};
+#[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::transport::{UidSaddrFrom, UnitIdOrSlaveAddr};
 use mbus_core::{
@@ -588,6 +589,7 @@ pub(crate) struct Multiple {
     quantity: u16,
 }
 /// Internal tracking payload for a Masking operation.
+#[cfg(feature = "registers")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Mask {
     address: u16,
@@ -605,9 +607,11 @@ pub(crate) struct Diag {
 /// Metadata required to match responses to requests and properly parse the payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OperationMeta {
+    #[allow(dead_code)]
     Other,
     Single(Single),
     Multiple(Multiple),
+    #[cfg(feature = "registers")]
     Masking(Mask),
     #[cfg(feature = "diagnostics")]
     Diag(Diag),
@@ -618,11 +622,13 @@ impl OperationMeta {
         match self {
             OperationMeta::Single(s) => s.address,
             OperationMeta::Multiple(m) => m.address,
+            #[cfg(feature = "registers")]
             OperationMeta::Masking(m) => m.address,
             _ => 0,
         }
     }
 
+    #[cfg(any(feature = "coils", test))]
     fn value(&self) -> u16 {
         match self {
             OperationMeta::Single(s) => s.value,
@@ -638,6 +644,7 @@ impl OperationMeta {
         }
     }
 
+    #[cfg(feature = "registers")]
     fn and_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.and_mask,
@@ -645,6 +652,7 @@ impl OperationMeta {
         }
     }
 
+    #[cfg(feature = "registers")]
     fn or_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.or_mask,
@@ -656,6 +664,7 @@ impl OperationMeta {
         matches!(self, OperationMeta::Single(_))
     }
 
+    #[cfg(feature = "registers")]
     fn single_value(&self) -> u16 {
         match self {
             OperationMeta::Single(s) => s.value,
@@ -663,17 +672,17 @@ impl OperationMeta {
         }
     }
 
+    #[cfg(feature = "diagnostics")]
     fn device_id_code(&self) -> ReadDeviceIdCode {
         match self {
-            #[cfg(feature = "diagnostics")]
             OperationMeta::Diag(d) => d.device_id_code,
             _ => ReadDeviceIdCode::default(),
         }
     }
 
+    #[cfg(feature = "diagnostics")]
     fn encap_type(&self) -> EncapsulatedInterfaceType {
         match self {
-            #[cfg(feature = "diagnostics")]
             OperationMeta::Diag(d) => d.encap_type,
             _ => EncapsulatedInterfaceType::default(),
         }
@@ -2377,8 +2386,10 @@ mod tests {
     /// Test case: `connect()` returns an error if transport connection fails.
     #[test]
     fn test_client_services_connect_failure() {
-        let mut transport = MockTransport::default();
-        transport.connect_should_fail = true;
+        let transport = MockTransport {
+            connect_should_fail: true,
+            ..MockTransport::default()
+        };
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
 
@@ -2556,8 +2567,10 @@ mod tests {
     #[cfg(feature = "traffic")]
     #[test]
     fn test_traffic_tx_error_emitted_on_submit_send_failure() {
-        let mut transport = MockTransport::default();
-        transport.send_should_fail = true;
+        let transport = MockTransport {
+            send_should_fail: true,
+            ..MockTransport::default()
+        };
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
@@ -2629,8 +2642,10 @@ mod tests {
     /// Test case: `read_multiple_coils` returns an error if sending fails.
     #[test]
     fn test_read_multiple_coils_send_failure() {
-        let mut transport = MockTransport::default();
-        transport.send_should_fail = true;
+        let transport = MockTransport {
+            send_should_fail: true,
+            ..MockTransport::default()
+        };
         let app = MockApp::default();
         let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", 502).unwrap());
         let mut client_services =
@@ -4765,7 +4780,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_inputs.from_address(), address);
         assert_eq!(rcv_inputs.quantity(), 1);
-        assert_eq!(rcv_inputs.value(address).unwrap(), true);
+        assert!(rcv_inputs.value(address).unwrap());
         assert_eq!(*rcv_quantity, 1);
     }
 

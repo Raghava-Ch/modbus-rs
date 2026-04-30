@@ -39,7 +39,10 @@ fn main() {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use mbus_core::transport::{BaudRate, ModbusConfig, Parity, SerialConfig, UnitIdOrSlaveAddr};
+    use mbus_core::transport::{
+        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+        Parity, SerialMode, UnitIdOrSlaveAddr,
+    };
     use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
     // TokioRtuTransport is re-exported from mbus_serial when serial-rtu is active.
     use mbus_serial::TokioRtuTransport;
@@ -47,7 +50,7 @@ fn main() {
 
     /// Serial port path — adjust for your OS and hardware.
     const SERIAL_PORT: &str = if cfg!(target_os = "windows") {
-        "COM3"
+        "COM2"
     } else {
         "/dev/ttyUSB0"
     };
@@ -58,14 +61,21 @@ fn main() {
         .unwrap()
         .block_on(async {
             // ── Downstream RTU transport ──────────────────────────────────────
-            let serial_cfg = ModbusConfig::Serial(
-                SerialConfig::builder()
-                    .port(SERIAL_PORT)
-                    .baud_rate(BaudRate::Baud19200)
-                    .parity(Parity::None)
-                    .build()
-                    .expect("valid serial config"),
-            );
+            let serial_cfg = ModbusConfig::Serial(ModbusSerialConfig {
+                port_path: SERIAL_PORT
+                    .try_into()
+                    .expect("serial port path too long"),
+                mode: SerialMode::Rtu,
+                baud_rate: BaudRate::Baud19200,
+                data_bits: DataBits::Eight,
+                stop_bits: 1,
+                parity: Parity::None,
+                response_timeout_ms: 1000,
+                retry_attempts: 0,
+                retry_backoff_strategy: BackoffStrategy::Immediate,
+                retry_jitter_strategy: JitterStrategy::None,
+                retry_random_fn: None,
+            });
             let rtu = TokioRtuTransport::new(&serial_cfg).expect("open serial port");
             let shared_rtu = Arc::new(Mutex::new(rtu));
 

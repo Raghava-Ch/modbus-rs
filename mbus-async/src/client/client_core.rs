@@ -28,6 +28,7 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(any(feature = "registers", feature = "diagnostics"))]
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
@@ -227,6 +228,7 @@ impl AsyncClientCore {
         quantity: u16,
     ) -> Result<Coils, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::ReadMultipleCoils {
                 unit,
@@ -251,6 +253,7 @@ impl AsyncClientCore {
         value: bool,
     ) -> Result<(u16, bool), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::WriteSingleCoil {
                 unit,
@@ -278,6 +281,7 @@ impl AsyncClientCore {
         coils: &Coils,
     ) -> Result<(u16, u16), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::WriteMultipleCoils {
                 unit,

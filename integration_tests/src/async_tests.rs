@@ -196,10 +196,10 @@ async fn test_async_tcp_client_read_discrete_inputs() -> Result<()> {
     assert_eq!(di.from_address(), 0);
     assert_eq!(di.quantity(), 8);
     // 0xA5 = 1010_0101: bit 0 (addr 0) = 1, bit 1 (addr 1) = 0, bit 2 (addr 2) = 1
-    assert_eq!(di.value(0)?, true);
-    assert_eq!(di.value(1)?, false);
-    assert_eq!(di.value(2)?, true);
-    assert_eq!(di.value(7)?, true);
+    assert!(di.value(0)?);
+    assert!(!di.value(1)?);
+    assert!(di.value(2)?);
+    assert!(di.value(7)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -744,7 +744,7 @@ async fn test_async_tcp_client_read_single_coil() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let coils = client.read_multiple_coils(1, 5, 1).await?;
     assert_eq!(coils.quantity(), 1);
-    assert_eq!(coils.value(5)?, true);
+    assert!(coils.value(5)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -780,7 +780,7 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let inputs = client.read_discrete_inputs(1, 10, 1).await?;
     assert_eq!(inputs.quantity(), 1);
-    assert_eq!(inputs.value(10)?, true);
+    assert!(inputs.value(10)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())

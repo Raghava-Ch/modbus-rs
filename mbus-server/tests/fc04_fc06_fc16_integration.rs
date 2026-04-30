@@ -1,3 +1,5 @@
+#![cfg(all(feature = "input-registers", feature = "holding-registers"))]
+
 mod common;
 use common::{MockTransport, build_request, tcp_config, unit_id};
 use heapless::Vec as HVec;

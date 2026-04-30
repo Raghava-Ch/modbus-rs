@@ -25,11 +25,11 @@ struct TransportCtx {
     uint16_t tx_len;
 };
 
-void mbus_server_pool_lock(void) {
+void mbus_pool_lock(void) {
     // Single-threaded demo: no-op lock hooks.
 }
 
-void mbus_server_pool_unlock(void) {
+void mbus_pool_unlock(void) {
     // Single-threaded demo: no-op lock hooks.
 }
 
@@ -47,7 +47,7 @@ void mbus_server_unlock(MbusServerId id) {
 void mbus_app_lock(void)   {}
 void mbus_app_unlock(void) {}
 
-/* NOTE: mbus_pool_lock / mbus_client_lock not needed — `c` feature not used. */
+/* NOTE: mbus_client_lock/unlock not needed — `c` feature not used. */
 
 static void set_u16_be(uint8_t *dst, uint16_t v) {
     dst[0] = (uint8_t)((v >> 8) & 0xFFu);

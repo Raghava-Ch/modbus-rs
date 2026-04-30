@@ -178,6 +178,7 @@ where
     }
 
     /// Handles a Serial broadcast FC06 request without emitting any response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_broadcast_write_single_register_request(
         &mut self,
         message: &ModbusMessage,
@@ -483,6 +484,7 @@ where
     }
 
     /// Handles a Serial broadcast FC10 request without emitting any response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_broadcast_write_multiple_registers_request(
         &mut self,
         message: &ModbusMessage,

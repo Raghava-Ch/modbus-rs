@@ -100,10 +100,10 @@ mod tests {
         let coils = Coils::new(10, 8).unwrap().with_values(&values, 8).unwrap();
 
         // Check specific bits based on the 0x05 bitmask
-        assert_eq!(coils.value(10).unwrap(), true); // Address 10 (Offset 0) -> bit 0 is 1
-        assert_eq!(coils.value(11).unwrap(), false); // Address 11 (Offset 1) -> bit 1 is 0
-        assert_eq!(coils.value(12).unwrap(), true); // Address 12 (Offset 2) -> bit 2 is 1
-        assert_eq!(coils.value(17).unwrap(), false); // Address 17 (Offset 7) -> bit 7 is 0
+        assert!(coils.value(10).unwrap()); // Address 10 (Offset 0) -> bit 0 is 1
+        assert!(!coils.value(11).unwrap()); // Address 11 (Offset 1) -> bit 1 is 0
+        assert!(coils.value(12).unwrap()); // Address 12 (Offset 2) -> bit 2 is 1
+        assert!(!coils.value(17).unwrap()); // Address 17 (Offset 7) -> bit 7 is 0
     }
 
     /// Test that retrieving a value out of the defined range returns an error.
@@ -133,19 +133,19 @@ mod tests {
 
         // Set coil at target address 22 (base 20 + offset 2) to ON
         assert_eq!(coils.set_value(22, true), Ok(()));
-        assert_eq!(coils.value(22).unwrap(), true);
+        assert!(coils.value(22).unwrap());
 
         // Set coil at target address 30 (base 25 + offset 5) to ON
         // This tests address calculation logic: 25 + 5 = 30
         assert_eq!(coils.set_value(30, true), Ok(()));
-        assert_eq!(coils.value(30).unwrap(), true);
+        assert!(coils.value(30).unwrap());
 
         // Turn coil at target address 22 back to OFF
         assert_eq!(coils.set_value(22, false), Ok(()));
-        assert_eq!(coils.value(22).unwrap(), false);
+        assert!(!coils.value(22).unwrap());
 
         // Verify that modifying one bit did not affect others (coil 30 should remain ON)
-        assert_eq!(coils.value(30).unwrap(), true);
+        assert!(coils.value(30).unwrap());
     }
 
     /// Test that setting a value out of the defined range returns an error.
