@@ -436,6 +436,9 @@ async fn perform_handshake(
     let allowed_origins = config.allowed_origins.clone();
     let require_subprotocol = config.require_modbus_subprotocol;
 
+    // tungstenite's server callback type requires `Result<Response, ErrorResponse>`
+    // where `ErrorResponse` is a large HTTP response type.
+    #[allow(clippy::result_large_err)]
     let callback =
         move |req: &Request, mut response: Response| -> Result<Response, ErrorResponse> {
             // ── Origin check ──────────────────────────────────────────────────
