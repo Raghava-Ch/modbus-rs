@@ -55,7 +55,15 @@ void mbus_app_unlock(void) {}
  * This hand-written demo does not use the generated APP_MODEL dispatcher,
  * so these stubs are never actually called; they just satisfy the linker.
  */
-#include "mbus_server_app.h"
+#ifndef MBUS_HOOK_OK
+typedef enum MbusHookStatus {
+    MBUS_HOOK_OK = 0,
+    MBUS_HOOK_ILLEGAL_DATA_ADDRESS = 1,
+    MBUS_HOOK_ILLEGAL_DATA_VALUE = 2,
+    MBUS_HOOK_DEVICE_FAILURE = 3,
+} MbusHookStatus;
+#endif
+
 MbusHookStatus app_on_write_pump_run(void *ctx, uint16_t addr, uint8_t v)
     { (void)ctx; (void)addr; (void)v; return MBUS_HOOK_OK; }
 MbusHookStatus app_on_write_alarm_ack(void *ctx, uint16_t addr, uint8_t v)

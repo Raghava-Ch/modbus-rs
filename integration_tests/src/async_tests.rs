@@ -758,7 +758,10 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
     let server_handle = thread::spawn(move || -> Result<()> {
         let (mut stream, _) = listener.accept()?;
 
-        let mut req = [0u8; 10];
+        // MBAP(6) + unit(1) + FC(1) + address(2) + quantity(2)
+        // Read the full ADU to avoid leaving unread bytes in the socket,
+        // which can cause connection-reset behavior on Windows when closing.
+        let mut req = [0u8; 12];
         stream.read_exact(&mut req)?;
         assert_eq!(req[7], 0x02); // FC Read Discrete Inputs
         assert_eq!(req[8], 0x00);
@@ -794,17 +797,21 @@ async fn test_async_tcp_client_server_exception_response() -> Result<()> {
     let server_handle = thread::spawn(move || -> Result<()> {
         let (mut stream, _) = listener.accept()?;
 
-        let mut req = [0u8; 12];
+        // MBAP(6) + unit(1) + FC(1) + addr(2) + qty(2) + byte_count(1) + data(6)
+        // for write_multiple_registers(3 values) => 19 bytes total.
+        // Read the full request to avoid Windows TCP reset behavior on close.
+        let mut req = [0u8; 19];
         stream.read_exact(&mut req)?;
 
-        // Send exception response: FC | 0x80 = exception, ExceptionCode = 0x02 (Illegal Data Address)
+        // Send exception response: FC 0x10 | 0x80 = 0x90,
+        // ExceptionCode = 0x02 (Illegal Data Address).
         #[rustfmt::skip]
         stream.write_all(&[
             0x00, 0x01,
             0x00, 0x00,
             0x00, 0x03, // len (unit + fc + exception_code)
             0x01,
-            0x81,       // FC 0x01 | 0x80
+            0x90,       // FC 0x10 | 0x80
             0x02,       // IllegalDataAddress
         ])?;
         Ok(())
