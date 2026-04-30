@@ -2,7 +2,7 @@
 //!
 //! [`AsyncWsGatewayServer`] binds a TCP port, performs the WebSocket handshake
 //! for each incoming connection, and then hands the session off to the same
-//! generic [`run_async_session`] loop used by [`AsyncTcpGatewayServer`].
+//! generic `run_async_session` loop used by [`AsyncTcpGatewayServer`].
 //! The downstream side is unchanged — any [`AsyncTransport`] (raw TCP, RTU,
 //! ASCII) can be used.
 //!
@@ -34,7 +34,6 @@
 //! [`allowed_origins`]: WsGatewayConfig::allowed_origins
 //! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
 //! [`WasmModbusClient`]: https://docs.rs/mbus-ffi
-//! [`run_async_session`]: crate::async_gateway::run_async_session
 
 use std::convert::Infallible;
 use std::future::Future;
