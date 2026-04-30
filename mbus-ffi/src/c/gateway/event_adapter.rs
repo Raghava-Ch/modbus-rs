@@ -1,5 +1,5 @@
 //! Bridges [`MbusGatewayCallbacks`] to the
-//! [`GatewayEventHandler`](mbus_gateway::GatewayEventHandler) trait expected
+//! [`GatewayEventHandler`] trait expected
 //! by [`GatewayServices`](mbus_gateway::GatewayServices).
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
