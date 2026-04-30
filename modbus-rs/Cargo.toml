@@ -18,6 +18,7 @@ mbus-network = { workspace = true, optional = true }
 mbus-client = { workspace = true, optional = true }
 mbus-async = { workspace = true, optional = true }
 mbus-server = { workspace = true, optional = true }
+mbus-gateway = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 
@@ -94,6 +95,7 @@ logging = [
 ]
 async = ["dep:mbus-async", "std-required"]
 traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
+gateway = ["dep:mbus-gateway"]
 
 # Convenience feature for no_std / embedded targets.
 # Enables the client state machine and all protocol model features.
@@ -257,3 +259,13 @@ required-features = [
     "holding-registers",
     "input-registers",
 ]
+
+[[example]]
+name = "modbus_rs_gateway_sync_tcp_to_rtu"
+path = "examples/gateway/sync_tcp_to_rtu.rs"
+required-features = ["gateway", "serial-rtu", "network-tcp"]
+
+[[example]]
+name = "modbus_rs_gateway_async_tcp_to_tcp"
+path = "examples/gateway/async_tcp_to_tcp.rs"
+required-features = ["gateway", "async", "network-tcp"]

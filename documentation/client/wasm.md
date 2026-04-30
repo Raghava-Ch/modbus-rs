@@ -291,7 +291,7 @@ Errors are surfaced by Promise rejection (for example: connection loss, timeout/
 
 A complete example is available at:
 
-[mbus-ffi/examples/network_smoke.html](../../mbus-ffi/examples/network_smoke.html)
+[mbus-ffi/examples/network_smoke.html](../../mbus-ffi/examples/wasm_client/network_smoke.html)
 
 ```bash
 # Serve the example

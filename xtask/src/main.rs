@@ -1,6 +1,7 @@
 //! Workspace maintenance commands for header generation/verification and C smoke build checks.
 
 mod check_doc_links;
+mod check_feature_subsets;
 mod demo_manifest;
 mod gen_server_app;
 mod validate_docs;
@@ -599,6 +600,9 @@ fn print_help() {
     println!();
     println!("VALIDATION COMMANDS");
     println!("  check-feature-matrix");
+    println!("  check-feature-subsets [--fast]");
+    println!("      Run cargo check / clippy / build / test over every per-feature subset.");
+    println!("      --fast  Skip slow steps (build + test); check + clippy only.");
     println!("  check-doc-links [--file/-f <path>] ...");
     println!("      Validate that every local markdown link resolves to an existing file.");
     println!("      --file/-f can be repeated to restrict to specific files.");
@@ -633,6 +637,10 @@ fn main() -> ExitCode {
         "check-server-gen" => cmd_check_server_gen(&root),
         "gen-server-app"   => cmd_gen_server_app(&root, &remaining_args),
         "check-feature-matrix" => cmd_check_feature_matrix(&root),
+        "check-feature-subsets" => {
+            check_feature_subsets::parse_args(&remaining_args)
+                .and_then(|opts| check_feature_subsets::cmd_check_feature_subsets(&root, &opts))
+        }
         "validate-docs" => validate_docs::cmd_validate_docs(&root, &remaining_args),
         "check-doc-links" => check_doc_links::cmd_check_doc_links(&root, &remaining_args),
         "check-release" => cmd_check_release(&root),

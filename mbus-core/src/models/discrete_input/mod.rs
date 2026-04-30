@@ -18,7 +18,7 @@
 //! and stores the actual bit-packed values in a memory-efficient `heapless::Vec`, making it
 //! suitable for `no_std` and embedded environments.
 //!
-//! Use the [`value()`](Self::value) method to extract individual boolean states without
+//! Use the `DiscreteInputs::value()` method to extract individual boolean states without
 //! manually performing bitwise operations.
 //!
 //! # Internal Representation
@@ -107,14 +107,14 @@ mod tests {
             .unwrap();
 
         // Check first byte (address 10-17)
-        assert_eq!(inputs.value(10).unwrap(), true); // Offset 0 -> bit 0 is 1
-        assert_eq!(inputs.value(11).unwrap(), false); // Offset 1 -> bit 1 is 0
-        assert_eq!(inputs.value(12).unwrap(), true); // Offset 2 -> bit 2 is 1
-        assert_eq!(inputs.value(17).unwrap(), false); // Offset 7 -> bit 7 is 0
+        assert!(inputs.value(10).unwrap()); // Offset 0 -> bit 0 is 1
+        assert!(!inputs.value(11).unwrap()); // Offset 1 -> bit 1 is 0
+        assert!(inputs.value(12).unwrap()); // Offset 2 -> bit 2 is 1
+        assert!(!inputs.value(17).unwrap()); // Offset 7 -> bit 7 is 0
 
         // Check second byte (address 18-25)
-        assert_eq!(inputs.value(18).unwrap(), false); // Offset 8 -> bit 0 of 2nd byte is 0
-        assert_eq!(inputs.value(25).unwrap(), true); // Offset 15 -> bit 7 of 2nd byte is 1
+        assert!(!inputs.value(18).unwrap()); // Offset 8 -> bit 0 of 2nd byte is 0
+        assert!(inputs.value(25).unwrap()); // Offset 15 -> bit 7 of 2nd byte is 1
     }
 
     /// Tests that retrieving a value out of the defined range returns an `InvalidAddress` error.

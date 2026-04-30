@@ -1,5 +1,7 @@
 pub mod client;
 pub mod errors;
+#[cfg(feature = "python-gateway")]
+pub mod gateway;
 pub mod server;
 
 use mbus_core::transport::SerialMode as TransportSerialMode;
@@ -73,6 +75,14 @@ pub fn _modbus_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<server::tcp::TcpServer>()?;
     m.add_class::<server::serial::AsyncSerialServer>()?;
     m.add_class::<server::serial::SerialServer>()?;
+
+    // Gateway classes (feature = "python-gateway")
+    #[cfg(feature = "python-gateway")]
+    {
+        m.add_class::<gateway::event_handler::GatewayEventHandler>()?;
+        m.add_class::<gateway::async_tcp::AsyncTcpGateway>()?;
+        m.add_class::<gateway::sync_tcp::TcpGateway>()?;
+    }
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+#![cfg(feature = "holding-registers")]
+
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ServerHoldingRegisterHandler;

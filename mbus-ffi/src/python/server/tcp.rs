@@ -20,13 +20,15 @@ use crate::python::errors::async_server_error_to_py;
 ///
 /// Usage::
 ///
-///     class MyApp(modbus_rs.ModbusApp):
-///         def handle_read_holding_registers(self, address, count):
-///             return [0] * count
+/// ```python
+/// class MyApp(modbus_rs.ModbusApp):
+///     def handle_read_holding_registers(self, address, count):
+///         return [0] * count
 ///
-///     async def main():
-///         async with AsyncTcpServer("0.0.0.0", port=502, app=MyApp(), unit_id=1) as server:
-///             await server.serve_forever()
+/// async def main():
+///     async with AsyncTcpServer("0.0.0.0", port=502, app=MyApp(), unit_id=1) as server:
+///         await server.serve_forever()
+/// ```
 #[pyclass(name = "AsyncTcpServer")]
 pub struct AsyncTcpServer {
     bind_addr: String,
@@ -134,8 +136,10 @@ impl AsyncTcpServer {
 ///
 /// Usage::
 ///
-///     server = TcpServer("0.0.0.0", port=502, app=MyApp(), unit_id=1)
-///     server.serve_forever()  # blocks
+/// ```python
+/// server = TcpServer("0.0.0.0", port=502, app=MyApp(), unit_id=1)
+/// server.serve_forever()  # blocks
+/// ```
 #[pyclass(name = "TcpServer")]
 pub struct TcpServer {
     bind_addr: String,

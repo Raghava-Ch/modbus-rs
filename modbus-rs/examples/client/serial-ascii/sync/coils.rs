@@ -119,7 +119,7 @@ fn main() -> Result<()> {
 
     // Initialize transport with ASCII mode
     let transport = StdAsciiTransport::new();
-    let app = ClientApp::default();
+    let app = ClientApp;
 
     // Configure serial port for standard Modbus ASCII:
     // - 7 Data Bits

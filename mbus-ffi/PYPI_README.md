@@ -134,6 +134,49 @@ cd ../python_async_client
 python3 async_client.py --host 127.0.0.1 --port 5020 --multi
 ```
 
+## Modbus TCP Gateway (`python-gateway` feature)
+
+The `python-gateway` feature exposes a thread-safe sync gateway and an
+asyncio-friendly async gateway that forward inbound Modbus/TCP requests to
+one or more downstream Modbus/TCP servers based on a unit-id routing table.
+
+Build with the gateway feature enabled:
+
+```bash
+cd mbus-ffi
+maturin develop --features python,python-gateway,full
+```
+
+### Sync gateway
+
+```python
+import modbus_rs
+
+gw = modbus_rs.TcpGateway("0.0.0.0:5020")
+ch = gw.add_tcp_downstream("192.168.1.10", 502)
+gw.add_unit_route(unit=1, channel=ch)
+gw.serve_forever()  # blocks; call gw.stop() from another thread to exit
+```
+
+### Async gateway
+
+```python
+import asyncio
+import modbus_rs
+
+async def main():
+    gw = modbus_rs.AsyncTcpGateway("0.0.0.0:5020")
+    ch = await gw.add_tcp_downstream("192.168.1.10", 502)
+    await gw.add_unit_route(unit=1, channel=ch)
+    await gw.serve_forever()  # cancel the task or call gw.stop() to exit
+
+asyncio.run(main())
+```
+
+> Note: the optional `event_handler=` constructor argument is reserved for
+> future telemetry callbacks. It is currently a forward-compatibility hook and
+> does not yet receive frame events.
+
 ## More Docs
 
 - Project docs: documentation/python_bindings.md

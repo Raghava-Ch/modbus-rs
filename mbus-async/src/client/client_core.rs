@@ -1,7 +1,7 @@
 //! Core async client handle shared by all transport flavours.
 //!
 //! [`AsyncClientCore`] is the single place that owns the channel to the
-//! background [`ClientTask`] and implements every Modbus request method.
+//! background `ClientTask` and implements every Modbus request method.
 //! Transport-specific client types (`AsyncTcpClient`, `AsyncSerialClient`)
 //! store an `AsyncClientCore` as their only field and expose its API
 //! transparently via [`std::ops::Deref`].
@@ -11,7 +11,7 @@
 //! ```text
 //! AsyncTcpClient / AsyncSerialClient
 //!   └── AsyncClientCore   (this module)
-//!         ├── mpsc::Sender<TaskCommand>  ──────► ClientTask::run()  (tokio task)
+//!         ├── mpsc::Sender<TaskCommand>  ──────► `ClientTask::run()`  (tokio task)
 //!         └── watch::Receiver<usize>            (pending-request count)
 //! ```
 //!
@@ -20,7 +20,6 @@
 //! 2. Sends a [`TaskCommand::Request`] (carrying the oneshot sender) over the mpsc channel.
 //! 3. `await`s the oneshot receiver for the reply.
 //!
-//! [`ClientTask`]: crate::client::task::ClientTask
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -28,6 +27,7 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
+#[cfg(any(feature = "registers", feature = "diagnostics"))]
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
@@ -65,9 +65,7 @@ use super::{CommEventLogResponse, DiagnosticsDataResponse};
 /// `watch::Receiver` used for a synchronous `has_pending_requests()` query.
 ///
 /// Dropping this value closes the channel, which causes the background
-/// [`ClientTask`] to exit cleanly via its `cmd_rx.recv()` returning `None`.
-///
-/// [`ClientTask`]: crate::client::task::ClientTask
+/// `ClientTask` to exit cleanly via its `cmd_rx.recv()` returning `None`.
 pub struct AsyncClientCore {
     cmd_tx: mpsc::Sender<TaskCommand>,
     pending_count_rx: PendingCountReceiver,
@@ -78,9 +76,7 @@ pub struct AsyncClientCore {
 }
 
 impl AsyncClientCore {
-    /// Creates a new core handle wired to an already-spawned [`ClientTask`].
-    ///
-    /// [`ClientTask`]: crate::client::task::ClientTask
+    /// Creates a new core handle wired to an already-spawned `ClientTask`.
     pub(super) fn new(
         cmd_tx: mpsc::Sender<TaskCommand>,
         pending_count_rx: PendingCountReceiver,
@@ -227,6 +223,7 @@ impl AsyncClientCore {
         quantity: u16,
     ) -> Result<Coils, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::ReadMultipleCoils {
                 unit,
@@ -251,6 +248,7 @@ impl AsyncClientCore {
         value: bool,
     ) -> Result<(u16, bool), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::WriteSingleCoil {
                 unit,
@@ -278,6 +276,7 @@ impl AsyncClientCore {
         coils: &Coils,
     ) -> Result<(u16, u16), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
+        #[allow(unreachable_patterns)]
         match self
             .send_request(ClientRequest::WriteMultipleCoils {
                 unit,
