@@ -7,7 +7,7 @@ use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 /// Queue a Read FIFO Queue (FC 0x18) request.
 ///
-/// The response is delivered via [`MbusCallbacks::on_read_fifo_queue`].
+/// The response is delivered via `MbusCallbacks::on_read_fifo_queue`.
 #[cfg(feature = "fifo")]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_fifo_queue(

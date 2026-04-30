@@ -18,7 +18,7 @@
 //! and stores the actual bit-packed values in a memory-efficient `heapless::Vec`, making it
 //! suitable for `no_std` and embedded environments.
 //!
-//! Use the [`value()`](Self::value) method to extract individual boolean states without
+//! Use the `DiscreteInputs::value()` method to extract individual boolean states without
 //! manually performing bitwise operations.
 //!
 //! # Internal Representation

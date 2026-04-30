@@ -38,10 +38,10 @@ pub trait Transport {
     /// Every implementation must declare its transport family here.
     /// For transports whose serial mode (RTU / ASCII) is chosen at runtime,
     /// set this to a representative value (e.g. `StdSerial(SerialMode::Rtu)`)
-    /// and override [`transport_type()`](Transport::transport_type) to return
-    /// the actual instance mode. The compile-time value is used by the server
+    /// and return the actual instance mode through your implementation-specific
+    /// runtime API. The compile-time value is used by the server
     /// for optimizations such as broadcast eligibility (`is_serial_type()`),
-    /// while the runtime method is authoritative for framing decisions.
+    /// while runtime transport metadata is authoritative for framing decisions.
     const TRANSPORT_TYPE: TransportType;
 
     /// Establishes the physical or logical connection to the Modbus server/slave.
