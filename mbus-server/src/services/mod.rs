@@ -821,7 +821,7 @@ where
     /// 3. **Ingest frames** — parse complete frames; queue or dispatch depending
     ///    on [`ResilienceConfig::enable_priority_queue`].
     /// 4. **Expire stale queued requests** — discard requests that have exceeded
-    ///    [`TimeoutConfig::request_deadline_ms`] (if configured).
+    ///    `TimeoutConfig::request_deadline_ms` (if configured).
     /// 5. **Dispatch queued requests** — process all buffered requests in
     ///    priority order (only reached when `enable_priority_queue` is `true`).
     pub fn poll(&mut self) {

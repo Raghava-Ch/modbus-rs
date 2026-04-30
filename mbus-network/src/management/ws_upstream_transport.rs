@@ -1,7 +1,7 @@
 //! `WsUpstreamTransport` — server-side WebSocket upstream transport.
 //!
 //! Wraps an accepted [`WebSocketStream<TcpStream>`] from `tokio-tungstenite` and
-//! implements [`AsyncTransport`] so that [`AsyncWsGatewayServer`] can feed it
+//! implements [`AsyncTransport`] so that `AsyncWsGatewayServer` can feed it
 //! directly into the generic `run_async_session` loop shared with
 //! [`AsyncTcpGatewayServer`].
 //!
@@ -12,7 +12,6 @@
 //! WebSocket message.  `recv()` therefore just unwraps the binary payload — no
 //! reassembly is needed.  Ping/Pong/Text frames are silently skipped.
 //!
-//! [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
 //! [`WasmModbusClient`]: https://docs.rs/mbus-ffi
 
 use futures_util::{SinkExt, StreamExt};
@@ -26,7 +25,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 /// Async gateway upstream transport that communicates via WebSocket.
 ///
-/// Created by [`AsyncWsGatewayServer`] after a successful WebSocket handshake;
+/// Created by `AsyncWsGatewayServer` after a successful WebSocket handshake;
 /// callers rarely construct this type directly.
 ///
 /// Each binary WebSocket message is expected to carry exactly one complete
