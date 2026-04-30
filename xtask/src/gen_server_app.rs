@@ -409,7 +409,7 @@ fn render_app_struct(config: &ServerAppConfig) -> String {
     if has_discrete { out.push_str("    pub discrete_inputs: AppDiscreteInputs,\n"); }
     if has_holding { out.push_str("    pub holding: AppHolding,\n"); }
     if has_input { out.push_str("    pub input: AppInput,\n"); }
-    out.push_str("}");
+    out.push('}');
     out
 }
 

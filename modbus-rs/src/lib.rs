@@ -97,3 +97,6 @@ pub use mbus_client::services::register::{MAX_REGISTERS_PER_PDU, Registers};
 
 #[cfg(feature = "async")]
 pub use mbus_async;
+
+#[cfg(feature = "gateway")]
+pub use mbus_gateway as gateway;

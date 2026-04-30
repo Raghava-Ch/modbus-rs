@@ -23,9 +23,17 @@ pub mod server;
 #[cfg(feature = "c-server")]
 pub mod server_gen;
 
+// ── Gateway bindings ──────────────────────────────────────────────────────────
+
+#[cfg(feature = "c-gateway")]
+pub mod gateway;
+
 // ── Public re-exports ─────────────────────────────────────────────────────────
 
 pub use error::MbusStatusCode;
 
 #[cfg(feature = "c")]
 pub use client::{MBUS_INVALID_CLIENT_ID, MbusClientId};
+
+#[cfg(feature = "c-gateway")]
+pub use gateway::{MBUS_INVALID_GATEWAY_ID, MbusGatewayId};

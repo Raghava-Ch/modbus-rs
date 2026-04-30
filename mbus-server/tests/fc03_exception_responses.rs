@@ -3,7 +3,7 @@
 //! These tests verify that the server correctly generates and sends
 //! Modbus exception ADUs when errors occur during FC03 processing.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "holding-registers"))]
 mod fc03_exception_tests {
     use mbus_core::errors::{ExceptionCode, MbusError};
     use mbus_core::function_codes::public::FunctionCode;

@@ -1,3 +1,5 @@
+#![cfg(feature = "diagnostics")]
+
 mod common;
 use common::{
     MockSerialTransport, MockTransport, build_request, build_serial_request, serial_rtu_config,

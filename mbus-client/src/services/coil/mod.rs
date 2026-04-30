@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn test_parse_read_coils_response_max_quantity() {
         let max_quantity = MAX_COILS_PER_PDU as u16; // 2000 coils
-        let expected_byte_count = ((max_quantity + 7) / 8) as u8; // 250 bytes
+        let expected_byte_count = max_quantity.div_ceil(8) as u8; // 250 bytes
 
         let mut response_bytes_vec: Vec<u8, 253> = Vec::new(); // FC + Byte Count + 250 data bytes
         response_bytes_vec
@@ -171,7 +171,7 @@ mod tests {
     fn test_parse_read_coils_response_buffer_too_small_for_data() {
         // Craft a PDU that claims a byte count of 251, which would exceed MAX_COIL_BYTES (250)
         let expected_quantity = (MAX_COIL_BYTES * 8 + 1) as u16; // A quantity that would require more than MAX_COIL_BYTES
-        let byte_count_in_pdu = ((expected_quantity + 7) / 8) as u8; // This would be 251 for 2001 coils
+        let byte_count_in_pdu = expected_quantity.div_ceil(8) as u8; // This would be 251 for 2001 coils
 
         let mut response_bytes_vec: Vec<u8, 253> = Vec::new();
         response_bytes_vec

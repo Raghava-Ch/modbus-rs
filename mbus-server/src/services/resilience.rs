@@ -12,7 +12,7 @@
 //! - [`ResilienceConfig`]: the single struct passed to
 //!   [`ServerServices::new`](super::ServerServices::new) to activate all
 //!   resilience features.
-//! - [`RequestQueue`] / [`ResponseQueue`]: fixed-capacity heapless collections
+//! - `RequestQueue` / `ResponseQueue`: fixed-capacity heapless collections
 //!   used by `ServerServices` at runtime.
 
 use heapless::{Deque, Vec};
@@ -148,7 +148,7 @@ impl Default for TimeoutConfig {
 
 /// Priority level assigned to a Modbus request based on its function code.
 ///
-/// When multiple requests are buffered in the [`RequestQueue`], higher-priority
+/// When multiple requests are buffered in the `RequestQueue`, higher-priority
 /// items are dispatched first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RequestPriority {
@@ -248,7 +248,7 @@ pub struct ResilienceConfig {
     /// `0` disables response retries.  Defaults to `3`.
     pub max_send_retries: u8,
 
-    /// When `true`, incoming requests are pushed onto the [`RequestQueue`]
+    /// When `true`, incoming requests are pushed onto the `RequestQueue`
     /// rather than dispatched immediately.  This enables priority-ordered
     /// dispatch when multiple requests are buffered at the same time.
     ///

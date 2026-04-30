@@ -48,11 +48,11 @@ pub struct MbusTransportCallbacks {
     pub on_is_connected: Option<unsafe extern "C" fn(userdata: *mut c_void) -> u8>,
 }
 
-#[cfg(any(feature = "c", feature = "c-server"))]
+#[cfg(any(feature = "c", feature = "c-server", feature = "c-gateway"))]
 pub(crate) use c_impl::{CAsciiTransport, CRtuTransport, CTcpTransport, validate_transport_callbacks};
 
-/// Implementation types — only compiled when the `c` or `c-server` feature is active.
-#[cfg(any(feature = "c", feature = "c-server"))]
+/// Implementation types — only compiled when the `c`, `c-server`, or `c-gateway` feature is active.
+#[cfg(any(feature = "c", feature = "c-server", feature = "c-gateway"))]
 mod c_impl {
     use heapless::Vec;
     use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;

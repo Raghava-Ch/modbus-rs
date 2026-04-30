@@ -669,7 +669,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_inputs.from_address(), address);
     assert_eq!(rcv_inputs.quantity(), 1);
-    assert_eq!(rcv_inputs.value(address).unwrap(), true);
+    assert!(rcv_inputs.value(address).unwrap());
     assert_eq!(*rcv_quantity, 1);
 
     server_handle.join().unwrap()?;
@@ -766,7 +766,7 @@ fn test_client_services_read_device_identification() -> Result<()> {
         rcv_resp.conformity_level,
         ConformityLevel::BasicStreamAndIndividual
     );
-    assert_eq!(rcv_resp.more_follows, false);
+    assert!(!rcv_resp.more_follows);
     assert_eq!(rcv_resp.next_object_id, ObjectId::from(0x00));
     assert_eq!(rcv_resp.number_of_objects, 1);
 
@@ -1217,7 +1217,7 @@ fn test_client_services_tcp_noise_injection() -> Result<()> {
     for _ in 0..20 {
         client.poll();
         thread::sleep(std::time::Duration::from_millis(10));
-        if client.app().received_coil_responses.borrow().len() > 0 {
+        if !client.app().received_coil_responses.borrow().is_empty() {
             break;
         }
     }

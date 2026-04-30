@@ -214,6 +214,7 @@ impl ServerHoldingRegisterHandler for ProbeApp {
 }
 
 impl ServerCoilHandler for ProbeApp {
+    #[cfg(feature = "coils")]
     fn write_single_coil_request(
         &mut self,
         _txn_id: u16,
@@ -229,6 +230,7 @@ impl ServerCoilHandler for ProbeApp {
         Ok(())
     }
 
+    #[cfg(feature = "coils")]
     fn write_multiple_coils_request(
         &mut self,
         _txn_id: u16,

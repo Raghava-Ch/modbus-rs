@@ -147,11 +147,10 @@ fn main() -> Result<()> {
 
     // Initialize Transport and App
     let transport = StdTcpTransport::new();
-    let app = ClientApp::default();
+    let app = ClientApp;
 
     // Configure Modbus
-    let mut tcp_config =
-        ModbusTcpConfig::new(host, port).map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+    let mut tcp_config = ModbusTcpConfig::new(host, port).map_err(|e| anyhow::anyhow!(e))?;
     tcp_config.connection_timeout_ms = 2000;
     tcp_config.response_timeout_ms = 2000;
     let config = ModbusConfig::Tcp(tcp_config);

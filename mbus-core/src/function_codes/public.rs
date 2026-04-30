@@ -3,9 +3,9 @@
 //! This module defines the standard function codes and sub-function codes used in the
 //! Modbus Application Protocol. It provides enums for:
 //!
-//! - **[`FunctionCode`]**: The primary operation identifier (e.g., Read Coils, Write Register).
-//! - **[`DiagnosticSubFunction`]**: Sub-codes for serial-line diagnostics (FC 0x08).
-//! - **[`EncapsulatedInterfaceType`]**: MEI types for tunneling other protocols (FC 0x2B).
+//! - **`FunctionCode`**: The primary operation identifier (e.g., Read Coils, Write Register).
+//! - **`DiagnosticSubFunction`**: Sub-codes for serial-line diagnostics (FC 0x08).
+//! - **`EncapsulatedInterfaceType`**: MEI types for tunneling other protocols (FC 0x2B).
 //!
 //! All types implement `TryFrom` for safe conversion from raw bytes and include
 //! documentation referencing the Modbus Application Protocol Specification V1.1b3.
@@ -24,7 +24,7 @@ use crate::errors::{ExceptionCode, MbusError};
 /// - Section 5.1 Public Function Code Definition
 /// - Section 6.x for individual function behaviors
 ///
-/// Reference: :contentReference[oaicite:1]{index=1}
+/// Reference: Modbus Application Protocol Specification V1.1b3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum FunctionCode {
@@ -268,6 +268,7 @@ impl TryFrom<u8> for FunctionCode {
     type Error = MbusError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
+        #[allow(unused_imports)]
         use FunctionCode::*;
 
         match value {

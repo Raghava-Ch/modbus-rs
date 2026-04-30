@@ -25,11 +25,11 @@ struct TransportCtx {
     uint16_t tx_len;
 };
 
-void mbus_server_pool_lock(void) {
+void mbus_pool_lock(void) {
     // Single-threaded demo: no-op lock hooks.
 }
 
-void mbus_server_pool_unlock(void) {
+void mbus_pool_unlock(void) {
     // Single-threaded demo: no-op lock hooks.
 }
 
@@ -47,7 +47,31 @@ void mbus_server_unlock(MbusServerId id) {
 void mbus_app_lock(void)   {}
 void mbus_app_unlock(void) {}
 
-/* NOTE: mbus_pool_lock / mbus_client_lock not needed — `c` feature not used. */
+/* NOTE: mbus_client_lock/unlock not needed — `c` feature not used. */
+
+/*
+ * write-hook stubs — required because build.rs falls back to the bundled
+ * example YAML (c_server_demo_yaml) which declares these four write hooks.
+ * This hand-written demo does not use the generated APP_MODEL dispatcher,
+ * so these stubs are never actually called; they just satisfy the linker.
+ */
+#ifndef MBUS_HOOK_OK
+typedef enum MbusHookStatus {
+    MBUS_HOOK_OK = 0,
+    MBUS_HOOK_ILLEGAL_DATA_ADDRESS = 1,
+    MBUS_HOOK_ILLEGAL_DATA_VALUE = 2,
+    MBUS_HOOK_DEVICE_FAILURE = 3,
+} MbusHookStatus;
+#endif
+
+MbusHookStatus app_on_write_pump_run(void *ctx, uint16_t addr, uint8_t v)
+    { (void)ctx; (void)addr; (void)v; return MBUS_HOOK_OK; }
+MbusHookStatus app_on_write_alarm_ack(void *ctx, uint16_t addr, uint8_t v)
+    { (void)ctx; (void)addr; (void)v; return MBUS_HOOK_OK; }
+MbusHookStatus app_on_write_speed_setpoint(void *ctx, uint16_t addr, uint16_t v)
+    { (void)ctx; (void)addr; (void)v; return MBUS_HOOK_OK; }
+MbusHookStatus app_on_write_pressure_limit(void *ctx, uint16_t addr, uint16_t v)
+    { (void)ctx; (void)addr; (void)v; return MBUS_HOOK_OK; }
 
 static void set_u16_be(uint8_t *dst, uint16_t v) {
     dst[0] = (uint8_t)((v >> 8) & 0xFFu);

@@ -10,6 +10,7 @@
 //! stubs so no real network I/O occurs.
 
 #![cfg(all(not(target_arch = "wasm32"), feature = "c-server"))]
+#![allow(clippy::missing_safety_doc)]
 
 use core::ffi::c_void;
 use std::sync::Mutex;
@@ -351,15 +352,16 @@ fn build_tcp_frame(txn_id: u16, unit_id: u8, fc: u8, payload: &[u8]) -> Vec<u8> 
     let pdu_len = 1 + payload.len();
     // MBAP length = 1 (unit_id) + pdu_len
     let mbap_len = (1 + pdu_len) as u16;
-    let mut frame = Vec::new();
-    frame.push((txn_id >> 8) as u8);
-    frame.push(txn_id as u8);
-    frame.push(0x00); // protocol
-    frame.push(0x00);
-    frame.push((mbap_len >> 8) as u8);
-    frame.push(mbap_len as u8);
-    frame.push(unit_id);
-    frame.push(fc);
+    let mut frame = vec![
+        (txn_id >> 8) as u8,
+        txn_id as u8,
+        0x00, // protocol
+        0x00,
+        (mbap_len >> 8) as u8,
+        mbap_len as u8,
+        unit_id,
+        fc,
+    ];
     frame.extend_from_slice(payload);
     frame
 }

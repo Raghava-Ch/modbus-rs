@@ -4,8 +4,10 @@
 //! - `on_exception` callback is invoked with correct FC, exception code, and error.
 //! - Exception code mapping for newly-mapped error variants
 //!   (`InvalidAndMask`, `InvalidOrMask`, `ReservedSubFunction`, `InvalidMeiType`,
-//!    `InvalidDeviceIdCode`, `BroadcastNotAllowed`, `InvalidBroadcastAddress`).
+//!   `InvalidDeviceIdCode`, `BroadcastNotAllowed`, `InvalidBroadcastAddress`).
 //! - Unknown FC → `IllegalFunction` exception, `on_exception` still fires.
+
+#![cfg(feature = "holding-registers")]
 
 mod common;
 use common::{
@@ -85,13 +87,12 @@ impl TrafficNotifier for ExceptionSpyApp {}
 // Helpers
 // ---------------------------------------------------------------------------
 
+type ExceptionLog = Arc<Mutex<Vec<(FunctionCode, ExceptionCode, MbusError)>>>;
+
 fn run_once(
     request: heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>,
     app: ExceptionSpyApp,
-) -> (
-    Vec<Vec<u8>>,
-    Arc<Mutex<Vec<(FunctionCode, ExceptionCode, MbusError)>>>,
-) {
+) -> (Vec<Vec<u8>>, ExceptionLog) {
     let sent_frames = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
     let exceptions = Arc::clone(&app.exceptions);
     let transport = MockTransport {

@@ -67,7 +67,7 @@ impl<T: mbus_core::transport::AsyncTransport + Send> AsyncSerialServer<T> {
 
     // ── Constructors ─────────────────────────────────────────────────────────
 
-    /// Construct from any transport that implements [`AsyncTransport`].
+    /// Construct from any transport that implements [`mbus_core::transport::AsyncTransport`].
     pub fn from_transport(transport: T, unit: UnitIdOrSlaveAddr) -> Self {
         Self {
             session: AsyncServerSession::new(transport, unit),

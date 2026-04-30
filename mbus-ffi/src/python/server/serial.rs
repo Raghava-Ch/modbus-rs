@@ -15,6 +15,7 @@ use crate::python::errors::async_server_error_to_py;
 
 // ── shared helpers ────────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn make_serial_config(
     port: &str,
     baud_rate: u32,
@@ -95,8 +96,10 @@ fn parse_stop_bits(stop_bits: u8) -> PyResult<u8> {
 ///
 /// Usage::
 ///
-///     async with AsyncSerialServer("/dev/ttyUSB0", app=MyApp(), unit_id=1) as srv:
-///         await srv.serve_forever()
+/// ```python
+/// async with AsyncSerialServer("/dev/ttyUSB0", app=MyApp(), unit_id=1) as srv:
+///     await srv.serve_forever()
+/// ```
 #[pyclass(name = "AsyncSerialServer")]
 pub struct AsyncSerialServer {
     port: String,
@@ -116,6 +119,7 @@ pub struct AsyncSerialServer {
 impl AsyncSerialServer {
     #[new]
     #[pyo3(signature = (port, app, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=0))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         port: &str,
@@ -248,6 +252,7 @@ pub struct SerialServer {
 impl SerialServer {
     #[new]
     #[pyo3(signature = (port, app, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=0))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         port: &str,

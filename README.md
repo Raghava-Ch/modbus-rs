@@ -7,6 +7,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 - **Sync and async** — poll-driven sync core; native `async/await` via Tokio
 - **Feature-gated** — enable only what you need for minimal binary size
 - **C and WASM bindings** — native C/C++ and browser integration via `mbus-ffi`
+- **Gateway** — Modbus TCP ↔ RTU/ASCII gateway with sync (no_std) and async modes
 
 ---
 
@@ -62,6 +63,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 |---------|-------------|
 | **Client** | [Quick Start](documentation/client/quick_start.md) · [Examples](documentation/client/examples.md) · [Building Apps](documentation/client/building_applications.md) · [Sync](documentation/client/sync.md) · [Async](documentation/client/async.md) · [Policies](documentation/client/policies.md) |
 | **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Building Apps](documentation/server/building_applications.md) · [Sync](documentation/server/sync.md) · [Async](documentation/server/async.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) · [Function Codes](documentation/server/function_codes.md) |
+| **Gateway** | [Quick Start](documentation/gateway/quick_start.md) · [Architecture](documentation/gateway/architecture.md) · [Routing](documentation/gateway/routing.md) · [WebSocket Gateway](documentation/gateway/ws_gateway.md) · [Feature Flags](documentation/gateway/feature_flags.md) |
 | **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) |
 | **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
 
@@ -81,6 +83,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | [`mbus-macros`](mbus-macros/) | Proc macros: `#[modbus_app]`, `#[derive(CoilsModel)]`, etc. |
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
+| [`mbus-gateway`](mbus-gateway/) | Modbus gateway — TCP ↔ RTU/ASCII routing (sync + async) |
 | [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings (client + phased server surface) |
 
 ### Direct Async Crate Selection
@@ -107,6 +110,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | `fifo` | FC18 FIFO queue read (default) |
 | `file-record` | FC14, FC15 file record read/write (default) |
 | `diagnostics` | FC07, FC08, FC2B, etc. (default) |
+| `gateway` | Modbus gateway (TCP ↔ RTU/ASCII, sync + async) |
 | `diagnostics-stats` | Per-counter diagnostics statistics |
 | `traffic` | Raw TX/RX frame callbacks |
 | `logging` | `log` facade integration |
@@ -231,12 +235,46 @@ Open the runnable smoke examples in a Chromium-based browser:
 
 | Example | What it exercises |
 |---|---|
-| [examples/network_smoke.html](mbus-ffi/examples/network_smoke.html) | WebSocket client (TCP proxy) |
-| [examples/serial_smoke.html](mbus-ffi/examples/serial_smoke.html) | Web Serial client (RTU/ASCII) |
-| [examples/network_server_smoke.html](mbus-ffi/examples/network_server_smoke.html) | WASM TCP server lifecycle + dispatch |
-| [examples/serial_server_smoke.html](mbus-ffi/examples/serial_server_smoke.html) | WASM Serial server lifecycle + dispatch |
+| [examples/network_smoke.html](mbus-ffi/examples/wasm_client/network_smoke.html) | WebSocket client (TCP proxy) |
+| [examples/serial_smoke.html](mbus-ffi/examples/wasm_client/serial_smoke.html) | Web Serial client (RTU/ASCII) |
+| [examples/network_server_smoke.html](mbus-ffi/examples/wasm_server/network_smoke.html) | WASM TCP server lifecycle + dispatch |
+| [examples/serial_server_smoke.html](mbus-ffi/examples/wasm_server/serial_smoke.html) | WASM Serial server lifecycle + dispatch |
 
 See [`mbus-ffi/README.md`](mbus-ffi/README.md) for the full WASM API reference and server binding architecture.
+
+### Gateway (sync TCP → RTU)
+
+```rust,ignore
+use modbus_rs::{gateway::GatewayServices, gateway::UnitRouteTable, gateway::NoopEventHandler,
+                gateway::DownstreamChannel};
+
+fn run_gateway(upstream_transport: impl std::any::Any, downstream_rtu_transport: impl std::any::Any) {
+    // Route unit IDs 1–10 to channel 0 (RTU downstream)
+    let mut routes = UnitRouteTable::new();
+    routes.add(1, 10, 0).unwrap();
+
+    let mut gw = GatewayServices::<_, _, 1, 8>::new(
+        upstream_transport, [(downstream_rtu_transport, 0)],
+        routes, NoopEventHandler,
+    );
+
+    loop { gw.poll(); }
+}
+```
+
+```bash
+# Sync TCP → RTU gateway
+cargo run -p modbus-rs --example modbus_rs_gateway_sync_tcp_to_rtu \
+  --no-default-features --features gateway,network-tcp,serial-rtu
+
+# Async TCP → TCP gateway
+cargo run -p modbus-rs --example modbus_rs_gateway_async_tcp_to_tcp \
+  --no-default-features --features gateway,async,network-tcp
+```
+
+📖 **[Gateway Documentation →](documentation/gateway/quick_start.md)**
+
+---
 
 ### Run examples
 

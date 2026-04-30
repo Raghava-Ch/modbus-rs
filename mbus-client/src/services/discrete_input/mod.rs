@@ -165,9 +165,9 @@ mod tests {
             .with_values(&values, 22)
             .expect("Should load values");
 
-        assert_eq!(inputs.value(196).unwrap(), false); // Bit 0 of 0xAC is 0
-        assert_eq!(inputs.value(198).unwrap(), true);
-        assert_eq!(inputs.value(203).unwrap(), true);
+        assert!(!inputs.value(196).unwrap()); // Bit 0 of 0xAC is 0
+        assert!(inputs.value(198).unwrap());
+        assert!(inputs.value(203).unwrap());
 
         // Boundary checks
         assert_eq!(inputs.value(195).unwrap_err(), MbusError::InvalidAddress); // Too low

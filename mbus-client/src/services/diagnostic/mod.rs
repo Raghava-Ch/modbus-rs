@@ -118,7 +118,7 @@ mod tests {
             resp.conformity_level,
             ConformityLevel::BasicStreamAndIndividual
         );
-        assert_eq!(resp.more_follows, false);
+        assert!(!resp.more_follows);
         assert_eq!(resp.next_object_id, ObjectId::from(0x00));
 
         let objects: Vec<DeviceIdObject, 10> = resp.objects().map(|r| r.unwrap()).collect();

@@ -24,6 +24,7 @@ use super::helpers::{
 
 // ── shared constructor helper ────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn make_serial_config(
     port: &str,
     baud_rate: u32,
@@ -158,6 +159,7 @@ fn file_record_read_to_py(py: Python<'_>, rows: Vec<SubRequestParams>) -> PyResu
     Ok(out.into_pyobject(py)?.into_any().unbind())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_inner(
     port: &str,
     baud_rate: u32,
@@ -226,6 +228,7 @@ impl SerialClient {
     /// :param retry_attempts: Number of client retry attempts (default 3).
     #[new]
     #[pyo3(signature = (port, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         port: &str,
@@ -626,6 +629,7 @@ pub struct AsyncSerialClient {
 impl AsyncSerialClient {
     #[new]
     #[pyo3(signature = (port, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         port: &str,

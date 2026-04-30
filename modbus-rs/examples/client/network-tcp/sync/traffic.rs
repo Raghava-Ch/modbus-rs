@@ -134,7 +134,7 @@ impl CoilResponse for TrafficApp {
 
 fn main() -> Result<()> {
     let transport = StdTcpTransport::new();
-    let app = TrafficApp::default();
+    let app = TrafficApp;
     let config = ModbusConfig::Tcp(ModbusTcpConfig::new("192.168.55.200", 502)?);
 
     let mut client = ClientServices::<_, _, 4>::new(transport, app, config)?;
