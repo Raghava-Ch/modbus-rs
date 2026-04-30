@@ -141,7 +141,7 @@ See [ws_gateway.md](ws_gateway.md) for the full WebSocket gateway reference.
 
 ## Runnable Examples
 
-Two end-to-end gateway examples are available in the [modbus-rs](../modbus-rs/examples/gateway/) crate:
+Two end-to-end gateway examples are available in the [modbus-rs](../../modbus-rs/examples/gateway/) crate:
 
 ### Sync: TCP upstream ↔ RTU downstream (`modbus_rs_gateway_sync_tcp_to_rtu`)
 
