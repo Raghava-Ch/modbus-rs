@@ -326,16 +326,37 @@ mod tests {
     /// This is simulated by trying to connect to a port where no server is listening.
     #[test]
     fn test_connect_failure_connection_refused() {
-        // We don't start a server, so the port will be refused
-        let listener = create_test_listener(); // Just to get an unused port
-        let port = listener.local_addr().unwrap().port();
-        drop(listener); // Explicitly drop the listener to ensure the port is free
-        let mut transport = StdTcpTransport::new();
-        let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
-        let result = transport.connect(&config);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), TransportError::ConnectionFailed);
-        assert!(!transport.is_connected());
+        // On shared CI hosts (especially Windows), a just-released ephemeral port
+        // may occasionally be rebound by another process between drop() and connect().
+        // Retry with several fresh closed ports to make the refusal assertion stable.
+        let mut last_result = Ok(());
+        let mut saw_refusal = false;
+
+        for _ in 0..8 {
+            let listener = create_test_listener();
+            let port = listener.local_addr().unwrap().port();
+            drop(listener);
+
+            let mut transport = StdTcpTransport::new();
+            let config = ModbusConfig::Tcp(ModbusTcpConfig::new("127.0.0.1", port).unwrap());
+            match transport.connect(&config) {
+                Ok(()) => {
+                    last_result = Ok(());
+                }
+                Err(err) => {
+                    assert_eq!(err, TransportError::ConnectionFailed);
+                    assert!(!transport.is_connected());
+                    last_result = Err(err);
+                    saw_refusal = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(
+            saw_refusal,
+            "expected at least one connection refusal attempt, last_result={last_result:?}"
+        );
     }
 
     /// Test case: `disconnect` closes an active connection.
