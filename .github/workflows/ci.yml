@@ -207,7 +207,10 @@ jobs:
         working-directory: mbus-ffi
 
       - name: Install built wheel
-        run: pip install $(find mbus-ffi/target/wheels -name '*.whl' | head -1)
+        run: |
+          WHEEL_PATH=$(find . -path '*/target/wheels/*.whl' | head -1)
+          test -n "$WHEEL_PATH"
+          pip install "$WHEEL_PATH"
 
       - name: Run Python tests
         run: pytest
