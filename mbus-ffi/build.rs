@@ -119,6 +119,28 @@ fn main() {
         Err(_) => 1, // default
     };
 
+    // ── MBUS_MAX_GATEWAYS ─────────────────────────────────────────────────────
+    //
+    // Controls how many gateway slots are pre-allocated in the static gateway pool.
+    // Default: 1. Valid range: [1, 255].
+    println!("cargo::rerun-if-env-changed=MBUS_MAX_GATEWAYS");
+
+    let max_gateways: usize = match std::env::var("MBUS_MAX_GATEWAYS") {
+        Ok(val) => {
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_MAX_GATEWAYS must be a valid integer, got: \"{val}\"")
+            });
+            if n == 0 {
+                panic!("MBUS_MAX_GATEWAYS must be >= 1, got: 0");
+            }
+            if n > 255 {
+                panic!("MBUS_MAX_GATEWAYS must be <= 255, got: {n}");
+            }
+            n
+        }
+        Err(_) => 1, // default
+    };
+
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     let config_path = format!("{out_dir}/pool_config.rs");
     std::fs::write(
@@ -135,15 +157,21 @@ fn main() {
              pub(crate) const MAX_TCP_SERVERS: usize = {max_tcp_servers};\n\
              /// Maximum number of Serial server slots (set via `MBUS_MAX_SERIAL_SERVERS` env var, default 1).\n\
              #[allow(dead_code)]\n\
-             pub(crate) const MAX_SERIAL_SERVERS: usize = {max_serial_servers};\n"
+             pub(crate) const MAX_SERIAL_SERVERS: usize = {max_serial_servers};\n\
+             /// Maximum number of gateway slots (set via `MBUS_MAX_GATEWAYS` env var, default 1).\n\
+             #[allow(dead_code)]\n\
+             pub(crate) const MAX_GATEWAYS: usize = {max_gateways};\n"
         ),
     )
     .expect("failed to write pool_config.rs");
 
     // ── cbindgen ──────────────────────────────────────────────────────────────
 
-    // Only run cbindgen when the `c` feature is enabled.
-    if std::env::var("CARGO_FEATURE_C").is_err() && std::env::var("CARGO_FEATURE_C_SERVER").is_err() {
+    // Only run cbindgen when the `c`, `c-server`, or `c-gateway` feature is enabled.
+    if std::env::var("CARGO_FEATURE_C").is_err()
+        && std::env::var("CARGO_FEATURE_C_SERVER").is_err()
+        && std::env::var("CARGO_FEATURE_C_GATEWAY").is_err()
+    {
         return;
     }
 
@@ -160,6 +188,7 @@ fn main() {
     // Rerun cbindgen if the configs or any source file changes.
     println!("cargo::rerun-if-changed=cbindgen_client.toml");
     println!("cargo::rerun-if-changed=cbindgen_server.toml");
+    println!("cargo::rerun-if-changed=cbindgen_gateway.toml");
     println!("cargo::rerun-if-changed=src");
     std::fs::create_dir_all(&include_dir).expect("failed to create target include directory");
 
@@ -255,5 +284,29 @@ fn main() {
         let gen_path = format!("{out_dir}/generated_server.rs");
         std::fs::write(&gen_path, rust_src)
             .unwrap_or_else(|e| panic!("failed to write {gen_path}: {e}"));
+    }
+
+    if std::env::var("CARGO_FEATURE_C_GATEWAY").is_ok() {
+        let output_file = include_dir.join("modbus_rs_gateway.h");
+        let config_path = format!("{crate_dir}/cbindgen_gateway.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "c", "MBUS_FEATURE_C")
+            .with_define("feature", "c-server", "MBUS_FEATURE_C_SERVER")
+            .with_define("feature", "c-gateway", "MBUS_FEATURE_C_GATEWAY")
+            .with_define("feature", "coils", "MBUS_FEATURE_COILS")
+            .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
+            .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
+            .with_define("feature", "fifo", "MBUS_FEATURE_FIFO")
+            .with_define("feature", "file-record", "MBUS_FEATURE_FILE_RECORD")
+            .with_define("feature", "diagnostics", "MBUS_FEATURE_DIAGNOSTICS")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate gateway C header")
+            .write_to_file(output_file);
     }
 }

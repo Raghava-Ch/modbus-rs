@@ -6,7 +6,7 @@ awaitables that can be ``await``-ed with any asyncio-compatible event loop.
 """
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -29,6 +29,9 @@ class ModbusDeviceException(ModbusProtocolError):
 
 class ModbusConfigError(ModbusError):
     """Invalid configuration (address, baud rate, etc.)."""
+
+class ModbusInvalidArgument(ModbusError):
+    """Invalid argument passed to a Modbus call (out-of-range address, count, etc.)."""
 
 # ---------------------------------------------------------------------------
 # Sync TCP client
@@ -490,4 +493,74 @@ class SerialServer:
         """Block the calling thread, serving requests until the port closes."""
 
     def __enter__(self) -> SerialServer: ...
+    def __exit__(self, *args: Any) -> bool: ...
+
+
+# ─── Gateway (feature: python-gateway) ─────────────────────────────────────
+
+class GatewayEventHandler:
+    """
+    Forward-compatible base class for gateway lifecycle events.
+
+    All methods are no-ops by default. Override only what you need.
+
+    .. note::
+        The current async gateway server does not yet invoke event hooks;
+        instances are accepted by :class:`AsyncTcpGateway` / :class:`TcpGateway`
+        constructors but never called. The class exists so that user code is
+        forward-compatible with future versions.
+    """
+
+    def __init__(self) -> None: ...
+    def on_forward(self, session_id: int, unit_id: int, channel_idx: int) -> None: ...
+    def on_response_returned(self, session_id: int, upstream_txn: int) -> None: ...
+    def on_routing_miss(self, session_id: int, unit_id: int) -> None: ...
+    def on_downstream_timeout(self, session_id: int, internal_txn: int) -> None: ...
+    def on_upstream_disconnect(self, session_id: int) -> None: ...
+
+
+class AsyncTcpGateway:
+    """Asyncio Modbus TCP→TCP gateway."""
+
+    def __init__(
+        self,
+        bind_addr: str,
+        event_handler: Optional[GatewayEventHandler] = None,
+    ) -> None: ...
+
+    def bind_address(self) -> str: ...
+    def add_tcp_downstream(self, host: str, port: int = 502) -> int:
+        """Register a downstream TCP endpoint; returns its channel index."""
+    def add_unit_route(self, unit: int, channel: int) -> None: ...
+    def add_range_route(self, min: int, max: int, channel: int) -> None: ...
+
+    async def serve_forever(self) -> None:
+        """Bind the listener and serve until :meth:`stop` is called."""
+
+    def stop(self) -> None: ...
+
+    async def __aenter__(self) -> "AsyncTcpGateway": ...
+    async def __aexit__(self, *args: Any) -> bool: ...
+
+
+class TcpGateway:
+    """Blocking Modbus TCP→TCP gateway."""
+
+    def __init__(
+        self,
+        bind_addr: str,
+        event_handler: Optional[GatewayEventHandler] = None,
+    ) -> None: ...
+
+    def bind_address(self) -> str: ...
+    def add_tcp_downstream(self, host: str, port: int = 502) -> int: ...
+    def add_unit_route(self, unit: int, channel: int) -> None: ...
+    def add_range_route(self, min: int, max: int, channel: int) -> None: ...
+
+    def serve_forever(self) -> None:
+        """Block the calling thread, serving until :meth:`stop` is called."""
+
+    def stop(self) -> None: ...
+
+    def __enter__(self) -> "TcpGateway": ...
     def __exit__(self, *args: Any) -> bool: ...

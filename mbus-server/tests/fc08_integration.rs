@@ -1,3 +1,5 @@
+#![cfg(feature = "diagnostics")]
+
 mod common;
 use common::{build_serial_request, serial_rtu_config, unit_id};
 use heapless::Vec as HVec;
@@ -211,6 +213,7 @@ fn fc08_0x0004_force_listen_only_mode_no_response() {
     );
 }
 
+#[cfg(feature = "coils")]
 #[test]
 fn fc08_listen_only_mode_gates_other_functions() {
     let (app, calls) = make_app(Mode::Success(0));

@@ -196,10 +196,10 @@ async fn test_async_tcp_client_read_discrete_inputs() -> Result<()> {
     assert_eq!(di.from_address(), 0);
     assert_eq!(di.quantity(), 8);
     // 0xA5 = 1010_0101: bit 0 (addr 0) = 1, bit 1 (addr 1) = 0, bit 2 (addr 2) = 1
-    assert_eq!(di.value(0)?, true);
-    assert_eq!(di.value(1)?, false);
-    assert_eq!(di.value(2)?, true);
-    assert_eq!(di.value(7)?, true);
+    assert!(di.value(0)?);
+    assert!(!di.value(1)?);
+    assert!(di.value(2)?);
+    assert!(di.value(7)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -744,7 +744,7 @@ async fn test_async_tcp_client_read_single_coil() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let coils = client.read_multiple_coils(1, 5, 1).await?;
     assert_eq!(coils.quantity(), 1);
-    assert_eq!(coils.value(5)?, true);
+    assert!(coils.value(5)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -758,7 +758,10 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
     let server_handle = thread::spawn(move || -> Result<()> {
         let (mut stream, _) = listener.accept()?;
 
-        let mut req = [0u8; 10];
+        // MBAP(6) + unit(1) + FC(1) + address(2) + quantity(2)
+        // Read the full ADU to avoid leaving unread bytes in the socket,
+        // which can cause connection-reset behavior on Windows when closing.
+        let mut req = [0u8; 12];
         stream.read_exact(&mut req)?;
         assert_eq!(req[7], 0x02); // FC Read Discrete Inputs
         assert_eq!(req[8], 0x00);
@@ -780,7 +783,7 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let inputs = client.read_discrete_inputs(1, 10, 1).await?;
     assert_eq!(inputs.quantity(), 1);
-    assert_eq!(inputs.value(10)?, true);
+    assert!(inputs.value(10)?);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -794,17 +797,21 @@ async fn test_async_tcp_client_server_exception_response() -> Result<()> {
     let server_handle = thread::spawn(move || -> Result<()> {
         let (mut stream, _) = listener.accept()?;
 
-        let mut req = [0u8; 12];
+        // MBAP(6) + unit(1) + FC(1) + addr(2) + qty(2) + byte_count(1) + data(6)
+        // for write_multiple_registers(3 values) => 19 bytes total.
+        // Read the full request to avoid Windows TCP reset behavior on close.
+        let mut req = [0u8; 19];
         stream.read_exact(&mut req)?;
 
-        // Send exception response: FC | 0x80 = exception, ExceptionCode = 0x02 (Illegal Data Address)
+        // Send exception response: FC 0x10 | 0x80 = 0x90,
+        // ExceptionCode = 0x02 (Illegal Data Address).
         #[rustfmt::skip]
         stream.write_all(&[
             0x00, 0x01,
             0x00, 0x00,
             0x00, 0x03, // len (unit + fc + exception_code)
             0x01,
-            0x81,       // FC 0x01 | 0x80
+            0x90,       // FC 0x10 | 0x80
             0x02,       // IllegalDataAddress
         ])?;
         Ok(())

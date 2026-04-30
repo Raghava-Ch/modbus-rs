@@ -38,6 +38,7 @@ pub(crate) type ResponseSender = oneshot::Sender<Result<ClientResponse, MbusErro
 ///
 /// Each variant corresponds to one function code (or a closely related group).
 /// The task assigns the transaction id; callers never supply it here.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum ClientRequest {
     // ── Coils (FC 01 / 05 / 0F) ───────────────────────────────────────────

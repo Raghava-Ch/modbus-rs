@@ -7,7 +7,7 @@ use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
 
 /// Queue a Read Discrete Inputs (FC 0x02) request.
 ///
-/// The response is delivered via [`MbusCallbacks::on_read_discrete_inputs`].
+/// The response is delivered via `MbusCallbacks::on_read_discrete_inputs`.
 #[cfg(feature = "discrete-inputs")]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_discrete_inputs(

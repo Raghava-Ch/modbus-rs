@@ -867,6 +867,7 @@ impl Pdu {
     /// Builds a PDU with `[address, and_mask, or_mask]` layout (6 bytes).
     ///
     /// Used by FC16 (Mask Write Register) requests.
+    #[cfg(feature = "registers")]
     pub fn build_mask_write_register(
         address: u16,
         and_mask: u16,
@@ -886,6 +887,7 @@ impl Pdu {
     ///
     /// `write_values` must already be the packed byte representation of the register words.
     /// `write_byte_count` is derived from `write_values.len()`.
+    #[cfg(feature = "registers")]
     pub fn build_read_write_multiple(
         read_address: u16,
         read_quantity: u16,

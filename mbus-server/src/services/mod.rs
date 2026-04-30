@@ -32,7 +32,9 @@ pub mod register;
 pub mod resilience;
 
 use crate::app::ModbusAppHandler;
-use heapless::{Deque, Vec};
+#[cfg(feature = "diagnostics")]
+use heapless::Deque;
+use heapless::Vec;
 use mbus_core::{
     data_unit::common::{
         self, AdditionalAddress, MAX_ADU_FRAME_LEN, ModbusMessage, SlaveAddress,
@@ -819,7 +821,7 @@ where
     /// 3. **Ingest frames** — parse complete frames; queue or dispatch depending
     ///    on [`ResilienceConfig::enable_priority_queue`].
     /// 4. **Expire stale queued requests** — discard requests that have exceeded
-    ///    [`TimeoutConfig::request_deadline_ms`] (if configured).
+    ///    `TimeoutConfig::request_deadline_ms` (if configured).
     /// 5. **Dispatch queued requests** — process all buffered requests in
     ///    priority order (only reached when `enable_priority_queue` is `true`).
     pub fn poll(&mut self) {
@@ -1411,7 +1413,7 @@ where
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "holding-registers"))]
 mod tests {
     use super::*;
     use crate::HoldingRegisterMap;

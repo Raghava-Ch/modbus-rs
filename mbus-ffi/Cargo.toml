@@ -29,6 +29,8 @@ wasm = [
 c = []
 ## Enables native C FFI bindings for the Modbus server stack.
 c-server = ["dep:mbus-server"]
+## Enables native C FFI bindings for the Modbus gateway stack.
+c-gateway = ["dep:mbus-gateway"]
 ## Enables traffic notification callbacks on the C server (mbus-server `traffic` feature).
 server-traffic = ["c-server", "mbus-server/traffic"]
 coils = ["mbus-client/coils"]
@@ -37,7 +39,7 @@ discrete-inputs = ["mbus-client/discrete-inputs"]
 fifo = ["mbus-client/fifo"]
 file-record = ["mbus-client/file-record"]
 diagnostics = ["mbus-client/diagnostics"]
-traffic = ["mbus-client/traffic"]
+traffic = ["mbus-client/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
 ## Convenience alias — enables every Modbus client feature at once
 full = [
     "coils",
@@ -50,6 +52,16 @@ full = [
 ]
 ## Convenience alias — enables every Modbus server feature at once (c-server must still be enabled)
 server-full = ["c-server"]
+
+## Enables Python bindings for the gateway. Requires `python` to be enabled too;
+## build with `--features python,python-gateway,full`.
+python-gateway = [
+    "python",
+    "dep:mbus-gateway",
+    "dep:mbus-network",
+    "mbus-gateway/async",
+    "mbus-network/async",
+]
 
 ## Enables Python bindings (PyO3 / Maturin) for the Modbus client + server stack.
 ## Requires the `full` feature set; build with `--features python,full`.
@@ -71,6 +83,8 @@ python = [
 mbus-core = { workspace = true }
 mbus-client = { workspace = true }
 mbus-server = { workspace = true, optional = true }
+mbus-gateway = { workspace = true, optional = true }
+mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.

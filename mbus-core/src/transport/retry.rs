@@ -11,9 +11,10 @@ pub type RetryRandomFn = fn() -> u32;
 ///
 /// The delay is computed per retry attempt in a poll-driven manner. No internal
 /// sleeping or blocking waits are performed by the library.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackoffStrategy {
     /// Retry immediately after timeout detection.
+    #[default]
     Immediate,
     /// Retry using a constant delay in milliseconds.
     Fixed {
@@ -36,12 +37,6 @@ pub enum BackoffStrategy {
         /// Upper bound used to clamp growth.
         max_delay_ms: u32,
     },
-}
-
-impl Default for BackoffStrategy {
-    fn default() -> Self {
-        Self::Immediate
-    }
 }
 
 impl BackoffStrategy {

@@ -3,6 +3,7 @@
 `modbus-rs` is a low-footprint, cross-platform Modbus client workspace built for both embedded and desktop/server systems.
 It runs on no_std and std targets (MCUs, RTOS, Windows, Linux, macOS), supports TCP/RTU/ASCII, provides sync and async APIs, and uses feature gating to keep binaries minimal.
 Advanced reliability features include configurable retry, backoff, and jitter, with optional native C and WASM bindings via `mbus-ffi`.
+A built-in Modbus gateway bridges TCP upstream connections to RTU/ASCII or TCP downstream slaves, in both sync (no_std-compatible) and async (Tokio) modes.
 
 It re-exports the core protocol crate, client and server services, and optional TCP/Serial transport
 implementations behind feature flags so you can choose between convenience and minimal
@@ -92,6 +93,14 @@ Additional workspace documentation is available in the `documentation/` folder:
 - [documentation/server/README.md](../documentation/server/README.md)
 - [documentation/server/quick_start.md](../documentation/server/quick_start.md)
 
+### Gateway docs
+
+- [documentation/gateway/quick_start.md](../documentation/gateway/quick_start.md)
+- [documentation/gateway/architecture.md](../documentation/gateway/architecture.md)
+- [documentation/gateway/routing.md](../documentation/gateway/routing.md)
+- [documentation/gateway/ws_gateway.md](../documentation/gateway/ws_gateway.md)
+- [documentation/gateway/feature_flags.md](../documentation/gateway/feature_flags.md)
+
 
 ## What This Crate Is
 
@@ -170,6 +179,7 @@ Features that are **no_std compatible**: `client`, `coils`, `registers`, `holdin
 - `diagnostics`
 - `traffic`: enables raw TX/RX frame observability hooks for sync and async clients
 - `logging`: enables `log` facade diagnostics in `mbus-network` and `mbus-serial` _(requires std)_
+- `gateway`: enables `mbus-gateway` — Modbus TCP ↔ RTU/ASCII/TCP gateway (sync + async)
 - `no-std`: convenience bundle — `client` + all FC models, no transports
 
 Default behavior:
@@ -192,6 +202,7 @@ modbus-rs = { version = "0.8.0", default-features = false, features = [
 For more feature combinations:
 - Server: [documentation/server/feature_flags.md](../documentation/server/feature_flags.md).
 - Client: [documentation/client/feature_flags.md](../documentation/client/feature_flags.md).
+- Gateway: [documentation/gateway/feature_flags.md](../documentation/gateway/feature_flags.md).
 
 ### Server Setup
 
@@ -274,6 +285,46 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+### Gateway Setup
+
+Enable the gateway with the `gateway` feature. Choose transport features to match your upstream/downstream protocol.
+
+```toml
+[dependencies]
+# Sync gateway: TCP upstream → RTU downstream
+modbus-rs = { version = "0.8.0", features = ["gateway", "network-tcp", "serial-rtu"] }
+
+# Async gateway: TCP upstream → TCP downstream
+modbus-rs = { version = "0.8.0", features = ["gateway", "async", "network-tcp"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+Sync poll-driven gateway (no_std-compatible):
+
+<!-- validate: skip -->
+```rust
+use modbus_rs::gateway::{GatewayServices, UnitRouteTable, NoopEventHandler, DownstreamChannel};
+
+fn run_gateway(upstream_transport: impl std::any::Any, downstream_rtu_transport: impl std::any::Any) {
+    // Route unit IDs 1–10 to channel 0 (RTU downstream)
+    let mut routes = UnitRouteTable::new();
+    routes.add(1, 10, 0).unwrap();
+
+    let mut gw = GatewayServices::<_, _, 1, 8>::new(
+        upstream_transport,
+        [(downstream_rtu_transport, 0)],
+        routes,
+        NoopEventHandler,
+    );
+
+    loop { gw.poll(); }
+}
+```
+
+See [documentation/gateway/quick_start.md](../documentation/gateway/quick_start.md) for async TCP and WebSocket gateway setup.
+
+---
 
 ### Async Client Setup
 
@@ -506,6 +557,11 @@ fn main() -> Result<(), MbusError> {
 
 - [coils.rs](examples/client/serial-ascii/sync/coils.rs)
 
+### Gateway examples
+
+- [sync_tcp_to_rtu.rs](examples/gateway/sync_tcp_to_rtu.rs) — poll-driven TCP → RTU gateway, no async runtime
+- [async_tcp_to_tcp.rs](examples/gateway/async_tcp_to_tcp.rs) — async TCP → TCP gateway with unit-ID remapping
+
 Run examples from the workspace root:
 
 ```bash
@@ -552,6 +608,12 @@ cargo run -p modbus-rs --example modbus_rs_client_async_serial_rtu --no-default-
 
 # Serial ASCII
 cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-default-features --features client,serial-ascii,coils
+
+# Gateway — sync TCP → RTU
+cargo run -p modbus-rs --example modbus_rs_gateway_sync_tcp_to_rtu --no-default-features --features gateway,network-tcp,serial-rtu
+
+# Gateway — async TCP → TCP
+cargo run -p modbus-rs --example modbus_rs_gateway_async_tcp_to_tcp --no-default-features --features gateway,async,network-tcp
 ```
 
 ## Workspace Structure
@@ -562,6 +624,7 @@ cargo run -p modbus-rs --example modbus_rs_client_serial_ascii_coils --no-defaul
 - `mbus-server`: server runtime, FC handlers, resilience engine
 - `mbus-macros`: proc-macros (`#[modbus_app]`, `#[async_modbus_app]`, `#[derive(CoilsModel)]`, etc.)
 - `mbus-async`: native async client and server via Tokio
+- `mbus-gateway`: Modbus gateway — TCP ↔ RTU/ASCII/TCP routing (sync + async)
 - `mbus-network`: standard TCP transport helper crate
 - `mbus-serial`: standard serial transport helper crate
 

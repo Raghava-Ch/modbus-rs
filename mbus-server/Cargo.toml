@@ -59,6 +59,50 @@ serial-ascii = [
 logging = ["dep:log"]
 traffic = []
 
+[[example]]
+name = "broadcast"
+required-features = ["coils", "holding-registers"]
+
+[[example]]
+name = "device_id"
+required-features = ["diagnostics"]
+
+[[example]]
+name = "diagnostics"
+required-features = ["diagnostics"]
+
+[[example]]
+name = "discrete_inputs"
+required-features = ["discrete-inputs"]
+
+[[example]]
+name = "discrete_inputs_read"
+required-features = ["discrete-inputs"]
+
+[[example]]
+name = "fifo"
+required-features = ["fifo"]
+
+[[example]]
+name = "file_record"
+required-features = ["file-record"]
+
+[[example]]
+name = "full_server"
+required-features = ["coils", "discrete-inputs", "holding-registers", "input-registers", "fifo", "file-record", "diagnostics"]
+
+[[example]]
+name = "holding_registers_read"
+required-features = ["holding-registers"]
+
+[[example]]
+name = "read_write_registers"
+required-features = ["holding-registers"]
+
+[[example]]
+name = "write_hooks"
+required-features = ["coils", "holding-registers"]
+
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

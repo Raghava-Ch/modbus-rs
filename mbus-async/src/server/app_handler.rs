@@ -15,7 +15,7 @@ use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_
 use mbus_core::transport::{checksum, SerialMode, TransportType, UnitIdOrSlaveAddr};
 use std::future::Future;
 
-/// Direction of a Modbus traffic event — mirrors [`mbus_server::TrafficDirection`] for
+/// Direction of a Modbus traffic event — mirrors `mbus_server::TrafficDirection` for
 /// async server users who do not depend on `mbus-server` directly.
 ///
 /// Exported alongside [`AsyncTrafficNotifier`] for convenience.
@@ -474,7 +474,7 @@ impl ModbusRequest {
 /// A Modbus response to be sent back to the client.
 ///
 /// Produced by user application logic and consumed by
-/// [`AsyncServerSession::respond()`](super::session::AsyncServerSession::respond).
+/// `AsyncServerSession::respond()`.
 #[derive(Debug)]
 pub enum ModbusResponse {
     /// A byte-count-prefixed payload (FC01, FC02, FC03, FC04).
@@ -579,7 +579,7 @@ pub enum ModbusResponse {
     ///
     /// Use this when the request arrived as [`ModbusRequest::Unknown`] and you
     /// need to reply with the correct exception FC byte (`fc_byte | 0x80`).
-    /// Unlike [`Exception`], this variant accepts any raw `u8` function-code
+    /// Unlike [`ModbusResponse::Exception`], this variant accepts any raw `u8` function-code
     /// byte and does not require a [`FunctionCode`] enum value.
     ExceptionRaw {
         /// The raw function-code byte from the unknown request.

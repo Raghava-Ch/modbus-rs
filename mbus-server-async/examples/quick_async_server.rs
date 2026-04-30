@@ -4,6 +4,9 @@ use mbus_server_async::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusRe
 #[derive(Clone)]
 struct DemoApp;
 
+#[cfg(feature = "traffic")]
+impl mbus_server_async::AsyncTrafficNotifier for DemoApp {}
+
 impl AsyncAppHandler for DemoApp {
     async fn handle(&mut self, _req: ModbusRequest) -> ModbusResponse {
         ModbusResponse::NoResponse
