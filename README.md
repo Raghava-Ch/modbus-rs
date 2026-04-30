@@ -244,20 +244,22 @@ See [`mbus-ffi/README.md`](mbus-ffi/README.md) for the full WASM API reference a
 
 ### Gateway (sync TCP → RTU)
 
-```rust
+```rust,ignore
 use modbus_rs::{gateway::GatewayServices, gateway::UnitRouteTable, gateway::NoopEventHandler,
                 gateway::DownstreamChannel};
 
-// Route unit IDs 1–10 to channel 0 (RTU downstream)
-let mut routes = UnitRouteTable::new();
-routes.add(1, 10, 0).unwrap();
+fn run_gateway(upstream_transport: impl std::any::Any, downstream_rtu_transport: impl std::any::Any) {
+    // Route unit IDs 1–10 to channel 0 (RTU downstream)
+    let mut routes = UnitRouteTable::new();
+    routes.add(1, 10, 0).unwrap();
 
-let mut gw = GatewayServices::<_, _, 1, 8>::new(
-    upstream_transport, [(downstream_rtu_transport, 0)],
-    routes, NoopEventHandler,
-);
+    let mut gw = GatewayServices::<_, _, 1, 8>::new(
+        upstream_transport, [(downstream_rtu_transport, 0)],
+        routes, NoopEventHandler,
+    );
 
-loop { gw.poll(); }
+    loop { gw.poll(); }
+}
 ```
 
 ```bash
