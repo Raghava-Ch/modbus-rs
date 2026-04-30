@@ -7,7 +7,7 @@
 //!
 //! Per the Modbus specification a server must **never** respond to a frame that is
 //! not addressed to it — doing so would corrupt bus communication.
-
+#![cfg(feature = "holding-registers")]
 mod common;
 use common::{MockTransport, tcp_config, unit_id};
 use heapless::Vec as HVec;

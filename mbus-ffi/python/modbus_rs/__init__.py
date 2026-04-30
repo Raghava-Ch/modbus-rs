@@ -27,6 +27,7 @@ ModbusConnectionError — connection failed or lost
 ModbusProtocolError   — parse / framing error
 ModbusDeviceException — remote device returned a Modbus exception code
 ModbusConfigError     — bad constructor arguments
+ModbusInvalidArgument — invalid argument passed to a Modbus call
 """
 
 from importlib.metadata import version, PackageNotFoundError
@@ -50,7 +51,20 @@ from ._modbus_rs import (
     ModbusProtocolError,
     ModbusDeviceException,
     ModbusConfigError,
+    ModbusInvalidArgument,
 )
+
+# Gateway classes are only available when the extension is built with the
+# `python-gateway` feature.
+try:
+    from ._modbus_rs import (  # type: ignore[attr-defined]
+        AsyncTcpGateway,
+        GatewayEventHandler,
+        TcpGateway,
+    )
+    _GATEWAY_AVAILABLE = True
+except ImportError:
+    _GATEWAY_AVAILABLE = False
 
 try:
     __version__ = version("modbus-rs")
@@ -76,4 +90,12 @@ __all__ = [
     "ModbusProtocolError",
     "ModbusDeviceException",
     "ModbusConfigError",
+    "ModbusInvalidArgument",
 ]
+
+if _GATEWAY_AVAILABLE:
+    __all__ += [
+        "AsyncTcpGateway",
+        "GatewayEventHandler",
+        "TcpGateway",
+    ]

@@ -5,8 +5,18 @@
 //! feature flag and live here so neither sub-module must depend on the other.
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, ModbusMessage, Pdu};
+use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, ModbusMessage, Pdu};
+#[cfg(any(feature = "file-record", feature = "diagnostics"))]
+use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 use mbus_core::errors::MbusError;
+#[cfg(any(
+    feature = "coils",
+    feature = "discrete-inputs",
+    feature = "holding-registers",
+    feature = "input-registers",
+    feature = "file-record",
+    feature = "diagnostics"
+))]
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{
@@ -19,12 +29,19 @@ const FILE_RECORD_RESPONSE_MAX_PAYLOAD_LEN: usize = MAX_PDU_DATA_LEN - 1;
 
 /// Parses read-window requests with a two-field payload:
 /// start address + quantity.
+#[cfg(any(
+    feature = "coils",
+    feature = "discrete-inputs",
+    feature = "holding-registers",
+    feature = "input-registers"
+))]
 pub(super) fn parse_read_window(message: &ModbusMessage) -> Result<(u16, u16), MbusError> {
     let rw = message.pdu.read_window()?;
     Ok((rw.address, rw.quantity))
 }
 
 /// Parses request PDUs that must have an empty payload (0 bytes).
+#[cfg(feature = "diagnostics")]
 pub(super) fn parse_empty_request(message: &ModbusMessage) -> Result<(), MbusError> {
     if message.pdu.data_len() != 0 {
         return Err(MbusError::InvalidPduLength);
@@ -35,7 +52,7 @@ pub(super) fn parse_empty_request(message: &ModbusMessage) -> Result<(), MbusErr
 /// Parses FC05/FC06 write-single requests.
 ///
 /// Payload layout: address (u16 big-endian), value (u16 big-endian).
-#[cfg(feature = "holding-registers")]
+#[cfg(any(feature = "coils", feature = "holding-registers"))]
 pub(super) fn parse_write_single_request(message: &ModbusMessage) -> Result<(u16, u16), MbusError> {
     let fields = message.pdu.write_single_u16_fields()?;
     Ok((fields.address, fields.value))
@@ -45,7 +62,7 @@ pub(super) fn parse_write_single_request(message: &ModbusMessage) -> Result<(u16
 ///
 /// Payload layout: address (u16), quantity (u16), byte_count (u8), values.
 /// The parser verifies that total PDU data length matches `byte_count`.
-#[cfg(feature = "holding-registers")]
+#[cfg(any(feature = "coils", feature = "holding-registers"))]
 pub(super) fn parse_write_multiple_request(
     message: &ModbusMessage,
 ) -> Result<(u16, u16, u8, &[u8]), MbusError> {
@@ -59,6 +76,13 @@ pub(super) fn parse_write_multiple_request(
 }
 
 /// Builds a read-style response payload: byte_count + raw payload bytes.
+#[cfg(any(
+    feature = "coils",
+    feature = "discrete-inputs",
+    feature = "holding-registers",
+    feature = "input-registers",
+    feature = "diagnostics"
+))]
 pub(super) fn build_byte_count_prefixed_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
@@ -76,6 +100,7 @@ pub(super) fn build_byte_count_prefixed_response<TRANSPORT: Transport>(
 }
 
 /// Builds a response carrying exactly one data byte.
+#[cfg(feature = "diagnostics")]
 pub(super) fn build_single_byte_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
@@ -93,6 +118,7 @@ pub(super) fn build_single_byte_response<TRANSPORT: Transport>(
 }
 
 /// Builds a response carrying exactly two `u16` values (big-endian).
+#[cfg(feature = "diagnostics")]
 pub(super) fn build_two_u16_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
@@ -111,7 +137,7 @@ pub(super) fn build_two_u16_response<TRANSPORT: Transport>(
 }
 
 /// Builds a write-style echo response containing two `u16` values.
-#[cfg(feature = "holding-registers")]
+#[cfg(any(feature = "coils", feature = "holding-registers"))]
 pub(super) fn build_echo_u16_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,

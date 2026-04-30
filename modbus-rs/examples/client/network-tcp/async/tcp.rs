@@ -74,9 +74,8 @@ async fn main() -> Result<()> {
 
     // Read back and verify
     let verify_coils = client.read_multiple_coils(unit_id, 0, 1).await?;
-    assert_eq!(
+    assert!(
         verify_coils.value(0)?,
-        true,
         "Single coil write verification failed"
     );
     println!("✓ Single coil write verified");
@@ -93,9 +92,8 @@ async fn main() -> Result<()> {
     // Read back and verify
     let verify_multi_coils = client.read_multiple_coils(unit_id, 0, 8).await?;
     for i in (0u16..8).step_by(2) {
-        assert_eq!(
+        assert!(
             verify_multi_coils.value(i)?,
-            true,
             "Coil[{}] write verification failed",
             i
         );

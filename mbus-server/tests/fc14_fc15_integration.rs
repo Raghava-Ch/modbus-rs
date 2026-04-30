@@ -1,3 +1,5 @@
+#![cfg(feature = "file-record")]
+
 mod common;
 use common::{MockTransport, build_request, tcp_config, unit_id};
 use heapless::Vec as HVec;

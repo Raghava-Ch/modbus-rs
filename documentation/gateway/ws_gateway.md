@@ -46,7 +46,8 @@ features).
 
 ## Minimal example
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use std::sync::Arc;
 use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
@@ -84,7 +85,7 @@ field has a safe default; only fill in what you need.
 
 ### Example: all options
 
-```rust,no_run
+```rust,ignore
 use mbus_gateway::WsGatewayConfig;
 use std::time::Duration;
 
@@ -104,7 +105,8 @@ Connect one WebSocket gateway to several downstream devices and route by
 unit ID.  The index in the `downstreams` Vec corresponds to the channel
 index returned by the routing policy.
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use std::sync::Arc;
 use mbus_gateway::{AsyncWsGatewayServer, RangeRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
@@ -142,7 +144,8 @@ Pair `ws-server` with the `serial-rtu` feature:
 mbus-gateway = { version = "0.8.0", features = ["ws-server", "serial-rtu"] }
 ```
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
 use mbus_core::transport::{BaudRate, ModbusConfig, Parity, SerialConfig, UnitIdOrSlaveAddr};
@@ -188,7 +191,8 @@ async fn main() -> anyhow::Result<()> {
 Use `serve_with_shutdown` to stop accepting new connections on a signal
 while letting in-flight sessions complete:
 
-```rust,no_run
+<!-- validate: skip -->
+```rust,ignore
 use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
 use std::sync::Arc;

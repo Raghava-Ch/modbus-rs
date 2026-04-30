@@ -231,10 +231,10 @@ Open the runnable smoke examples in a Chromium-based browser:
 
 | Example | What it exercises |
 |---|---|
-| [examples/network_smoke.html](mbus-ffi/examples/network_smoke.html) | WebSocket client (TCP proxy) |
-| [examples/serial_smoke.html](mbus-ffi/examples/serial_smoke.html) | Web Serial client (RTU/ASCII) |
-| [examples/network_server_smoke.html](mbus-ffi/examples/network_server_smoke.html) | WASM TCP server lifecycle + dispatch |
-| [examples/serial_server_smoke.html](mbus-ffi/examples/serial_server_smoke.html) | WASM Serial server lifecycle + dispatch |
+| [examples/network_smoke.html](mbus-ffi/examples/wasm_client/network_smoke.html) | WebSocket client (TCP proxy) |
+| [examples/serial_smoke.html](mbus-ffi/examples/wasm_client/serial_smoke.html) | Web Serial client (RTU/ASCII) |
+| [examples/network_server_smoke.html](mbus-ffi/examples/wasm_server/network_smoke.html) | WASM TCP server lifecycle + dispatch |
+| [examples/serial_server_smoke.html](mbus-ffi/examples/wasm_server/serial_smoke.html) | WASM Serial server lifecycle + dispatch |
 
 See [`mbus-ffi/README.md`](mbus-ffi/README.md) for the full WASM API reference and server binding architecture.
 

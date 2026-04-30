@@ -490,7 +490,7 @@ mod tests {
             if let Err(TransportError::Timeout) = result {
                 std::thread::sleep(Duration::from_millis(10));
                 result = transport.recv();
-            } else if let Ok(_) = result {
+            } else if result.is_ok() {
                 result = transport.recv();
             } else {
                 break;
@@ -531,7 +531,7 @@ mod tests {
             if let Err(TransportError::Timeout) = result {
                 std::thread::sleep(Duration::from_millis(10));
                 result = transport.recv();
-            } else if let Ok(_) = result {
+            } else if result.is_ok() {
                 result = transport.recv();
             } else {
                 break;

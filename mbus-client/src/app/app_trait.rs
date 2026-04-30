@@ -23,9 +23,12 @@
 
 use mbus_core::{
     errors::MbusError,
-    function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType},
     transport::UnitIdOrSlaveAddr,
 };
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::DiagnosticSubFunction;
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 
 #[cfg(feature = "coils")]
 use crate::services::coil::Coils;

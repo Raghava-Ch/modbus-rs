@@ -18,7 +18,7 @@ log = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 mbus-serial  = { workspace = true, optional = true }
 tokio = { version = "1", features = ["net", "sync", "rt", "macros", "time"], optional = true }
-tokio-tungstenite = { version = "0.26", optional = true }
+tokio-tungstenite = { version = "0.29.0", optional = true }
 
 [[example]]
 name = "ws_to_tcp"
@@ -34,7 +34,11 @@ required-features = ["ws-server"]
 
 [[example]]
 name = "ws_to_rtu"
-required-features = ["ws-server"]
+required-features = ["ws-server", "serial-rtu"]
+
+[[example]]
+name = "tcp_to_rtu"
+required-features = ["network", "serial-rtu"]
 
 [dev-dependencies]
 mbus-network = { workspace = true, features = ["async"] }
@@ -65,7 +69,7 @@ serial-ascii = ["dep:mbus-serial", "std-required"]
 # WasmModbusClient instances and forwards requests to any AsyncTransport downstream.
 # Features: idle-timeout watchdog, session concurrency cap, origin allowlist,
 # Modbus WebSocket subprotocol negotiation.
-ws-server = ["dep:mbus-network", "mbus-network/ws-server", "mbus-core/async", "dep:tokio", "dep:tokio-tungstenite", "std-required"]
+ws-server = ["async", "dep:mbus-network", "mbus-network/ws-server", "mbus-core/async", "dep:tokio", "dep:tokio-tungstenite", "dep:mbus-serial", "mbus-serial/async", "std-required"]
 
 # log facade integration
 logging = ["dep:log", "std-required"]

@@ -157,6 +157,25 @@ where
         self.downstream.get_mut(idx)
     }
 
+    /// Number of downstream channels currently registered.
+    pub fn downstream_count(&self) -> usize {
+        self.downstream.len()
+    }
+
+    /// Return an immutable reference to the routing policy.
+    pub fn router(&self) -> &ROUTER {
+        &self.router
+    }
+
+    /// Return a mutable reference to the routing policy.
+    ///
+    /// Useful for routers (e.g. `UnitRouteTable`, `RangeRouteTable`, or
+    /// custom FFI-driven routers) whose contents are populated after the
+    /// gateway has been constructed.
+    pub fn router_mut(&mut self) -> &mut ROUTER {
+        &mut self.router
+    }
+
     /// Drive one poll cycle.
     ///
     /// Each call to `poll`:
@@ -479,19 +498,19 @@ where
         }
 
         // Try to extract a complete frame.
-        if let Some(expected_len) = derive_length_from_bytes(&channel.rxbuf, transport_type) {
-            if channel.rxbuf.len() >= expected_len {
-                let msg = decompile_adu_frame(&channel.rxbuf[..expected_len], transport_type)?;
+        if let Some(expected_len) = derive_length_from_bytes(&channel.rxbuf, transport_type)
+            && channel.rxbuf.len() >= expected_len
+        {
+            let msg = decompile_adu_frame(&channel.rxbuf[..expected_len], transport_type)?;
 
-                // Drain the consumed bytes.
-                let buf_len = channel.rxbuf.len();
-                if expected_len < buf_len {
-                    channel.rxbuf.copy_within(expected_len.., 0);
-                }
-                channel.rxbuf.truncate(buf_len - expected_len);
-
-                return Ok(msg);
+            // Drain the consumed bytes.
+            let buf_len = channel.rxbuf.len();
+            if expected_len < buf_len {
+                channel.rxbuf.copy_within(expected_len.., 0);
             }
+            channel.rxbuf.truncate(buf_len - expected_len);
+
+            return Ok(msg);
         }
     }
 

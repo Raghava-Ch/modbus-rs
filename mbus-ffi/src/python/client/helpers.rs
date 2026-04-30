@@ -65,7 +65,7 @@ pub fn registers_to_py(py: Python<'_>, regs: Registers) -> PyResult<Py<PyAny>> {
 
 /// Convert a `FifoQueue` value into a Python `list[int]`.
 pub fn fifo_to_py(py: Python<'_>, queue: FifoQueue) -> PyResult<Py<PyAny>> {
-    let list: Vec<u16> = queue.queue().iter().copied().collect();
+    let list: Vec<u16> = queue.queue().to_vec();
     Ok(list.into_pyobject(py)?.into_any().unbind())
 }
 

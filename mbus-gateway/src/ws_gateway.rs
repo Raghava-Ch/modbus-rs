@@ -71,7 +71,7 @@ use crate::router::GatewayRoutingPolicy;
 ///     allowed_origins: vec!["https://example.com".to_string()],
 /// };
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WsGatewayConfig {
     /// Maximum time to wait between frames before closing an idle session.
     ///
@@ -107,17 +107,6 @@ pub struct WsGatewayConfig {
     ///
     /// Default: empty = allow all origins.
     pub allowed_origins: Vec<String>,
-}
-
-impl Default for WsGatewayConfig {
-    fn default() -> Self {
-        Self {
-            idle_timeout: None,
-            max_sessions: 0,
-            require_modbus_subprotocol: false,
-            allowed_origins: Vec::new(),
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

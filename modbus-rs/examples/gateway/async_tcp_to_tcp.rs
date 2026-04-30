@@ -20,10 +20,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use mbus_gateway::{
-    AsyncTcpGatewayServer, DownstreamChannel, GatewayEventHandler, GatewayRoutingPolicy,
-    NoopEventHandler, UnitIdRewriteRouter, UnitRouteTable,
+    AsyncTcpGatewayServer, UnitIdRewriteRouter, UnitRouteTable,
 };
-use mbus_core::transport::{AsyncTransport, UnitIdOrSlaveAddr};
+use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_network::TokioTcpTransport;
 
 #[tokio::main]

@@ -98,7 +98,7 @@ fn main() -> Result<()> {
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
     let mut tcp_config = ModbusTcpConfig::new("192.168.55.200", 502)
-        .map_err(|e| anyhow::anyhow!(MbusError::from(e)))?;
+        .map_err(|e| anyhow::anyhow!(e))?;
     tcp_config.connection_timeout_ms = 500;
     let config = ModbusConfig::Tcp(tcp_config);
 
@@ -131,7 +131,7 @@ fn main() -> Result<()> {
             read_single_address,
             coils.value(read_single_address)?
         );
-        assert_eq!(coils.value(read_single_address)?, true); // Initialized to true
+        assert!(coils.value(read_single_address)?); // Initialized to true
     }
     println!("\n--- Testing Write Single Coil ---");
     let write_single_address = 0;
@@ -219,9 +219,9 @@ fn main() -> Result<()> {
                 coils_multi.value(current_address)?
             );
         }
-        assert_eq!(coils_multi.value(10)?, true);
-        assert_eq!(coils_multi.value(11)?, false);
-        assert_eq!(coils_multi.value(12)?, true);
+        assert!(coils_multi.value(10)?);
+        assert!(!coils_multi.value(11)?);
+        assert!(coils_multi.value(12)?);
     }
 
     println!("\n--- Testing Write Multiple Coils ---");
@@ -229,9 +229,7 @@ fn main() -> Result<()> {
     let write_multi_quantity = 3;
 
     let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity).unwrap();
-    write_multi_coils
-        .set_value(write_multi_address + 0, false)
-        .unwrap();
+    write_multi_coils.set_value(write_multi_address, false).unwrap();
     write_multi_coils
         .set_value(write_multi_address + 1, true)
         .unwrap();

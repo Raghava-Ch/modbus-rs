@@ -14,11 +14,11 @@
 //! ```
 
 use std::env;
-use std::time::Duration;
+use std::net::TcpListener;
 
 use modbus_rs::{
-    BaudRate, DataBits, ModbusSerialConfig, ModbusTcpConfig, Parity, SerialMode, StdRtuTransport,
-    StdTcpServerTransport, StdTcpTransport,
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+    Parity, SerialMode, StdRtuTransport, StdTcpServerTransport, Transport,
 };
 use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
 use mbus_core::transport::UnitIdOrSlaveAddr;
@@ -31,31 +31,33 @@ fn main() -> anyhow::Result<()> {
 
     // ── Upstream: listen for TCP connections ──────────────────────────────────
     println!("Binding upstream TCP on {bind_addr}");
-    let tcp_config = ModbusTcpConfig {
-        host: bind_addr.split(':').next().unwrap_or("127.0.0.1").to_string(),
-        port: bind_addr.split(':').nth(1).and_then(|p| p.parse().ok()).unwrap_or(5502),
-        response_timeout_ms: 1000,
-        connection_timeout_ms: 5000,
-    };
-
-    let mut upstream = StdTcpServerTransport::new();
-    upstream.connect(&modbus_rs::ModbusConfig::Tcp(tcp_config))?;
-    println!("Upstream TCP transport ready");
+    let listener = TcpListener::bind(&bind_addr)?;
+    println!("Waiting for upstream TCP connection on {bind_addr}");
+    let (stream, peer) = listener.accept()?;
+    println!("Accepted upstream TCP connection from {peer}");
+    let upstream = StdTcpServerTransport::new(stream);
 
     // ── Downstream: connect to RTU slave ─────────────────────────────────────
     println!("Opening serial downstream on {serial_port}");
     let serial_config = ModbusSerialConfig {
-        port: serial_port.clone(),
+        port_path: serial_port
+            .as_str()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("serial port path too long"))?,
+        mode: SerialMode::Rtu,
         baud_rate: BaudRate::Baud9600,
         data_bits: DataBits::Eight,
+        stop_bits: 1,
         parity: Parity::None,
-        stop_bits: modbus_rs::transport::StopBits::One,
         response_timeout_ms: 500,
-        mode: SerialMode::Rtu,
+        retry_attempts: 0,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
     };
 
     let mut downstream_transport = StdRtuTransport::new();
-    downstream_transport.connect(&modbus_rs::ModbusConfig::Serial(serial_config))?;
+    downstream_transport.connect(&ModbusConfig::Serial(serial_config))?;
     println!("Serial downstream ready");
 
     // ── Routing table ─────────────────────────────────────────────────────────

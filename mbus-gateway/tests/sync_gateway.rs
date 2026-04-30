@@ -22,7 +22,6 @@ struct MockTransport {
     next_rx: Option<HVec<u8, MAX_ADU_FRAME_LEN>>,
     /// All frames captured by `send()`.
     sent: std::vec::Vec<std::vec::Vec<u8>>,
-    transport_type: TransportType,
     connected: bool,
 }
 
@@ -31,7 +30,6 @@ impl MockTransport {
         Self {
             next_rx: None,
             sent: std::vec::Vec::new(),
-            transport_type: TransportType::StdTcp,
             connected: true,
         }
     }
