@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 /// # Thread safety
 ///
 /// Implementations must be `Send`.  The notifier is wrapped in a shared
-/// [`Mutex`](tokio::sync::Mutex) so a single instance is shared between the
+/// [`tokio::sync::Mutex`] so a single instance is shared between the
 /// public [`AsyncClientCore`] and the background task without cloning.
 ///
 /// # Example

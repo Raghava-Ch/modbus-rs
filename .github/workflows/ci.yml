@@ -99,7 +99,11 @@ jobs:
         # Snapshots are maintained locally; CI just verifies code compiles/fails as expected.
         env:
           TRYBUILD: overwrite
-        run: cargo test --workspace --all-features
+        # Exclude mbus-ffi: its C-FFI layer requires consumer-supplied extern symbols
+        # (mbus_app_lock, app_on_write_*, etc.) that aren't present in test binaries.
+        # On Linux/macOS the dynamic linker allows lazy binding; MSVC's link.exe does not.
+        # mbus-ffi is exercised by the dedicated c-ffi and python jobs (Linux only).
+        run: cargo test --workspace --all-features --exclude mbus-ffi
 
   # ── 4. Feature-subset build + integration tests ───────────────────────────
   feature-subsets-full:
@@ -203,7 +207,7 @@ jobs:
         working-directory: mbus-ffi
 
       - name: Install built wheel
-        run: pip install mbus-ffi/target/wheels/modbus_rs-*.whl
+        run: pip install $(find mbus-ffi/target/wheels -name '*.whl' | head -1)
 
       - name: Run Python tests
         run: pytest
