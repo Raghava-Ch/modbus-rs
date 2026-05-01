@@ -20,7 +20,6 @@ package tcp
 
 import (
 	"context"
-	"errors"
 	"net"
 	"runtime"
 	rcgo "runtime/cgo"
@@ -148,7 +147,7 @@ func NewServer(addr string, h Handler, opts ...Option) (*Server, error) {
 		return nil, &modbus.Error{Op: "NewServer", Status: modbus.StatusInvalidConfiguration, Cause: err}
 	}
 
-	cb := newAdapter(h)
+	cb := newAdapter(h, cfg.unitID)
 	srv, hand, st := cgo.TcpServerNew(host, uint16(port64), cfg.unitID, cb)
 	if st != modbus.StatusOK {
 		return nil, modbus.FromStatus("NewServer", st)
@@ -221,8 +220,8 @@ type adapter struct {
 	unitID uint8
 }
 
-func newAdapter(h Handler) *adapter {
-	return &adapter{h: h, unitID: 1}
+func newAdapter(h Handler, unitID uint8) *adapter {
+	return &adapter{h: h, unitID: unitID}
 }
 
 // All adapter methods are invoked on a Tokio worker thread. We use a
@@ -258,6 +257,3 @@ var _ cgo.ServerCallbacks = (*adapter)(nil)
 
 // Compile-time assertion that BaseHandler satisfies Handler.
 var _ Handler = BaseHandler{}
-
-// Sentinel that errors.Is can match.
-var errClosed = errors.New("server: closed")

@@ -34,6 +34,7 @@ func main() {
 ```
 
 See [`examples/`](./examples) for runnable TCP client, server, and gateway demos.
+For the complete reference, see [`documentation/go_bindings.md`](../../documentation/go_bindings.md).
 
 ## Building
 

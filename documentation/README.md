@@ -12,6 +12,7 @@ Welcome to the modbus-rs documentation. This guide covers both client and server
 | Build a Modbus **server** application | [Server Documentation](server/README.md) |
 | Build with **Python bindings** | [Python Bindings](python_bindings.md) |
 | Build with **.NET / C# bindings** | [.NET Bindings](dotnet_bindings.md) |
+| Build with **Go bindings** | [Go Bindings](go_bindings.md) |
 | Migrate from an older version | [Migration Guide](migration_guide.md) |
 
 ---
@@ -34,6 +35,7 @@ Everything you need to build Modbus client applications.
 | [WASM Development](client/wasm.md) | Browser WebSocket client |
 | [Python Bindings](python_bindings.md) | Python client/server usage via mbus-ffi |
 | [.NET / C# Bindings](dotnet_bindings.md) | .NET (C#) client/server via P/Invoke |
+| [Go Bindings](go_bindings.md) | Go client/server/gateway via cgo over mbus-ffi |
 
 ---
 
@@ -85,7 +87,7 @@ transports (TCP ↔ RTU, WebSocket ↔ TCP, etc.).
 | [`mbus-async`](../mbus-async/README.md) | Async facade | [Client Async](client/async.md) |
 | [`mbus-network`](../mbus-network/README.md) | TCP transport | [Client](client/building_applications.md) / [Server](server/building_applications.md) |
 | [`mbus-serial`](../mbus-serial/README.md) | Serial RTU/ASCII transports | [Client](client/building_applications.md) / [Server](server/building_applications.md) |
-| [`mbus-ffi`](../mbus-ffi/README.md) | C, WASM, Python, and .NET bindings | [C Bindings](client/c_bindings.md) / [WASM](client/wasm.md) / [Python](python_bindings.md) / [.NET](dotnet_bindings.md) |
+| [`mbus-ffi`](../mbus-ffi/README.md) | C, WASM, Python, .NET, and Go bindings | [C Bindings](client/c_bindings.md) / [WASM](client/wasm.md) / [Python](python_bindings.md) / [.NET](dotnet_bindings.md) / [Go](go_bindings.md) |
 
 ### Additional Resources
 
