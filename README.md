@@ -6,7 +6,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 - **All transports** — TCP, Serial RTU, Serial ASCII
 - **Sync and async** — poll-driven sync core; native `async/await` via Tokio
 - **Feature-gated** — enable only what you need for minimal binary size
-- **C and WASM bindings** — native C/C++ and browser integration via `mbus-ffi`
+- **C and .NET bindings** — native C/C++ and .NET (C#) integration via `mbus-ffi`
 - **Gateway** — Modbus TCP ↔ RTU/ASCII gateway with sync (no_std) and async modes
 
 ---
@@ -64,7 +64,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | **Client** | [Quick Start](documentation/client/quick_start.md) · [Examples](documentation/client/examples.md) · [Building Apps](documentation/client/building_applications.md) · [Sync](documentation/client/sync.md) · [Async](documentation/client/async.md) · [Policies](documentation/client/policies.md) |
 | **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Building Apps](documentation/server/building_applications.md) · [Sync](documentation/server/sync.md) · [Async](documentation/server/async.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) · [Function Codes](documentation/server/function_codes.md) |
 | **Gateway** | [Quick Start](documentation/gateway/quick_start.md) · [Architecture](documentation/gateway/architecture.md) · [Routing](documentation/gateway/routing.md) · [WebSocket Gateway](documentation/gateway/ws_gateway.md) · [Feature Flags](documentation/gateway/feature_flags.md) |
-| **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) |
+| **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) · [.NET / C#](documentation/dotnet_bindings.md) |
 | **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
 
 ---
@@ -79,18 +79,18 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | [`mbus-client-async`](mbus-client-async/) | Role-focused async client facade crate |
 | [`mbus-server-async`](mbus-server-async/) | Role-focused async server facade crate |
 | [`mbus-core`](mbus-core/) | Shared protocol types and transport trait |
-| [`mbus-async`](mbus-async/) | Combined async client+server crate (still supported) |
+| [`mbus-async`](mbus-async/) | Combined async client+server crate — prefer `mbus-client-async` / `mbus-server-async` for new projects |
 | [`mbus-macros`](mbus-macros/) | Proc macros: `#[modbus_app]`, `#[derive(CoilsModel)]`, etc. |
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
 | [`mbus-gateway`](mbus-gateway/) | Modbus gateway — TCP ↔ RTU/ASCII routing (sync + async) |
-| [`mbus-ffi`](mbus-ffi/) | Native C and WASM bindings (client + phased server surface) |
+| [`mbus-ffi`](mbus-ffi/) | Native C, WASM, Python, and .NET (C#) bindings — client, server, and gateway |
 
 ### Direct Async Crate Selection
 
 - Use [`mbus-client-async`](mbus-client-async/) for async client-only dependencies.
 - Use [`mbus-server-async`](mbus-server-async/) for async server-only dependencies.
-- Use [`mbus-async`](mbus-async/) if you want a combined async client+server dependency.
+- [`mbus-async`](mbus-async/) provides a combined async client+server crate and is still supported, but **prefer `mbus-client-async` and `mbus-server-async`** for new projects — `mbus-async` will be consolidated into those two focused crates in a future release.
 
 ---
 
@@ -241,6 +241,37 @@ Open the runnable smoke examples in a Chromium-based browser:
 | [examples/serial_server_smoke.html](mbus-ffi/examples/wasm_server/serial_smoke.html) | WASM Serial server lifecycle + dispatch |
 
 See [`mbus-ffi/README.md`](mbus-ffi/README.md) for the full WASM API reference and server binding architecture.
+
+### .NET / C# Client (via `mbus-ffi`)
+
+```bash
+# 1. Build the native library (Debug configuration — do this once per Rust change)
+cargo build -p mbus-ffi --features dotnet,full
+
+# 2. Open the solution in Visual Studio 2022 and press F5, or run from the CLI:
+dotnet run --project mbus-ffi/dotnet/examples/ModbusRsClientExample
+```
+
+```csharp
+using ModbusRs;
+
+using var client = new ModbusTcpClient("192.168.1.10", 502);
+client.SetRequestTimeout(TimeSpan.FromSeconds(2));
+await client.ConnectAsync();
+
+ushort[] regs = await client.ReadHoldingRegistersAsync(unitId: 1, address: 0, quantity: 4);
+await client.WriteSingleRegisterAsync(unitId: 1, address: 5, value: 0xBEEF);
+bool[] coils  = await client.ReadCoilsAsync(unitId: 1, address: 0, quantity: 8);
+
+await client.DisconnectAsync();
+```
+
+> **DllNotFoundException?** Run `cargo build -p mbus-ffi --features dotnet,full` first —
+> the native library is not committed to the repository.  Visual Studio automatically
+> copies `mbus_ffi.dll` from `target\debug\` to the output folder on every build
+> (see [.NET binding documentation](documentation/dotnet_bindings.md#troubleshooting-dllnotfoundexception)).
+
+📖 **[Full .NET Binding Documentation →](documentation/dotnet_bindings.md)**
 
 ### Gateway (sync TCP → RTU)
 

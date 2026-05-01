@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ModbusRsClientExample</AssemblyName>
+    <RootNamespace>ModbusRsClientExample</RootNamespace>
+
+    <!--
+      The native library is resolved from the Cargo target directory.
+      Build it before opening this project:
+        cargo build -p mbus-ffi  (Debug config, features: dotnet,full)
+        cargo build -p mbus-ffi  (Release config adds: release flag)
+
+      MSBuild will automatically copy the right artefact to the output
+      directory so Visual Studio can find it at runtime without any
+      manual file copying.
+    -->
+    <Description>
+      Example Modbus TCP/RTU client application using the ModbusRs .NET bindings.
+      Demonstrates FC01-FC04, FC05-FC10, FC22-FC24, FC07-FC0C, FC14-FC15.
+    </Description>
+
+    <!-- Map MSBuild configuration to the matching Cargo output folder -->
+    <CargoProfile Condition="'$(Configuration)' == 'Release'">release</CargoProfile>
+    <CargoProfile Condition="'$(CargoProfile)' == ''">debug</CargoProfile>
+
+    <!-- Repo root is 4 directories above this csproj file -->
+    <NativeDllDir>$(MSBuildThisFileDirectory)..\..\..\..\target\$(CargoProfile)\</NativeDllDir>
+
+    <!-- Platform-specific native library filename -->
+    <NativeLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">mbus_ffi.dll</NativeLibName>
+    <NativeLibName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libmbus_ffi.so</NativeLibName>
+    <NativeLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmbus_ffi.dylib</NativeLibName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ModbusRs\ModbusRs.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Automatically copies mbus_ffi.dll (or .so / .dylib on non-Windows) to the
+      output directory so the P/Invoke DllImport resolves at runtime.
+      The file is hidden from Solution Explorer (Visible=false) to keep the
+      project tree tidy; it will still appear in the bin\ folder after a build.
+
+      If the file does not exist yet (Cargo build not run), the condition
+      suppresses the item silently — the project still builds, but running it
+      will throw DllNotFoundException until the native library is present.
+    -->
+    <None Include="$(NativeDllDir)$(NativeLibName)"
+          Condition="'$(NativeLibName)' != '' And Exists('$(NativeDllDir)$(NativeLibName)')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>$(NativeLibName)</Link>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+</Project>
