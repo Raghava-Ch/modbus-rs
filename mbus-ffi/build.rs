@@ -167,11 +167,12 @@ fn main() {
 
     // ── cbindgen ──────────────────────────────────────────────────────────────
 
-    // Only run cbindgen when the `c`, `c-server`, `c-gateway`, or `dotnet` feature is enabled.
+    // Only run cbindgen when the `c`, `c-server`, `c-gateway`, `dotnet`, or `go` feature is enabled.
     if std::env::var("CARGO_FEATURE_C").is_err()
         && std::env::var("CARGO_FEATURE_C_SERVER").is_err()
         && std::env::var("CARGO_FEATURE_C_GATEWAY").is_err()
         && std::env::var("CARGO_FEATURE_DOTNET").is_err()
+        && std::env::var("CARGO_FEATURE_GO").is_err()
     {
         return;
     }
@@ -191,6 +192,7 @@ fn main() {
     println!("cargo::rerun-if-changed=cbindgen_server.toml");
     println!("cargo::rerun-if-changed=cbindgen_gateway.toml");
     println!("cargo::rerun-if-changed=cbindgen_dotnet.toml");
+    println!("cargo::rerun-if-changed=cbindgen_go.toml");
     println!("cargo::rerun-if-changed=src");
     std::fs::create_dir_all(&include_dir).expect("failed to create target include directory");
 
@@ -329,5 +331,47 @@ fn main() {
             .generate()
             .expect("cbindgen failed to generate .NET C header")
             .write_to_file(output_file);
+    }
+
+    if std::env::var("CARGO_FEATURE_GO").is_ok() {
+        let output_file = include_dir.join("modbus_rs_go.h");
+        let config_path = format!("{crate_dir}/cbindgen_go.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "go", "MBUS_FEATURE_GO")
+            .with_define("feature", "coils", "MBUS_FEATURE_COILS")
+            .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
+            .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
+            .with_define("feature", "fifo", "MBUS_FEATURE_FIFO")
+            .with_define("feature", "file-record", "MBUS_FEATURE_FILE_RECORD")
+            .with_define("feature", "diagnostics", "MBUS_FEATURE_DIAGNOSTICS")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate Go C header")
+            .write_to_file(&output_file);
+
+        // Mirror the freshly-generated header into the Go module so
+        // `go build` can find it without the user having to run a
+        // separate copy step.  This keeps the vendored header in
+        // `mbus-ffi/go/internal/cgo/include/` in sync with the Rust FFI
+        // surface on every Cargo build.
+        let go_include_dir = std::path::Path::new(&crate_dir)
+            .join("go")
+            .join("internal")
+            .join("cgo")
+            .join("include");
+        if go_include_dir.exists() {
+            let dst = go_include_dir.join("modbus_rs_go.h");
+            if let Err(e) = std::fs::copy(&output_file, &dst) {
+                println!(
+                    "cargo::warning=failed to copy modbus_rs_go.h into Go module ({}): {e}",
+                    dst.display()
+                );
+            }
+        }
     }
 }
