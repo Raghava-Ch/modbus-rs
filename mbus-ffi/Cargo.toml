@@ -145,3 +145,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 ## In-process AsyncTcpServer used by the .NET binding integration test.
 mbus-async = { version = "0.8.0", path = "../mbus-async", features = ["server-tcp", "registers"] }
 anyhow = "1"
+
+[[example]]
+name = "dotnet_test_server"
+required-features = ["registers"]
