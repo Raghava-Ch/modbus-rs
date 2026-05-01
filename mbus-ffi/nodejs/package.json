@@ -1,0 +1,62 @@
+{
+  "name": "modbus-rs",
+  "version": "0.8.0",
+  "description": "High-performance Modbus TCP/RTU/ASCII client, server and gateway for Node.js, powered by Rust",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "node --test test/",
+    "prepublishOnly": "napi prepublish -t npm",
+    "artifacts": "napi artifacts",
+    "universal": "napi universal"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
+  },
+  "keywords": [
+    "modbus",
+    "modbus-tcp",
+    "modbus-rtu",
+    "modbus-ascii",
+    "scada",
+    "plc",
+    "industrial",
+    "automation",
+    "napi-rs",
+    "rust"
+  ],
+  "author": "Raghava-Ch",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Raghava-Ch/modbus-rs/issues"
+  },
+  "homepage": "https://github.com/Raghava-Ch/modbus-rs#readme",
+  "engines": {
+    "node": ">= 18"
+  },
+  "napi": {
+    "name": "modbus-rs",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "aarch64-apple-darwin",
+        "armv7-unknown-linux-gnueabihf"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "optionalDependencies": {}
+}

@@ -2,6 +2,12 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(cbindgen)");
     println!("cargo::rustc-check-cfg=cfg(has_unwind)");
 
+    // napi-build setup for Node.js bindings — generates the native addon registration glue.
+    // Only called when the `nodejs` feature is active.
+    if std::env::var("CARGO_FEATURE_NODEJS").is_ok() {
+        napi_build::setup();
+    }
+
     let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
 
     // Link the C standard library for intrinsics (memcpy, memset, strlen, etc.)

@@ -106,6 +106,33 @@ go = [
 ## Enables traffic notification callbacks on the Go server (mbus-server-async `traffic` feature).
 go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 
+## Enables Node.js bindings (napi-rs) for the Modbus client/server/gateway stack.
+##
+## Build with `cargo build --release -p mbus-ffi --features nodejs,full`.
+## The npm package resides in `mbus-ffi/nodejs/` and uses `napi build` to
+## produce the native addon.
+nodejs = [
+    "dep:napi",
+    "dep:napi-derive",
+    "dep:tokio",
+    "dep:mbus-client-async",
+    "dep:mbus-server-async",
+    "dep:mbus-gateway",
+    "dep:mbus-network",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "mbus-client-async/serial-rtu",
+    "mbus-client-async/serial-ascii",
+    "mbus-gateway/async",
+    "mbus-network/async",
+]
+## Enables traffic notification callbacks on the Node.js server/client.
+nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
+
 ## Enables native .NET (C#) P/Invoke bindings for the Modbus client stack.
 ## Generates a separate `modbus_rs_dotnet.h` header and exposes async request
 ## functions intended to be wrapped by the managed `ModbusRs` C# project under
@@ -142,6 +169,10 @@ tokio = { version = "1", features = ["full"], optional = true }
 mbus-client-async = { version = "0.8.0", path = "../mbus-client-async", features = ["network-tcp", "serial-rtu", "serial-ascii", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 mbus-server-async = { version = "0.8.0", path = "../mbus-server-async", features = ["server-tcp", "server-serial", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
+## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
+napi = { version = "2.16", default-features = false, features = ["napi6", "tokio_rt", "async"], optional = true }
+napi-derive = { version = "2.16", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)
 mbus-network = { workspace = true }
@@ -158,6 +189,7 @@ gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 [build-dependencies]
 cbindgen = { version = "0.29" }
 mbus-codegen = { workspace = true }
+napi-build = { version = "2.1" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # No native-only deps needed; this section exists as an explicit marker.
