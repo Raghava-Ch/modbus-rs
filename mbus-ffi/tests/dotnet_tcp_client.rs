@@ -34,6 +34,9 @@ struct TestApp {
     holding: Arc<Mutex<[u16; 16]>>,
 }
 
+#[cfg(feature = "traffic")]
+impl mbus_async::server::AsyncTrafficNotifier for TestApp {}
+
 impl AsyncAppHandler for TestApp {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
         let response = self.process(req);
