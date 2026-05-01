@@ -79,6 +79,33 @@ python = [
     "diagnostics",
 ]
 
+## Enables native Go (cgo) bindings for the Modbus client/server/gateway stack.
+##
+## Mirrors the `dotnet` feature: builds the cdylib + staticlib with the same
+## `mbus-client-async` / `mbus-server-async` / `mbus-gateway` underpinnings,
+## but exports symbols with the `mbus_go_*` prefix so the Go binding can
+## evolve independently of the .NET binding. Build with:
+##
+##     cargo build --release -p mbus-ffi --features go,full
+go = [
+    "dep:tokio",
+    "dep:mbus-client-async",
+    "dep:mbus-server-async",
+    "dep:mbus-gateway",
+    "dep:mbus-network",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "diagnostics",
+    "mbus-client-async/serial-rtu",
+    "mbus-client-async/serial-ascii",
+    "mbus-gateway/async",
+    "mbus-network/async",
+]
+## Enables traffic notification callbacks on the Go server (mbus-server-async `traffic` feature).
+go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
+
 ## Enables native .NET (C#) P/Invoke bindings for the Modbus client stack.
 ## Generates a separate `modbus_rs_dotnet.h` header and exposes async request
 ## functions intended to be wrapped by the managed `ModbusRs` C# project under
