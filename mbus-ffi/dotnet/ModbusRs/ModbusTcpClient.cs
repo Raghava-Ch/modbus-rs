@@ -546,6 +546,163 @@ public sealed class ModbusTcpClient : IDisposable
         }, cancellationToken);
     }
 
+    // ── FC08 (diagnostics) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Sends a Diagnostics (FC08) request.
+    /// </summary>
+    /// <param name="unitId">Target unit / slave ID.</param>
+    /// <param name="subFunction">
+    /// Diagnostics sub-function code (e.g. <c>0x0000</c> = Return Query Data).
+    /// </param>
+    /// <param name="data">
+    /// Optional request data words. May be empty for sub-functions that carry
+    /// no data.
+    /// </param>
+    /// <returns>
+    /// A tuple of the echoed sub-function code and the echoed data words.
+    /// </returns>
+    public Task<(ushort SubFunction, ushort[] Data)> DiagnosticsAsync(
+        byte unitId, ushort subFunction, ReadOnlyMemory<ushort> data = default,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return Task.Run(() =>
+        {
+            var outBuf = new ushort[128];
+            ushort outSf = 0, outCount = 0;
+            ModbusStatus status;
+            unsafe
+            {
+                fixed (ushort* pData = data.Span)
+                fixed (ushort* pOut = outBuf)
+                {
+                    status = NativeMethods.mbus_dn_tcp_client_diagnostics(
+                        _handle.DangerousHandle, unitId,
+                        subFunction,
+                        pData, (ushort)data.Length,
+                        &outSf,
+                        pOut, (ushort)outBuf.Length, &outCount);
+                }
+            }
+            ModbusException.ThrowIfError(status, nameof(DiagnosticsAsync));
+            if (outCount != outBuf.Length) Array.Resize(ref outBuf, outCount);
+            return (outSf, outBuf);
+        }, cancellationToken);
+    }
+
+    // ── FC14 / FC15 (file record) ────────────────────────────────────────
+
+    /// <summary>
+    /// Reads one or more file records (FC14).
+    /// </summary>
+    /// <param name="unitId">Target unit / slave ID.</param>
+    /// <param name="subRequests">
+    /// Read sub-request descriptors.  Each entry specifies a file number,
+    /// starting record number, and the number of registers to read.
+    /// </param>
+    /// <returns>
+    /// A flat array of all returned register words in sub-request order.
+    /// Split the array by the known <c>RecordLength</c> of each sub-request
+    /// to obtain per-record slices.
+    /// </returns>
+    public Task<ushort[]> ReadFileRecordAsync(
+        byte unitId, IReadOnlyList<FileRecordSubRequest> subRequests,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(subRequests);
+        if (subRequests.Count == 0)
+            return Task.FromResult(Array.Empty<ushort>());
+        ThrowIfDisposed();
+        return Task.Run(() =>
+        {
+            var outBuf = new ushort[2048];
+            ushort outCount = 0;
+            ModbusStatus status;
+            unsafe
+            {
+                var nativeReqs = stackalloc Native.MbusDnSubRequest[subRequests.Count];
+                for (int i = 0; i < subRequests.Count; i++)
+                {
+                    nativeReqs[i] = new Native.MbusDnSubRequest
+                    {
+                        FileNumber = subRequests[i].FileNumber,
+                        RecordNumber = subRequests[i].RecordNumber,
+                        RecordLength = subRequests[i].RecordLength,
+                        Data = null,
+                        DataLen = 0,
+                    };
+                }
+                fixed (ushort* pOut = outBuf)
+                {
+                    status = NativeMethods.mbus_dn_tcp_client_read_file_record(
+                        _handle.DangerousHandle, unitId,
+                        nativeReqs, (ushort)subRequests.Count,
+                        pOut, (ushort)outBuf.Length, &outCount);
+                }
+            }
+            ModbusException.ThrowIfError(status, nameof(ReadFileRecordAsync));
+            if (outCount != outBuf.Length) Array.Resize(ref outBuf, outCount);
+            return outBuf;
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes one or more file records (FC15).
+    /// </summary>
+    /// <param name="unitId">Target unit / slave ID.</param>
+    /// <param name="subRequests">
+    /// Write sub-request descriptors.  Each entry specifies a file number,
+    /// starting record number, and the register data to write.
+    /// </param>
+    public Task WriteFileRecordAsync(
+        byte unitId, IReadOnlyList<FileRecordWriteSubRequest> subRequests,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(subRequests);
+        if (subRequests.Count == 0)
+            return Task.CompletedTask;
+        ThrowIfDisposed();
+        return Task.Run(() =>
+        {
+            ModbusStatus status;
+            // Pin all data arrays before building the native array.
+            var handles = new System.Runtime.InteropServices.GCHandle[subRequests.Count];
+            try
+            {
+                unsafe
+                {
+                    var nativeReqs = stackalloc Native.MbusDnSubRequest[subRequests.Count];
+                    for (int i = 0; i < subRequests.Count; i++)
+                    {
+                        handles[i] = System.Runtime.InteropServices.GCHandle.Alloc(
+                            subRequests[i].Data, System.Runtime.InteropServices.GCHandleType.Pinned);
+                        fixed (ushort* pData = subRequests[i].Data)
+                        {
+                            nativeReqs[i] = new Native.MbusDnSubRequest
+                            {
+                                FileNumber = subRequests[i].FileNumber,
+                                RecordNumber = subRequests[i].RecordNumber,
+                                RecordLength = (ushort)subRequests[i].Data.Length,
+                                Data = pData,
+                                DataLen = (ushort)subRequests[i].Data.Length,
+                            };
+                        }
+                    }
+                    status = NativeMethods.mbus_dn_tcp_client_write_file_record(
+                        _handle.DangerousHandle, unitId,
+                        nativeReqs, (ushort)subRequests.Count);
+                }
+            }
+            finally
+            {
+                foreach (var h in handles)
+                    if (h.IsAllocated) h.Free();
+            }
+            ModbusException.ThrowIfError(status, nameof(WriteFileRecordAsync));
+        }, cancellationToken);
+    }
+
     // ── IDisposable ──────────────────────────────────────────────────────
 
     private void ThrowIfDisposed()
