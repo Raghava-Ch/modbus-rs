@@ -86,9 +86,18 @@ python = [
 dotnet = [
     "dep:tokio",
     "dep:mbus-client-async",
+    "dep:mbus-server-async",
+    "dep:mbus-gateway",
+    "dep:mbus-network",
     "coils",
     "registers",
     "discrete-inputs",
+    "fifo",
+    "diagnostics",
+    "mbus-client-async/serial-rtu",
+    "mbus-client-async/serial-ascii",
+    "mbus-gateway/async",
+    "mbus-network/async",
 ]
 
 [dependencies]
