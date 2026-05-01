@@ -71,24 +71,24 @@ type FunctionCode uint8
 
 // Standard Modbus function codes.
 const (
-	FCReadCoils                   FunctionCode = 0x01
-	FCReadDiscreteInputs          FunctionCode = 0x02
-	FCReadHoldingRegisters        FunctionCode = 0x03
-	FCReadInputRegisters          FunctionCode = 0x04
-	FCWriteSingleCoil             FunctionCode = 0x05
-	FCWriteSingleRegister         FunctionCode = 0x06
-	FCReadExceptionStatus         FunctionCode = 0x07
-	FCDiagnostics                 FunctionCode = 0x08
-	FCGetCommEventCounter         FunctionCode = 0x0B
-	FCGetCommEventLog             FunctionCode = 0x0C
-	FCWriteMultipleCoils          FunctionCode = 0x0F
-	FCWriteMultipleRegisters      FunctionCode = 0x10
-	FCReportServerID              FunctionCode = 0x11
-	FCReadFileRecord              FunctionCode = 0x14
-	FCWriteFileRecord             FunctionCode = 0x15
-	FCMaskWriteRegister           FunctionCode = 0x16
-	FCReadWriteMultipleRegisters  FunctionCode = 0x17
-	FCReadFifoQueue               FunctionCode = 0x18
+	FCReadCoils                  FunctionCode = 0x01
+	FCReadDiscreteInputs         FunctionCode = 0x02
+	FCReadHoldingRegisters       FunctionCode = 0x03
+	FCReadInputRegisters         FunctionCode = 0x04
+	FCWriteSingleCoil            FunctionCode = 0x05
+	FCWriteSingleRegister        FunctionCode = 0x06
+	FCReadExceptionStatus        FunctionCode = 0x07
+	FCDiagnostics                FunctionCode = 0x08
+	FCGetCommEventCounter        FunctionCode = 0x0B
+	FCGetCommEventLog            FunctionCode = 0x0C
+	FCWriteMultipleCoils         FunctionCode = 0x0F
+	FCWriteMultipleRegisters     FunctionCode = 0x10
+	FCReportServerID             FunctionCode = 0x11
+	FCReadFileRecord             FunctionCode = 0x14
+	FCWriteFileRecord            FunctionCode = 0x15
+	FCMaskWriteRegister          FunctionCode = 0x16
+	FCReadWriteMultipleRegisters FunctionCode = 0x17
+	FCReadFifoQueue              FunctionCode = 0x18
 )
 
 // ExceptionCode is the Modbus protocol-level exception code.

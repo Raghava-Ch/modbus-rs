@@ -6,6 +6,7 @@ package cgo
 #include "modbus_rs_go.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 // Forward declarations of the //export trampolines defined in
 // trampolines.go. cgo will generate the appropriate symbol stubs.
@@ -17,6 +18,15 @@ extern int32_t goReadHoldingRegistersTrampoline(void*, uint16_t, uint16_t, uint1
 extern int32_t goReadInputRegistersTrampoline(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
 extern int32_t goWriteSingleRegisterTrampoline(void*, uint16_t, uint16_t);
 extern int32_t goWriteMultipleRegistersTrampoline(void*, uint16_t, const uint8_t*, uint16_t);
+
+// Helper that converts a uintptr_t (carrying a runtime/cgo.Handle) to
+// the void* type expected by the vtable's `ctx` slot. Doing the cast
+// in C avoids `go vet`'s `unsafeptr` warning, which trips on
+// uintptr→unsafe.Pointer conversions for non-pointer-derived values
+// (a cgo.Handle is just an opaque integer).
+static void *mbus_go_handle_to_ctx(uintptr_t h) {
+    return (void *)h;
+}
 
 // build_server_vtable is a small C shim that fills in the
 // MbusGoServerVtable struct from Go-supplied function pointers and
@@ -43,7 +53,7 @@ import (
 )
 
 // TcpServer is an opaque handle to a native async Modbus TCP server.
-type TcpServer = C.MbusGoTcpServer
+type TcpServer struct{ raw *C.MbusGoTcpServer }
 
 // ServerCallbacks is the set of Go-language callbacks invoked by the
 // native server when a Modbus request arrives. Each method must return
@@ -79,43 +89,25 @@ func TcpServerNew(host string, port uint16, unitID uint8, cb ServerCallbacks) (*
 	defer C.free(unsafe.Pointer(chost))
 
 	var vt C.struct_MbusGoServerVtable
-	C.mbus_go_build_server_vtable(&vt, handleToVoidPtr(h))
+	C.mbus_go_build_server_vtable(&vt, C.mbus_go_handle_to_ctx(C.uintptr_t(h)))
 
 	srv := C.mbus_go_tcp_server_new(chost, C.uint16_t(port), C.uint8_t(unitID), &vt)
 	if srv == nil {
 		h.Delete()
 		return nil, 0, StatusInvalidConfiguration
 	}
-	return srv, h, StatusOK
+	return &TcpServer{raw: srv}, h, StatusOK
 }
 
-// handleToVoidPtr converts a [runtime/cgo.Handle] (an opaque uintptr)
-// into a `void*` for the C callback context slot.
-//
-// `//go:nocheckptr` is required because the runtime's `-race` checkptr
-// pass otherwise flags the uintptr→unsafe.Pointer conversion, even
-// though the resulting "pointer" is never dereferenced as Go memory —
-// the C side just hands it back unchanged to our trampolines, which
-// cast it back to a [cgo.Handle] using [voidPtrToHandle].
-//
-//go:nocheckptr
-func handleToVoidPtr(h cgo.Handle) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(h))
-}
-
-// voidPtrToHandle is the inverse of [handleToVoidPtr]. Exported so the
-// trampolines (in trampolines.go) can recover the Go-side callback
-// instance from the opaque ctx pointer.
-//
-//go:nocheckptr
-func voidPtrToHandle(p unsafe.Pointer) cgo.Handle {
-	return cgo.Handle(uintptr(p))
-}
+// (No more uintptr↔unsafe.Pointer round-trips on the Go side: the
+// cgo.Handle reaches the C side as a uintptr_t and is type-laundered
+// to `void*` by mbus_go_handle_to_ctx in the C preamble. The reverse
+// direction lives in trampolines.go.)
 
 // TcpServerFree releases the native handle and the cgo callback handle.
 func TcpServerFree(s *TcpServer, h cgo.Handle) {
 	if s != nil {
-		C.mbus_go_tcp_server_free(s)
+		C.mbus_go_tcp_server_free(s.raw)
 	}
 	if h != 0 {
 		h.Delete()
@@ -125,24 +117,11 @@ func TcpServerFree(s *TcpServer, h cgo.Handle) {
 // TcpServerStart spawns the listener thread and starts accepting
 // connections. Returns immediately; use [TcpServerStop] to terminate.
 func TcpServerStart(s *TcpServer) Status {
-	return Status(C.mbus_go_tcp_server_start(s))
+	return Status(C.mbus_go_tcp_server_start(s.raw))
 }
 
 // TcpServerStop signals the running server to terminate. The native
 // thread will finish in-flight sessions and exit.
 func TcpServerStop(s *TcpServer) {
-	C.mbus_go_tcp_server_stop(s)
-}
-
-// TcpServerToHandle / TcpServerFromHandle let higher-level packages
-// store a *TcpServer as a uintptr.
-func TcpServerToHandle(p *TcpServer) uintptr {
-	return uintptr(unsafe.Pointer(p))
-}
-
-func TcpServerFromHandle(p uintptr) *TcpServer {
-	if p == 0 {
-		return nil
-	}
-	return (*TcpServer)(unsafe.Pointer(p)) //nolint:govet
+	C.mbus_go_tcp_server_stop(s.raw)
 }
