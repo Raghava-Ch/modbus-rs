@@ -1,0 +1,42 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModbusRs", "ModbusRs\ModbusRs.csproj", "{E86878E1-0219-4D9F-A3B3-B662CCB333A6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModbusRsClientExample", "examples\ModbusRsClientExample\ModbusRsClientExample.csproj", "{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModbusRsServerExample", "examples\ModbusRsServerExample\ModbusRsServerExample.csproj", "{E2D6326D-8B0F-4408-A3B7-8459F631AD36}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{87CD405E-7AA0-4521-8D7F-1ADCB204620F}"
+EndProject
+
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E86878E1-0219-4D9F-A3B3-B662CCB333A6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E86878E1-0219-4D9F-A3B3-B662CCB333A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E86878E1-0219-4D9F-A3B3-B662CCB333A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E86878E1-0219-4D9F-A3B3-B662CCB333A6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E2D6326D-8B0F-4408-A3B7-8459F631AD36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2D6326D-8B0F-4408-A3B7-8459F631AD36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2D6326D-8B0F-4408-A3B7-8459F631AD36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2D6326D-8B0F-4408-A3B7-8459F631AD36}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EF0D1D24-308E-4BCF-ACA6-D6C67853A4B3} = {87CD405E-7AA0-4521-8D7F-1ADCB204620F}
+		{E2D6326D-8B0F-4408-A3B7-8459F631AD36} = {87CD405E-7AA0-4521-8D7F-1ADCB204620F}
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
