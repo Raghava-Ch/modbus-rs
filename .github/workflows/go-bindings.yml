@@ -80,7 +80,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --release -p mbus-ffi --features go,full --target x86_64-pc-windows-gnu
+          # Use --crate-type staticlib to skip the cdylib (.dll) link phase.
+          # MinGW 15+ removed the libc.a stub that older toolchains provided,
+          # so the cdylib link fails with "cannot find -lc".  A staticlib is a
+          # plain object-file archive with no linking step, which sidesteps the
+          # issue.  Go cgo only needs the staticlib anyway.
+          cargo rustc --release -p mbus-ffi --features go,full \
+            --target x86_64-pc-windows-gnu --crate-type staticlib
           mkdir -p mbus-ffi/go/internal/cgo/lib/windows_amd64
           cp target/x86_64-pc-windows-gnu/release/libmbus_ffi.a \
              mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.a
