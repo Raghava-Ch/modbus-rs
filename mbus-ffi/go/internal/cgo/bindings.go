@@ -16,8 +16,12 @@ package cgo
 
 // ── Default: static linking ─────────────────────────────────────────────
 // We link against libmbus_ffi.a vendored in `internal/cgo/lib/<os>_<arch>/`.
-// The build script `scripts/build_native.sh` copies the freshly-built
-// archive into that directory on every release build.
+// The build script `scripts/build_native.sh` copies the freshly-built archive
+// into that directory on every release build.
+//
+// On Windows the archive is built with --target x86_64-pc-windows-gnu so that
+// the resulting object files use the MinGW ABI (no MSVC __chkstk references)
+// and are compatible with the MinGW gcc/ld toolchain that cgo uses.
 
 #cgo !modbus_dynamic,linux,amd64   LDFLAGS: -L${SRCDIR}/lib/linux_amd64 -lmbus_ffi -ludev -ldl -lm -lpthread
 #cgo !modbus_dynamic,linux,arm64   LDFLAGS: -L${SRCDIR}/lib/linux_arm64 -lmbus_ffi -ludev -ldl -lm -lpthread

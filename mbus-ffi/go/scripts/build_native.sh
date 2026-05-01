@@ -40,23 +40,30 @@ esac
 PLATFORM_DIR="${GOOS}_${GOARCH}"
 
 # ── Build ──────────────────────────────────────────────────────────────────
-echo "→ Building mbus-ffi (${PROFILE}) with --features go,full"
-(cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go,full)
+# On Windows we target x86_64-pc-windows-gnu so that the static archive uses
+# the MinGW ABI.  The default MSVC target (x86_64-pc-windows-msvc) emits
+# calls to __chkstk (a MSVC CRT symbol) which MinGW's ld — used by cgo —
+# cannot resolve.  The GNU target produces a plain libmbus_ffi.a that is
+# fully compatible with MinGW.
+if [[ "$GOOS" == "windows" ]]; then
+    echo "→ Building mbus-ffi (${PROFILE}) for x86_64-pc-windows-gnu"
+    rustup target add x86_64-pc-windows-gnu
+    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go,full \
+        --target x86_64-pc-windows-gnu)
+    LIB_SRC="$ROOT/target/x86_64-pc-windows-gnu/$PROFILE/libmbus_ffi.a"
+else
+    echo "→ Building mbus-ffi (${PROFILE}) with --features go,full"
+    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go,full)
+    LIB_SRC="$ROOT/target/$PROFILE/libmbus_ffi.a"
+fi
 
 # ── Vendor the artefacts ───────────────────────────────────────────────────
-LIB_SRC="$ROOT/target/$PROFILE/libmbus_ffi.a"
 HDR_SRC="$ROOT/target/mbus-ffi/include/modbus_rs_go.h"
 LIB_DST_DIR="$GO_MODULE_DIR/internal/cgo/lib/$PLATFORM_DIR"
 HDR_DST="$GO_MODULE_DIR/internal/cgo/include/modbus_rs_go.h"
 
 mkdir -p "$LIB_DST_DIR"
-
-if [[ "$GOOS" == "windows" ]]; then
-    LIB_SRC="$ROOT/target/$PROFILE/mbus_ffi.lib"
-    cp -v "$LIB_SRC" "$LIB_DST_DIR/mbus_ffi.lib"
-else
-    cp -v "$LIB_SRC" "$LIB_DST_DIR/libmbus_ffi.a"
-fi
+cp -v "$LIB_SRC" "$LIB_DST_DIR/libmbus_ffi.a"
 cp -v "$HDR_SRC" "$HDR_DST"
 
 echo
