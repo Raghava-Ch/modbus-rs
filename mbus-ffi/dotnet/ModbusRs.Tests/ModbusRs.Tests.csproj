@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      Tell the runtime to look for the `mbus_ffi` cdylib relative to the
+      compiled test assembly. The build also copies the artefact in via
+      `Content` below, so the same path works on every platform.
+    -->
+    <RuntimeFrameworkVersion>8.0.0</RuntimeFrameworkVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ModbusRs\ModbusRs.csproj" />
+  </ItemGroup>
+
+  <!--
+    Copy the freshly built native library next to the test binary so
+    `[LibraryImport("mbus_ffi")]` resolves at run time. Edit the
+    `RustTargetDir` property if your `cargo build` output sits elsewhere.
+  -->
+  <PropertyGroup>
+    <RustTargetDir>$(MSBuildThisFileDirectory)..\..\..\target\debug</RustTargetDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(RustTargetDir)\libmbus_ffi.so" Condition="Exists('$(RustTargetDir)\libmbus_ffi.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libmbus_ffi.so</Link>
+    </Content>
+    <Content Include="$(RustTargetDir)\libmbus_ffi.dylib" Condition="Exists('$(RustTargetDir)\libmbus_ffi.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libmbus_ffi.dylib</Link>
+    </Content>
+    <Content Include="$(RustTargetDir)\mbus_ffi.dll" Condition="Exists('$(RustTargetDir)\mbus_ffi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>mbus_ffi.dll</Link>
+    </Content>
+  </ItemGroup>
+
+</Project>

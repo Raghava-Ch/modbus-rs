@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ModbusRs</RootNamespace>
+    <AssemblyName>ModbusRs</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- NuGet metadata -->
+    <PackageId>ModbusRs</PackageId>
+    <Version>0.8.0-alpha</Version>
+    <Authors>modbus-rs contributors</Authors>
+    <Description>
+      .NET (C#) bindings for the modbus-rs Modbus client/server/gateway
+      stacks. Wraps the native `mbus_ffi` cdylib via P/Invoke; exposes a
+      Task-based async API that is binary-compatible with the existing
+      Python and pure-Rust consumers.
+    </Description>
+    <RepositoryUrl>https://github.com/Raghava-Ch/modbus-rs</RepositoryUrl>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>
