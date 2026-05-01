@@ -98,12 +98,12 @@ pub struct MbusDnServerVtable {
     pub write_multiple_registers:
         Option<unsafe extern "C" fn(*mut c_void, u16, *const u8, u16) -> i32>,
 
-    // ── FC16 — Mask Write Register ───────────────────────────────────────────
+    // ── FC22 — Mask Write Register ───────────────────────────────────────────
     /// `fn(ctx, address, and_mask, or_mask) -> i32`
     #[cfg(feature = "registers")]
     pub mask_write_register: Option<unsafe extern "C" fn(*mut c_void, u16, u16, u16) -> i32>,
 
-    // ── FC17 — Read/Write Multiple Registers ─────────────────────────────────
+    // ── FC23 — Read/Write Multiple Registers ─────────────────────────────────
     /// `fn(ctx, read_addr, read_count, write_addr, write_values_be_bytes,
     ///    write_count, out_u16_values, out_count) -> i32`
     #[cfg(feature = "registers")]
@@ -120,7 +120,7 @@ pub struct MbusDnServerVtable {
         ) -> i32,
     >,
 
-    // ── FC18 — Read FIFO Queue ───────────────────────────────────────────────
+    // ── FC24 — Read FIFO Queue ───────────────────────────────────────────────
     /// `fn(ctx, pointer_address, out_u16_values, out_count) -> i32`
     #[cfg(feature = "fifo")]
     pub read_fifo_queue:
@@ -387,7 +387,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count)
         }
 
-        // ── FC16 — Mask Write Register ───────────────────────────────────────
+        // ── FC22 — Mask Write Register ───────────────────────────────────────
         #[cfg(feature = "registers")]
         ModbusRequest::MaskWriteRegister {
             address,
@@ -408,7 +408,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             ModbusResponse::echo_mask_write(address, and_mask, or_mask)
         }
 
-        // ── FC17 — Read/Write Multiple Registers ──────────────────────────────
+        // ── FC23 — Read/Write Multiple Registers ──────────────────────────────
         #[cfg(feature = "registers")]
         ModbusRequest::ReadWriteMultipleRegisters {
             read_address,
@@ -447,7 +447,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             )
         }
 
-        // ── FC18 — Read FIFO Queue ───────────────────────────────────────────
+        // ── FC24 — Read FIFO Queue ───────────────────────────────────────────
         #[cfg(feature = "fifo")]
         ModbusRequest::ReadFifoQueue {
             pointer_address, ..

@@ -5,21 +5,29 @@ It exposes the [`mbus-client-async`](../../mbus-client-async/) Modbus
 TCP client through a `Task`-based async API on top of `[LibraryImport]`
 P/Invoke declarations.
 
-> **Status:** Phase 1 (foundation) — TCP client only, FC03 / FC06 / FC16.
-> Full FC coverage, serial transport, server, and gateway bindings land
-> in subsequent phases.
+> **Status:** Phases 1–4 complete — TCP client (all standard FCs), serial
+> client (RTU + ASCII), TCP server (vtable-based request handler), and TCP
+> gateway (unit-ID routing to downstream servers).
 
 ## Layout
 
 ```
 mbus-ffi/dotnet/
-├── ModbusRs/                    # The library (netstandard-friendly net8.0)
-│   ├── ModbusTcpClient.cs       # Public Task-based async wrapper
+├── ModbusRs/                    # The library (net8.0)
+│   ├── ModbusTcpClient.cs       # Async TCP Modbus client (all standard FCs)
+│   ├── ModbusSerialClient.cs    # Async serial Modbus client (RTU / ASCII)
+│   ├── ModbusTcpServer.cs       # Modbus TCP server with vtable dispatch
+│   ├── ModbusTcpGateway.cs      # Modbus TCP gateway (unit-ID routing)
+│   ├── ModbusRequestHandler.cs  # Abstract base for server request handlers
+│   ├── ModbusExceptionCode.cs   # Modbus exception code enum
+│   ├── ModbusServerException.cs # Exception for server-side Modbus errors
 │   ├── ModbusStatus.cs          # Status enum (mirrors C MbusStatusCode)
 │   ├── ModbusException.cs       # Exception type carrying the status code
 │   └── Native/
-│       ├── NativeMethods.cs     # [LibraryImport] declarations
-│       └── SafeTcpClientHandle.cs  # SafeHandle for the opaque Rust pointer
+│       ├── NativeMethods.cs         # [LibraryImport] declarations
+│       ├── SafeTcpClientHandle.cs   # SafeHandle for TCP client pointer
+│       ├── SafeSerialClientHandle.cs # SafeHandle for serial client pointer
+│       └── MbusDnServerVtable.cs   # [StructLayout] vtable for server callbacks
 ├── ModbusRs.Tests/              # xUnit tests
 │   ├── ModbusServerFixture.cs   # IClassFixture: launches Rust example server
 │   ├── ModbusTcpClientTests.cs  # Server-less validation / lifetime tests

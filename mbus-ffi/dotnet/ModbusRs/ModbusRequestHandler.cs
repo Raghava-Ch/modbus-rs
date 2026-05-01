@@ -75,15 +75,15 @@ public abstract class ModbusRequestHandler
     public virtual void WriteMultipleRegisters(ushort address, ushort[] values)
         => throw NotSupported();
 
-    // ── FC16 ─────────────────────────────────────────────────────────────
+    // ── FC22 ─────────────────────────────────────────────────────────────
 
-    /// <summary>Handles a Mask Write Register (FC16) request.</summary>
+    /// <summary>Handles a Mask Write Register (FC22) request.</summary>
     public virtual void MaskWriteRegister(ushort address, ushort andMask, ushort orMask)
         => throw NotSupported();
 
-    // ── FC17 ─────────────────────────────────────────────────────────────
+    // ── FC23 ─────────────────────────────────────────────────────────────
 
-    /// <summary>Handles a Read/Write Multiple Registers (FC17) request.</summary>
+    /// <summary>Handles a Read/Write Multiple Registers (FC23) request.</summary>
     /// <param name="readAddress">Starting address for the read.</param>
     /// <param name="readCount">Number of registers to read.</param>
     /// <param name="writeAddress">Starting address for the write.</param>
@@ -94,9 +94,9 @@ public abstract class ModbusRequestHandler
         ushort writeAddress, ushort[] writeValues)
         => throw NotSupported();
 
-    // ── FC18 ─────────────────────────────────────────────────────────────
+    // ── FC24 ─────────────────────────────────────────────────────────────
 
-    /// <summary>Handles a Read FIFO Queue (FC18) request.</summary>
+    /// <summary>Handles a Read FIFO Queue (FC24) request.</summary>
     public virtual ushort[] ReadFifoQueue(ushort pointerAddress)
         => throw NotSupported();
 
