@@ -73,11 +73,21 @@ go test ./...
 
 ### Windows
 
-Use a Windows host with Rust, Go, and a cgo-compatible C toolchain (for example
-mingw-w64). The CI workflow builds the native library and copies it into:
+Rust, Go, and a MinGW-w64 toolchain (for cgo) are required. The native library
+**must be built with the `x86_64-pc-windows-gnu` Rust target**, not the default
+MSVC target. The MSVC target emits calls to `__chkstk` (a MSVC CRT symbol) that
+MinGW's `ld.exe` cannot resolve, causing link errors.
+
+```sh
+rustup target add x86_64-pc-windows-gnu
+./mbus-ffi/go/scripts/build_native.sh
+```
+
+The script detects Windows and automatically uses the GNU target, producing
+`libmbus_ffi.a` (GNU-format archive) in:
 
 ```text
-mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.lib
+mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.a
 ```
 
 ## Feature flags
