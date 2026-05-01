@@ -27,6 +27,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mbus_client_async::AsyncTcpClient;
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::DiagnosticSubFunction;
+#[cfg(feature = "file-record")]
+use {
+    heapless::Vec as HVec,
+    mbus_client_async::SubRequest,
+    mbus_core::data_unit::common::MAX_PDU_DATA_LEN,
+};
 
 use crate::dotnet::runtime;
 use crate::dotnet::status::{self, MbusDnStatus};
@@ -806,6 +814,210 @@ pub unsafe extern "C" fn mbus_dn_tcp_client_report_server_id(
             unsafe { *out_count = data.len() as u16 };
             MbusDnStatus::MbusOk
         }
+        Err(e) => status::from_async(e),
+    }
+}
+
+// ── Diagnostics FC08 ─────────────────────────────────────────────────────────
+
+/// Sends a Diagnostics (FC08) request.
+///
+/// `sub_function` is the 16-bit sub-function code (see Modbus spec table).
+/// `data_in` / `data_in_count` form the optional request data words (`null` / `0` for
+/// sub-functions that carry no data such as *Return Query Data* with zero words).
+///
+/// On success writes the echoed sub-function code to `out_sub_function` and the
+/// echoed data words into `out_buf`, then sets `out_count` to the number of words written.
+///
+/// # Safety
+///
+/// `handle`, `out_sub_function`, `out_buf`, and `out_count` must be valid non-null pointers.
+/// If `data_in_count > 0`, `data_in` must point to at least `data_in_count` valid `u16` words.
+#[cfg(feature = "diagnostics")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mbus_dn_tcp_client_diagnostics(
+    handle: *mut MbusDnTcpClient,
+    unit_id: u8,
+    sub_function: u16,
+    data_in: *const u16,
+    data_in_count: u16,
+    out_sub_function: *mut u16,
+    out_buf: *mut u16,
+    out_buf_len: u16,
+    out_count: *mut u16,
+) -> MbusDnStatus {
+    let client = match unsafe { handle.as_ref() } {
+        Some(h) => h.inner.clone(),
+        None => return MbusDnStatus::MbusErrNullPointer,
+    };
+    if out_sub_function.is_null() || out_buf.is_null() || out_count.is_null() {
+        return MbusDnStatus::MbusErrNullPointer;
+    }
+    if data_in_count > 0 && data_in.is_null() {
+        return MbusDnStatus::MbusErrNullPointer;
+    }
+    let sf = match DiagnosticSubFunction::try_from(sub_function) {
+        Ok(s) => s,
+        Err(e) => return status::from_mbus(e),
+    };
+    let words: &[u16] = if data_in_count > 0 {
+        unsafe { slice::from_raw_parts(data_in, data_in_count as usize) }
+    } else {
+        &[]
+    };
+    let rt = runtime::get();
+    match rt.block_on(client.diagnostics(unit_id, sf, words)) {
+        Ok(resp) => {
+            if out_buf_len < resp.data.len() as u16 {
+                return MbusDnStatus::MbusErrBufferTooSmall;
+            }
+            let dst = unsafe { slice::from_raw_parts_mut(out_buf, resp.data.len()) };
+            dst.copy_from_slice(&resp.data);
+            unsafe { *out_sub_function = u16::from(resp.sub_function) };
+            unsafe { *out_count = resp.data.len() as u16 };
+            MbusDnStatus::MbusOk
+        }
+        Err(e) => status::from_async(e),
+    }
+}
+
+// ── File Record FCs ───────────────────────────────────────────────────────────
+
+/// A sub-request descriptor used by [`mbus_dn_tcp_client_read_file_record`] and
+/// [`mbus_dn_tcp_client_write_file_record`].
+///
+/// **Read** sub-requests: set `data` to `null` and `data_len` to `0`; fill
+/// `file_number`, `record_number`, and `record_length` with the target record.
+///
+/// **Write** sub-requests: set `data` to a pointer to `data_len` `u16` words and
+/// ensure `record_length == data_len`.
+#[cfg(feature = "file-record")]
+#[repr(C)]
+pub struct MbusDnSubRequest {
+    /// File number (1–65535).
+    pub file_number: u16,
+    /// Starting record number within the file (0–9999).
+    pub record_number: u16,
+    /// Number of 16-bit registers. For reads: how many to read; for writes: must equal `data_len`.
+    pub record_length: u16,
+    /// Pointer to write data (`null` for reads). Valid for at least `data_len` words.
+    pub data: *const u16,
+    /// Number of valid words pointed to by `data` (0 for reads).
+    pub data_len: u16,
+}
+
+/// Reads one or more file records (FC14).
+///
+/// `sub_reqs` must point to `sub_req_count` [`MbusDnSubRequest`] descriptors in read mode
+/// (i.e. each `data` field is `null` and `data_len` is `0`).
+///
+/// On success the register words for all sub-requests are written contiguously into
+/// `out_buf` (in the order of the sub-requests), and `out_count` is set to the total
+/// number of words written.  The caller is expected to know the `record_length` of each
+/// sub-request so it can split the flat buffer into per-record slices.
+///
+/// # Safety
+///
+/// `handle`, `sub_reqs`, `out_buf`, and `out_count` must be valid non-null pointers.
+/// `sub_reqs` must be valid for `sub_req_count` items.
+#[cfg(feature = "file-record")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mbus_dn_tcp_client_read_file_record(
+    handle: *mut MbusDnTcpClient,
+    unit_id: u8,
+    sub_reqs: *const MbusDnSubRequest,
+    sub_req_count: u16,
+    out_buf: *mut u16,
+    out_buf_len: u16,
+    out_count: *mut u16,
+) -> MbusDnStatus {
+    let client = match unsafe { handle.as_ref() } {
+        Some(h) => h.inner.clone(),
+        None => return MbusDnStatus::MbusErrNullPointer,
+    };
+    if sub_reqs.is_null() || out_buf.is_null() || out_count.is_null() {
+        return MbusDnStatus::MbusErrNullPointer;
+    }
+    let c_slice = unsafe { slice::from_raw_parts(sub_reqs, sub_req_count as usize) };
+    let mut sub_request = SubRequest::new();
+    for sr in c_slice {
+        if let Err(e) =
+            sub_request.add_read_sub_request(sr.file_number, sr.record_number, sr.record_length)
+        {
+            return status::from_mbus(e);
+        }
+    }
+    let rt = runtime::get();
+    match rt.block_on(client.read_file_record(unit_id, &sub_request)) {
+        Ok(results) => {
+            let total: usize = results
+                .iter()
+                .map(|r| r.record_data.as_ref().map_or(0, |d| d.len()))
+                .sum();
+            if out_buf_len < total as u16 {
+                return MbusDnStatus::MbusErrBufferTooSmall;
+            }
+            let dst = unsafe { slice::from_raw_parts_mut(out_buf, total) };
+            let mut pos = 0;
+            for r in &results {
+                if let Some(ref d) = r.record_data {
+                    dst[pos..pos + d.len()].copy_from_slice(d.as_slice());
+                    pos += d.len();
+                }
+            }
+            unsafe { *out_count = total as u16 };
+            MbusDnStatus::MbusOk
+        }
+        Err(e) => status::from_async(e),
+    }
+}
+
+/// Writes one or more file records (FC15).
+///
+/// `sub_reqs` must point to `sub_req_count` [`MbusDnSubRequest`] descriptors in write mode
+/// (i.e. each `data` field points to `data_len` valid `u16` words, and `record_length == data_len`).
+///
+/// Returns `MbusOk` when all records have been written successfully.
+///
+/// # Safety
+///
+/// `handle` and `sub_reqs` must be valid non-null pointers.  `sub_reqs` must be valid for
+/// `sub_req_count` items.  For each item, `data` must be valid for `data_len` words.
+#[cfg(feature = "file-record")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mbus_dn_tcp_client_write_file_record(
+    handle: *mut MbusDnTcpClient,
+    unit_id: u8,
+    sub_reqs: *const MbusDnSubRequest,
+    sub_req_count: u16,
+) -> MbusDnStatus {
+    let client = match unsafe { handle.as_ref() } {
+        Some(h) => h.inner.clone(),
+        None => return MbusDnStatus::MbusErrNullPointer,
+    };
+    if sub_reqs.is_null() {
+        return MbusDnStatus::MbusErrNullPointer;
+    }
+    let c_slice = unsafe { slice::from_raw_parts(sub_reqs, sub_req_count as usize) };
+    let mut sub_request = SubRequest::new();
+    for sr in c_slice {
+        if sr.data.is_null() || sr.data_len == 0 {
+            return MbusDnStatus::MbusErrNullPointer;
+        }
+        let word_slice = unsafe { slice::from_raw_parts(sr.data, sr.data_len as usize) };
+        let mut hvec: HVec<u16, MAX_PDU_DATA_LEN> = HVec::new();
+        if hvec.extend_from_slice(word_slice).is_err() {
+            return MbusDnStatus::MbusErrBufferTooSmall;
+        }
+        if let Err(e) =
+            sub_request.add_write_sub_request(sr.file_number, sr.record_number, sr.record_length, hvec)
+        {
+            return status::from_mbus(e);
+        }
+    }
+    let rt = runtime::get();
+    match rt.block_on(client.write_file_record(unit_id, &sub_request)) {
+        Ok(()) => MbusDnStatus::MbusOk,
         Err(e) => status::from_async(e),
     }
 }
