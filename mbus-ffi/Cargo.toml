@@ -79,6 +79,18 @@ python = [
     "diagnostics",
 ]
 
+## Enables native .NET (C#) P/Invoke bindings for the Modbus client stack.
+## Generates a separate `modbus_rs_dotnet.h` header and exposes async request
+## functions intended to be wrapped by the managed `ModbusRs` C# project under
+## `mbus-ffi/dotnet/`. Build with `--features dotnet,full`.
+dotnet = [
+    "dep:tokio",
+    "dep:mbus-client-async",
+    "coils",
+    "registers",
+    "discrete-inputs",
+]
+
 [dependencies]
 mbus-core = { workspace = true }
 mbus-client = { workspace = true }
@@ -119,3 +131,8 @@ wasm-bindgen-test = "0.3"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+## In-process AsyncTcpServer used by the .NET binding integration test.
+mbus-async = { version = "0.8.0", path = "../mbus-async", features = ["server-tcp", "registers"] }
+anyhow = "1"
