@@ -47,7 +47,7 @@ pub const VTABLE_BUF_WORDS: usize = 128;
 /// # Repr
 ///
 /// The struct uses `#[repr(C)]` so that it has a stable, platform-defined
-/// layout.  Pass it by pointer to [`mbus_dn_tcp_server_new`].
+/// layout.  Pass it by pointer to `mbus_dn_tcp_server_new`.
 #[repr(C)]
 pub struct MbusDnServerVtable {
     /// Caller-supplied opaque context forwarded unchanged to every callback.
