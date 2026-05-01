@@ -16,9 +16,9 @@ import (
 // in-memory device that backs every test below.
 type memDevice struct {
 	tcp.BaseHandler
-	mu       sync.Mutex
-	holding  [256]uint16
-	coils    [256]bool
+	mu      sync.Mutex
+	holding [256]uint16
+	coils   [256]bool
 }
 
 func (d *memDevice) ReadHoldingRegisters(_ context.Context, _ uint8, addr, count uint16) ([]uint16, error) {

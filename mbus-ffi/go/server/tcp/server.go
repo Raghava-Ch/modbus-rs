@@ -88,20 +88,20 @@ type Exception struct {
 	Code modbus.ExceptionCode
 }
 
-func (e *Exception) Error() string         { return "modbus exception: " + e.Code.String() }
-func (e *Exception) ExceptionCode() uint8  { return uint8(e.Code) }
+func (e *Exception) Error() string        { return "modbus exception: " + e.Code.String() }
+func (e *Exception) ExceptionCode() uint8 { return uint8(e.Code) }
 
 // IllegalFunction returns a sentinel error producing exception 0x01.
-func IllegalFunction() error      { return &Exception{modbus.ExIllegalFunction} }
+func IllegalFunction() error { return &Exception{modbus.ExIllegalFunction} }
 
 // IllegalDataAddress returns a sentinel error producing exception 0x02.
-func IllegalDataAddress() error   { return &Exception{modbus.ExIllegalDataAddress} }
+func IllegalDataAddress() error { return &Exception{modbus.ExIllegalDataAddress} }
 
 // IllegalDataValue returns a sentinel error producing exception 0x03.
-func IllegalDataValue() error     { return &Exception{modbus.ExIllegalDataValue} }
+func IllegalDataValue() error { return &Exception{modbus.ExIllegalDataValue} }
 
 // ServerDeviceFailure returns a sentinel error producing exception 0x04.
-func ServerDeviceFailure() error  { return &Exception{modbus.ExServerDeviceFailure} }
+func ServerDeviceFailure() error { return &Exception{modbus.ExServerDeviceFailure} }
 
 // WithException wraps an arbitrary modbus.ExceptionCode.
 func WithException(code modbus.ExceptionCode) error { return &Exception{code} }
@@ -110,7 +110,7 @@ func WithException(code modbus.ExceptionCode) error { return &Exception{code} }
 
 // Server is the Modbus TCP server handle.
 type Server struct {
-	handle  atomic.Uintptr
+	handle  atomic.Pointer[cgo.TcpServer]
 	cbHand  rcgo.Handle
 	closing sync.Mutex
 
@@ -158,7 +158,7 @@ func NewServer(addr string, h Handler, opts ...Option) (*Server, error) {
 		addr:   addr,
 		unitID: cfg.unitID,
 	}
-	s.handle.Store(uintptr(toUintptr(srv)))
+	s.handle.Store(srv)
 	runtime.SetFinalizer(s, func(s *Server) { _ = s.Close() })
 	return s, nil
 }
@@ -170,7 +170,7 @@ func NewServer(addr string, h Handler, opts ...Option) (*Server, error) {
 // second and later calls (they just block on ctx).
 func (s *Server) Serve(ctx context.Context) error {
 	s.startedOnce.Do(func() {
-		h := fromUintptr(s.handle.Load())
+		h := s.handle.Load()
 		if h == nil {
 			s.startErr = modbus.ErrClosed
 			return
@@ -196,13 +196,12 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) Close() error {
 	s.closing.Lock()
 	defer s.closing.Unlock()
-	old := s.handle.Swap(0)
-	if old == 0 {
+	old := s.handle.Swap(nil)
+	if old == nil {
 		return nil
 	}
-	h := fromUintptr(old)
-	cgo.TcpServerStop(h)
-	cgo.TcpServerFree(h, s.cbHand)
+	cgo.TcpServerStop(old)
+	cgo.TcpServerFree(old, s.cbHand)
 	s.cbHand = 0
 	runtime.SetFinalizer(s, nil)
 	return nil
