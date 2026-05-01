@@ -210,7 +210,7 @@ pub unsafe extern "C" fn mbus_dn_tcp_gateway_start(
 
     std::thread::spawn(move || {
         let rt = runtime::get();
-        let _ = rt.block_on(async move {
+        rt.block_on(async move {
             let mut ds = Vec::with_capacity(downstreams.len());
             for (host, port) in &downstreams {
                 match TokioTcpTransport::connect((host.as_str(), *port)).await {
