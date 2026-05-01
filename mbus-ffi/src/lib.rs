@@ -67,3 +67,7 @@ pub mod c;
 #[cfg(feature = "python")]
 #[allow(missing_docs)]
 pub mod python;
+
+#[cfg(all(feature = "dotnet", not(target_arch = "wasm32")))]
+#[allow(missing_docs)]
+pub mod dotnet;
