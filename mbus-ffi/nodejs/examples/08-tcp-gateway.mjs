@@ -1,11 +1,13 @@
 /**
- * Gateway Example
- * 
- * Demonstrates running a Modbus TCP gateway that routes requests
- * to different downstream servers based on unit ID.
+ * Example 08 — TCP gateway: route by unit ID
+ *
+ * Listens on :5502 and forwards Modbus requests to one of several
+ * downstream Modbus TCP servers based on the request's unit ID.
+ *
+ * Run:    node examples/08-tcp-gateway.mjs
  */
 
-const { AsyncTcpGateway } = require('modbus-rs');
+import { AsyncTcpGateway } from 'modbus-rs';
 
 async function main() {
   // Create and bind the gateway

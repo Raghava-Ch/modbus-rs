@@ -1,10 +1,16 @@
 /**
- * TCP Server Example
- * 
- * Demonstrates running a Modbus TCP server with request handlers.
+ * Example 06 — TCP server: basic in-memory store
+ *
+ * Spawns an in-process Modbus TCP server on port 5502 backed by a
+ * simple JavaScript object that stores coils and registers in memory.
+ * Run any of the client examples (01-05) against it.
+ *
+ * Run:    node examples/06-tcp-server-basic.mjs
+ *         (then in another terminal:)
+ *         node examples/01-tcp-client-read-holding.mjs
  */
 
-const { AsyncTcpModbusServer } = require('modbus-rs');
+import { AsyncTcpModbusServer } from 'modbus-rs';
 
 // Simulated memory areas
 const coils = new Array(1000).fill(false);

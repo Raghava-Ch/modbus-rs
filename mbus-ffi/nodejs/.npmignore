@@ -1,0 +1,18 @@
+# Sources & build artifacts that are not part of the published package.
+target/
+node_modules/
+__test__/
+examples/
+scripts/
+tsconfig.json
+.gitignore
+.npmignore
+
+# Platform stub READMEs are part of the per-triple sub-packages, not the umbrella package.
+npm/
+
+# Rust source — the consumer doesn't need it.
+*.rs
+Cargo.toml
+Cargo.lock
+build.rs

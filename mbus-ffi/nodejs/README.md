@@ -204,14 +204,36 @@ try {
 }
 ```
 
-## Supported Platforms
+## Status & known limitations (v0.8)
 
-Pre-built binaries are available for:
+The Node.js bindings are an **early release**. The following work is planned
+for v0.9 and beyond:
 
-- Linux (x64, arm64, armv7)
-- macOS (x64, arm64)
-- Windows (x64, ia32, arm64)
+* **Server JS handler dispatch** — `AsyncTcpModbusServer.bind()` accepts a
+  handlers object today, but only the lifecycle (`bind` / `shutdown`) and
+  write-request echo are wired up. JS handler callbacks for read requests
+  are not yet invoked; the server returns `IllegalFunction` for reads. The
+  client API is fully functional — use it against any third-party Modbus
+  server today.
+* **`AsyncSerialModbusServer`** — not yet exposed in the JS API. Use the
+  Rust `mbus-async` crate directly for serial servers.
+* **`AbortSignal`** support on per-request methods. Use `timeoutMs` at
+  connect time as a workaround.
+* A separate **browser/WASM npm package** built on the existing `wasm`
+  feature.
+
+## Supported platforms
+
+Pre-built binaries are published for:
+
+- Linux x64 (glibc), Linux arm64 (glibc)
+- macOS x64, macOS arm64
+- Windows x64 (MSVC)
+
+Other targets can be built locally via `cargo build -p mbus-ffi --features nodejs,full`
+followed by `npm run build`.
 
 ## License
 
-MIT
+GPL-3.0-only — see [LICENSE](./LICENSE). A commercial license is available
+for proprietary use; contact ch.raghava44@gmail.com.

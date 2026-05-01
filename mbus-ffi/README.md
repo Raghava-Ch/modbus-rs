@@ -1,6 +1,6 @@
 # mbus-ffi
 
-WASM/JS, Native C/C++ FFI, **Python**, and **.NET (C#)** bindings for the `modbus-rs` stack.
+WASM/JS, Native C/C++ FFI, **Python**, **.NET (C#)**, **Go**, and **Node.js** bindings for the `modbus-rs` stack.
 
 ---
 
@@ -453,6 +453,48 @@ await client.DisconnectAsync();
 ```
 
 📖 **[Full .NET Binding Documentation →](../documentation/dotnet_bindings.md)**
+
+---
+
+## Node.js Bindings (`modbus-rs` on npm)
+
+The `nodejs` feature compiles `mbus-ffi` into a Node.js native addon via
+[napi-rs](https://napi.rs/), exposing an idiomatic Promise-based JavaScript
+and TypeScript API. The package source lives in
+[`mbus-ffi/nodejs/`](nodejs/).
+
+```bash
+# Build the native addon with all Modbus features
+cargo build -p mbus-ffi --features nodejs,full
+
+# Then build the npm package
+cd mbus-ffi/nodejs
+npm install
+npm run build
+```
+
+Minimum supported Node.js version: **20 LTS**. Prebuilt binaries are
+published per-platform via the `optionalDependencies` mechanism so end
+users do not need a Rust toolchain.
+
+### Quick start (JavaScript)
+
+```js
+import { AsyncTcpModbusClient } from 'modbus-rs';
+
+const client = await AsyncTcpModbusClient.connect({
+  host: '192.168.1.10',
+  port: 502,
+  unitId: 1,
+  timeoutMs: 2000,
+});
+
+const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
+await client.writeMultipleRegisters({ address: 10, values: [1, 2, 3, 4] });
+await client.close();
+```
+
+📖 **[Full Node.js Binding Documentation →](../documentation/nodejs_bindings.md)**
 
 ---
 
