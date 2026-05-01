@@ -57,19 +57,33 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: mbus-ffi/go/go.sum
 
+      # serialport requires libudev on Linux; install before cargo build.
+      - name: Install libudev (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Build native bindings (Linux/macOS)
         if: runner.os != 'Windows'
         run: ./mbus-ffi/go/scripts/build_native.sh
         shell: bash
+
+      # Build with the GNU (MinGW) target so the static archive is compatible
+      # with the MinGW gcc/ld that cgo uses on Windows.  Building with the
+      # default MSVC target produces COFF objects that reference __chkstk (a
+      # MSVC CRT symbol), which MinGW's ld cannot resolve.
+      - name: Add MinGW Rust target (Windows)
+        if: runner.os == 'Windows'
+        run: rustup target add x86_64-pc-windows-gnu
 
       - name: Build native bindings (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --release -p mbus-ffi --features go,full
+          cargo build --release -p mbus-ffi --features go,full --target x86_64-pc-windows-gnu
           mkdir -p mbus-ffi/go/internal/cgo/lib/windows_amd64
-          cp target/release/mbus_ffi.lib  mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.lib
+          cp target/x86_64-pc-windows-gnu/release/libmbus_ffi.a \
+             mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.a
           cp target/mbus-ffi/include/modbus_rs_go.h mbus-ffi/go/internal/cgo/include/
 
       - name: gofmt
