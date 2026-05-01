@@ -1,0 +1,17 @@
+# ── x86_64-pc-windows-gnu target (Go cgo-compatible static library) ──────────
+#
+# The Go cgo toolchain uses MinGW-w64 gcc/ld on Windows.  To produce a static
+# archive (libmbus_ffi.a) whose object files are MinGW-ABI-compatible (no MSVC
+# __chkstk references), mbus-ffi is built with --target x86_64-pc-windows-gnu.
+#
+# mbus-ffi has crate-type = ["cdylib", "rlib", "staticlib"], so Cargo also
+# tries to link a .dll (cdylib) when building for this target.  The DLL link
+# requires GCC's own runtime support library (libgcc_s_seh-1.dll on Windows),
+# which is installed alongside gcc.exe but is not always on the linker's
+# dynamic-library search path on CI runners.
+#
+# -static-libgcc tells gcc to pull that runtime from the static archive
+# (libgcc.a) instead of the DLL, so the link succeeds without needing the DLL
+# to be resolvable.
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-static-libgcc"]

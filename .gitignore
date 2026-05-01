@@ -40,7 +40,8 @@ temp
 .wasm-pack-cache
 mbus-ffi/pkg
 mbus-ffi/include
-.cargo
+.cargo/*
+!.cargo/config.toml
 
 # Python local env/artifacts (generated, never commit)
 .venv/

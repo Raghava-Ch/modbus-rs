@@ -214,6 +214,8 @@ static STEPS: &[Step] = &[
         &["-p", "mbus-ffi", "--no-default-features", "--features", "c,c-server,server-traffic,full"]),
     Step::check("ffi / c+c-gateway+full",
         &["-p", "mbus-ffi", "--no-default-features", "--features", "c,c-gateway,full"]),
+    Step::check("ffi / go+full",
+        &["-p", "mbus-ffi", "--no-default-features", "--features", "go,full"]),
 ];
 
 // ─── Runner ───────────────────────────────────────────────────────────────────

@@ -134,3 +134,18 @@ This runs: `check-header` → `check-server-gen` → `build-c-demo c_client_demo
   (`mbus-codegen` is `publish = false` — skip it)
 - Attach release notes summarising breaking changes, migration steps, and validation status.
 
+### Go module tag
+
+The Go bindings live at `mbus-ffi/go/` and are published as a sub-module:
+`github.com/Raghava-Ch/modbus-rs/mbus-ffi/go`. Tag it alongside the workspace
+release using the path-prefixed scheme that Go modules require:
+
+```sh
+git tag mbus-ffi/go/v<version>
+git push origin mbus-ffi/go/v<version>
+```
+
+This makes `go get github.com/Raghava-Ch/modbus-rs/mbus-ffi/go@v<version>`
+resolve to that commit.
+
+
