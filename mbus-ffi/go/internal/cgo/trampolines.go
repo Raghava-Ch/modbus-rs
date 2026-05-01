@@ -5,9 +5,18 @@ package cgo
 /*
 #include <stdint.h>
 #include <string.h>
+
+// ctxToHandle launders the void* ctx supplied by the native server
+// (which is actually a uintptr-packed runtime/cgo.Handle) back into a
+// uintptr_t, so the Go side never has to perform a forbidden
+// unsafe.Pointer→uintptr conversion that would trip `go vet`.
+static uintptr_t mbus_go_ctx_to_handle(void *ctx) {
+    return (uintptr_t)ctx;
+}
 */
 import "C"
 import (
+	"runtime/cgo"
 	"unsafe"
 )
 
@@ -15,10 +24,10 @@ import (
 // trampoline to instruct the native server to send back a protocol
 // exception rather than a successful response.
 const (
-	exIllegalFunction      = 0x01
-	exIllegalDataAddress   = 0x02
-	exIllegalDataValue     = 0x03
-	exServerDeviceFailure  = 0x04
+	exIllegalFunction     = 0x01
+	exIllegalDataAddress  = 0x02
+	exIllegalDataValue    = 0x03
+	exServerDeviceFailure = 0x04
 )
 
 // recoverCallbacks fetches the Go-side ServerCallbacks instance from
@@ -28,7 +37,7 @@ func recoverCallbacks(ctx unsafe.Pointer) ServerCallbacks {
 	if ctx == nil {
 		return nil
 	}
-	h := voidPtrToHandle(ctx)
+	h := cgo.Handle(C.mbus_go_ctx_to_handle(ctx))
 	v := h.Value()
 	cb, _ := v.(ServerCallbacks)
 	return cb

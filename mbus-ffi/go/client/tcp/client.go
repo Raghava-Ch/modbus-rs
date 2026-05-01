@@ -30,10 +30,10 @@ import (
 // Use [Client.Close] (or rely on the runtime finalizer) to release
 // native resources.
 type Client struct {
-	// handle owns the native pointer. Stored as a uintptr behind atomic
-	// access so [Client.Close] can be called concurrently with in-flight
-	// requests.
-	handle  atomic.Uintptr
+	// handle owns the native pointer. atomic.Pointer guarantees that
+	// concurrent Close()/request paths observe a consistent value
+	// without resorting to uintptr round-tripping.
+	handle  atomic.Pointer[cgo.TcpClient]
 	closing sync.RWMutex
 	unitID  uint8
 	timeout time.Duration
@@ -67,7 +67,7 @@ func NewClient(host string, port uint16, opts ...Option) (*Client, error) {
 		return nil, modbus.FromStatus("NewClient", modbus.StatusInvalidConfiguration)
 	}
 	c := &Client{unitID: cfg.unitID, timeout: cfg.timeout}
-	c.handle.Store(uintptr(toUintptr(h)))
+	c.handle.Store(h)
 	if cfg.timeout > 0 {
 		_ = cgo.TcpClientSetRequestTimeoutMs(h, uint64(cfg.timeout/time.Millisecond))
 	}
@@ -81,11 +81,11 @@ func NewClient(host string, port uint16, opts ...Option) (*Client, error) {
 func (c *Client) Close() error {
 	c.closing.Lock()
 	defer c.closing.Unlock()
-	old := c.handle.Swap(0)
-	if old == 0 {
+	old := c.handle.Swap(nil)
+	if old == nil {
 		return nil
 	}
-	cgo.TcpClientFree(fromUintptr(old))
+	cgo.TcpClientFree(old)
 	runtime.SetFinalizer(c, nil)
 	return nil
 }
@@ -109,7 +109,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 func (c *Client) HasPendingRequests() bool {
 	c.closing.RLock()
 	defer c.closing.RUnlock()
-	h := fromUintptr(c.handle.Load())
+	h := c.handle.Load()
 	if h == nil {
 		return false
 	}
@@ -223,7 +223,7 @@ func (c *Client) WriteMultipleCoils(ctx context.Context, unit uint8, addr uint16
 func (c *Client) do(ctx context.Context, op string, f func(*cgo.TcpClient) modbus.Status) error {
 	c.closing.RLock()
 	defer c.closing.RUnlock()
-	h := fromUintptr(c.handle.Load())
+	h := c.handle.Load()
 	if h == nil {
 		return &modbus.Error{Op: op, Status: modbus.StatusNullPointer, Cause: modbus.ErrClosed}
 	}
