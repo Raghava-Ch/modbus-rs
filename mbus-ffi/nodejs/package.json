@@ -5,12 +5,13 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "test": "node --test test/",
+    "build": "napi build --platform --release --features nodejs,full --js index.js --dts index.d.ts --cargo-cwd ..",
+    "build:debug": "napi build --platform --features nodejs,full --js index.js --dts index.d.ts --cargo-cwd ..",
+    "test": "node --test __test__/",
     "prepublishOnly": "napi prepublish -t npm",
     "artifacts": "napi artifacts",
-    "universal": "napi universal"
+    "universal": "napi universal",
+    "version": "napi version"
   },
   "repository": {
     "type": "git",
@@ -29,13 +30,13 @@
     "rust"
   ],
   "author": "Raghava-Ch",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "bugs": {
     "url": "https://github.com/Raghava-Ch/modbus-rs/issues"
   },
   "homepage": "https://github.com/Raghava-Ch/modbus-rs#readme",
   "engines": {
-    "node": ">= 18"
+    "node": ">=20"
   },
   "napi": {
     "name": "modbus-rs",
@@ -51,12 +52,16 @@
     }
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4"
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
   },
   "files": [
     "index.js",
     "index.d.ts",
-    "*.node"
+    "*.node",
+    "README.md",
+    "LICENSE"
   ],
   "optionalDependencies": {}
 }

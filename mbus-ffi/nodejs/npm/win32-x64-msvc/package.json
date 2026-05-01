@@ -1,0 +1,14 @@
+{
+  "name": "modbus-rs-win32-x64-msvc",
+  "version": "0.8.0",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "main": "modbus-rs.win32-x64-msvc.node",
+  "files": ["modbus-rs.win32-x64-msvc.node"],
+  "license": "GPL-3.0-only",
+  "engines": { "node": ">=20" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
+  }
+}

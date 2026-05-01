@@ -1,0 +1,15 @@
+{
+  "name": "modbus-rs-linux-x64-gnu",
+  "version": "0.8.0",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "main": "modbus-rs.linux-x64-gnu.node",
+  "files": ["modbus-rs.linux-x64-gnu.node"],
+  "license": "GPL-3.0-only",
+  "engines": { "node": ">=20" },
+  "libc": ["glibc"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
+  }
+}

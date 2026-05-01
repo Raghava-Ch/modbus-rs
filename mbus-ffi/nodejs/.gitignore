@@ -1,0 +1,23 @@
+# Build output
+*.node
+target/
+node_modules/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Per-platform stub package READMEs are committed; their .node binaries are not.
+npm/*/*.node
+
+# NOTE: index.js and index.d.ts are intentionally COMMITTED so the package
+# is consumable directly from the git repo without first running `napi build`.
+# Do not add them to this file.

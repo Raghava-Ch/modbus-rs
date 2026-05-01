@@ -1,0 +1,14 @@
+{
+  "name": "modbus-rs-darwin-x64",
+  "version": "0.8.0",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "main": "modbus-rs.darwin-x64.node",
+  "files": ["modbus-rs.darwin-x64.node"],
+  "license": "GPL-3.0-only",
+  "engines": { "node": ">=20" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
+  }
+}

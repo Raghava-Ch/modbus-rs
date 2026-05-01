@@ -1,10 +1,15 @@
 /**
- * TCP Client Example
- * 
- * Demonstrates connecting to a Modbus TCP server and reading registers.
+ * Example 01 — TCP client: read holding registers (FC03)
+ *
+ * Connects to a Modbus TCP server and demonstrates the most common read
+ * operations.  Run an example server first (see `06-tcp-server-basic.mjs`)
+ * or point it at any real Modbus TCP device / simulator (e.g. ModbusPal,
+ * diagslave -m tcp).
+ *
+ * Run:    node examples/01-tcp-client-read-holding.mjs
  */
 
-const { AsyncTcpModbusClient } = require('modbus-rs');
+import { AsyncTcpModbusClient } from 'modbus-rs';
 
 async function main() {
   // Connect to a Modbus TCP server
