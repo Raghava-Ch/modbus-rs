@@ -1,0 +1,19 @@
+# Native libraries are produced by `scripts/build_native.sh` (or by your
+# CI release pipeline) and copied into per-platform sub-directories
+# below. They are NOT checked in to keep the repository small.
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+
+# Per-platform sub-directories are populated by the build script.
+linux_amd64/
+linux_arm64/
+darwin_amd64/
+darwin_arm64/
+windows_amd64/
+
+# Keep this README in place to document the layout.
+!README.md

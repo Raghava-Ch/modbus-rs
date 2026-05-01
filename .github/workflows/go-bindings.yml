@@ -1,0 +1,128 @@
+name: Go bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/python/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/go-bindings.yml'
+  pull_request:
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/python/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/go-bindings.yml'
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: go-bindings-${{ matrix.os }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: mbus-ffi/go/go.sum
+
+      # serialport requires libudev on Linux; install before cargo build.
+      - name: Install libudev (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev
+
+      - name: Build native bindings (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ./mbus-ffi/go/scripts/build_native.sh
+        shell: bash
+
+      # Build with the GNU (MinGW) target so the static archive is compatible
+      # with the MinGW gcc/ld that cgo uses on Windows.  Building with the
+      # default MSVC target produces COFF objects that reference __chkstk (a
+      # MSVC CRT symbol), which MinGW's ld cannot resolve.
+      - name: Add MinGW Rust target (Windows)
+        if: runner.os == 'Windows'
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - name: Build native bindings (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use --crate-type staticlib to skip the cdylib (.dll) link phase.
+          # MinGW 15+ removed the libc.a stub that older toolchains provided,
+          # so the cdylib link fails with "cannot find -lc".  A staticlib is a
+          # plain object-file archive with no linking step, which sidesteps the
+          # issue.  Go cgo only needs the staticlib anyway.
+          cargo rustc --release -p mbus-ffi --features go,full \
+            --target x86_64-pc-windows-gnu --crate-type staticlib
+          mkdir -p mbus-ffi/go/internal/cgo/lib/windows_amd64
+          cp target/x86_64-pc-windows-gnu/release/libmbus_ffi.a \
+             mbus-ffi/go/internal/cgo/lib/windows_amd64/libmbus_ffi.a
+          cp target/mbus-ffi/include/modbus_rs_go.h mbus-ffi/go/internal/cgo/include/
+
+      - name: gofmt
+        if: runner.os != 'Windows'
+        working-directory: mbus-ffi/go
+        run: |
+          out="$(gofmt -d .)"
+          if [ -n "$out" ]; then
+            echo "$out"
+            echo "::error::gofmt found unformatted files"
+            exit 1
+          fi
+
+      - name: go vet
+        working-directory: mbus-ffi/go
+        run: go vet ./...
+
+      - name: go build
+        working-directory: mbus-ffi/go
+        run: go build ./...
+
+      - name: go test
+        working-directory: mbus-ffi/go
+        run: go test -count=1 ./...
+
+      - name: go test -race
+        # The race detector is not supported on every Windows toolchain;
+        # skip there and rely on the Linux/macOS legs.
+        if: runner.os != 'Windows'
+        working-directory: mbus-ffi/go
+        run: go test -race -count=1 ./...
+
+      - name: Integration test (against dotnet_test_server example)
+        if: runner.os != 'Windows'
+        working-directory: mbus-ffi/go
+        run: go test -tags integration -count=1 ./client/tcp/...

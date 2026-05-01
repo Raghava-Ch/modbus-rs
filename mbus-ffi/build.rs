@@ -167,11 +167,12 @@ fn main() {
 
     // ── cbindgen ──────────────────────────────────────────────────────────────
 
-    // Only run cbindgen when the `c`, `c-server`, `c-gateway`, or `dotnet` feature is enabled.
+    // Only run cbindgen when the `c`, `c-server`, `c-gateway`, `dotnet`, or `go` feature is enabled.
     if std::env::var("CARGO_FEATURE_C").is_err()
         && std::env::var("CARGO_FEATURE_C_SERVER").is_err()
         && std::env::var("CARGO_FEATURE_C_GATEWAY").is_err()
         && std::env::var("CARGO_FEATURE_DOTNET").is_err()
+        && std::env::var("CARGO_FEATURE_GO").is_err()
     {
         return;
     }
@@ -191,6 +192,7 @@ fn main() {
     println!("cargo::rerun-if-changed=cbindgen_server.toml");
     println!("cargo::rerun-if-changed=cbindgen_gateway.toml");
     println!("cargo::rerun-if-changed=cbindgen_dotnet.toml");
+    println!("cargo::rerun-if-changed=cbindgen_go.toml");
     println!("cargo::rerun-if-changed=src");
     std::fs::create_dir_all(&include_dir).expect("failed to create target include directory");
 
@@ -330,4 +332,193 @@ fn main() {
             .expect("cbindgen failed to generate .NET C header")
             .write_to_file(output_file);
     }
+
+    if std::env::var("CARGO_FEATURE_GO").is_ok() {
+        let output_file = include_dir.join("modbus_rs_go.h");
+        let config_path = format!("{crate_dir}/cbindgen_go.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "go", "MBUS_FEATURE_GO")
+            .with_define("feature", "coils", "MBUS_FEATURE_COILS")
+            .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
+            .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
+            .with_define("feature", "fifo", "MBUS_FEATURE_FIFO")
+            .with_define("feature", "file-record", "MBUS_FEATURE_FILE_RECORD")
+            .with_define("feature", "diagnostics", "MBUS_FEATURE_DIAGNOSTICS")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate Go C header")
+            .write_to_file(&output_file);
+
+        // ── Post-process: strip leaked sibling-binding declarations ──────
+        //
+        // cbindgen does not fully honour module-level `#[cfg(feature)]`
+        // gates and ends up emitting C/dotnet function declarations
+        // (e.g. `mbus_coils_value`, `mbus_dn_serial_client_*`) into the
+        // Go header. cgo must compile the entire header, so any decl
+        // that references a type we do not forward-declare causes a
+        // build failure. Drop every `mbus_*` declaration whose name is
+        // NOT in the Go ABI surface (i.e. `mbus_go_*`).
+        prune_go_header(&output_file);
+
+        // Mirror the freshly-generated header into the Go module so
+        // `go build` can find it without the user having to run a
+        // separate copy step.  This keeps the vendored header in
+        // `mbus-ffi/go/internal/cgo/include/` in sync with the Rust FFI
+        // surface on every Cargo build.
+        let go_include_dir = std::path::Path::new(&crate_dir)
+            .join("go")
+            .join("internal")
+            .join("cgo")
+            .join("include");
+        if go_include_dir.exists() {
+            let dst = go_include_dir.join("modbus_rs_go.h");
+            if let Err(e) = std::fs::copy(&output_file, &dst) {
+                println!(
+                    "cargo::warning=failed to copy modbus_rs_go.h into Go module ({}): {e}",
+                    dst.display()
+                );
+            }
+        }
+    }
+}
+
+/// Strip every top-level declaration from the generated Go header that
+/// is not part of the `mbus_go_*` ABI surface.
+///
+/// We do this because cbindgen can leak declarations from sibling
+/// FFI modules (the C, .NET and WASM bindings) even when their cfg
+/// gates are disabled. Those declarations reference types we do not
+/// forward-declare, which would break the cgo compile.
+///
+/// The implementation walks the file as a stream of top-level
+/// declarations (semicolon-terminated function prototypes and
+/// `#define` lines). Block declarations like `typedef struct { … }`
+/// and `typedef enum { … }` are preserved unconditionally because they
+/// are needed for the structs / enums we DO export.
+fn prune_go_header(path: &std::path::Path) {
+    let original = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("cargo::warning=cannot read {} for pruning: {e}", path.display());
+            return;
+        }
+    };
+
+    let mut output = String::with_capacity(original.len());
+    let mut buf = String::new();
+    let mut in_brace_block: i32 = 0;
+
+    for line in original.lines() {
+        // Track curly-brace nesting so we never split a typedef struct/enum
+        // body across the prune logic.
+        let opens = line.matches('{').count() as i32;
+        let closes = line.matches('}').count() as i32;
+
+        if in_brace_block > 0 {
+            // Inside a struct/enum body – pass through verbatim.
+            output.push_str(line);
+            output.push('\n');
+            in_brace_block += opens - closes;
+            continue;
+        }
+
+        // Buffer lines until we see a terminating ';' at brace-depth 0.
+        if !buf.is_empty() {
+            buf.push('\n');
+        }
+        buf.push_str(line);
+
+        let net_open = opens - closes;
+        if net_open > 0 {
+            // Entering a brace block – flush whatever we've buffered so
+            // far (preamble lines like `/** ... */` should be kept) and
+            // pass-through until the matching close brace.
+            output.push_str(&buf);
+            output.push('\n');
+            buf.clear();
+            in_brace_block += net_open;
+            continue;
+        }
+
+        // Decision point: a buffered declaration ends at `;`.
+        if line.contains(';') && !buf.contains('{') {
+            if should_keep(&buf) {
+                output.push_str(&buf);
+                output.push('\n');
+            }
+            buf.clear();
+        }
+    }
+
+    // Trailing un-flushed content (preprocessor directives, blank lines).
+    if !buf.is_empty() {
+        output.push_str(&buf);
+        output.push('\n');
+    }
+
+    if let Err(e) = std::fs::write(path, output) {
+        println!("cargo::warning=cannot write pruned {}: {e}", path.display());
+    }
+}
+
+fn should_keep(decl: &str) -> bool {
+    // Strip C-style comments before scanning so words inside doc
+    // comments don't accidentally match the `mbus_` filter.
+    let mut code = String::with_capacity(decl.len());
+    let bytes = decl.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            // Skip until '*/'.
+            let mut j = i + 2;
+            while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+                j += 1;
+            }
+            i = (j + 2).min(bytes.len());
+            continue;
+        }
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'/' {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        code.push(bytes[i] as char);
+        i += 1;
+    }
+
+    let trimmed = code.trim();
+    if trimmed.is_empty() {
+        return true; // blank lines & pure-comment blocks always retained
+    }
+
+    // Preprocessor directives are always kept.
+    if trimmed.starts_with('#') {
+        return true;
+    }
+
+    // Look for any `mbus_` identifier in the (comment-free) declaration;
+    // if present, keep only when it starts with `mbus_go_`.
+    let mut mbus_kept = false;
+    let mut mbus_seen = false;
+    for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+        if tok.starts_with("mbus_") {
+            mbus_seen = true;
+            if tok.starts_with("mbus_go_") {
+                mbus_kept = true;
+            }
+        }
+    }
+    if mbus_seen {
+        return mbus_kept;
+    }
+
+    // No `mbus_` identifier: it is one of the data-model accessors
+    // (e.g. structs/typedefs) — leave it alone.
+    true
 }
