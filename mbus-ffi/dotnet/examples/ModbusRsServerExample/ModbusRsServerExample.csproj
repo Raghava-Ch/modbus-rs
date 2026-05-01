@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ModbusRsServerExample</AssemblyName>
+    <RootNamespace>ModbusRsServerExample</RootNamespace>
+
+    <!--
+      The native library (mbus_ffi.dll / libmbus_ffi.so / libmbus_ffi.dylib)
+      must be placed next to this executable at runtime.
+
+      Build it from the repository root:
+        cargo build -p mbus-ffi  [with features: dotnet,full]  [release mode]
+
+      Then copy the artefact from target/release/ into the output directory.
+    -->
+    <Description>
+      Example Modbus TCP server application using the ModbusRs .NET bindings.
+      Demonstrates a concrete ModbusRequestHandler serving holding registers,
+      coils, discrete inputs, input registers, FIFO, diagnostics, and file
+      records.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ModbusRs\ModbusRs.csproj" />
+  </ItemGroup>
+
+</Project>

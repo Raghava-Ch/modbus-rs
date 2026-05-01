@@ -139,6 +139,29 @@ internal static partial class NativeMethods
     internal static unsafe partial ModbusStatus mbus_dn_tcp_client_report_server_id(
         IntPtr handle, byte unitId, byte* outBuf, ushort outBufLen, ushort* outCount);
 
+    // ── TCP client — FC08 (diagnostics) ──────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_tcp_client_diagnostics")]
+    internal static unsafe partial ModbusStatus mbus_dn_tcp_client_diagnostics(
+        IntPtr handle, byte unitId,
+        ushort subFunction,
+        ushort* dataIn, ushort dataInCount,
+        ushort* outSubFunction,
+        ushort* outBuf, ushort outBufLen, ushort* outCount);
+
+    // ── TCP client — FC14/FC15 (file record) ──────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_tcp_client_read_file_record")]
+    internal static unsafe partial ModbusStatus mbus_dn_tcp_client_read_file_record(
+        IntPtr handle, byte unitId,
+        MbusDnSubRequest* subReqs, ushort subReqCount,
+        ushort* outBuf, ushort outBufLen, ushort* outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_tcp_client_write_file_record")]
+    internal static unsafe partial ModbusStatus mbus_dn_tcp_client_write_file_record(
+        IntPtr handle, byte unitId,
+        MbusDnSubRequest* subReqs, ushort subReqCount);
+
     // ── Serial client — lifecycle ─────────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "mbus_dn_serial_client_new_rtu",
@@ -255,6 +278,29 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mbus_dn_serial_client_report_server_id")]
     internal static unsafe partial ModbusStatus mbus_dn_serial_client_report_server_id(
         IntPtr handle, byte unitId, byte* outBuf, ushort outBufLen, ushort* outCount);
+
+    // ── Serial client — FC08 (diagnostics) ───────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_serial_client_diagnostics")]
+    internal static unsafe partial ModbusStatus mbus_dn_serial_client_diagnostics(
+        IntPtr handle, byte unitId,
+        ushort subFunction,
+        ushort* dataIn, ushort dataInCount,
+        ushort* outSubFunction,
+        ushort* outBuf, ushort outBufLen, ushort* outCount);
+
+    // ── Serial client — FC14/FC15 (file record) ───────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_serial_client_read_file_record")]
+    internal static unsafe partial ModbusStatus mbus_dn_serial_client_read_file_record(
+        IntPtr handle, byte unitId,
+        MbusDnSubRequest* subReqs, ushort subReqCount,
+        ushort* outBuf, ushort outBufLen, ushort* outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "mbus_dn_serial_client_write_file_record")]
+    internal static unsafe partial ModbusStatus mbus_dn_serial_client_write_file_record(
+        IntPtr handle, byte unitId,
+        MbusDnSubRequest* subReqs, ushort subReqCount);
 
     // ── Server — lifecycle ────────────────────────────────────────────────
 
