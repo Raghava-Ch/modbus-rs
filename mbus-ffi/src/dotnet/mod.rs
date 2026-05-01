@@ -17,11 +17,9 @@
 //! * **Shared Tokio runtime** — a single multi-threaded runtime is created
 //!   on first use and reused by every handle, so we never spawn redundant
 //!   OS threads.  Mirrors the python helper [`crate::python::client`].
-//! * **Blocking call shape (Phase 1)** — every `mbus_dn_*` request function
-//!   blocks the calling thread on `runtime.block_on(async { … })`.  The C#
-//!   wrapper hides this inside `Task.Run` so callers still `await` a
-//!   `Task<T>`.  A future revision can swap the implementation to a true
-//!   completion-callback model without changing the managed surface.
+//! * **Blocking call shape** — every `mbus_dn_*` request function blocks the
+//!   calling thread on `runtime.block_on(async { … })`.  The C# wrapper
+//!   hides this inside `Task.Run` so callers still `await` a `Task<T>`.
 //!
 //! ## Module layout
 //!
@@ -30,9 +28,13 @@
 //! | [`runtime`] | Lazy module-wide [`tokio::runtime::Runtime`]. |
 //! | [`status`]  | Status code + helpers shared by every entry point. |
 //! | [`client`]  | Public client constructors / request methods. |
+//! | [`server`]  | TCP server with vtable-based request dispatch. |
+//! | [`gateway`] | TCP-to-TCP gateway forwarding. |
 
 pub mod client;
+pub mod gateway;
 pub mod runtime;
+pub mod server;
 pub mod status;
 
 pub use status::{MbusDnStatus, mbus_dn_status_str};

@@ -6,231 +6,112 @@ using ModbusRs.Native;
 namespace ModbusRs;
 
 /// <summary>
-/// Asynchronous Modbus TCP client backed by the native <c>mbus_ffi</c>
-/// cdylib. Each request method returns a <see cref="Task{TResult}"/>
-/// which completes when the underlying Tokio runtime finishes the
-/// request.
+/// Parity option for serial port configuration.
+/// </summary>
+public enum SerialParity : byte
+{
+    None = 0,
+    Even = 1,
+    Odd = 2,
+}
+
+/// <summary>
+/// Asynchronous Modbus serial client backed by the native <c>mbus_ffi</c>
+/// cdylib. Supports both RTU and ASCII framing.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Threading.</b> All native request entry points block the calling
-/// thread on the shared Tokio runtime. To preserve the <c>Task</c>-based
-/// async surface this wrapper offloads them to the .NET thread pool via
-/// <see cref="Task.Run(Action)"/>. A future native upgrade can swap in a
-/// completion-callback implementation without changing this surface.
+/// Call <see cref="ConnectAsync"/> before issuing requests. The underlying
+/// serial port is opened/closed by the native runtime.
 /// </para>
 /// <para>
-/// <b>Lifetime.</b> The instance owns a <see cref="SafeHandle"/> and
-/// implements <see cref="IDisposable"/>. <see cref="Dispose"/> tears down
-/// the underlying Rust background task and releases the FFI handle. The
-/// finalizer reachable through the SafeHandle ensures cleanup even if
-/// <c>Dispose</c> is missed.
+/// All native request entry points block the calling thread on the shared
+/// Tokio runtime. To preserve the <c>Task</c>-based async surface this
+/// wrapper offloads them to the .NET thread pool via
+/// <see cref="Task.Run(Action)"/>.
 /// </para>
 /// </remarks>
-public sealed class ModbusTcpClient : IDisposable
+public sealed class ModbusSerialClient : IDisposable
 {
-    private readonly SafeTcpClientHandle _handle;
+    private readonly SafeSerialClientHandle _handle;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a new TCP client targeting <paramref name="host"/>
-    /// (NUL-terminated UTF-8) and <paramref name="port"/>.
-    /// </summary>
-    /// <remarks>
-    /// The constructor only sets up local state — call
-    /// <see cref="ConnectAsync"/> before issuing requests.
-    /// </remarks>
-    /// <exception cref="ModbusException">
-    /// Thrown when the native constructor returns null (invalid host or
-    /// other configuration failure).
-    /// </exception>
-    public ModbusTcpClient(string host, ushort port = 502)
+    private ModbusSerialClient(SafeSerialClientHandle handle)
     {
-        ArgumentException.ThrowIfNullOrEmpty(host);
-        _handle = SafeTcpClientHandle.Create(host, port);
+        _handle = handle;
     }
 
     /// <summary>
-    /// Returns <c>true</c> if there are requests in flight awaiting a
-    /// response.
+    /// Creates a Modbus RTU serial client.
     /// </summary>
-    public bool HasPendingRequests
+    /// <param name="port">Serial port name (e.g. <c>/dev/ttyS0</c>, <c>COM1</c>).</param>
+    /// <param name="baudRate">Baud rate (e.g. 9600, 115200).</param>
+    /// <param name="dataBits">Data bits (typically 8).</param>
+    /// <param name="parity">Parity mode.</param>
+    /// <param name="stopBits">Stop bits (typically 1 or 2).</param>
+    /// <param name="responseTimeoutMs">Per-request response timeout in milliseconds.</param>
+    public static ModbusSerialClient CreateRtu(
+        string port,
+        uint baudRate = 9600,
+        byte dataBits = 8,
+        SerialParity parity = SerialParity.None,
+        byte stopBits = 1,
+        uint responseTimeoutMs = 1000)
     {
-        get
-        {
-            ThrowIfDisposed();
-            return NativeMethods.mbus_dn_tcp_client_has_pending_requests(_handle.DangerousHandle) != 0;
-        }
+        ArgumentException.ThrowIfNullOrEmpty(port);
+        var handle = SafeSerialClientHandle.CreateRtu(port, baudRate, dataBits, (byte)parity, stopBits, responseTimeoutMs);
+        return new ModbusSerialClient(handle);
     }
 
     /// <summary>
-    /// Sets a per-request timeout. Pass <see cref="TimeSpan.Zero"/> to
-    /// disable. Takes effect on the next request.
+    /// Creates a Modbus ASCII serial client.
     /// </summary>
+    /// <param name="port">Serial port name (e.g. <c>/dev/ttyS0</c>, <c>COM1</c>).</param>
+    /// <param name="baudRate">Baud rate.</param>
+    /// <param name="dataBits">Data bits (typically 7 or 8 for ASCII).</param>
+    /// <param name="parity">Parity mode.</param>
+    /// <param name="stopBits">Stop bits.</param>
+    /// <param name="responseTimeoutMs">Per-request response timeout in milliseconds.</param>
+    public static ModbusSerialClient CreateAscii(
+        string port,
+        uint baudRate = 9600,
+        byte dataBits = 7,
+        SerialParity parity = SerialParity.Even,
+        byte stopBits = 1,
+        uint responseTimeoutMs = 1000)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(port);
+        var handle = SafeSerialClientHandle.CreateAscii(port, baudRate, dataBits, (byte)parity, stopBits, responseTimeoutMs);
+        return new ModbusSerialClient(handle);
+    }
+
+    /// <summary>Sets the per-request timeout. Pass <see cref="TimeSpan.Zero"/> to disable.</summary>
     public void SetRequestTimeout(TimeSpan timeout)
     {
         ThrowIfDisposed();
         ulong ms = timeout <= TimeSpan.Zero ? 0UL : (ulong)timeout.TotalMilliseconds;
-        var status = NativeMethods.mbus_dn_tcp_client_set_request_timeout_ms(
-            _handle.DangerousHandle, ms);
-        ModbusException.ThrowIfError(status, nameof(SetRequestTimeout));
+        NativeMethods.mbus_dn_serial_client_set_request_timeout_ms(_handle.DangerousHandle, ms);
     }
 
-    /// <summary>
-    /// Establishes the underlying TCP connection.
-    /// </summary>
+    /// <summary>Opens the serial port and connects the Modbus transport.</summary>
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return Task.Run(() =>
         {
-            var status = NativeMethods.mbus_dn_tcp_client_connect(_handle.DangerousHandle);
+            var status = NativeMethods.mbus_dn_serial_client_connect(_handle.DangerousHandle);
             ModbusException.ThrowIfError(status, nameof(ConnectAsync));
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Closes the TCP transport gracefully. The client can be reconnected
-    /// with <see cref="ConnectAsync"/>.
-    /// </summary>
+    /// <summary>Closes the serial port transport.</summary>
     public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return Task.Run(() =>
         {
-            var status = NativeMethods.mbus_dn_tcp_client_disconnect(_handle.DangerousHandle);
+            var status = NativeMethods.mbus_dn_serial_client_disconnect(_handle.DangerousHandle);
             ModbusException.ThrowIfError(status, nameof(DisconnectAsync));
-        }, cancellationToken);
-    }
-
-    // ── FC03 ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Reads <paramref name="quantity"/> holding registers (FC03) starting
-    /// at <paramref name="address"/> from the given <paramref name="unitId"/>.
-    /// </summary>
-    public Task<ushort[]> ReadHoldingRegistersAsync(
-        byte unitId,
-        ushort address,
-        ushort quantity,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        if (quantity == 0)
-        {
-            return Task.FromResult(Array.Empty<ushort>());
-        }
-
-        return Task.Run(() =>
-        {
-            var buf = new ushort[quantity];
-            ushort actual = 0;
-            ModbusStatus status;
-            unsafe
-            {
-                fixed (ushort* bufPtr = buf)
-                {
-                    status = NativeMethods.mbus_dn_tcp_client_read_holding_registers(
-                        _handle.DangerousHandle,
-                        unitId,
-                        address,
-                        quantity,
-                        bufPtr,
-                        quantity,
-                        &actual);
-                }
-            }
-            ModbusException.ThrowIfError(status, nameof(ReadHoldingRegistersAsync));
-            if (actual != quantity)
-            {
-                Array.Resize(ref buf, actual);
-            }
-            return buf;
-        }, cancellationToken);
-    }
-
-    // ── FC06 ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Writes a single holding register (FC06).
-    /// </summary>
-    /// <returns>The echoed <c>(address, value)</c> pair from the server.</returns>
-    public Task<(ushort Address, ushort Value)> WriteSingleRegisterAsync(
-        byte unitId,
-        ushort address,
-        ushort value,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        return Task.Run(() =>
-        {
-            ushort echoAddr = 0;
-            ushort echoVal = 0;
-            ModbusStatus status;
-            unsafe
-            {
-                status = NativeMethods.mbus_dn_tcp_client_write_single_register(
-                    _handle.DangerousHandle,
-                    unitId,
-                    address,
-                    value,
-                    &echoAddr,
-                    &echoVal);
-            }
-            ModbusException.ThrowIfError(status, nameof(WriteSingleRegisterAsync));
-            return (echoAddr, echoVal);
-        }, cancellationToken);
-    }
-
-    // ── FC16 ─────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Writes multiple holding registers (FC16) starting at
-    /// <paramref name="address"/>.
-    /// </summary>
-    /// <returns>The echoed <c>(starting_address, quantity)</c> pair.</returns>
-    public Task<(ushort StartingAddress, ushort Quantity)> WriteMultipleRegistersAsync(
-        byte unitId,
-        ushort address,
-        ReadOnlyMemory<ushort> values,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        if (values.Length == 0)
-        {
-            throw new ArgumentException("values must contain at least one register", nameof(values));
-        }
-        if (values.Length > ushort.MaxValue)
-        {
-            throw new ArgumentException("values exceeds 65535 registers", nameof(values));
-        }
-
-        // Snapshot to a stable array so the Task.Run continuation has
-        // exclusive access; the caller's Memory<T> may mutate after this
-        // method returns.
-        var snapshot = values.ToArray();
-
-        return Task.Run(() =>
-        {
-            ushort echoAddr = 0;
-            ushort echoQty = 0;
-            ModbusStatus status;
-            unsafe
-            {
-                fixed (ushort* p = snapshot)
-                {
-                    status = NativeMethods.mbus_dn_tcp_client_write_multiple_registers(
-                        _handle.DangerousHandle,
-                        unitId,
-                        address,
-                        p,
-                        (ushort)snapshot.Length,
-                        &echoAddr,
-                        &echoQty);
-                }
-            }
-            ModbusException.ThrowIfError(status, nameof(WriteMultipleRegistersAsync));
-            return (echoAddr, echoQty);
         }, cancellationToken);
     }
 
@@ -251,7 +132,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (byte* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_read_coils(
+                    status = NativeMethods.mbus_dn_serial_client_read_coils(
                         _handle.DangerousHandle, unitId, address, quantity,
                         p, (ushort)buf.Length, &count);
                 }
@@ -276,9 +157,8 @@ public sealed class ModbusTcpClient : IDisposable
             ModbusStatus status;
             unsafe
             {
-                status = NativeMethods.mbus_dn_tcp_client_write_single_coil(
-                    _handle.DangerousHandle, unitId, address,
-                    value ? (byte)1 : (byte)0,
+                status = NativeMethods.mbus_dn_serial_client_write_single_coil(
+                    _handle.DangerousHandle, unitId, address, value ? (byte)1 : (byte)0,
                     &echoAddr, &echoVal);
             }
             ModbusException.ThrowIfError(status, nameof(WriteSingleCoilAsync));
@@ -305,7 +185,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (byte* p = packed)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_write_multiple_coils(
+                    status = NativeMethods.mbus_dn_serial_client_write_multiple_coils(
                         _handle.DangerousHandle, unitId, address,
                         p, (ushort)packed.Length, (ushort)values.Length,
                         &echoAddr, &echoQty);
@@ -333,13 +213,95 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (byte* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_read_discrete_inputs(
+                    status = NativeMethods.mbus_dn_serial_client_read_discrete_inputs(
                         _handle.DangerousHandle, unitId, address, quantity,
                         p, (ushort)buf.Length, &count);
                 }
             }
             ModbusException.ThrowIfError(status, nameof(ReadDiscreteInputsAsync));
             return UnpackCoils(buf, quantity);
+        }, cancellationToken);
+    }
+
+    // ── FC03 ─────────────────────────────────────────────────────────────
+
+    /// <summary>Reads holding registers (FC03).</summary>
+    public Task<ushort[]> ReadHoldingRegistersAsync(
+        byte unitId, ushort address, ushort quantity,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return Task.Run(() =>
+        {
+            var buf = new ushort[quantity];
+            ushort actual = 0;
+            ModbusStatus status;
+            unsafe
+            {
+                fixed (ushort* p = buf)
+                {
+                    status = NativeMethods.mbus_dn_serial_client_read_holding_registers(
+                        _handle.DangerousHandle, unitId, address, quantity,
+                        p, quantity, &actual);
+                }
+            }
+            ModbusException.ThrowIfError(status, nameof(ReadHoldingRegistersAsync));
+            if (actual != quantity) Array.Resize(ref buf, actual);
+            return buf;
+        }, cancellationToken);
+    }
+
+    // ── FC06 ─────────────────────────────────────────────────────────────
+
+    /// <summary>Writes a single holding register (FC06).</summary>
+    public Task<(ushort Address, ushort Value)> WriteSingleRegisterAsync(
+        byte unitId, ushort address, ushort value,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return Task.Run(() =>
+        {
+            ushort echoAddr = 0;
+            ushort echoVal = 0;
+            ModbusStatus status;
+            unsafe
+            {
+                status = NativeMethods.mbus_dn_serial_client_write_single_register(
+                    _handle.DangerousHandle, unitId, address, value,
+                    &echoAddr, &echoVal);
+            }
+            ModbusException.ThrowIfError(status, nameof(WriteSingleRegisterAsync));
+            return (echoAddr, echoVal);
+        }, cancellationToken);
+    }
+
+    // ── FC16 ─────────────────────────────────────────────────────────────
+
+    /// <summary>Writes multiple holding registers (FC16).</summary>
+    public Task<(ushort StartingAddress, ushort Quantity)> WriteMultipleRegistersAsync(
+        byte unitId, ushort address, ReadOnlyMemory<ushort> values,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (values.Length == 0) throw new ArgumentException("values must not be empty", nameof(values));
+        var snapshot = values.ToArray();
+        return Task.Run(() =>
+        {
+            ushort echoAddr = 0;
+            ushort echoQty = 0;
+            ModbusStatus status;
+            unsafe
+            {
+                fixed (ushort* p = snapshot)
+                {
+                    status = NativeMethods.mbus_dn_serial_client_write_multiple_registers(
+                        _handle.DangerousHandle, unitId, address,
+                        p, (ushort)snapshot.Length,
+                        &echoAddr, &echoQty);
+                }
+            }
+            ModbusException.ThrowIfError(status, nameof(WriteMultipleRegistersAsync));
+            return (echoAddr, echoQty);
         }, cancellationToken);
     }
 
@@ -360,7 +322,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (ushort* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_read_input_registers(
+                    status = NativeMethods.mbus_dn_serial_client_read_input_registers(
                         _handle.DangerousHandle, unitId, address, quantity,
                         p, quantity, &actual);
                 }
@@ -381,7 +343,7 @@ public sealed class ModbusTcpClient : IDisposable
         ThrowIfDisposed();
         return Task.Run(() =>
         {
-            var status = NativeMethods.mbus_dn_tcp_client_mask_write_register(
+            var status = NativeMethods.mbus_dn_serial_client_mask_write_register(
                 _handle.DangerousHandle, unitId, address, andMask, orMask);
             ModbusException.ThrowIfError(status, nameof(MaskWriteRegisterAsync));
         }, cancellationToken);
@@ -408,7 +370,7 @@ public sealed class ModbusTcpClient : IDisposable
                 fixed (ushort* rp = buf)
                 fixed (ushort* wp = writeSnapshot)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_read_write_multiple_registers(
+                    status = NativeMethods.mbus_dn_serial_client_read_write_multiple_registers(
                         _handle.DangerousHandle, unitId,
                         readAddress, readQuantity,
                         writeAddress, wp, (ushort)writeSnapshot.Length,
@@ -438,7 +400,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (ushort* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_read_fifo_queue(
+                    status = NativeMethods.mbus_dn_serial_client_read_fifo_queue(
                         _handle.DangerousHandle, unitId, address,
                         p, (ushort)buf.Length, &actual);
                 }
@@ -462,7 +424,7 @@ public sealed class ModbusTcpClient : IDisposable
             ModbusStatus status;
             unsafe
             {
-                status = NativeMethods.mbus_dn_tcp_client_read_exception_status(
+                status = NativeMethods.mbus_dn_serial_client_read_exception_status(
                     _handle.DangerousHandle, unitId, &result);
             }
             ModbusException.ThrowIfError(status, nameof(ReadExceptionStatusAsync));
@@ -484,7 +446,7 @@ public sealed class ModbusTcpClient : IDisposable
             ModbusStatus mbStatus;
             unsafe
             {
-                mbStatus = NativeMethods.mbus_dn_tcp_client_get_comm_event_counter(
+                mbStatus = NativeMethods.mbus_dn_serial_client_get_comm_event_counter(
                     _handle.DangerousHandle, unitId, &statusWord, &eventCount);
             }
             ModbusException.ThrowIfError(mbStatus, nameof(GetCommEventCounterAsync));
@@ -508,7 +470,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (byte* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_get_comm_event_log(
+                    status = NativeMethods.mbus_dn_serial_client_get_comm_event_log(
                         _handle.DangerousHandle, unitId,
                         p, (ushort)buf.Length, &count);
                 }
@@ -535,7 +497,7 @@ public sealed class ModbusTcpClient : IDisposable
             {
                 fixed (byte* p = buf)
                 {
-                    status = NativeMethods.mbus_dn_tcp_client_report_server_id(
+                    status = NativeMethods.mbus_dn_serial_client_report_server_id(
                         _handle.DangerousHandle, unitId,
                         p, (ushort)buf.Length, &count);
                 }
@@ -548,18 +510,12 @@ public sealed class ModbusTcpClient : IDisposable
 
     // ── IDisposable ──────────────────────────────────────────────────────
 
-    private void ThrowIfDisposed()
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-    }
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
+        if (_disposed) return;
         _disposed = true;
         _handle.Dispose();
     }
