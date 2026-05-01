@@ -167,10 +167,11 @@ fn main() {
 
     // ── cbindgen ──────────────────────────────────────────────────────────────
 
-    // Only run cbindgen when the `c`, `c-server`, or `c-gateway` feature is enabled.
+    // Only run cbindgen when the `c`, `c-server`, `c-gateway`, or `dotnet` feature is enabled.
     if std::env::var("CARGO_FEATURE_C").is_err()
         && std::env::var("CARGO_FEATURE_C_SERVER").is_err()
         && std::env::var("CARGO_FEATURE_C_GATEWAY").is_err()
+        && std::env::var("CARGO_FEATURE_DOTNET").is_err()
     {
         return;
     }
@@ -189,6 +190,7 @@ fn main() {
     println!("cargo::rerun-if-changed=cbindgen_client.toml");
     println!("cargo::rerun-if-changed=cbindgen_server.toml");
     println!("cargo::rerun-if-changed=cbindgen_gateway.toml");
+    println!("cargo::rerun-if-changed=cbindgen_dotnet.toml");
     println!("cargo::rerun-if-changed=src");
     std::fs::create_dir_all(&include_dir).expect("failed to create target include directory");
 
@@ -307,6 +309,25 @@ fn main() {
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate gateway C header")
+            .write_to_file(output_file);
+    }
+
+    if std::env::var("CARGO_FEATURE_DOTNET").is_ok() {
+        let output_file = include_dir.join("modbus_rs_dotnet.h");
+        let config_path = format!("{crate_dir}/cbindgen_dotnet.toml");
+        let config = cbindgen::Config::from_file(&config_path)
+            .unwrap_or_else(|err| panic!("failed to parse {config_path}: {err}"));
+
+        cbindgen::Builder::new()
+            .with_crate(&crate_dir)
+            .with_language(cbindgen::Language::C)
+            .with_define("feature", "dotnet", "MBUS_FEATURE_DOTNET")
+            .with_define("feature", "coils", "MBUS_FEATURE_COILS")
+            .with_define("feature", "registers", "MBUS_FEATURE_REGISTERS")
+            .with_define("feature", "discrete-inputs", "MBUS_FEATURE_DISCRETE_INPUTS")
+            .with_config(config)
+            .generate()
+            .expect("cbindgen failed to generate .NET C header")
             .write_to_file(output_file);
     }
 }
