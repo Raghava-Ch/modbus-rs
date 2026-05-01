@@ -109,7 +109,7 @@ public sealed class ModbusTcpServer : IDisposable
             read_write_multiple_registers = (IntPtr)(delegate* unmanaged[Cdecl]<void*, ushort, ushort, ushort, byte*, ushort, ushort*, ushort*, int>)&CbReadWriteMultipleRegisters,
             read_fifo_queue = (IntPtr)(delegate* unmanaged[Cdecl]<void*, ushort, ushort*, ushort*, int>)&CbReadFifoQueue,
             read_exception_status = (IntPtr)(delegate* unmanaged[Cdecl]<void*, byte*, int>)&CbReadExceptionStatus,
-            diagnostics = IntPtr.Zero, // not exposed through ModbusRequestHandler
+            diagnostics = IntPtr.Zero, // FC08 (diagnostics echo) is not exposed; Rust layer handles the echo response directly
             get_comm_event_counter = (IntPtr)(delegate* unmanaged[Cdecl]<void*, ushort*, ushort*, int>)&CbGetCommEventCounter,
             get_comm_event_log = (IntPtr)(delegate* unmanaged[Cdecl]<void*, byte*, ushort*, int>)&CbGetCommEventLog,
             report_server_id = (IntPtr)(delegate* unmanaged[Cdecl]<void*, byte*, ushort*, int>)&CbReportServerId,
