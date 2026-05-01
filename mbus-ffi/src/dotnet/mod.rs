@@ -9,7 +9,7 @@
 //! * **.NET owns the Rust object** via an opaque pointer.  Each constructor
 //!   returns a `*mut TcpClientHandle` produced by [`Box::into_raw`]; the
 //!   matching `*_free` function reclaims it via [`Box::from_raw`].  The C#
-//!   wrapper holds the pointer in a [`SafeHandle`] which guarantees the
+//!   wrapper holds the pointer in a `SafeHandle` which guarantees the
 //!   destructor runs even if the user forgets `Dispose`.
 //! * **Heap-allocated**, no static slab pool — `.NET` is always a `std`
 //!   environment so the safety motivation that drove the C bindings'
