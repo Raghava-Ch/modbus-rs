@@ -435,7 +435,7 @@ Output: `target/debug/mbus_ffi.dll` (Windows) / `libmbus_ffi.so` (Linux) /
 `[LibraryImport("mbus_ffi")]` loads the native library from the application
 output directory, `PATH`, or the working directory.  The example projects copy
 the DLL from `target\debug\` (or `target\release\`) automatically via MSBuild.
-See [DLL Deployment](../../documentation/dotnet_bindings.md#native-dll-deployment)
+See [DLL Deployment](../documentation/dotnet_bindings.md#native-dll-deployment)
 for the full copy rule and VS 2022 setup.
 
 ### Quick start (C#)
@@ -452,7 +452,7 @@ bool[] coils  = await client.ReadCoilsAsync(unitId: 1, address: 0, quantity: 8);
 await client.DisconnectAsync();
 ```
 
-📖 **[Full .NET Binding Documentation →](../../documentation/dotnet_bindings.md)**
+📖 **[Full .NET Binding Documentation →](../documentation/dotnet_bindings.md)**
 
 ---
 
