@@ -101,6 +101,13 @@ Additional workspace documentation is available in the `documentation/` folder:
 - [documentation/gateway/ws_gateway.md](../documentation/gateway/ws_gateway.md)
 - [documentation/gateway/feature_flags.md](../documentation/gateway/feature_flags.md)
 
+### Binding docs
+
+- [documentation/python_bindings.md](../documentation/python_bindings.md) — Python (PyO3 / maturin)
+- [documentation/dotnet_bindings.md](../documentation/dotnet_bindings.md) — .NET / C# (P/Invoke)
+- [documentation/go_bindings.md](../documentation/go_bindings.md) — Go (cgo)
+- [documentation/nodejs_bindings.md](../documentation/nodejs_bindings.md) — Node.js (napi-rs)
+
 
 ## What This Crate Is
 
@@ -122,7 +129,7 @@ For consumers, `modbus-rs` is the intended public API surface.
 
 - Use `modbus-rs` in application `Cargo.toml`.
 - Access all request/response service features through `modbus-rs` re-exports.
-- For browser/WASM or native C integrations, use `mbus-ffi` directly.
+- For browser/WASM, native C, Python, Go, or Node.js integrations, use `mbus-ffi` directly.
 
 Helper crates (`mbus-core`, `mbus-client`, `mbus-network`, `mbus-serial`, `mbus-ffi`) remain workspace building blocks.
 
