@@ -6,7 +6,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 - **All transports** — TCP, Serial RTU, Serial ASCII
 - **Sync and async** — poll-driven sync core; native `async/await` via Tokio
 - **Feature-gated** — enable only what you need for minimal binary size
-- **C and .NET bindings** — native C/C++ and .NET (C#) integration via `mbus-ffi`
+- **Multi-language bindings** — native C/C++, .NET (C#), Python, Go, and **Node.js** integration via `mbus-ffi`
 - **Gateway** — Modbus TCP ↔ RTU/ASCII gateway with sync (no_std) and async modes
 
 ---
@@ -64,7 +64,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | **Client** | [Quick Start](documentation/client/quick_start.md) · [Examples](documentation/client/examples.md) · [Building Apps](documentation/client/building_applications.md) · [Sync](documentation/client/sync.md) · [Async](documentation/client/async.md) · [Policies](documentation/client/policies.md) |
 | **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Building Apps](documentation/server/building_applications.md) · [Sync](documentation/server/sync.md) · [Async](documentation/server/async.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) · [Function Codes](documentation/server/function_codes.md) |
 | **Gateway** | [Quick Start](documentation/gateway/quick_start.md) · [Architecture](documentation/gateway/architecture.md) · [Routing](documentation/gateway/routing.md) · [WebSocket Gateway](documentation/gateway/ws_gateway.md) · [Feature Flags](documentation/gateway/feature_flags.md) |
-| **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) · [.NET / C#](documentation/dotnet_bindings.md) · [Go](documentation/go_bindings.md) |
+| **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) · [.NET / C#](documentation/dotnet_bindings.md) · [Go](documentation/go_bindings.md) · [Node.js](documentation/nodejs_bindings.md) |
 | **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
 
 ---
@@ -84,7 +84,7 @@ mbus-core = { version = "0.8.0", default-features = false, features = ["coils", 
 | [`mbus-network`](mbus-network/) | TCP transport implementation |
 | [`mbus-serial`](mbus-serial/) | Serial RTU/ASCII transport implementation |
 | [`mbus-gateway`](mbus-gateway/) | Modbus gateway — TCP ↔ RTU/ASCII routing (sync + async) |
-| [`mbus-ffi`](mbus-ffi/) | Native C, WASM, Python, and .NET (C#) bindings — client, server, and gateway |
+| [`mbus-ffi`](mbus-ffi/) | Native C, WASM, Python, .NET (C#), Go, and **Node.js** bindings — client, server, and gateway |
 
 ### Direct Async Crate Selection
 
@@ -295,6 +295,43 @@ regs, _ := c.ReadHoldingRegisters(ctx, 1, 0, 4)
 ```
 
 📖 **[Full Go Binding Documentation →](documentation/go_bindings.md)**
+
+
+### Node.js bindings (via `mbus-ffi`)
+
+Idiomatic Promise-based JavaScript and TypeScript API, built on napi-rs over
+the same async Rust crates as the .NET and Go bindings.  Prebuilt binaries
+mean end users do not need a Rust toolchain.
+
+```sh
+# Install from npm (prebuilt binary downloaded automatically):
+npm install modbus-rs
+
+# Or build locally:
+cd mbus-ffi/nodejs && npm install && npm run build
+```
+
+```js
+import { AsyncTcpModbusClient } from 'modbus-rs';
+
+const client = await AsyncTcpModbusClient.connect({
+  host: '192.168.1.10',
+  port: 502,
+  unitId: 1,
+  timeoutMs: 2000,
+});
+
+const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
+await client.writeMultipleRegisters({ address: 10, values: [1, 2, 3, 4] });
+await client.close();
+```
+
+> **Server handler dispatch note (v0.8):** `AsyncTcpModbusServer.bind()` accepts
+> a handlers object but the JS callback invocation is not yet wired up — reads
+> return `IllegalFunction` and writes are echoed.  Full dispatch is planned for
+> v0.9. The client API is fully functional.
+
+📖 **[Full Node.js Binding Documentation →](documentation/nodejs_bindings.md)**
 
 
 ### Gateway (sync TCP → RTU)
