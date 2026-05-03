@@ -116,6 +116,16 @@ pub struct ReadFifoQueueOptions {
     pub address: u16,
 }
 
+/// Response from reading FIFO queue.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct FifoQueueResponse {
+    /// Number of values in the queue.
+    pub count: u16,
+    /// Queue values.
+    pub values: Vec<u16>,
+}
+
 /// A single file record read sub-request.
 #[napi(object)]
 #[derive(Debug, Clone)]
@@ -455,13 +465,15 @@ impl AsyncTcpModbusClient {
     /// Reads FIFO queue (FC24).
     #[napi]
     #[cfg(feature = "fifo")]
-    pub async fn read_fifo_queue(&self, opts: ReadFifoQueueOptions) -> Result<Vec<u16>> {
+    pub async fn read_fifo_queue(&self, opts: ReadFifoQueueOptions) -> Result<FifoQueueResponse> {
         let client = self.get_client()?;
         let fifo = client
             .read_fifo_queue(self.unit_id, opts.address)
             .await
             .map_err(from_async_error)?;
-        Ok(fifo.queue().to_vec())
+        let values = fifo.queue().to_vec();
+        let count = values.len() as u16;
+        Ok(FifoQueueResponse { count, values })
     }
 
     // ── File record ──────────────────────────────────────────────────────────

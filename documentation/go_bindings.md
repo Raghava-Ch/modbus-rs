@@ -369,12 +369,12 @@ The tests include:
 The Go module uses a path-prefixed tag:
 
 ```sh
-git tag mbus-ffi/go/v0.8.0
-git push origin mbus-ffi/go/v0.8.0
+git tag mbus-ffi/go/v0.9.0
+git push origin mbus-ffi/go/v0.9.0
 ```
 
 Consumers can then use:
 
 ```sh
-go get github.com/Raghava-Ch/modbus-rs/mbus-ffi/go@v0.8.0
+go get github.com/Raghava-Ch/modbus-rs/mbus-ffi/go@v0.9.0
 ```

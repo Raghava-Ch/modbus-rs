@@ -11,7 +11,7 @@
 import { AsyncTcpModbusClient } from 'modbus-rs';
 
 const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
-const PORT = Number(process.env.MODBUS_PORT ?? 5502);
+const PORT = Number(process.env.MODBUS_PORT ?? 502);
 
 async function main() {
   const client = await AsyncTcpModbusClient.connect({
@@ -24,8 +24,8 @@ async function main() {
   try {
     // FC08 — Diagnostics, sub-function 0x0000 = Return Query Data (loopback)
     try {
-      const diag = await client.diagnostics({ subFunction: 0x0000, data: 0xCAFE });
-      console.log(`FC08 loopback echo: sub=${diag.subFunction.toString(16)} data=0x${diag.data.toString(16)}`);
+      const diag = await client.diagnostics({ subFunction: 0x0000, data: [0xCAFE] });
+      console.log(`FC08 loopback echo: sub=${diag.subFunction.toString(16)} data=0x${diag.data[0].toString(16)}`);
     } catch (err) {
       console.log('FC08 not supported by this server:', err.message);
     }

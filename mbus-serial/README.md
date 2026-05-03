@@ -49,7 +49,7 @@ The crate re-exports, depending on target/features:
 
 ```toml
 [dependencies]
-modbus-rs = "0.8.0"
+modbus-rs = "0.9.0"
 ```
 
 ### 2) Create serial config and transport
@@ -128,7 +128,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-serial = { version = "0.8.0", features = ["logging"] }
+mbus-serial = { version = "0.9.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
@@ -151,10 +151,10 @@ In most applications, `mbus-serial` is used together with `mbus-client`:
 
 Copyright (C) 2025 Raghava Challari
 
-This project is currently licensed under GNU GPL v3.0.
+This project is licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+This crate is licensed under GPLv3. Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 
 ## Contact
 

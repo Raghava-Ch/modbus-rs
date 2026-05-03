@@ -125,4 +125,4 @@ Use the workspace docs for full server guides:
 
 This crate is licensed under **GPL-3.0-only**.
 
-If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).

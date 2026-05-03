@@ -21,10 +21,10 @@ use mbus_client_async::SubRequest;
 
 use crate::nodejs::client_tcp::{
     DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
-    DiagnosticsResponse, ReadBitsOptions, ReadDeviceIdentificationOptions, ReadFifoQueueOptions,
-    ReadFileRecordOptions, ReadRegistersOptions, ReadWriteMultipleRegistersOptions,
-    WriteFileRecordOptions, WriteMultipleCoilsOptions, WriteMultipleRegistersOptions,
-    WriteSingleCoilOptions, WriteSingleRegisterOptions,
+    DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions, ReadDeviceIdentificationOptions,
+    ReadFifoQueueOptions, ReadFileRecordOptions, ReadRegistersOptions,
+    ReadWriteMultipleRegistersOptions, WriteFileRecordOptions, WriteMultipleCoilsOptions,
+    WriteMultipleRegistersOptions, WriteSingleCoilOptions, WriteSingleRegisterOptions,
 };
 use crate::nodejs::errors::{from_async_error, to_napi_err, ERR_MODBUS_INVALID_ARGUMENT};
 
@@ -392,13 +392,15 @@ impl AsyncSerialModbusClient {
     /// Reads FIFO queue (FC24).
     #[napi]
     #[cfg(feature = "fifo")]
-    pub async fn read_fifo_queue(&self, opts: ReadFifoQueueOptions) -> Result<Vec<u16>> {
+    pub async fn read_fifo_queue(&self, opts: ReadFifoQueueOptions) -> Result<FifoQueueResponse> {
         let client = self.get_client()?;
         let fifo = client
             .read_fifo_queue(self.unit_id, opts.address)
             .await
             .map_err(from_async_error)?;
-        Ok(fifo.queue().to_vec())
+        let values = fifo.queue().to_vec();
+        let count = values.len() as u16;
+        Ok(FifoQueueResponse { count, values })
     }
 
     // ── File record ──────────────────────────────────────────────────────────
