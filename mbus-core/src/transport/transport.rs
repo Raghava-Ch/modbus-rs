@@ -73,7 +73,7 @@ pub trait Transport {
     /// Receives available bytes from the transport medium in a **non-blocking** manner.
     ///
     /// # Implementation Details
-    /// - **TCP**: Implementors should ideally return a complete Modbus Application Data Unit (ADU).
+    /// - **TCP**: Implementors may ideally return a complete Modbus Application Data Unit (ADU) or available fragments.
     /// - **Serial**: Implementors can return any number of available bytes. The protocol stack
     ///   is responsible for accumulating these fragments into a complete frame.
     /// - **Timeouts**: If the protocol stack fails to assemble a full frame within the configured

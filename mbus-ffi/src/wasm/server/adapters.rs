@@ -162,7 +162,9 @@ impl SerialServerAdapter {
         });
 
         let inner = match kind {
-            WasmServerTransportKind::SerialRtu => RuntimeSerialAdapter::Rtu(WasmRtuTransport::new()),
+            WasmServerTransportKind::SerialRtu => {
+                RuntimeSerialAdapter::Rtu(WasmRtuTransport::new())
+            }
             WasmServerTransportKind::SerialAscii => {
                 RuntimeSerialAdapter::Ascii(WasmAsciiTransport::new())
             }

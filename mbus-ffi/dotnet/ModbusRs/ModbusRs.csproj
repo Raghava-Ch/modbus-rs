@@ -11,7 +11,7 @@
 
     <!-- NuGet metadata -->
     <PackageId>ModbusRs</PackageId>
-    <Version>0.8.0-alpha</Version>
+    <Version>0.9.0</Version>
     <Authors>modbus-rs contributors</Authors>
     <Description>
       .NET (C#) bindings for the modbus-rs Modbus client/server/gateway

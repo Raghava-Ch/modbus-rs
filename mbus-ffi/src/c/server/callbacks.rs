@@ -95,8 +95,10 @@ pub struct MbusServerReadCoilsReq {
 
 /// C callback type for FC 0x01.
 pub type MbusServerReadCoilsFn = Option<
-    unsafe extern "C" fn(req: *mut MbusServerReadCoilsReq, userdata: *mut c_void)
-        -> MbusServerExceptionCode,
+    unsafe extern "C" fn(
+        req: *mut MbusServerReadCoilsReq,
+        userdata: *mut c_void,
+    ) -> MbusServerExceptionCode,
 >;
 
 /// Request context for FC 0x02 — Read Discrete Inputs.
@@ -113,8 +115,10 @@ pub struct MbusServerReadDiscreteInputsReq {
 
 /// C callback type for FC 0x02.
 pub type MbusServerReadDiscreteInputsFn = Option<
-    unsafe extern "C" fn(req: *mut MbusServerReadDiscreteInputsReq, userdata: *mut c_void)
-        -> MbusServerExceptionCode,
+    unsafe extern "C" fn(
+        req: *mut MbusServerReadDiscreteInputsReq,
+        userdata: *mut c_void,
+    ) -> MbusServerExceptionCode,
 >;
 
 /// Request context for FC 0x03 — Read Holding Registers.
@@ -134,8 +138,10 @@ pub struct MbusServerReadHoldingRegistersReq {
 
 /// C callback type for FC 0x03.
 pub type MbusServerReadHoldingRegistersFn = Option<
-    unsafe extern "C" fn(req: *mut MbusServerReadHoldingRegistersReq, userdata: *mut c_void)
-        -> MbusServerExceptionCode,
+    unsafe extern "C" fn(
+        req: *mut MbusServerReadHoldingRegistersReq,
+        userdata: *mut c_void,
+    ) -> MbusServerExceptionCode,
 >;
 
 /// Request context for FC 0x04 — Read Input Registers.
@@ -152,8 +158,10 @@ pub struct MbusServerReadInputRegistersReq {
 
 /// C callback type for FC 0x04.
 pub type MbusServerReadInputRegistersFn = Option<
-    unsafe extern "C" fn(req: *mut MbusServerReadInputRegistersReq, userdata: *mut c_void)
-        -> MbusServerExceptionCode,
+    unsafe extern "C" fn(
+        req: *mut MbusServerReadInputRegistersReq,
+        userdata: *mut c_void,
+    ) -> MbusServerExceptionCode,
 >;
 
 // ── FC05 / FC06 — Write single (no output data) ───────────────────────────────

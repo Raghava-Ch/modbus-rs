@@ -5,6 +5,13 @@ Fast Modbus TCP + Serial bindings for Python, powered by Rust.
 - PyPI package: modbus-rs
 - Import name: modbus_rs
 
+## Licensing
+
+This package is available under GNU GPL v3.0 for open-source use.
+
+Commercial licenses are also available for proprietary/closed-source use.
+Contact: [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com)
+
 ## Install
 
 ```bash
@@ -186,7 +193,7 @@ asyncio.run(main())
 
 Copyright (C) 2026 Raghava Challari
 
-This project is currently licensed under GNU GPL v3.0.
+This project is licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+Commercial licenses for proprietary use are available via [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).

@@ -8,9 +8,7 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::sync::Arc;
 
-use mbus_core::data_unit::common::{
-    compile_adu_frame, decompile_adu_frame, Pdu,
-};
+use mbus_core::data_unit::common::{Pdu, compile_adu_frame, decompile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{AsyncTransport, TransportType, UnitIdOrSlaveAddr};
@@ -135,9 +133,7 @@ impl AsyncTcpGatewayServer {
             gateway_log_debug!("accepted upstream connection from {:?}", peer);
 
             tokio::spawn(async move {
-                if let Err(e) =
-                    run_async_session(upstream, router_ref, downstreams_ref).await
-                {
+                if let Err(e) = run_async_session(upstream, router_ref, downstreams_ref).await {
                     gateway_log_debug!("session ended: {:?}", e);
                 }
             });
@@ -311,7 +307,12 @@ where
         let downstream_unit = router.rewrite(unit);
 
         let downstream_type = DS::TRANSPORT_TYPE;
-        let ds_adu = match compile_adu_frame(internal_txn, downstream_unit.get(), msg.pdu.clone(), downstream_type) {
+        let ds_adu = match compile_adu_frame(
+            internal_txn,
+            downstream_unit.get(),
+            msg.pdu.clone(),
+            downstream_type,
+        ) {
             Ok(adu) => adu,
             Err(e) => {
                 gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
@@ -403,8 +404,8 @@ pub(crate) async fn send_async_exception<T: AsyncTransport>(
         Some(efc) => efc,
         None => return Ok(()),
     };
-    let pdu =
-        Pdu::build_byte_payload(exception_fc, exception_code as u8).map_err(|_| MbusError::Unexpected)?;
+    let pdu = Pdu::build_byte_payload(exception_fc, exception_code as u8)
+        .map_err(|_| MbusError::Unexpected)?;
     let adu = compile_adu_frame(txn_id, unit.get(), pdu, transport_type)?;
     upstream.send(&adu).await
 }

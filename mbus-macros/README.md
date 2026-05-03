@@ -59,7 +59,7 @@ including positive cases and compile-fail diagnostics for unsupported/invalid fo
 
 Copyright (C) 2025 Raghava Challari
 
-This project is currently licensed under GNU GPL v3.0.
+This project is licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+This crate is licensed under GPLv3. Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).

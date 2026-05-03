@@ -101,6 +101,13 @@ Additional workspace documentation is available in the `documentation/` folder:
 - [documentation/gateway/ws_gateway.md](../documentation/gateway/ws_gateway.md)
 - [documentation/gateway/feature_flags.md](../documentation/gateway/feature_flags.md)
 
+### Binding docs
+
+- [documentation/python_bindings.md](../documentation/python_bindings.md) — Python (PyO3 / maturin)
+- [documentation/dotnet_bindings.md](../documentation/dotnet_bindings.md) — .NET / C# (P/Invoke)
+- [documentation/go_bindings.md](../documentation/go_bindings.md) — Go (cgo)
+- [documentation/nodejs_bindings.md](../documentation/nodejs_bindings.md) — Node.js (napi-rs)
+
 
 ## What This Crate Is
 
@@ -122,7 +129,7 @@ For consumers, `modbus-rs` is the intended public API surface.
 
 - Use `modbus-rs` in application `Cargo.toml`.
 - Access all request/response service features through `modbus-rs` re-exports.
-- For browser/WASM or native C integrations, use `mbus-ffi` directly.
+- For browser/WASM, native C, Python, Go, or Node.js integrations, use `mbus-ffi` directly.
 
 Helper crates (`mbus-core`, `mbus-client`, `mbus-network`, `mbus-serial`, `mbus-ffi`) remain workspace building blocks.
 
@@ -148,7 +155,7 @@ For **embedded / no_std** targets, disable defaults and use the `no-std` conveni
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = ["no-std"] }
+modbus-rs = { version = "0.9.0", default-features = false, features = ["no-std"] }
 ```
 
 This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
@@ -192,7 +199,7 @@ Example: only enable sync client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
   "client",
 	"network-tcp",
   "coils"
@@ -211,10 +218,10 @@ Enable the server runtime with the `server` feature. Sync servers also need a tr
 ```toml
 [dependencies]
 # Sync TCP server
-modbus-rs = { version = "0.8.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.9.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
 
 # Async TCP server
-modbus-rs = { version = "0.8.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.9.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -293,10 +300,10 @@ Enable the gateway with the `gateway` feature. Choose transport features to matc
 ```toml
 [dependencies]
 # Sync gateway: TCP upstream → RTU downstream
-modbus-rs = { version = "0.8.0", features = ["gateway", "network-tcp", "serial-rtu"] }
+modbus-rs = { version = "0.9.0", features = ["gateway", "network-tcp", "serial-rtu"] }
 
 # Async gateway: TCP upstream → TCP downstream
-modbus-rs = { version = "0.8.0", features = ["gateway", "async", "network-tcp"] }
+modbus-rs = { version = "0.9.0", features = ["gateway", "async", "network-tcp"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -332,7 +339,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
 	"async",
 	"network-tcp",
 	"coils"
@@ -361,7 +368,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
 	"client",
 	"network-tcp",
 	"coils",
@@ -381,7 +388,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = ["network-tcp", "logging"] }
+modbus-rs = { version = "0.9.0", default-features = false, features = ["network-tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -391,14 +398,14 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.8.0"
+modbus-rs = "0.9.0"
 ```
 
 ### Minimal TCP client setup
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
   "client",
   "network-tcp",
   "registers"
@@ -411,7 +418,7 @@ Use `mbus-ffi` directly for browser/WASM. `modbus-rs` does not re-export the WAS
 
 ```toml
 [dependencies]
-mbus-ffi = { version = "0.8.0", default-features = false, features = ["wasm", "full"] }
+mbus-ffi = { version = "0.9.0", default-features = false, features = ["wasm", "full"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:
@@ -657,10 +664,10 @@ wasm-pack test --chrome --target wasm32-unknown-unknown --features wasm,full
 
 Copyright (C) 2025 Raghava Challari
 
-This project is currently licensed under GNU GPL v3.0.
+This project is licensed under GNU GPL v3.0.
 See [LICENSE](../LICENSE) for details.
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+This crate is licensed under GPLv3. Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 
 ## Disclaimer
 

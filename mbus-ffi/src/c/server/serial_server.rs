@@ -21,7 +21,9 @@ use mbus_server::ServerServices;
 
 use crate::c::{
     error::MbusStatusCode,
-    transport::{CAsciiTransport, CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks},
+    transport::{
+        CAsciiTransport, CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks,
+    },
 };
 
 use super::{
@@ -29,9 +31,9 @@ use super::{
     callbacks::MbusServerHandlers,
     config::MbusServerConfig,
     pool::{
-        MBUS_INVALID_SERVER_ID, MbusServerId,
-        server_pool_allocate_serial_rtu, server_pool_allocate_serial_ascii,
-        server_pool_free, with_serial_server, with_serial_server_uniform,
+        MBUS_INVALID_SERVER_ID, MbusServerId, server_pool_allocate_serial_ascii,
+        server_pool_allocate_serial_rtu, server_pool_free, with_serial_server,
+        with_serial_server_uniform,
     },
 };
 
@@ -83,7 +85,13 @@ pub unsafe extern "C" fn mbus_serial_server_new(
         };
         let transport = CAsciiTransport::new(transport_callbacks);
         let app = CServerApp::new(server_handlers);
-        let inner = ServerServices::<_, _, 1>::with_queue_depth(transport, app, modbus_config, unit_id, resilience);
+        let inner = ServerServices::<_, _, 1>::with_queue_depth(
+            transport,
+            app,
+            modbus_config,
+            unit_id,
+            resilience,
+        );
         match server_pool_allocate_serial_ascii(inner) {
             Ok(id) => id,
             Err(_) => MBUS_INVALID_SERVER_ID,
@@ -95,7 +103,13 @@ pub unsafe extern "C" fn mbus_serial_server_new(
         };
         let transport = CRtuTransport::new(transport_callbacks);
         let app = CServerApp::new(server_handlers);
-        let inner = ServerServices::<_, _, 1>::with_queue_depth(transport, app, modbus_config, unit_id, resilience);
+        let inner = ServerServices::<_, _, 1>::with_queue_depth(
+            transport,
+            app,
+            modbus_config,
+            unit_id,
+            resilience,
+        );
         match server_pool_allocate_serial_rtu(inner) {
             Ok(id) => id,
             Err(_) => MBUS_INVALID_SERVER_ID,
@@ -154,8 +168,7 @@ pub extern "C" fn mbus_serial_server_poll(id: MbusServerId) -> MbusStatusCode {
 /// Returns `true` if the serial server's transport is connected.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_server_is_connected(id: MbusServerId) -> bool {
-    with_serial_server(id, |srv| srv.is_connected(), |srv| srv.is_connected())
-        .unwrap_or(false)
+    with_serial_server(id, |srv| srv.is_connected(), |srv| srv.is_connected()).unwrap_or(false)
 }
 
 // ── mbus_serial_server_pending_request_count ──────────────────────────────────

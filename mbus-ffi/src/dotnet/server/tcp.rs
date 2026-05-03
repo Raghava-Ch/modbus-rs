@@ -21,9 +21,9 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server_async::AsyncTcpServer as InnerAsyncTcpServer;
 use tokio::sync::Notify;
 
+use super::vtable::{DotNetServerAdapter, MbusDnServerVtable};
 use crate::dotnet::runtime;
 use crate::dotnet::status::{self, MbusDnStatus};
-use super::vtable::{DotNetServerAdapter, MbusDnServerVtable};
 
 /// Opaque handle to an async Modbus TCP server.
 pub struct MbusDnTcpServer {
@@ -100,9 +100,7 @@ pub unsafe extern "C" fn mbus_dn_tcp_server_free(handle: *mut MbusDnTcpServer) {
 ///
 /// `handle` must be a valid server pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mbus_dn_tcp_server_start(
-    handle: *mut MbusDnTcpServer,
-) -> MbusDnStatus {
+pub unsafe extern "C" fn mbus_dn_tcp_server_start(handle: *mut MbusDnTcpServer) -> MbusDnStatus {
     let srv = match unsafe { handle.as_ref() } {
         Some(s) => s,
         None => return MbusDnStatus::MbusErrNullPointer,

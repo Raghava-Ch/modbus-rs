@@ -191,9 +191,7 @@ pub unsafe extern "C" fn mbus_dn_tcp_gateway_add_range_route(
 ///
 /// `handle` must be a valid gateway pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mbus_dn_tcp_gateway_start(
-    handle: *mut MbusDnTcpGateway,
-) -> MbusDnStatus {
+pub unsafe extern "C" fn mbus_dn_tcp_gateway_start(handle: *mut MbusDnTcpGateway) -> MbusDnStatus {
     let gw = match unsafe { handle.as_ref() } {
         Some(g) => g,
         None => return MbusDnStatus::MbusErrNullPointer,
@@ -204,7 +202,11 @@ pub unsafe extern "C" fn mbus_dn_tcp_gateway_start(
         if cfg.downstreams.is_empty() || cfg.router.is_empty() {
             return MbusDnStatus::MbusErrInvalidAddress;
         }
-        (cfg.bind_addr.clone(), cfg.downstreams.clone(), cfg.router.clone())
+        (
+            cfg.bind_addr.clone(),
+            cfg.downstreams.clone(),
+            cfg.router.clone(),
+        )
     };
     let stop_signal = gw.stop_signal.clone();
 

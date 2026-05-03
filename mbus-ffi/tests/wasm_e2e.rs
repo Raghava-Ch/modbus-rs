@@ -1134,8 +1134,8 @@ async fn e2e_wasm_tcp_server_start_is_idempotent() {
     let url = "ws://server-start-idempotent";
 
     let handler = Function::new_with_args("req", "return req;");
-    let server =
-        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+    let server = WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler)
+        .expect("server creation failed");
 
     server.start().expect("first start should succeed");
     let created_1 = call_global_1("__fake_ws_created_count", &JsValue::from_str(url))
@@ -1143,7 +1143,9 @@ async fn e2e_wasm_tcp_server_start_is_idempotent() {
         .unwrap_or(-1.0) as u32;
     assert_eq!(created_1, 1, "first start should create one websocket");
 
-    server.start().expect("second start should be no-op and succeed");
+    server
+        .start()
+        .expect("second start should be no-op and succeed");
     let created_2 = call_global_1("__fake_ws_created_count", &JsValue::from_str(url))
         .as_f64()
         .unwrap_or(-1.0) as u32;
@@ -1209,12 +1211,16 @@ async fn e2e_wasm_tcp_server_dispatch_callback_semantics() {
         "req",
         "if (req && req.fail) { return Promise.reject('intentional-failure'); }\nreturn { mode: 'sync', value: req.value ?? 0 };",
     );
-    let server =
-        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+    let server = WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler)
+        .expect("server creation failed");
     server.start().expect("server start failed");
 
     let ok_req = Object::new();
-    let _ = Reflect::set(&ok_req, &JsValue::from_str("value"), &JsValue::from_f64(7.0));
+    let _ = Reflect::set(
+        &ok_req,
+        &JsValue::from_str("value"),
+        &JsValue::from_f64(7.0),
+    );
     let ok_out = server
         .dispatch_request(ok_req.into())
         .await
@@ -1231,7 +1237,11 @@ async fn e2e_wasm_tcp_server_dispatch_callback_semantics() {
     assert_eq!(value as u8, 7);
 
     let fail_req = Object::new();
-    let _ = Reflect::set(&fail_req, &JsValue::from_str("fail"), &JsValue::from_bool(true));
+    let _ = Reflect::set(
+        &fail_req,
+        &JsValue::from_str("fail"),
+        &JsValue::from_bool(true),
+    );
     let err = server
         .dispatch_request(fail_req.into())
         .await
@@ -1251,8 +1261,8 @@ async fn e2e_wasm_tcp_server_lifecycle_and_frame_flow_deterministic() {
     let url = "ws://server-lifecycle-flow";
 
     let handler = Function::new_with_args("req", "return req;");
-    let server =
-        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+    let server = WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler)
+        .expect("server creation failed");
 
     assert_eq!(server.ws_url(), url);
     assert!(!server.is_running(), "server starts in stopped state");
@@ -1329,8 +1339,8 @@ async fn e2e_wasm_tcp_server_status_snapshot_and_last_error_observability() {
     let url = "ws://server-observability";
 
     let handler = Function::new_with_args("req", "return req;");
-    let server =
-        WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler).expect("server creation failed");
+    let server = WasmTcpServer::new(WasmTcpGatewayConfig::new(url), handler)
+        .expect("server creation failed");
 
     let snap0 = server.status_snapshot();
     assert_eq!(snap0.transport(), WasmServerTransportKind::TcpGateway);

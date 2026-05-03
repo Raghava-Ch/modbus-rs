@@ -72,9 +72,7 @@ impl<const N: usize> TxnMap<N> {
 
     /// Look up an entry by its internal transaction ID.
     pub fn lookup(&self, internal_txn: u16) -> Option<&TxnEntry> {
-        self.entries
-            .iter()
-            .find(|e| e.internal_txn == internal_txn)
+        self.entries.iter().find(|e| e.internal_txn == internal_txn)
     }
 
     /// Remove and return the entry for `internal_txn`.

@@ -21,9 +21,9 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server_async::AsyncTcpServer as InnerAsyncTcpServer;
 use tokio::sync::Notify;
 
+use super::vtable::{GoServerAdapter, MbusGoServerVtable};
 use crate::go::runtime;
 use crate::go::status::{self, MbusGoStatus};
-use super::vtable::{GoServerAdapter, MbusGoServerVtable};
 
 /// Opaque handle to an async Modbus TCP server.
 pub struct MbusGoTcpServer {
@@ -100,9 +100,7 @@ pub unsafe extern "C" fn mbus_go_tcp_server_free(handle: *mut MbusGoTcpServer) {
 ///
 /// `handle` must be a valid server pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mbus_go_tcp_server_start(
-    handle: *mut MbusGoTcpServer,
-) -> MbusGoStatus {
+pub unsafe extern "C" fn mbus_go_tcp_server_start(handle: *mut MbusGoTcpServer) -> MbusGoStatus {
     let srv = match unsafe { handle.as_ref() } {
         Some(s) => s,
         None => return MbusGoStatus::MbusErrNullPointer,

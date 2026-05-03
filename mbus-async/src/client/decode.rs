@@ -27,6 +27,8 @@ use mbus_core::{
 
 use crate::client::response::ClientResponse;
 
+#[cfg(any(feature = "file-record", feature = "diagnostics"))]
+use heapless::Vec;
 #[cfg(feature = "coils")]
 use mbus_core::models::coil::Coils;
 #[cfg(feature = "discrete-inputs")]
@@ -47,8 +49,6 @@ use mbus_core::{
         ConformityLevel, DeviceIdentificationResponse, ObjectId, ReadDeviceIdCode,
     },
 };
-#[cfg(any(feature = "file-record", feature = "diagnostics"))]
-use heapless::Vec;
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 

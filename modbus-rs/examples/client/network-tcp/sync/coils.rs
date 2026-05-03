@@ -97,8 +97,8 @@ fn main() -> Result<()> {
     // --- Modbus Client Operations ---
     let transport = StdTcpTransport::new();
     let app = ClientMockApp::default();
-    let mut tcp_config = ModbusTcpConfig::new("192.168.55.200", 502)
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let mut tcp_config =
+        ModbusTcpConfig::new("192.168.55.200", 502).map_err(|e| anyhow::anyhow!(e))?;
     tcp_config.connection_timeout_ms = 500;
     let config = ModbusConfig::Tcp(tcp_config);
 
@@ -229,7 +229,9 @@ fn main() -> Result<()> {
     let write_multi_quantity = 3;
 
     let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity).unwrap();
-    write_multi_coils.set_value(write_multi_address, false).unwrap();
+    write_multi_coils
+        .set_value(write_multi_address, false)
+        .unwrap();
     write_multi_coils
         .set_value(write_multi_address + 1, true)
         .unwrap();
