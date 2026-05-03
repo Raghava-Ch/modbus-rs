@@ -109,6 +109,18 @@ jobs:
         if: matrix.settings.setup
         run: ${{ matrix.settings.setup }}
 
+      - name: Configure aarch64 linker
+        if: matrix.settings.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Configure armv7 linker
+        if: matrix.settings.target == 'armv7-unknown-linux-gnueabihf'
+        run: |
+          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> "$GITHUB_ENV"
+          echo "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc" >> "$GITHUB_ENV"
+
       - name: Build native module
         working-directory: mbus-ffi/nodejs
         run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs,full --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir .
