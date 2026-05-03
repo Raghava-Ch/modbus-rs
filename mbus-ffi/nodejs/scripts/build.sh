@@ -30,7 +30,7 @@ esac
 npx napi build --platform $EXTRA \
     --features nodejs,full \
     --js index.js --dts index.d.ts \
-    --cargo-cwd ..
+    --manifest-path ../Cargo.toml
 
 echo
 echo "Build complete. Native artifacts:"
