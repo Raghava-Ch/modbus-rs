@@ -97,6 +97,8 @@ transports (TCP ↔ RTU, WebSocket ↔ TCP, etc.).
 - [Release Checklist](../RELEASE.md) — Release process
 - [License](../LICENSE) — GPLv3
 
+Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
+
 ---
 
 ## Getting Help

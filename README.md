@@ -15,7 +15,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 ```toml
 [dependencies]
-modbus-rs = "0.8.0"
+modbus-rs = "0.9.0"
 ```
 
 ```rust
@@ -36,21 +36,21 @@ Use `default-features = false` and opt into only the features you need.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = ["client", "network-tcp", "coils"] }
+modbus-rs = { version = "0.9.0", default-features = false, features = ["client", "network-tcp", "coils"] }
 ```
 
 ### Minimal Embedded / no_std Client
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = ["client", "coils", "registers"] }
+modbus-rs = { version = "0.9.0", default-features = false, features = ["client", "coils", "registers"] }
 ```
 
 ### Core-only (protocol + models)
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.8.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.9.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 📖 **[Full Documentation →](documentation/README.md)**
@@ -393,7 +393,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution wo
 
 This project is licensed under the **GNU General Public License v3.0 (GPLv3)** — see [LICENSE](LICENSE).
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+This crate is licensed under GPLv3. Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 
 ---
 

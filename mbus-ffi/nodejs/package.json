@@ -1,12 +1,12 @@
 {
   "name": "modbus-rs",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "High-performance Modbus TCP/RTU/ASCII client, server and gateway for Node.js, powered by Rust",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build": "napi build --platform --release --features nodejs,full --js index.js --dts index.d.ts --cargo-cwd ..",
-    "build:debug": "napi build --platform --features nodejs,full --js index.js --dts index.d.ts --cargo-cwd ..",
+    "build": "napi build --platform --release --features nodejs,full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
+    "build:debug": "napi build --platform --features nodejs,full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
     "test": "node --test __test__/",
     "prepublishOnly": "napi prepublish -t npm",
     "artifacts": "napi artifacts",
@@ -39,22 +39,22 @@
     "node": ">=20"
   },
   "napi": {
-    "name": "modbus-rs",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "x86_64-unknown-linux-musl",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl",
-        "aarch64-apple-darwin",
-        "armv7-unknown-linux-gnueabihf"
-      ]
-    }
+    "binaryName": "modbus-rs",
+    "targets": [
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
+      "armv7-unknown-linux-gnueabihf"
+    ]
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.6.0"
+    "@napi-rs/cli": "^3.6.2",
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   },
   "files": [
     "index.js",
@@ -63,5 +63,7 @@
     "README.md",
     "LICENSE"
   ],
-  "optionalDependencies": {}
+  "dependencies": {
+    "modbus-rs": "file:"
+  }
 }

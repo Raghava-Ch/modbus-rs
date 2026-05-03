@@ -4,6 +4,27 @@ A self-contained tour of the `modbus-rs` Node.js bindings.  Every example is
 runnable on its own with `node examples/<file>.mjs` after the package has
 been installed (`npm install`) and built (`npm run build`).
 
+## Before running examples (local repo checkout)
+
+Build the Rust FFI crate first (from repository root):
+
+```bash
+cargo build -p mbus-ffi --features nodejs,full --release
+```
+
+Then in `mbus-ffi/nodejs`, run:
+
+```bash
+npm install
+npm run build
+npm install modbus-rs@file:.
+```
+
+Why this is needed: examples import `modbus-rs` by package name, so in a local
+repository checkout you must link the package to itself after building. The
+`npm run build` step also builds the native addon and emits JS/TypeScript
+bindings.
+
 ## Index
 
 | #  | File | Topic |
@@ -76,9 +97,19 @@ node dist/examples/12-typescript-client.js
 
 ## Troubleshooting
 
-* **`Error: Cannot find module 'modbus-rs'`** — run `npm install` then
-  `npm run build` to compile the native addon for your platform.  See the
-  package README for prerequisites (Rust toolchain, `libudev-dev` on Linux).
+* **`Error: Cannot find module 'modbus-rs'`** (or
+  **`ERR_MODULE_NOT_FOUND: Cannot find package 'modbus-rs'`**) — from
+  repository root and then `mbus-ffi/nodejs`, run:
+
+  ```bash
+  cargo build -p mbus-ffi --features nodejs,full --release
+  npm install
+  npm run build
+  npm install modbus-rs@file:.
+  ```
+
+  This installs dependencies, builds the native addon, and creates the local
+  package link used by the examples.
 * **Connection refused** — make sure a server is listening on the host/port.
 * **Serial port not found** — check the path with `ls /dev/tty*` (Linux/macOS)
   or `mode` (Windows), and confirm the user has access (Linux: add user to

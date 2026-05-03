@@ -12,7 +12,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", features = ["async"] }
+modbus-rs = { version = "0.9.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
     "async", "serial-rtu", "coils", "registers"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -284,7 +284,7 @@ Enable `traffic` when you need raw frame observability in async apps:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.8.0", default-features = false, features = [
+modbus-rs = { version = "0.9.0", default-features = false, features = [
     "async", "traffic", "network-tcp", "coils"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -334,5 +334,5 @@ async fn main() -> anyhow::Result<()> {
 
 This crate is licensed under **GPL-3.0** — see the repository root [LICENSE](../LICENSE).
 
-If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 

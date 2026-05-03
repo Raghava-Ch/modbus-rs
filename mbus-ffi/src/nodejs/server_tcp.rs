@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
 
 use mbus_core::errors::ExceptionCode;
@@ -132,31 +132,25 @@ pub struct ServerExceptionResponse {
 /// Internal adapter that implements AsyncAppHandler by delegating to JS callbacks.
 struct JsHandlerAdapter {
     #[cfg(feature = "coils")]
-    on_read_coils: Option<ThreadsafeFunction<ReadCoilsRequest, ErrorStrategy::Fatal>>,
+    on_read_coils: Option<ThreadsafeFunction<ReadCoilsRequest>>,
     #[cfg(feature = "coils")]
-    on_write_single_coil: Option<ThreadsafeFunction<WriteSingleCoilRequest, ErrorStrategy::Fatal>>,
+    on_write_single_coil: Option<ThreadsafeFunction<WriteSingleCoilRequest>>,
     #[cfg(feature = "coils")]
-    on_write_multiple_coils:
-        Option<ThreadsafeFunction<WriteMultipleCoilsRequest, ErrorStrategy::Fatal>>,
+    on_write_multiple_coils: Option<ThreadsafeFunction<WriteMultipleCoilsRequest>>,
     #[cfg(feature = "discrete-inputs")]
-    on_read_discrete_inputs:
-        Option<ThreadsafeFunction<ReadDiscreteInputsRequest, ErrorStrategy::Fatal>>,
+    on_read_discrete_inputs: Option<ThreadsafeFunction<ReadDiscreteInputsRequest>>,
     #[cfg(feature = "registers")]
-    on_read_holding_registers:
-        Option<ThreadsafeFunction<ReadHoldingRegistersRequest, ErrorStrategy::Fatal>>,
+    on_read_holding_registers: Option<ThreadsafeFunction<ReadHoldingRegistersRequest>>,
     #[cfg(feature = "registers")]
-    on_read_input_registers:
-        Option<ThreadsafeFunction<ReadInputRegistersRequest, ErrorStrategy::Fatal>>,
+    on_read_input_registers: Option<ThreadsafeFunction<ReadInputRegistersRequest>>,
     #[cfg(feature = "registers")]
-    on_write_single_register:
-        Option<ThreadsafeFunction<WriteSingleRegisterRequest, ErrorStrategy::Fatal>>,
+    on_write_single_register: Option<ThreadsafeFunction<WriteSingleRegisterRequest>>,
     #[cfg(feature = "registers")]
-    on_write_multiple_registers:
-        Option<ThreadsafeFunction<WriteMultipleRegistersRequest, ErrorStrategy::Fatal>>,
+    on_write_multiple_registers: Option<ThreadsafeFunction<WriteMultipleRegistersRequest>>,
     #[cfg(feature = "fifo")]
-    on_read_fifo_queue: Option<ThreadsafeFunction<ReadFifoQueueRequest, ErrorStrategy::Fatal>>,
+    on_read_fifo_queue: Option<ThreadsafeFunction<ReadFifoQueueRequest>>,
     #[cfg(feature = "diagnostics")]
-    on_diagnostics: Option<ThreadsafeFunction<DiagnosticsRequest, ErrorStrategy::Fatal>>,
+    on_diagnostics: Option<ThreadsafeFunction<DiagnosticsRequest>>,
 }
 
 // Safety: The ThreadsafeFunctions are designed to be called from multiple threads
@@ -165,27 +159,29 @@ unsafe impl Sync for JsHandlerAdapter {}
 
 impl Clone for JsHandlerAdapter {
     fn clone(&self) -> Self {
+        // ThreadsafeFunctions are not Clone in napi v3; since callbacks are unimplemented
+        // stubs (all None), cloning produces another empty adapter.
         Self {
             #[cfg(feature = "coils")]
-            on_read_coils: self.on_read_coils.clone(),
+            on_read_coils: None,
             #[cfg(feature = "coils")]
-            on_write_single_coil: self.on_write_single_coil.clone(),
+            on_write_single_coil: None,
             #[cfg(feature = "coils")]
-            on_write_multiple_coils: self.on_write_multiple_coils.clone(),
+            on_write_multiple_coils: None,
             #[cfg(feature = "discrete-inputs")]
-            on_read_discrete_inputs: self.on_read_discrete_inputs.clone(),
+            on_read_discrete_inputs: None,
             #[cfg(feature = "registers")]
-            on_read_holding_registers: self.on_read_holding_registers.clone(),
+            on_read_holding_registers: None,
             #[cfg(feature = "registers")]
-            on_read_input_registers: self.on_read_input_registers.clone(),
+            on_read_input_registers: None,
             #[cfg(feature = "registers")]
-            on_write_single_register: self.on_write_single_register.clone(),
+            on_write_single_register: None,
             #[cfg(feature = "registers")]
-            on_write_multiple_registers: self.on_write_multiple_registers.clone(),
+            on_write_multiple_registers: None,
             #[cfg(feature = "fifo")]
-            on_read_fifo_queue: self.on_read_fifo_queue.clone(),
+            on_read_fifo_queue: None,
             #[cfg(feature = "diagnostics")]
-            on_diagnostics: self.on_diagnostics.clone(),
+            on_diagnostics: None,
         }
     }
 }

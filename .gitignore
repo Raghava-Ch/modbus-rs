@@ -50,6 +50,11 @@ mbus-ffi/include
 *.pyc
 mbus-ffi/python/modbus_rs/_modbus_rs.cpython-*.so
 
+# Safety net: Node napi build artifacts belong under mbus-ffi/nodejs/.
+# Ignore accidental root-level emissions.
+mbus-ffi/index.d.ts
+mbus-ffi/*.node
+
 # CMake project ignores
 CMakeLists.txt.user
 CMakeCache.txt
