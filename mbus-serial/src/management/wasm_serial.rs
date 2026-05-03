@@ -184,28 +184,30 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     }
                 };
 
-                let reader = match WasmSerialTransport::<ASCII>::call_method0(&readable, "getReader") {
-                    Ok(reader) => reader,
-                    Err(_) => {
-                        shared.borrow_mut().connected = false;
-                        break;
-                    }
-                };
+                let reader =
+                    match WasmSerialTransport::<ASCII>::call_method0(&readable, "getReader") {
+                        Ok(reader) => reader,
+                        Err(_) => {
+                            shared.borrow_mut().connected = false;
+                            break;
+                        }
+                    };
 
                 loop {
                     if !shared.borrow().connected {
                         break;
                     }
 
-                    let read_result = match WasmSerialTransport::<ASCII>::call_method0(&reader, "read")
-                        .and_then(WasmSerialTransport::<ASCII>::promise_from)
-                    {
-                        Ok(promise) => JsFuture::from(promise).await,
-                        Err(_) => {
-                            shared.borrow_mut().connected = false;
-                            break;
-                        }
-                    };
+                    let read_result =
+                        match WasmSerialTransport::<ASCII>::call_method0(&reader, "read")
+                            .and_then(WasmSerialTransport::<ASCII>::promise_from)
+                        {
+                            Ok(promise) => JsFuture::from(promise).await,
+                            Err(_) => {
+                                shared.borrow_mut().connected = false;
+                                break;
+                            }
+                        };
 
                     let result = match read_result {
                         Ok(result) => result,
@@ -271,25 +273,29 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     }
                 };
 
-                let writer = match WasmSerialTransport::<ASCII>::call_method0(&writable, "getWriter") {
-                    Ok(writer) => writer,
-                    Err(_) => {
-                        shared.borrow_mut().connected = false;
-                        break;
-                    }
-                };
-
-                let data = Uint8Array::from(frame.as_slice());
-                let write_result =
-                    match WasmSerialTransport::<ASCII>::call_method1(&writer, "write", &data.into())
-                        .and_then(WasmSerialTransport::<ASCII>::promise_from)
-                    {
-                        Ok(promise) => JsFuture::from(promise).await,
+                let writer =
+                    match WasmSerialTransport::<ASCII>::call_method0(&writable, "getWriter") {
+                        Ok(writer) => writer,
                         Err(_) => {
                             shared.borrow_mut().connected = false;
                             break;
                         }
                     };
+
+                let data = Uint8Array::from(frame.as_slice());
+                let write_result = match WasmSerialTransport::<ASCII>::call_method1(
+                    &writer,
+                    "write",
+                    &data.into(),
+                )
+                .and_then(WasmSerialTransport::<ASCII>::promise_from)
+                {
+                    Ok(promise) => JsFuture::from(promise).await,
+                    Err(_) => {
+                        shared.borrow_mut().connected = false;
+                        break;
+                    }
+                };
 
                 if write_result.is_err() {
                     shared.borrow_mut().connected = false;

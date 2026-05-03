@@ -5,10 +5,10 @@ use mbus_client::services::ClientServices;
 use super::app::CApp;
 use super::callbacks::MbusCallbacks;
 use super::config::{MbusTcpConfig, tcp_config_from_c};
-use crate::c::error::MbusStatusCode;
 use super::pool::{
     MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_tcp, pool_free, with_tcp_client,
 };
+use crate::c::error::MbusStatusCode;
 use crate::c::transport::{CTcpTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

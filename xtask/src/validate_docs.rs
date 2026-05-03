@@ -415,7 +415,7 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
             Ok(o) if o.status.success() => {
                 println!("{}", ok("✓"));
                 passed += 1;
-                
+
                 // Capture warnings even on success
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 let block_warnings = extract_warnings(&stderr);
@@ -496,26 +496,34 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
 /// cleaned up even on failure. `modbus-rs/examples/` is never touched.
 ///
 /// Returns: (passed, failed, failures, warnings).
-fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<String>, Vec<String>) {
+fn validate_rust_blocks(
+    root: &Path,
+    blocks: &[&CodeBlock],
+) -> (u32, u32, Vec<String>, Vec<String>) {
     if blocks.is_empty() {
         return (0, 0, Vec::new(), Vec::new());
     }
 
     // ── Bootstrap the scratch package ────────────────────────────────
-    let scratch_dir      = root.join("target").join("doc-validate");
+    let scratch_dir = root.join("target").join("doc-validate");
     let scratch_examples = scratch_dir.join("examples");
     let scratch_manifest = scratch_dir.join("Cargo.toml");
 
     if let Err(e) = fs::create_dir_all(&scratch_examples) {
-        return (0, 0, vec![format!("cannot create scratch dir: {e}")], Vec::new());
+        return (
+            0,
+            0,
+            vec![format!("cannot create scratch dir: {e}")],
+            Vec::new(),
+        );
     }
 
     // Use absolute paths so the manifest is location-independent.
-    let modbus_rs_path   = root.join("modbus-rs");
-    let mbus_core_path   = root.join("mbus-core");
+    let modbus_rs_path = root.join("modbus-rs");
+    let mbus_core_path = root.join("mbus-core");
     let mbus_client_path = root.join("mbus-client");
     let mbus_server_path = root.join("mbus-server");
-    let mbus_async_path  = root.join("mbus-async");
+    let mbus_async_path = root.join("mbus-async");
     let manifest_src = format!(
         // [workspace] prevents Cargo from walking up and inheriting the root workspace.
         "[workspace]\n\
@@ -557,7 +565,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
          version = \"1.0\"\n\
          \n\
          [dependencies.heapless]\n\
-         version = \"0.8\"\n\
+         version = \"0.9\"\n\
          \n\
          [dependencies.env_logger]\n\
          version = \"0.11\"\n\
@@ -584,15 +592,20 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
          fifo = []\n\
          client = []\n\
          server = []\n",
-        modbus_rs   = modbus_rs_path.display(),
-        mbus_core   = mbus_core_path.display(),
+        modbus_rs = modbus_rs_path.display(),
+        mbus_core = mbus_core_path.display(),
         mbus_client = mbus_client_path.display(),
         mbus_server = mbus_server_path.display(),
-        mbus_async  = mbus_async_path.display(),
+        mbus_async = mbus_async_path.display(),
     );
 
     if let Err(e) = fs::write(&scratch_manifest, &manifest_src) {
-        return (0, 0, vec![format!("cannot write scratch Cargo.toml: {e}")], Vec::new());
+        return (
+            0,
+            0,
+            vec![format!("cannot write scratch Cargo.toml: {e}")],
+            Vec::new(),
+        );
     }
 
     let mut temp_files: Vec<PathBuf> = Vec::new();
@@ -638,7 +651,7 @@ fn validate_rust_blocks(root: &Path, blocks: &[&CodeBlock]) -> (u32, u32, Vec<St
                 Ok(o) if o.status.success() => {
                     println!("{}", ok("✓"));
                     passed += 1;
-                    
+
                     // Capture warnings even on success
                     let stderr = String::from_utf8_lossy(&o.stderr);
                     let block_warnings = extract_warnings(&stderr);
@@ -769,10 +782,7 @@ fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<Vec<PathBuf>
                 let p = PathBuf::from(raw);
                 let resolved = if p.is_absolute() { p } else { root.join(p) };
                 if !resolved.exists() {
-                    return Err(format!(
-                        "--file '{}' does not exist",
-                        resolved.display()
-                    ));
+                    return Err(format!("--file '{}' does not exist", resolved.display()));
                 }
                 files.push(resolved);
             }
@@ -804,10 +814,7 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
     if filtered {
         println!("Scanning {} selected file(s):\n", md_files.len());
         for f in &md_files {
-            println!(
-                "  {}",
-                f.strip_prefix(root).unwrap_or(f).display()
-            );
+            println!("  {}", f.strip_prefix(root).unwrap_or(f).display());
         }
         println!();
     } else {
@@ -852,7 +859,8 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
         doc_example_names.len()
     );
 
-    let (cargo_pass, cargo_fail, cargo_failures, cargo_warnings) = validate_cargo_commands(root, &cargo_cmds);
+    let (cargo_pass, cargo_fail, cargo_failures, cargo_warnings) =
+        validate_cargo_commands(root, &cargo_cmds);
     total_fail += cargo_fail;
 
     // ── Phase 4: Rust code blocks ────────────────────────────────────
@@ -868,7 +876,8 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
         skipped_n
     );
 
-    let (rust_pass, rust_fail, rust_failures, rust_warnings) = validate_rust_blocks(root, &compilable);
+    let (rust_pass, rust_fail, rust_failures, rust_warnings) =
+        validate_rust_blocks(root, &compilable);
     total_fail += rust_fail;
 
     // ── Phase 5: Cross-reference ─────────────────────────────────────
@@ -961,9 +970,10 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
             warn("⚠"),
             warn(&format!("BOLD: {} total", total_warnings))
         );
-        
+
         if !cargo_warnings.is_empty() {
-            println!("\n    {} Cargo example warnings ({}):",
+            println!(
+                "\n    {} Cargo example warnings ({}):",
                 warn("⚠"),
                 cargo_warnings.len()
             );
@@ -971,9 +981,10 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
                 println!("      {} {w}", warn("⚠"));
             }
         }
-        
+
         if !rust_warnings.is_empty() {
-            println!("\n    {} Rust block warnings ({}):",
+            println!(
+                "\n    {} Rust block warnings ({}):",
                 warn("⚠"),
                 rust_warnings.len()
             );
@@ -988,7 +999,11 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
     if total_fail > 0 {
         Err(format!("{total_fail} validation(s) failed"))
     } else {
-        println!("{} All validations passed! ({} warnings found)\n", ok("✓"), total_warnings);
+        println!(
+            "{} All validations passed! ({} warnings found)\n",
+            ok("✓"),
+            total_warnings
+        );
         Ok(())
     }
 }

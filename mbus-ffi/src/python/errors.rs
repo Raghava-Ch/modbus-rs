@@ -1,32 +1,60 @@
 use mbus_client_async::AsyncError;
-use mbus_server_async::AsyncServerError;
 use mbus_core::errors::MbusError;
+use mbus_server_async::AsyncServerError;
 use pyo3::prelude::*;
 use pyo3::{create_exception, exceptions::PyException};
 
 // ── Exception hierarchy ──────────────────────────────────────────────────────
 
-create_exception!(modbus_rs, ModbusError, PyException,
-    "Base class for all modbus-rs exceptions.");
+create_exception!(
+    modbus_rs,
+    ModbusError,
+    PyException,
+    "Base class for all modbus-rs exceptions."
+);
 
-create_exception!(modbus_rs, ModbusTimeout, ModbusError,
-    "Raised when a Modbus request times out before a response is received.");
+create_exception!(
+    modbus_rs,
+    ModbusTimeout,
+    ModbusError,
+    "Raised when a Modbus request times out before a response is received."
+);
 
-create_exception!(modbus_rs, ModbusConnectionError, ModbusError,
-    "Raised when the connection to the Modbus device fails or is lost.");
+create_exception!(
+    modbus_rs,
+    ModbusConnectionError,
+    ModbusError,
+    "Raised when the connection to the Modbus device fails or is lost."
+);
 
-create_exception!(modbus_rs, ModbusProtocolError, ModbusError,
-    "Raised when a Modbus protocol framing or parse error occurs.");
+create_exception!(
+    modbus_rs,
+    ModbusProtocolError,
+    ModbusError,
+    "Raised when a Modbus protocol framing or parse error occurs."
+);
 
-create_exception!(modbus_rs, ModbusDeviceException, ModbusProtocolError,
-    "Raised when the remote device returns a Modbus exception response (exception code in args[1]).");
+create_exception!(
+    modbus_rs,
+    ModbusDeviceException,
+    ModbusProtocolError,
+    "Raised when the remote device returns a Modbus exception response (exception code in args[1])."
+);
 
-create_exception!(modbus_rs, ModbusConfigError, ModbusError,
-    "Raised when client or server configuration is invalid (e.g. bad port, bad unit ID at construction).");
+create_exception!(
+    modbus_rs,
+    ModbusConfigError,
+    ModbusError,
+    "Raised when client or server configuration is invalid (e.g. bad port, bad unit ID at construction)."
+);
 
-create_exception!(modbus_rs, ModbusInvalidArgument, ModbusError,
+create_exception!(
+    modbus_rs,
+    ModbusInvalidArgument,
+    ModbusError,
     "Raised when a per-request argument is out of range or otherwise invalid \
-    (e.g. address out of range, invalid quantity, bad coil value, invalid mask).");
+    (e.g. address out of range, invalid quantity, bad coil value, invalid mask)."
+);
 
 // ── Conversion helpers ───────────────────────────────────────────────────────
 
@@ -54,17 +82,13 @@ pub fn mbus_error_to_py(err: MbusError) -> PyErr {
         MbusError::ConnectionLost
         | MbusError::ConnectionFailed
         | MbusError::ConnectionClosed
-        | MbusError::IoError => {
-            ModbusConnectionError::new_err(format!("{err}"))
-        }
+        | MbusError::IoError => ModbusConnectionError::new_err(format!("{err}")),
         MbusError::ParseError
         | MbusError::BasicParseError
         | MbusError::InvalidPduLength
         | MbusError::InvalidAduLength
         | MbusError::ChecksumError
-        | MbusError::UnexpectedResponse => {
-            ModbusProtocolError::new_err(format!("{err}"))
-        }
+        | MbusError::UnexpectedResponse => ModbusProtocolError::new_err(format!("{err}")),
         // Setup/construction errors — bad configuration supplied at build time.
         MbusError::InvalidConfiguration
         | MbusError::InvalidSlaveAddress

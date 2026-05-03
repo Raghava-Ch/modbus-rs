@@ -71,7 +71,8 @@ pub struct DemoManifest {
 impl DemoManifest {
     /// Absolute path to the CMake build output directory.
     pub fn build_dir(&self, link_static: bool) -> PathBuf {
-        self.dir.join(if link_static { "build-static" } else { "build" })
+        self.dir
+            .join(if link_static { "build-static" } else { "build" })
     }
 
     /// Absolute path to the compiled demo binary.
@@ -115,9 +116,6 @@ pub fn discover_demos(root: &Path) -> Result<Vec<DemoManifest>, String> {
 pub fn find_demo<'a>(demos: &'a [DemoManifest], name: &str) -> Result<&'a DemoManifest, String> {
     demos.iter().find(|d| d.name == name).ok_or_else(|| {
         let names: Vec<&str> = demos.iter().map(|d| d.name.as_str()).collect();
-        format!(
-            "demo '{name}' not found. Available: {}",
-            names.join(", ")
-        )
+        format!("demo '{name}' not found. Available: {}", names.join(", "))
     })
 }

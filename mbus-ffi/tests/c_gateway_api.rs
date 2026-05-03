@@ -10,9 +10,9 @@
 use core::ffi::c_void;
 use mbus_ffi::c::error::MbusStatusCode;
 use mbus_ffi::c::gateway::{
-    mbus_gateway_add_downstream, mbus_gateway_add_range_route, mbus_gateway_add_unit_route,
-    mbus_gateway_free, mbus_gateway_new, mbus_gateway_poll, MbusGatewayId,
-    MBUS_INVALID_GATEWAY_ID,
+    MBUS_INVALID_GATEWAY_ID, MbusGatewayId, mbus_gateway_add_downstream,
+    mbus_gateway_add_range_route, mbus_gateway_add_unit_route, mbus_gateway_free, mbus_gateway_new,
+    mbus_gateway_poll,
 };
 use mbus_ffi::c::transport::MbusTransportCallbacks;
 
@@ -111,7 +111,10 @@ fn full_lifecycle_smoke() {
     assert_eq!(ch, 0);
 
     // Unit route now succeeds
-    assert_eq!(mbus_gateway_add_unit_route(id, 1, 0), MbusStatusCode::MbusOk);
+    assert_eq!(
+        mbus_gateway_add_unit_route(id, 1, 0),
+        MbusStatusCode::MbusOk
+    );
     // Duplicate unit fails
     assert_eq!(
         mbus_gateway_add_unit_route(id, 1, 0),

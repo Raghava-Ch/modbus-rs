@@ -12,8 +12,8 @@
 // Generated code contains raw-pointer extern signatures and safety docs that
 // are produced by codegen; lint at the generator level rather than here.
 mod generated {
-	#![allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
-	include!(concat!(env!("OUT_DIR"), "/generated_server.rs"));
+    #![allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
+    include!(concat!(env!("OUT_DIR"), "/generated_server.rs"));
 }
 
 pub use generated::*;

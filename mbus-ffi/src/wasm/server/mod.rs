@@ -11,14 +11,14 @@
 //! This module owns only JS binding types, lifecycle facade, and callback bridge.
 
 mod adapters;
-mod bridge;
 mod binding_types;
+mod bridge;
 mod serial_server;
 mod tcp_server;
 
-pub use serial_server::WasmSerialServer;
-pub use tcp_server::WasmTcpServer;
 pub use binding_types::{
     WasmSerialServerConfig, WasmServerBindingPlan, WasmServerStatusSnapshot,
     WasmServerTransportKind, WasmTcpGatewayConfig,
 };
+pub use serial_server::WasmSerialServer;
+pub use tcp_server::WasmTcpServer;

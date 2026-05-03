@@ -19,7 +19,7 @@
 //! ```
 
 use anyhow::Result;
-use mbus_async::server::{AsyncTcpServer};
+use mbus_async::server::AsyncTcpServer;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};

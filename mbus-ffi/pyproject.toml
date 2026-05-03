@@ -7,7 +7,7 @@ name = "modbus-rs"
 version = "0.9.0"
 description = "Fast, full-featured Modbus TCP + Serial bindings for Python — powered by Rust"
 readme = "PYPI_README.md"
-license = { file = "../LICENSE" }
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 keywords = ["modbus", "rtu", "tcp", "serial", "industrial", "automation"]
 classifiers = [

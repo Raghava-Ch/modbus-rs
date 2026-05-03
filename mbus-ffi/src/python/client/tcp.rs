@@ -4,18 +4,18 @@ use std::time::Duration;
 use mbus_client_async::AsyncTcpClient as InnerAsyncTcpClient;
 #[cfg(feature = "diagnostics")]
 use mbus_client_async::{ObjectId, ReadDeviceIdCode};
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "file-record")]
 use mbus_client_async::{SubRequest, SubRequestParams};
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::coil::Coils;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_async_runtimes::tokio::future_into_py;
 
 use super::helpers::{
-    async_error_to_py, coils_to_py, discrete_inputs_to_py, fifo_to_py, registers_to_py,
-    enter_runtime, get_runtime,
+    async_error_to_py, coils_to_py, discrete_inputs_to_py, enter_runtime, fifo_to_py, get_runtime,
+    registers_to_py,
 };
 
 // ── shared constructor helper ────────────────────────────────────────────────
@@ -38,9 +38,11 @@ fn parse_device_id_kind(kind: &str) -> PyResult<ReadDeviceIdCode> {
         "regular" => Ok(ReadDeviceIdCode::Regular),
         "extended" => Ok(ReadDeviceIdCode::Extended),
         "specific" => Ok(ReadDeviceIdCode::Specific),
-        other => Err(crate::python::errors::ModbusInvalidArgument::new_err(format!(
-            "Unknown device-identification kind '{other}'; expected 'basic', 'regular', 'extended', or 'specific'"
-        ))),
+        other => Err(crate::python::errors::ModbusInvalidArgument::new_err(
+            format!(
+                "Unknown device-identification kind '{other}'; expected 'basic', 'regular', 'extended', or 'specific'"
+            ),
+        )),
     }
 }
 
@@ -63,9 +65,11 @@ fn build_write_file_sub_request(requests: &[(u16, u16, Vec<u16>)]) -> PyResult<S
             heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
                 data.as_slice(),
             )
-            .map_err(|_| crate::python::errors::ModbusInvalidArgument::new_err(
-                "record_data exceeds Modbus PDU capacity",
-            ))?;
+            .map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err(
+                    "record_data exceeds Modbus PDU capacity",
+                )
+            })?;
         let record_length = record_data.len() as u16;
         sub_request
             .add_write_sub_request(*file_number, *record_number, record_length, record_data)
@@ -142,7 +146,10 @@ impl TcpClient {
     /// Disconnect from the server.
     fn disconnect(&self, py: Python<'_>) -> PyResult<()> {
         let rt = get_runtime();
-        py.detach(|| rt.block_on(self.inner.disconnect()).map_err(async_error_to_py))
+        py.detach(|| {
+            rt.block_on(self.inner.disconnect())
+                .map_err(async_error_to_py)
+        })
     }
 
     /// Returns ``True`` if there are requests currently in-flight.
@@ -192,12 +199,7 @@ impl TcpClient {
 
     /// Write multiple coils (FC 0F). Returns ``(start_address, quantity)`` echo.
     #[pyo3(signature = (address, values))]
-    fn write_coils(
-        &self,
-        py: Python<'_>,
-        address: u16,
-        values: Vec<bool>,
-    ) -> PyResult<(u16, u16)> {
+    fn write_coils(&self, py: Python<'_>, address: u16, values: Vec<bool>) -> PyResult<(u16, u16)> {
         let rt = get_runtime();
         let uid = self.unit_id;
         let qty = values.len() as u16;
@@ -438,8 +440,8 @@ impl TcpClient {
     ) -> PyResult<(u16, Vec<u16>)> {
         let rt = get_runtime();
         let uid = self.unit_id;
-        let sub_fn =
-            DiagnosticSubFunction::try_from(sub_function).map_err(crate::python::errors::mbus_error_to_py)?;
+        let sub_fn = DiagnosticSubFunction::try_from(sub_function)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
         let response = py.detach(|| {
             rt.block_on(self.inner.diagnostics(uid, sub_fn, data.as_slice()))
                 .map_err(async_error_to_py)
@@ -484,11 +486,8 @@ impl TcpClient {
         let oid = ObjectId::from(object_id);
         let read_code = parse_device_id_kind(kind)?;
         let result = py.detach(|| {
-            rt.block_on(
-                self.inner
-                    .read_device_identification(uid, read_code, oid),
-            )
-            .map_err(async_error_to_py)
+            rt.block_on(self.inner.read_device_identification(uid, read_code, oid))
+                .map_err(async_error_to_py)
         })?;
         let dict = PyDict::new(py);
         for obj in result.objects().flatten() {
@@ -852,8 +851,8 @@ impl AsyncTcpClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
         let uid = self.unit_id;
-        let sub_fn =
-            DiagnosticSubFunction::try_from(sub_function).map_err(crate::python::errors::mbus_error_to_py)?;
+        let sub_fn = DiagnosticSubFunction::try_from(sub_function)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
         future_into_py(py, async move {
             let response = client
                 .diagnostics(uid, sub_fn, data.as_slice())
@@ -880,7 +879,10 @@ impl AsyncTcpClient {
         let client = self.inner.clone();
         let uid = self.unit_id;
         future_into_py(py, async move {
-            client.report_server_id(uid).await.map_err(async_error_to_py)
+            client
+                .report_server_id(uid)
+                .await
+                .map_err(async_error_to_py)
         })
     }
 

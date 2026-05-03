@@ -7,7 +7,13 @@ pub mod server;
 use mbus_core::transport::SerialMode as TransportSerialMode;
 use pyo3::prelude::*;
 
-#[pyclass(module = "modbus_rs._modbus_rs", name = "SerialMode", eq, eq_int, skip_from_py_object)]
+#[pyclass(
+    module = "modbus_rs._modbus_rs",
+    name = "SerialMode",
+    eq,
+    eq_int,
+    skip_from_py_object
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PySerialMode {
     Rtu = 0,

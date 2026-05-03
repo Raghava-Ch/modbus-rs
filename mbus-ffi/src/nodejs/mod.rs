@@ -28,14 +28,14 @@
 //! await client.close();
 //! ```
 
-pub mod runtime;
-pub mod errors;
-pub mod client_tcp;
 pub mod client_serial;
-pub mod server_tcp;
+pub mod client_tcp;
+pub mod errors;
 pub mod gateway;
+pub mod runtime;
+pub mod server_tcp;
 
-pub use client_tcp::*;
 pub use client_serial::*;
-pub use server_tcp::*;
+pub use client_tcp::*;
 pub use gateway::*;
+pub use server_tcp::*;

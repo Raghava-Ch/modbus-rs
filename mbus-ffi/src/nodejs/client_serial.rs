@@ -12,12 +12,12 @@ use mbus_core::transport::{
     UnitIdOrSlaveAddr,
 };
 
+#[cfg(feature = "file-record")]
+use mbus_client_async::SubRequest;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
-#[cfg(feature = "file-record")]
-use mbus_client_async::SubRequest;
 
 use crate::nodejs::client_tcp::{
     DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
@@ -26,7 +26,7 @@ use crate::nodejs::client_tcp::{
     ReadWriteMultipleRegistersOptions, WriteFileRecordOptions, WriteMultipleCoilsOptions,
     WriteMultipleRegistersOptions, WriteSingleCoilOptions, WriteSingleRegisterOptions,
 };
-use crate::nodejs::errors::{from_async_error, to_napi_err, ERR_MODBUS_INVALID_ARGUMENT};
+use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err};
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
@@ -60,7 +60,10 @@ fn parse_parity(s: &str) -> Result<Parity> {
         "odd" | "o" => Ok(Parity::Odd),
         _ => Err(napi::Error::new(
             Status::InvalidArg,
-            format!("Invalid parity value: '{}'. Expected 'none', 'even', or 'odd'", s),
+            format!(
+                "Invalid parity value: '{}'. Expected 'none', 'even', or 'odd'",
+                s
+            ),
         )),
     }
 }
@@ -102,14 +105,22 @@ fn parse_stop_bits(bits: u8) -> Result<u8> {
 /// Builds a ModbusSerialConfig from options with defaults.
 fn build_serial_config(opts: &SerialClientOptions, mode: SerialMode) -> Result<ModbusSerialConfig> {
     let baud_rate = parse_baud_rate(opts.baud_rate)?;
-    let data_bits = opts.data_bits.map(parse_data_bits).transpose()?.unwrap_or(DataBits::Eight);
+    let data_bits = opts
+        .data_bits
+        .map(parse_data_bits)
+        .transpose()?
+        .unwrap_or(DataBits::Eight);
     let parity = opts
         .parity
         .as_ref()
         .map(|s| parse_parity(s))
         .transpose()?
         .unwrap_or(Parity::None);
-    let stop_bits = opts.stop_bits.map(parse_stop_bits).transpose()?.unwrap_or(1);
+    let stop_bits = opts
+        .stop_bits
+        .map(parse_stop_bits)
+        .transpose()?
+        .unwrap_or(1);
     let response_timeout_ms = opts.response_timeout_ms.unwrap_or(1000);
 
     let port_path = heapless::String::try_from(opts.port_path.as_str())
@@ -188,9 +199,10 @@ impl AsyncSerialModbusClient {
     }
 
     fn get_client(&self) -> Result<Arc<AsyncSerialClient>> {
-        let guard = self.inner.lock().map_err(|_| {
-            napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-        })?;
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
         guard
             .clone()
             .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Client is closed"))
@@ -223,9 +235,10 @@ impl AsyncSerialModbusClient {
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let client = {
-            let mut guard = self.inner.lock().map_err(|_| {
-                napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-            })?;
+            let mut guard = self
+                .inner
+                .lock()
+                .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
             guard.take()
         };
         if let Some(inner) = client {
@@ -282,7 +295,10 @@ impl AsyncSerialModbusClient {
     /// Writes multiple registers (FC16).
     #[napi]
     #[cfg(feature = "registers")]
-    pub async fn write_multiple_registers(&self, opts: WriteMultipleRegistersOptions) -> Result<()> {
+    pub async fn write_multiple_registers(
+        &self,
+        opts: WriteMultipleRegistersOptions,
+    ) -> Result<()> {
         let client = self.get_client()?;
         client
             .write_multiple_registers(self.unit_id, opts.address, &opts.values)
@@ -491,7 +507,10 @@ impl AsyncSerialModbusClient {
         let sub_function = DiagnosticSubFunction::try_from(opts.sub_function).map_err(|_| {
             napi::Error::new(
                 Status::InvalidArg,
-                format!("Invalid diagnostic sub-function code: {}", opts.sub_function),
+                format!(
+                    "Invalid diagnostic sub-function code: {}",
+                    opts.sub_function
+                ),
             )
         })?;
 
@@ -517,8 +536,8 @@ impl AsyncSerialModbusClient {
 
         let client = self.get_client()?;
 
-        let read_device_id_code = ReadDeviceIdCode::try_from(opts.read_device_id_code)
-            .map_err(|_| {
+        let read_device_id_code =
+            ReadDeviceIdCode::try_from(opts.read_device_id_code).map_err(|_| {
                 napi::Error::new(
                     Status::InvalidArg,
                     format!("Invalid read device ID code: {}", opts.read_device_id_code),

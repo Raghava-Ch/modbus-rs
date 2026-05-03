@@ -19,18 +19,15 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use mbus_gateway::{
-    AsyncTcpGatewayServer, UnitIdRewriteRouter, UnitRouteTable,
-};
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_gateway::{AsyncTcpGatewayServer, UnitIdRewriteRouter, UnitRouteTable};
 use mbus_network::TokioTcpTransport;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let upstream_addr =
-        env::var("MBUS_GATEWAY_UPSTREAM").unwrap_or_else(|_| "0.0.0.0:5502".into());
+    let upstream_addr = env::var("MBUS_GATEWAY_UPSTREAM").unwrap_or_else(|_| "0.0.0.0:5502".into());
     let downstream_addr =
         env::var("MBUS_GATEWAY_DOWNSTREAM").unwrap_or_else(|_| "127.0.0.1:502".into());
 
@@ -48,12 +45,7 @@ async fn main() -> anyhow::Result<()> {
     let router = UnitIdRewriteRouter::new(inner_router, 100);
 
     println!("Starting async gateway on {upstream_addr}");
-    AsyncTcpGatewayServer::serve(
-        upstream_addr,
-        router,
-        vec![shared_downstream],
-    )
-    .await?;
+    AsyncTcpGatewayServer::serve(upstream_addr, router, vec![shared_downstream]).await?;
 
     Ok(())
 }

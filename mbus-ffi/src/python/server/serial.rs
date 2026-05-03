@@ -1,10 +1,11 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use mbus_server_async::{AsyncRtuServer, AsyncAsciiServer};
 use mbus_core::transport::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, ModbusConfig, Parity, SerialMode, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, UnitIdOrSlaveAddr,
 };
+use mbus_server_async::{AsyncAsciiServer, AsyncRtuServer};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Notify;
@@ -26,10 +27,11 @@ fn make_serial_config(
     stop_bits: u8,
     retry_attempts: u8,
 ) -> PyResult<ModbusConfig> {
-    let port_path = heapless::String::<64>::from_str(port)
-        .map_err(|_| crate::python::errors::ModbusConfigError::new_err(
-            format!("Port path too long (max 64 chars): {port}"),
-        ))?;
+    let port_path = heapless::String::<64>::from_str(port).map_err(|_| {
+        crate::python::errors::ModbusConfigError::new_err(format!(
+            "Port path too long (max 64 chars): {port}"
+        ))
+    })?;
     let serial_cfg = ModbusSerialConfig {
         port_path,
         mode,
@@ -140,8 +142,7 @@ impl AsyncSerialServer {
         let data_bits = parse_data_bits(data_bits)?;
         let parity = parse_parity(parity)?;
         let stop_bits = parse_stop_bits(stop_bits)?;
-        let _ = UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(crate::python::errors::mbus_error_to_py)?;
+        let _ = UnitIdOrSlaveAddr::new(unit_id).map_err(crate::python::errors::mbus_error_to_py)?;
         Ok(Self {
             port: port.to_string(),
             baud_rate,
@@ -180,8 +181,8 @@ impl AsyncSerialServer {
         future_into_py(py, async move {
             match mode {
                 SerialMode::Rtu => {
-                    let mut srv = AsyncRtuServer::new_rtu(&config, unit)
-                        .map_err(async_server_error_to_py)?;
+                    let mut srv =
+                        AsyncRtuServer::new_rtu(&config, unit).map_err(async_server_error_to_py)?;
                     srv.run_with_shutdown(adapter, stop_signal.notified())
                         .await
                         .map_err(async_server_error_to_py)
@@ -273,8 +274,7 @@ impl SerialServer {
         let data_bits = parse_data_bits(data_bits)?;
         let parity = parse_parity(parity)?;
         let stop_bits = parse_stop_bits(stop_bits)?;
-        let _ = UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(crate::python::errors::mbus_error_to_py)?;
+        let _ = UnitIdOrSlaveAddr::new(unit_id).map_err(crate::python::errors::mbus_error_to_py)?;
         Ok(Self {
             port: port.to_string(),
             baud_rate,
