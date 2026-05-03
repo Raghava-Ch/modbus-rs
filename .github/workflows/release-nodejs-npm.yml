@@ -1,69 +1,24 @@
-name: Node.js bindings
+name: Release Node.js (npm)
 
+# Trigger: push a tag of the form `nodejs-v*` (e.g. `nodejs-v0.9.0`).
+# Run manually via workflow_dispatch for testing.
 on:
   push:
-    branches: [main]
-    paths:
-      - 'mbus-ffi/**'
-      - '!mbus-ffi/dotnet/**'
-      - '!mbus-ffi/python/**'
-      - '!mbus-ffi/go/**'
-      - '!mbus-ffi/examples/c_*/**'
-      - 'mbus-core/**'
-      - 'mbus-async/**'
-      - 'mbus-client-async/**'
-      - 'mbus-server-async/**'
-      - 'mbus-gateway/**'
-      - 'mbus-network/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/nodejs-bindings.yml'
-  pull_request:
-    paths:
-      - 'mbus-ffi/**'
-      - '!mbus-ffi/dotnet/**'
-      - '!mbus-ffi/python/**'
-      - '!mbus-ffi/go/**'
-      - '!mbus-ffi/examples/c_*/**'
-      - 'mbus-core/**'
-      - 'mbus-async/**'
-      - 'mbus-client-async/**'
-      - 'mbus-server-async/**'
-      - 'mbus-gateway/**'
-      - 'mbus-network/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/nodejs-bindings.yml'
+    tags:
+      - "nodejs-v*"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   DEBUG: napi:*
   MACOSX_DEPLOYMENT_TARGET: '10.13'
 
 jobs:
-  check:
-    name: Check Rust
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: nodejs-check
-
-      - name: cargo check (nodejs feature)
-        run: cargo check -p mbus-ffi --features nodejs
-
-      - name: cargo clippy (nodejs feature)
-        run: cargo clippy -p mbus-ffi --features nodejs -- -D warnings
-
   build:
     name: Build - ${{ matrix.settings.target }}
     runs-on: ${{ matrix.settings.os }}
-    needs: check
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +44,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: nodejs-build-${{ matrix.settings.target }}
+          shared-key: nodejs-release-${{ matrix.settings.target }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -112,15 +67,10 @@ jobs:
 
       - name: Build native module
         working-directory: mbus-ffi/nodejs
-        run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs,full --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir .
         shell: bash
+        run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs,full --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir .
         env:
           CARGO_BUILD_TARGET: ${{ matrix.settings.target }}
-
-      - name: List built native artifacts
-        shell: bash
-        run: |
-          find mbus-ffi/nodejs -maxdepth 4 -name '*.node' -print
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -129,43 +79,52 @@ jobs:
           path: mbus-ffi/nodejs/**/*.node
           if-no-files-found: error
 
-  test:
-    name: Test - ${{ matrix.os }} - Node.js ${{ matrix.node }}
-    runs-on: ${{ matrix.os }}
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
     needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [18, 20, 22]
     steps:
       - uses: actions/checkout@v5
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Download artifacts
+      - name: Install dependencies
+        working-directory: mbus-ffi/nodejs
+        run: npm install
+
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: mbus-ffi/nodejs/artifacts
 
-      - name: Move artifacts
+      - name: Prepare npm artifacts
         working-directory: mbus-ffi/nodejs
         shell: bash
         run: |
           for dir in artifacts/bindings-*; do
             cp "$dir"/*.node . 2>/dev/null || true
           done
+          npm run prepublishOnly
 
-      - name: Install dependencies
+      - name: Publish platform packages
         working-directory: mbus-ffi/nodejs
-        run: npm install
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg_dir in npm/*; do
+            if [ -d "$pkg_dir" ]; then
+              echo "Publishing $pkg_dir"
+              (cd "$pkg_dir" && npm publish --access public)
+            fi
+          done
 
-      - name: Test imports
+      - name: Publish main package
         working-directory: mbus-ffi/nodejs
-        run: node -e "const m = require('.'); console.log('Loaded:', Object.keys(m))"
-
-  # publish job lives in .github/workflows/release-nodejs-npm.yml
-  # trigger: git tag nodejs-v*
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
