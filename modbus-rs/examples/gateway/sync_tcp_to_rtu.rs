@@ -16,12 +16,12 @@
 use std::env;
 use std::net::TcpListener;
 
-use modbus_rs::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-    Parity, SerialMode, StdRtuTransport, StdTcpServerTransport, Transport,
-};
-use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
+use modbus_rs::{
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, StdRtuTransport, StdTcpServerTransport, Transport,
+};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

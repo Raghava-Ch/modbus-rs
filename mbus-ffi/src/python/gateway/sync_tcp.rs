@@ -76,7 +76,9 @@ impl TcpGateway {
 
     fn add_range_route(&self, min: u8, max: u8, channel: usize) -> PyResult<()> {
         if min == 0 || max < min {
-            return Err(PyValueError::new_err("invalid range: require 1 <= min <= max"));
+            return Err(PyValueError::new_err(
+                "invalid range: require 1 <= min <= max",
+            ));
         }
         let mut cfg = self.config.lock().unwrap();
         if channel >= cfg.downstreams.len() {

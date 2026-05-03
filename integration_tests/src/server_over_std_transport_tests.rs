@@ -4,7 +4,7 @@ use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType,
 };
 use mbus_server::{
-    modbus_app, CoilsModel, HoldingRegistersModel, InputRegistersModel, ServerServices,
+    CoilsModel, HoldingRegistersModel, InputRegistersModel, ServerServices, modbus_app,
 };
 use modbus_rs::{
     ClientServices, CoilResponse, Coils, MbusError, RegisterResponse, Registers,

@@ -1,10 +1,10 @@
 //! Tests for routing policy implementations.
 
+use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_gateway::{
     GatewayRoutingPolicy, PassthroughRouter, RangeRouteTable, UnitIdRewriteRouter, UnitRouteTable,
 };
-use mbus_core::errors::MbusError;
 
 fn uid(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::new(v).expect("valid unit id")

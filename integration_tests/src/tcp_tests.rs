@@ -889,7 +889,7 @@ fn test_client_services_encapsulated_interface_transport_canopen() -> Result<()>
         assert_eq!(buf[4], 0x00);
         assert_eq!(buf[5], 0x05); // Length (5 bytes: Unit+FC+MEI+Data)
         assert_eq!(buf[6], 0x01); // Unit ID
-                                  // PDU
+        // PDU
         assert_eq!(buf[7], 0x2B); // FC 43
         assert_eq!(buf[8], 0x0D); // MEI 0D (CANopen)
         assert_eq!(buf[9], 0xAA); // Data 1
@@ -1007,11 +1007,13 @@ fn test_client_services_encapsulated_interface_transport_mismatch_mei() -> Resul
     }
 
     // Should fail
-    assert!(client
-        .app()
-        .received_encapsulated_interface_transport_responses
-        .borrow()
-        .is_empty());
+    assert!(
+        client
+            .app()
+            .received_encapsulated_interface_transport_responses
+            .borrow()
+            .is_empty()
+    );
     let failed = client.app().failed_requests.borrow();
     assert_eq!(failed.len(), 1);
     assert_eq!(failed[0].2, MbusError::InvalidMeiType);
@@ -1070,11 +1072,13 @@ fn test_client_services_encapsulated_interface_transport_exception() -> Result<(
     }
 
     // Should fail
-    assert!(client
-        .app()
-        .received_encapsulated_interface_transport_responses
-        .borrow()
-        .is_empty());
+    assert!(
+        client
+            .app()
+            .received_encapsulated_interface_transport_responses
+            .borrow()
+            .is_empty()
+    );
     let failed = client.app().failed_requests.borrow();
     assert_eq!(failed.len(), 1);
     assert_eq!(failed[0].2, MbusError::ModbusException(0x01));

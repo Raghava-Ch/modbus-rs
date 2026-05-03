@@ -107,8 +107,7 @@ impl Drop for ServerBorrowGuard<'_> {
 // ── Server inner types ────────────────────────────────────────────────────────
 
 /// Fully-specialised TCP server type stored in the pool.
-pub(super) type TcpServerInner =
-    ServerServices<CTcpTransport, CServerApp, SERVER_TCP_QUEUE_DEPTH>;
+pub(super) type TcpServerInner = ServerServices<CTcpTransport, CServerApp, SERVER_TCP_QUEUE_DEPTH>;
 /// Fully-specialised Serial RTU server type.
 pub(super) type SerialRtuServerInner =
     ServerServices<CRtuTransport, CServerApp, SERVER_SERIAL_QUEUE_DEPTH>;
@@ -294,7 +293,9 @@ static SERVER_POOL: SyncServerPool = SyncServerPool(UnsafeCell::new(ServerPool::
 
 // ── Public pool operations ────────────────────────────────────────────────────
 
-pub(super) fn server_pool_allocate_tcp(inner: TcpServerInner) -> Result<MbusServerId, MbusStatusCode> {
+pub(super) fn server_pool_allocate_tcp(
+    inner: TcpServerInner,
+) -> Result<MbusServerId, MbusStatusCode> {
     let _guard = ServerPoolLockGuard::new();
     let pool = unsafe { &mut *SERVER_POOL.0.get() };
     pool.allocate_tcp(inner)

@@ -18,15 +18,18 @@ pub const ERR_MODBUS_INTERNAL: &str = "MODBUS_INTERNAL";
 /// Converts an `AsyncError` to a napi::Error with appropriate status and message.
 pub fn from_async_error(e: AsyncError) -> napi::Error {
     match e {
-        AsyncError::Timeout => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_TIMEOUT}] Request timed out"))
-        }
-        AsyncError::WorkerClosed => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_CONNECTION_CLOSED}] Worker task closed"))
-        }
-        AsyncError::UnexpectedResponseType => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_INTERNAL}] Unexpected response type"))
-        }
+        AsyncError::Timeout => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_TIMEOUT}] Request timed out"),
+        ),
+        AsyncError::WorkerClosed => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_CONNECTION_CLOSED}] Worker task closed"),
+        ),
+        AsyncError::UnexpectedResponseType => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_INTERNAL}] Unexpected response type"),
+        ),
         AsyncError::Mbus(mbus_err) => from_mbus_error(mbus_err),
     }
 }
@@ -34,33 +37,30 @@ pub fn from_async_error(e: AsyncError) -> napi::Error {
 /// Converts an `MbusError` to a napi::Error.
 pub fn from_mbus_error(e: MbusError) -> napi::Error {
     match e {
-        MbusError::ModbusException(code) => {
-            napi::Error::new(
-                Status::GenericFailure,
-                format!("[{ERR_MODBUS_EXCEPTION}:{code}] Modbus exception code: {code}"),
-            )
-        }
-        MbusError::Timeout => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_TIMEOUT}] Transport timeout"))
-        }
-        MbusError::ConnectionClosed => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_CONNECTION_CLOSED}] Connection closed"))
-        }
-        MbusError::InvalidSlaveAddress => {
-            napi::Error::new(
-                Status::InvalidArg,
-                format!("[{ERR_MODBUS_INVALID_ARGUMENT}] Invalid slave address"),
-            )
-        }
-        MbusError::InvalidAddress => {
-            napi::Error::new(
-                Status::InvalidArg,
-                format!("[{ERR_MODBUS_INVALID_ARGUMENT}] Invalid address"),
-            )
-        }
-        other => {
-            napi::Error::new(Status::GenericFailure, format!("[{ERR_MODBUS_TRANSPORT}] {other}"))
-        }
+        MbusError::ModbusException(code) => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_EXCEPTION}:{code}] Modbus exception code: {code}"),
+        ),
+        MbusError::Timeout => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_TIMEOUT}] Transport timeout"),
+        ),
+        MbusError::ConnectionClosed => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_CONNECTION_CLOSED}] Connection closed"),
+        ),
+        MbusError::InvalidSlaveAddress => napi::Error::new(
+            Status::InvalidArg,
+            format!("[{ERR_MODBUS_INVALID_ARGUMENT}] Invalid slave address"),
+        ),
+        MbusError::InvalidAddress => napi::Error::new(
+            Status::InvalidArg,
+            format!("[{ERR_MODBUS_INVALID_ARGUMENT}] Invalid address"),
+        ),
+        other => napi::Error::new(
+            Status::GenericFailure,
+            format!("[{ERR_MODBUS_TRANSPORT}] {other}"),
+        ),
     }
 }
 

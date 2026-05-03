@@ -12,18 +12,18 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use js_sys::{Function, Object, Reflect, Uint8Array, Uint16Array};
 #[cfg(any(feature = "file-record", feature = "diagnostics"))]
 use js_sys::Array;
-use mbus_client::app::{
-    CoilResponse, DiscreteInputResponse, RegisterResponse, RequestErrorNotifier,
-};
+use js_sys::{Function, Object, Reflect, Uint8Array, Uint16Array};
 #[cfg(feature = "diagnostics")]
 use mbus_client::app::DiagnosticsResponse;
 #[cfg(feature = "fifo")]
 use mbus_client::app::FifoQueueResponse;
 #[cfg(feature = "file-record")]
 use mbus_client::app::FileRecordResponse;
+use mbus_client::app::{
+    CoilResponse, DiscreteInputResponse, RegisterResponse, RequestErrorNotifier,
+};
 use mbus_client::services::coil::Coils;
 #[cfg(feature = "diagnostics")]
 use mbus_client::services::diagnostic::DeviceIdentificationResponse;

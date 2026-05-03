@@ -9,14 +9,14 @@ use napi_derive::napi;
 use mbus_client_async::AsyncTcpClient;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(feature = "file-record")]
+use mbus_client_async::SubRequest;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
-#[cfg(feature = "file-record")]
-use mbus_client_async::SubRequest;
 
-use crate::nodejs::errors::{from_async_error, to_napi_err, ERR_MODBUS_INVALID_ARGUMENT};
+use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err};
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
@@ -260,9 +260,10 @@ impl AsyncTcpModbusClient {
     }
 
     fn get_client(&self) -> Result<Arc<AsyncTcpClient>> {
-        let guard = self.inner.lock().map_err(|_| {
-            napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-        })?;
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
         guard
             .clone()
             .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Client is closed"))
@@ -295,9 +296,10 @@ impl AsyncTcpModbusClient {
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let client = {
-            let mut guard = self.inner.lock().map_err(|_| {
-                napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-            })?;
+            let mut guard = self
+                .inner
+                .lock()
+                .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
             guard.take()
         };
         if let Some(inner) = client {
@@ -354,7 +356,10 @@ impl AsyncTcpModbusClient {
     /// Writes multiple registers (FC16).
     #[napi]
     #[cfg(feature = "registers")]
-    pub async fn write_multiple_registers(&self, opts: WriteMultipleRegistersOptions) -> Result<()> {
+    pub async fn write_multiple_registers(
+        &self,
+        opts: WriteMultipleRegistersOptions,
+    ) -> Result<()> {
         let client = self.get_client()?;
         client
             .write_multiple_registers(self.unit_id, opts.address, &opts.values)
@@ -569,7 +574,10 @@ impl AsyncTcpModbusClient {
         let sub_function = DiagnosticSubFunction::try_from(opts.sub_function).map_err(|_| {
             napi::Error::new(
                 Status::InvalidArg,
-                format!("Invalid diagnostic sub-function code: {}", opts.sub_function),
+                format!(
+                    "Invalid diagnostic sub-function code: {}",
+                    opts.sub_function
+                ),
             )
         })?;
 
@@ -595,8 +603,8 @@ impl AsyncTcpModbusClient {
 
         let client = self.get_client()?;
 
-        let read_device_id_code = ReadDeviceIdCode::try_from(opts.read_device_id_code)
-            .map_err(|_| {
+        let read_device_id_code =
+            ReadDeviceIdCode::try_from(opts.read_device_id_code).map_err(|_| {
                 napi::Error::new(
                     Status::InvalidArg,
                     format!("Invalid read device ID code: {}", opts.read_device_id_code),

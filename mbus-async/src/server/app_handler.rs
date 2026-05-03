@@ -12,7 +12,7 @@ use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_PER_PDU};
-use mbus_core::transport::{checksum, SerialMode, TransportType, UnitIdOrSlaveAddr};
+use mbus_core::transport::{SerialMode, TransportType, UnitIdOrSlaveAddr, checksum};
 use std::future::Future;
 
 /// Direction of a Modbus traffic event — mirrors `mbus_server::TrafficDirection` for
@@ -1195,43 +1195,65 @@ fn encode_exception_raw(
         TransportType::StdTcp | TransportType::CustomTcp => {
             // MBAP header: TID(2) + Protocol(2) + Length(2) + UnitID(1) + PDU(2) = 9 bytes
             // Length field = 1 (unit) + 2 (PDU) = 3
-            frame.extend_from_slice(&txn_id.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
-            frame.extend_from_slice(&0u16.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
-            frame.extend_from_slice(&3u16.to_be_bytes()).map_err(|_| MbusError::Unexpected)?;
+            frame
+                .extend_from_slice(&txn_id.to_be_bytes())
+                .map_err(|_| MbusError::Unexpected)?;
+            frame
+                .extend_from_slice(&0u16.to_be_bytes())
+                .map_err(|_| MbusError::Unexpected)?;
+            frame
+                .extend_from_slice(&3u16.to_be_bytes())
+                .map_err(|_| MbusError::Unexpected)?;
             frame.push(unit_id).map_err(|_| MbusError::Unexpected)?;
-            frame.push(exception_fc_byte).map_err(|_| MbusError::Unexpected)?;
+            frame
+                .push(exception_fc_byte)
+                .map_err(|_| MbusError::Unexpected)?;
             frame.push(code_byte).map_err(|_| MbusError::Unexpected)?;
         }
-        TransportType::StdSerial(mode) | TransportType::CustomSerial(mode) => {
-            match mode {
-                SerialMode::Rtu => {
-                    let payload = [unit_id, exception_fc_byte, code_byte];
-                    frame.extend_from_slice(&payload).map_err(|_| MbusError::Unexpected)?;
-                    let crc = checksum::crc16(&payload);
-                    frame.extend_from_slice(&crc.to_le_bytes()).map_err(|_| MbusError::Unexpected)?;
-                }
-                SerialMode::Ascii => {
-                    let binary = [unit_id, exception_fc_byte, code_byte];
-                    let lrc = checksum::lrc(&binary);
-                    frame.push(b':').map_err(|_| MbusError::Unexpected)?;
-                    for &b in &binary {
-                        frame.push(raw_nibble_to_hex(b >> 4)).map_err(|_| MbusError::Unexpected)?;
-                        frame.push(raw_nibble_to_hex(b & 0x0F)).map_err(|_| MbusError::Unexpected)?;
-                    }
-                    frame.push(raw_nibble_to_hex(lrc >> 4)).map_err(|_| MbusError::Unexpected)?;
-                    frame.push(raw_nibble_to_hex(lrc & 0x0F)).map_err(|_| MbusError::Unexpected)?;
-                    frame.push(b'\r').map_err(|_| MbusError::Unexpected)?;
-                    frame.push(b'\n').map_err(|_| MbusError::Unexpected)?;
-                }
+        TransportType::StdSerial(mode) | TransportType::CustomSerial(mode) => match mode {
+            SerialMode::Rtu => {
+                let payload = [unit_id, exception_fc_byte, code_byte];
+                frame
+                    .extend_from_slice(&payload)
+                    .map_err(|_| MbusError::Unexpected)?;
+                let crc = checksum::crc16(&payload);
+                frame
+                    .extend_from_slice(&crc.to_le_bytes())
+                    .map_err(|_| MbusError::Unexpected)?;
             }
-        }
+            SerialMode::Ascii => {
+                let binary = [unit_id, exception_fc_byte, code_byte];
+                let lrc = checksum::lrc(&binary);
+                frame.push(b':').map_err(|_| MbusError::Unexpected)?;
+                for &b in &binary {
+                    frame
+                        .push(raw_nibble_to_hex(b >> 4))
+                        .map_err(|_| MbusError::Unexpected)?;
+                    frame
+                        .push(raw_nibble_to_hex(b & 0x0F))
+                        .map_err(|_| MbusError::Unexpected)?;
+                }
+                frame
+                    .push(raw_nibble_to_hex(lrc >> 4))
+                    .map_err(|_| MbusError::Unexpected)?;
+                frame
+                    .push(raw_nibble_to_hex(lrc & 0x0F))
+                    .map_err(|_| MbusError::Unexpected)?;
+                frame.push(b'\r').map_err(|_| MbusError::Unexpected)?;
+                frame.push(b'\n').map_err(|_| MbusError::Unexpected)?;
+            }
+        },
     }
     Ok(frame)
 }
 
 #[inline]
 fn raw_nibble_to_hex(nibble: u8) -> u8 {
-    if nibble < 10 { b'0' + nibble } else { b'A' + nibble - 10 }
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'A' + nibble - 10
+    }
 }
 
 /// Counts the `[id(1), len(1), value(N)...]` object triples in a FC2B/MEI 0x0E objects payload.

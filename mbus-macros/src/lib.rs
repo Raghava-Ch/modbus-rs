@@ -239,12 +239,8 @@ fn parse_modbus_app_args(attr: TokenStream) -> Result<SelectedAppFields, Error> 
             "discrete_inputs" => {
                 selected.discrete_inputs = parse_group_idents(meta, "discrete_inputs")?
             }
-            "fifo" => {
-                selected.fifo = parse_group_idents(meta, "fifo")?
-            }
-            "file_record" => {
-                selected.file_record = parse_group_idents(meta, "file_record")?
-            }
+            "fifo" => selected.fifo = parse_group_idents(meta, "fifo")?,
+            "file_record" => selected.file_record = parse_group_idents(meta, "file_record")?,
             _ => {
                 return Err(Error::new_spanned(
                     meta,

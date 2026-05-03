@@ -13,7 +13,7 @@ use mbus_server_async::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusRe
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
-use crate::nodejs::errors::{to_napi_err, ERR_MODBUS_INVALID_ARGUMENT};
+use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, to_napi_err};
 use crate::nodejs::runtime;
 
 // ── Option structs ───────────────────────────────────────────────────────────
@@ -130,6 +130,7 @@ pub struct ServerExceptionResponse {
 // ── Handler struct ───────────────────────────────────────────────────────────
 
 /// Internal adapter that implements AsyncAppHandler by delegating to JS callbacks.
+#[allow(dead_code)]
 struct JsHandlerAdapter {
     #[cfg(feature = "coils")]
     on_read_coils: Option<ThreadsafeFunction<ReadCoilsRequest>>,
@@ -201,118 +202,89 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::IllegalFunction)
             }
             #[cfg(feature = "coils")]
-            ModbusRequest::WriteSingleCoil {
-                address, value, ..
-            } => {
+            ModbusRequest::WriteSingleCoil { address, value, .. } => {
                 ModbusResponse::echo_coil(address, value)
             }
             #[cfg(feature = "coils")]
-            ModbusRequest::WriteMultipleCoils {
-                address, count, ..
-            } => {
+            ModbusRequest::WriteMultipleCoils { address, count, .. } => {
                 ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleCoils, address, count)
             }
             #[cfg(feature = "discrete-inputs")]
-            ModbusRequest::ReadDiscreteInputs { .. } => {
-                ModbusResponse::exception(
-                    FunctionCode::ReadDiscreteInputs,
-                    ExceptionCode::IllegalFunction,
-                )
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::ReadHoldingRegisters { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReadHoldingRegisters,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::ReadInputRegisters { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReadInputRegisters,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::WriteSingleRegister { address, value, .. } => {
-                    ModbusResponse::echo_register(address, value)
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::WriteMultipleRegisters {
-                    address, count, ..
-                } => {
-                    ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count)
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::MaskWriteRegister { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::MaskWriteRegister,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "registers")]
-                ModbusRequest::ReadWriteMultipleRegisters { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReadWriteMultipleRegisters,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "fifo")]
-                ModbusRequest::ReadFifoQueue { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReadFifoQueue,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::ReadExceptionStatus { .. } => {
-                    ModbusResponse::read_exception_status(0)
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::Diagnostics { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::Diagnostics,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::GetCommEventCounter { .. } => {
-                    ModbusResponse::comm_event_counter(0, 0)
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::GetCommEventLog { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::GetCommEventLog,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::ReportServerId { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReportServerId,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "file-record")]
-                ModbusRequest::ReadFileRecord { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::ReadFileRecord,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "file-record")]
-                ModbusRequest::WriteFileRecord { .. } => {
-                    ModbusResponse::exception(
-                        FunctionCode::WriteFileRecord,
-                        ExceptionCode::IllegalFunction,
-                    )
-                }
-                #[cfg(feature = "diagnostics")]
-                ModbusRequest::EncapsulatedInterfaceTransport { .. } => {
-                    ModbusResponse::exception_raw(0x2B, ExceptionCode::IllegalFunction)
-                }
-                _ => ModbusResponse::NoResponse,
+            ModbusRequest::ReadDiscreteInputs { .. } => ModbusResponse::exception(
+                FunctionCode::ReadDiscreteInputs,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "registers")]
+            ModbusRequest::ReadHoldingRegisters { .. } => ModbusResponse::exception(
+                FunctionCode::ReadHoldingRegisters,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "registers")]
+            ModbusRequest::ReadInputRegisters { .. } => ModbusResponse::exception(
+                FunctionCode::ReadInputRegisters,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "registers")]
+            ModbusRequest::WriteSingleRegister { address, value, .. } => {
+                ModbusResponse::echo_register(address, value)
             }
+            #[cfg(feature = "registers")]
+            ModbusRequest::WriteMultipleRegisters { address, count, .. } => {
+                ModbusResponse::echo_multi_write(
+                    FunctionCode::WriteMultipleRegisters,
+                    address,
+                    count,
+                )
+            }
+            #[cfg(feature = "registers")]
+            ModbusRequest::MaskWriteRegister { .. } => ModbusResponse::exception(
+                FunctionCode::MaskWriteRegister,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "registers")]
+            ModbusRequest::ReadWriteMultipleRegisters { .. } => ModbusResponse::exception(
+                FunctionCode::ReadWriteMultipleRegisters,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "fifo")]
+            ModbusRequest::ReadFifoQueue { .. } => ModbusResponse::exception(
+                FunctionCode::ReadFifoQueue,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::ReadExceptionStatus { .. } => ModbusResponse::read_exception_status(0),
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::Diagnostics { .. } => {
+                ModbusResponse::exception(FunctionCode::Diagnostics, ExceptionCode::IllegalFunction)
+            }
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::GetCommEventCounter { .. } => ModbusResponse::comm_event_counter(0, 0),
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::GetCommEventLog { .. } => ModbusResponse::exception(
+                FunctionCode::GetCommEventLog,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::ReportServerId { .. } => ModbusResponse::exception(
+                FunctionCode::ReportServerId,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "file-record")]
+            ModbusRequest::ReadFileRecord { .. } => ModbusResponse::exception(
+                FunctionCode::ReadFileRecord,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "file-record")]
+            ModbusRequest::WriteFileRecord { .. } => ModbusResponse::exception(
+                FunctionCode::WriteFileRecord,
+                ExceptionCode::IllegalFunction,
+            ),
+            #[cfg(feature = "diagnostics")]
+            ModbusRequest::EncapsulatedInterfaceTransport { .. } => {
+                ModbusResponse::exception_raw(0x2B, ExceptionCode::IllegalFunction)
+            }
+            _ => ModbusResponse::NoResponse,
+        }
     }
 }
 
@@ -392,9 +364,10 @@ impl AsyncTcpModbusServer {
         self.stop_signal.notify_one();
 
         let handle = {
-            let mut guard = self.join_handle.lock().map_err(|_| {
-                napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-            })?;
+            let mut guard = self
+                .join_handle
+                .lock()
+                .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
             guard.take()
         };
         if let Some(h) = handle {

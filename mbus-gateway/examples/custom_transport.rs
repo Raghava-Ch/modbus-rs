@@ -18,11 +18,11 @@
 //! defaults.
 
 use heapless::Vec as HVec;
-use mbus_core::data_unit::common::{compile_adu_frame, MAX_ADU_FRAME_LEN};
+use mbus_core::data_unit::common::Pdu;
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, compile_adu_frame};
 use mbus_core::errors::MbusError;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{ModbusConfig, Transport, TransportType};
-use mbus_core::data_unit::common::Pdu;
 use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, PassthroughRouter};
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -5,10 +5,10 @@ use std::time::Duration;
 use mbus_client_async::AsyncSerialClient as InnerAsyncSerialClient;
 #[cfg(feature = "diagnostics")]
 use mbus_client_async::{ObjectId, ReadDeviceIdCode};
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "file-record")]
 use mbus_client_async::{SubRequest, SubRequestParams};
+#[cfg(feature = "diagnostics")]
+use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::coil::Coils;
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
@@ -35,10 +35,11 @@ fn make_serial_config(
     stop_bits: u8,
     retry_attempts: u8,
 ) -> PyResult<ModbusSerialConfig> {
-    let port_path = heapless::String::<64>::from_str(port)
-        .map_err(|_| crate::python::errors::ModbusConfigError::new_err(
-            format!("Port path too long (max 64 chars): {port}"),
-        ))?;
+    let port_path = heapless::String::<64>::from_str(port).map_err(|_| {
+        crate::python::errors::ModbusConfigError::new_err(format!(
+            "Port path too long (max 64 chars): {port}"
+        ))
+    })?;
     Ok(ModbusSerialConfig {
         port_path,
         mode,
@@ -101,9 +102,11 @@ fn parse_device_id_kind(kind: &str) -> PyResult<ReadDeviceIdCode> {
         "regular" => Ok(ReadDeviceIdCode::Regular),
         "extended" => Ok(ReadDeviceIdCode::Extended),
         "specific" => Ok(ReadDeviceIdCode::Specific),
-        other => Err(crate::python::errors::ModbusInvalidArgument::new_err(format!(
-            "Unknown device-identification kind '{other}'; expected 'basic', 'regular', 'extended', or 'specific'"
-        ))),
+        other => Err(crate::python::errors::ModbusInvalidArgument::new_err(
+            format!(
+                "Unknown device-identification kind '{other}'; expected 'basic', 'regular', 'extended', or 'specific'"
+            ),
+        )),
     }
 }
 
@@ -126,9 +129,11 @@ fn build_write_file_sub_request(requests: &[(u16, u16, Vec<u16>)]) -> PyResult<S
             heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
                 data.as_slice(),
             )
-            .map_err(|_| crate::python::errors::ModbusInvalidArgument::new_err(
-                "record_data exceeds Modbus PDU capacity",
-            ))?;
+            .map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err(
+                    "record_data exceeds Modbus PDU capacity",
+                )
+            })?;
         let record_length = record_data.len() as u16;
         sub_request
             .add_write_sub_request(*file_number, *record_number, record_length, record_data)
@@ -184,12 +189,8 @@ fn make_inner(
         retry_attempts,
     )?;
     let client = match mode {
-        SerialMode::Rtu => {
-            InnerAsyncSerialClient::new_rtu(cfg).map_err(async_error_to_py)?
-        }
-        SerialMode::Ascii => {
-            InnerAsyncSerialClient::new_ascii(cfg).map_err(async_error_to_py)?
-        }
+        SerialMode::Rtu => InnerAsyncSerialClient::new_rtu(cfg).map_err(async_error_to_py)?,
+        SerialMode::Ascii => InnerAsyncSerialClient::new_ascii(cfg).map_err(async_error_to_py)?,
     };
     if timeout_ms > 0 {
         client.set_request_timeout(Duration::from_millis(timeout_ms));
@@ -263,14 +264,15 @@ impl SerialClient {
 
     fn connect(&self, py: Python<'_>) -> PyResult<()> {
         let rt = get_runtime();
-        py.detach(|| {
-            rt.block_on(self.inner.connect()).map_err(async_error_to_py)
-        })
+        py.detach(|| rt.block_on(self.inner.connect()).map_err(async_error_to_py))
     }
 
     fn disconnect(&self, py: Python<'_>) -> PyResult<()> {
         let rt = get_runtime();
-        py.detach(|| rt.block_on(self.inner.disconnect()).map_err(async_error_to_py))
+        py.detach(|| {
+            rt.block_on(self.inner.disconnect())
+                .map_err(async_error_to_py)
+        })
     }
 
     fn has_pending_requests(&self) -> bool {
@@ -316,12 +318,7 @@ impl SerialClient {
     }
 
     #[pyo3(signature = (address, values))]
-    fn write_coils(
-        &self,
-        py: Python<'_>,
-        address: u16,
-        values: Vec<bool>,
-    ) -> PyResult<(u16, u16)> {
+    fn write_coils(&self, py: Python<'_>, address: u16, values: Vec<bool>) -> PyResult<(u16, u16)> {
         let rt = get_runtime();
         let uid = self.unit_id;
         let qty = values.len() as u16;
@@ -552,8 +549,8 @@ impl SerialClient {
     ) -> PyResult<(u16, Vec<u16>)> {
         let rt = get_runtime();
         let uid = self.unit_id;
-        let sub_fn =
-            DiagnosticSubFunction::try_from(sub_function).map_err(crate::python::errors::mbus_error_to_py)?;
+        let sub_fn = DiagnosticSubFunction::try_from(sub_function)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
         let response = py.detach(|| {
             rt.block_on(self.inner.diagnostics(uid, sub_fn, data.as_slice()))
                 .map_err(async_error_to_py)
@@ -595,11 +592,8 @@ impl SerialClient {
         let oid = ObjectId::from(object_id);
         let read_code = parse_device_id_kind(kind)?;
         let result = py.detach(|| {
-            rt.block_on(
-                self.inner
-                    .read_device_identification(uid, read_code, oid),
-            )
-            .map_err(async_error_to_py)
+            rt.block_on(self.inner.read_device_identification(uid, read_code, oid))
+                .map_err(async_error_to_py)
         })?;
         let dict = PyDict::new(py);
         for obj in result.objects().flatten() {
@@ -989,8 +983,8 @@ impl AsyncSerialClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
         let uid = self.unit_id;
-        let sub_fn =
-            DiagnosticSubFunction::try_from(sub_function).map_err(crate::python::errors::mbus_error_to_py)?;
+        let sub_fn = DiagnosticSubFunction::try_from(sub_function)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
         future_into_py(py, async move {
             let response = client
                 .diagnostics(uid, sub_fn, data.as_slice())
@@ -1017,7 +1011,10 @@ impl AsyncSerialClient {
         let client = self.inner.clone();
         let uid = self.unit_id;
         future_into_py(py, async move {
-            client.report_server_id(uid).await.map_err(async_error_to_py)
+            client
+                .report_server_id(uid)
+                .await
+                .map_err(async_error_to_py)
         })
     }
 

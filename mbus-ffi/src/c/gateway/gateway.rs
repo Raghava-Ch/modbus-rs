@@ -9,15 +9,13 @@
 //! 5. [`mbus_gateway_free`] — release the handle.
 
 use crate::c::error::MbusStatusCode;
-use crate::c::transport::{validate_transport_callbacks, CTcpTransport, MbusTransportCallbacks};
+use crate::c::transport::{CTcpTransport, MbusTransportCallbacks, validate_transport_callbacks};
 
 use mbus_gateway::{DownstreamChannel, GatewayServices};
 
 use super::callbacks::MbusGatewayCallbacks;
 use super::event_adapter::CGatewayEventAdapter;
-use super::pool::{
-    pool_allocate, pool_free, with_gateway, GatewayInner, MAX_DOWNSTREAM_CHANNELS,
-};
+use super::pool::{GatewayInner, MAX_DOWNSTREAM_CHANNELS, pool_allocate, pool_free, with_gateway};
 use super::routing::CGatewayRouter;
 
 pub use super::pool::{MBUS_INVALID_GATEWAY_ID, MbusGatewayId};

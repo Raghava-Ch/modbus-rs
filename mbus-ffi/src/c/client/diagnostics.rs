@@ -4,8 +4,8 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use crate::c::error::MbusStatusCode;
 use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+use crate::c::error::MbusStatusCode;
 
 macro_rules! tcp_diag_fn {
     ($name:ident, $method:ident $(, $arg:ident : $ty:ty)*) => {

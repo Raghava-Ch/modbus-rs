@@ -167,8 +167,16 @@ fn generate_feature_gated_header(base_header: &str) -> String {
         out.push_str("#endif\n");
     }
 
-    let out = out.replacen("#ifndef MODBUS_RS_CLIENT_H", "#ifndef MODBUS_RS_CLIENT_FEATURE_GATED_H", 1);
-    out.replacen("#define MODBUS_RS_CLIENT_H", "#define MODBUS_RS_CLIENT_FEATURE_GATED_H", 1)
+    let out = out.replacen(
+        "#ifndef MODBUS_RS_CLIENT_H",
+        "#ifndef MODBUS_RS_CLIENT_FEATURE_GATED_H",
+        1,
+    );
+    out.replacen(
+        "#define MODBUS_RS_CLIENT_H",
+        "#define MODBUS_RS_CLIENT_FEATURE_GATED_H",
+        1,
+    )
 }
 
 fn cmd_gen_feature_header(root: &Path) -> Result<(), String> {
@@ -255,9 +263,9 @@ fn parse_build_c_demo_args(args: &[String]) -> Result<BuildCDemoOpts, String> {
                         .clone(),
                 );
             }
-            "--static"   => link_static = true,
+            "--static" => link_static = true,
             "--skip-gen" => skip_gen = true,
-            "--no-test"  => no_test = true,
+            "--no-test" => no_test = true,
             "--features" => {
                 i += 1;
                 features_override = Some(
@@ -278,7 +286,13 @@ fn parse_build_c_demo_args(args: &[String]) -> Result<BuildCDemoOpts, String> {
         i += 1;
     }
 
-    Ok(BuildCDemoOpts { demo_name, link_static, features_override, skip_gen, no_test })
+    Ok(BuildCDemoOpts {
+        demo_name,
+        link_static,
+        features_override,
+        skip_gen,
+        no_test,
+    })
 }
 
 fn build_one_demo(
@@ -286,14 +300,19 @@ fn build_one_demo(
     demo: &demo_manifest::DemoManifest,
     opts: &BuildCDemoOpts,
 ) -> Result<(), String> {
-    let features = opts.features_override.as_deref().unwrap_or(&demo.rust_features);
+    let features = opts
+        .features_override
+        .as_deref()
+        .unwrap_or(&demo.rust_features);
 
     // Step 1: optional codegen (generates the C header only; Rust dispatcher is
     // generated at compile time by build.rs via MBUS_SERVER_APP_CONFIG).
     if let (Some(cg), false) = (&demo.codegen, opts.skip_gen) {
         let mut gen_args = vec![
-            "--config".to_string(), cg.config.clone(),
-            "--emit-c-header".to_string(), cg.header.clone(),
+            "--config".to_string(),
+            cg.config.clone(),
+            "--emit-c-header".to_string(),
+            cg.header.clone(),
         ];
         // If out_dir is still specified in demo.yaml, honour it for manual inspection.
         if let Some(out_dir) = &cg.out_dir {
@@ -305,9 +324,10 @@ fn build_one_demo(
 
     // Step 2: compile Rust library.
     // Pass MBUS_SERVER_APP_CONFIG so build.rs can generate the server dispatcher.
-    let config_abs: Option<String> = demo.codegen.as_ref().map(|cg| {
-        root.join(&cg.config).to_string_lossy().into_owned()
-    });
+    let config_abs: Option<String> = demo
+        .codegen
+        .as_ref()
+        .map(|cg| root.join(&cg.config).to_string_lossy().into_owned());
     let env_pair: Vec<(&str, &str)> = config_abs
         .as_deref()
         .map(|v| vec![("MBUS_SERVER_APP_CONFIG", v)])
@@ -320,20 +340,40 @@ fn build_one_demo(
     )?;
 
     // Step 3: cmake configure + build.
-    let build_name  = if opts.link_static { "build-static" } else { "build" };
-    let static_flag = if opts.link_static { "-DMBUS_FFI_LINK_STATIC=ON" } else { "-DMBUS_FFI_LINK_STATIC=OFF" };
-    run_step("cmake", &["-S", ".", "-B", build_name, static_flag], &demo.dir)?;
+    let build_name = if opts.link_static {
+        "build-static"
+    } else {
+        "build"
+    };
+    let static_flag = if opts.link_static {
+        "-DMBUS_FFI_LINK_STATIC=ON"
+    } else {
+        "-DMBUS_FFI_LINK_STATIC=OFF"
+    };
+    run_step(
+        "cmake",
+        &["-S", ".", "-B", build_name, static_flag],
+        &demo.dir,
+    )?;
     run_step("cmake", &["--build", build_name], &demo.dir)?;
 
     // Step 4: optional CTest.
     if !opts.no_test {
-        run_step("ctest", &["--test-dir", build_name, "--output-on-failure"], &demo.dir)?;
+        run_step(
+            "ctest",
+            &["--test-dir", build_name, "--output-on-failure"],
+            &demo.dir,
+        )?;
     }
 
     println!(
         "Demo '{}' {} at {}",
         demo.name,
-        if opts.no_test { "built" } else { "built and tested" },
+        if opts.no_test {
+            "built"
+        } else {
+            "built and tested"
+        },
         demo.binary_path(opts.link_static).display(),
     );
     Ok(())
@@ -347,7 +387,7 @@ fn cmd_build_c_demo(root: &Path, args: &[String]) -> Result<(), String> {
     }
     let to_build: Vec<&demo_manifest::DemoManifest> = match &opts.demo_name {
         Some(name) => vec![demo_manifest::find_demo(&all_demos, name)?],
-        None       => all_demos.iter().collect(),
+        None => all_demos.iter().collect(),
     };
     for demo in to_build {
         build_one_demo(root, demo, &opts)?;
@@ -358,15 +398,15 @@ fn cmd_build_c_demo(root: &Path, args: &[String]) -> Result<(), String> {
 // ── C demo: run ────────────────────────────────────────────────────────────
 
 struct RunCDemoOpts {
-    demo_name:   Option<String>,
+    demo_name: Option<String>,
     link_static: bool,
-    mode:        Option<String>,
+    mode: Option<String>,
 }
 
 fn parse_run_c_demo_args(args: &[String]) -> Result<RunCDemoOpts, String> {
-    let mut demo_name   = None;
+    let mut demo_name = None;
     let mut link_static = false;
-    let mut mode        = None;
+    let mut mode = None;
 
     let mut i = 0usize;
     while i < args.len() {
@@ -400,11 +440,15 @@ fn parse_run_c_demo_args(args: &[String]) -> Result<RunCDemoOpts, String> {
         i += 1;
     }
 
-    Ok(RunCDemoOpts { demo_name, link_static, mode })
+    Ok(RunCDemoOpts {
+        demo_name,
+        link_static,
+        mode,
+    })
 }
 
 fn cmd_run_c_demo(root: &Path, args: &[String]) -> Result<(), String> {
-    let opts      = parse_run_c_demo_args(args)?;
+    let opts = parse_run_c_demo_args(args)?;
     let all_demos = demo_manifest::discover_demos(root)?;
     if all_demos.is_empty() {
         return Err("no demo.yaml files found under mbus-ffi/examples/".to_string());
@@ -425,12 +469,13 @@ fn cmd_run_c_demo(root: &Path, args: &[String]) -> Result<(), String> {
         }
     };
 
-    let run_cfg = demo.run.as_ref().ok_or_else(|| {
-        format!("demo '{}' has no run modes defined in demo.yaml", demo.name)
-    })?;
+    let run_cfg = demo
+        .run
+        .as_ref()
+        .ok_or_else(|| format!("demo '{}' has no run modes defined in demo.yaml", demo.name))?;
 
     let mode_name = opts.mode.as_deref().unwrap_or(&run_cfg.default_mode);
-    let run_mode  = run_cfg.modes.get(mode_name).ok_or_else(|| {
+    let run_mode = run_cfg.modes.get(mode_name).ok_or_else(|| {
         let available: Vec<&str> = run_cfg.modes.keys().map(String::as_str).collect();
         format!(
             "mode '{mode_name}' not found in demo '{}'. Available: {}",
@@ -443,13 +488,16 @@ fn cmd_run_c_demo(root: &Path, args: &[String]) -> Result<(), String> {
 
     // Auto-build if the binary is missing.
     if !binary.exists() {
-        println!("Binary not found at {}. Building first...", binary.display());
+        println!(
+            "Binary not found at {}. Building first...",
+            binary.display()
+        );
         let build_opts = BuildCDemoOpts {
-            demo_name:         Some(demo.name.clone()),
-            link_static:       opts.link_static,
+            demo_name: Some(demo.name.clone()),
+            link_static: opts.link_static,
             features_override: None,
-            skip_gen:          false,
-            no_test:           true,
+            skip_gen: false,
+            no_test: true,
         };
         build_one_demo(root, demo, &build_opts)?;
     }
@@ -493,7 +541,11 @@ fn cmd_list_c_demos(root: &Path) -> Result<(), String> {
         }
         if let Some(run) = &demo.run {
             for (name, mode) in &run.modes {
-                let tag = if name == &run.default_mode { " [default]" } else { "" };
+                let tag = if name == &run.default_mode {
+                    " [default]"
+                } else {
+                    ""
+                };
                 println!("  mode '{name}'{tag}  — {}", mode.description);
             }
         }
@@ -585,9 +637,13 @@ fn print_help() {
     println!("      --static          Use the statically-linked build");
     println!();
     println!("CODEGEN COMMANDS");
-    println!("  gen-server-app --config <path> [--out-dir <path>] [--emit-c-header <path>] [--check] [--dry-run]");
+    println!(
+        "  gen-server-app --config <path> [--out-dir <path>] [--emit-c-header <path>] [--check] [--dry-run]"
+    );
     println!("      Regenerate the C header from a YAML device config.");
-    println!("      The Rust dispatcher is generated at compile time by build.rs (set MBUS_SERVER_APP_CONFIG).");
+    println!(
+        "      The Rust dispatcher is generated at compile time by build.rs (set MBUS_SERVER_APP_CONFIG)."
+    );
     println!("      --out-dir is optional; omit it for the normal build.rs-driven workflow.");
     println!("  check-server-gen");
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
@@ -631,16 +687,14 @@ fn main() -> ExitCode {
         "check-header" => cmd_check_header(&root),
         "gen-feature-header" => cmd_gen_feature_header(&root),
         "check-feature-header" => cmd_check_feature_header(&root),
-        "list-c-demos"  => cmd_list_c_demos(&root),
-        "build-c-demo"  => cmd_build_c_demo(&root, &remaining_args),
-        "run-c-demo"    => cmd_run_c_demo(&root, &remaining_args),
+        "list-c-demos" => cmd_list_c_demos(&root),
+        "build-c-demo" => cmd_build_c_demo(&root, &remaining_args),
+        "run-c-demo" => cmd_run_c_demo(&root, &remaining_args),
         "check-server-gen" => cmd_check_server_gen(&root),
-        "gen-server-app"   => cmd_gen_server_app(&root, &remaining_args),
+        "gen-server-app" => cmd_gen_server_app(&root, &remaining_args),
         "check-feature-matrix" => cmd_check_feature_matrix(&root),
-        "check-feature-subsets" => {
-            check_feature_subsets::parse_args(&remaining_args)
-                .and_then(|opts| check_feature_subsets::cmd_check_feature_subsets(&root, &opts))
-        }
+        "check-feature-subsets" => check_feature_subsets::parse_args(&remaining_args)
+            .and_then(|opts| check_feature_subsets::cmd_check_feature_subsets(&root, &opts)),
         "validate-docs" => validate_docs::cmd_validate_docs(&root, &remaining_args),
         "check-doc-links" => check_doc_links::cmd_check_doc_links(&root, &remaining_args),
         "check-release" => cmd_check_release(&root),

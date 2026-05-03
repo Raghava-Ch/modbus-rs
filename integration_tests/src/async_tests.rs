@@ -1,6 +1,6 @@
 use anyhow::Result;
-use modbus_rs::mbus_async::{AsyncError, AsyncTcpClient};
 use modbus_rs::Coils;
+use modbus_rs::mbus_async::{AsyncError, AsyncTcpClient};
 use modbus_rs::{EncapsulatedInterfaceType, ObjectId, ReadDeviceIdCode, SubRequest};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -1014,10 +1014,10 @@ async fn test_async_tcp_client_pipeline_concurrent_requests() -> Result<()> {
 #[cfg(feature = "async-traffic")]
 #[tokio::test]
 async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
-    use modbus_rs::mbus_async::AsyncClientNotifier;
     use modbus_rs::UnitIdOrSlaveAddr;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use modbus_rs::mbus_async::AsyncClientNotifier;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct CountNotifier {
         tx: Arc<AtomicUsize>,

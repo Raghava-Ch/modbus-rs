@@ -49,10 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Routing table ─────────────────────────────────────────────────────────
     let mut router: UnitRouteTable<32> = UnitRouteTable::new();
     for unit in 1u8..=16 {
-        router.add(UnitIdOrSlaveAddr::new(unit).unwrap(), 0).unwrap();
+        router
+            .add(UnitIdOrSlaveAddr::new(unit).unwrap(), 0)
+            .unwrap();
     }
     for unit in 17u8..=32 {
-        router.add(UnitIdOrSlaveAddr::new(unit).unwrap(), 1).unwrap();
+        router
+            .add(UnitIdOrSlaveAddr::new(unit).unwrap(), 1)
+            .unwrap();
     }
 
     // ── Security configuration ────────────────────────────────────────────────

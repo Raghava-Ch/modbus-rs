@@ -10,8 +10,8 @@ use js_sys::Function;
 use wasm_bindgen::prelude::*;
 
 use super::adapters::SerialServerAdapter;
-use super::bridge::JsServerHandler;
 use super::binding_types::{WasmSerialServerConfig, WasmServerTransportKind};
+use super::bridge::JsServerHandler;
 
 #[wasm_bindgen]
 /// Browser-facing Modbus server endpoint for Web Serial traffic.

@@ -7,8 +7,8 @@
 use mbus_core::{
     errors::MbusError,
     transport::{
-        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig,
-        ModbusSerialConfig, ModbusTcpConfig, Parity, SerialMode, UnitIdOrSlaveAddr,
+        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+        ModbusTcpConfig, Parity, SerialMode, UnitIdOrSlaveAddr,
     },
 };
 use mbus_server::ResilienceConfig;

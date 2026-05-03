@@ -17,14 +17,13 @@ use std::time::Duration;
 use mbus_client_async::AsyncSerialClient;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
-#[cfg(feature = "file-record")]
-use {
-    heapless::Vec as HVec,
-    mbus_client_async::SubRequest,
-    mbus_core::data_unit::common::MAX_PDU_DATA_LEN,
-};
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
+};
+#[cfg(feature = "file-record")]
+use {
+    heapless::Vec as HVec, mbus_client_async::SubRequest,
+    mbus_core::data_unit::common::MAX_PDU_DATA_LEN,
 };
 
 use crate::dotnet::runtime;
@@ -980,9 +979,12 @@ pub unsafe extern "C" fn mbus_dn_serial_client_write_file_record(
         if hvec.extend_from_slice(word_slice).is_err() {
             return MbusDnStatus::MbusErrBufferTooSmall;
         }
-        if let Err(e) =
-            sub_request.add_write_sub_request(sr.file_number, sr.record_number, sr.record_length, hvec)
-        {
+        if let Err(e) = sub_request.add_write_sub_request(
+            sr.file_number,
+            sr.record_number,
+            sr.record_length,
+            hvec,
+        ) {
             return status::from_mbus(e);
         }
     }

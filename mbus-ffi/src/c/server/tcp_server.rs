@@ -33,7 +33,10 @@ use super::{
     app::CServerApp,
     callbacks::MbusServerHandlers,
     config::MbusServerConfig,
-    pool::{MBUS_INVALID_SERVER_ID, MbusServerId, server_pool_allocate_tcp, server_pool_free, with_tcp_server},
+    pool::{
+        MBUS_INVALID_SERVER_ID, MbusServerId, server_pool_allocate_tcp, server_pool_free,
+        with_tcp_server,
+    },
 };
 
 // ── mbus_tcp_server_new ───────────────────────────────────────────────────────
