@@ -1,8 +1,8 @@
 use modbus_rs::{
     CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
     DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse,
-    FileRecordResponse, MbusError, RegisterResponse, Registers, RequestErrorNotifier,
-    SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr, MAX_DISCRETE_INPUT_BYTES,
+    FileRecordResponse, MAX_DISCRETE_INPUT_BYTES, MbusError, RegisterResponse, Registers,
+    RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};

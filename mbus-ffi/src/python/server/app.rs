@@ -1,9 +1,7 @@
-use mbus_server_async::{
-    AsyncAppHandler, ModbusRequest, ModbusResponse,
-};
 use mbus_core::errors::ExceptionCode;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_server_async::{AsyncAppHandler, ModbusRequest, ModbusResponse};
 use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use std::future::Future;
@@ -288,7 +286,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             let result = app.call_method1(py, "handle_read_coils", (address, count));
             match result.and_then(|v| v.extract::<Vec<bool>>(py)) {
                 Ok(bits) if bits.len() == count as usize => {
-                    let mut packed = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::new();
+                    let mut packed = heapless::Vec::<
+                        u8,
+                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                    >::new();
                     for chunk in bits.chunks(8) {
                         let mut byte: u8 = 0;
                         for (i, &b) in chunk.iter().enumerate() {
@@ -300,7 +301,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
                     }
                     ModbusResponse::packed_bits(FunctionCode::ReadCoils, &packed)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadCoils,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadCoils, e),
             }
         }
@@ -317,10 +321,20 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
 
         // FC0F — Write Multiple Coils
         #[cfg(feature = "coils")]
-        ModbusRequest::WriteMultipleCoils { address, count, data, .. } => {
-            let result = app.call_method1(py, "handle_write_coils", (address, count, data.as_slice()));
+        ModbusRequest::WriteMultipleCoils {
+            address,
+            count,
+            data,
+            ..
+        } => {
+            let result =
+                app.call_method1(py, "handle_write_coils", (address, count, data.as_slice()));
             match result {
-                Ok(_) => ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleCoils, address, count),
+                Ok(_) => ModbusResponse::echo_multi_write(
+                    FunctionCode::WriteMultipleCoils,
+                    address,
+                    count,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteMultipleCoils, e),
             }
         }
@@ -331,7 +345,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             let result = app.call_method1(py, "handle_read_discrete_inputs", (address, count));
             match result.and_then(|v| v.extract::<Vec<bool>>(py)) {
                 Ok(bits) if bits.len() == count as usize => {
-                    let mut packed = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::new();
+                    let mut packed = heapless::Vec::<
+                        u8,
+                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                    >::new();
                     for chunk in bits.chunks(8) {
                         let mut byte: u8 = 0;
                         for (i, &b) in chunk.iter().enumerate() {
@@ -343,7 +360,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
                     }
                     ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &packed)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadDiscreteInputs,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadDiscreteInputs, e),
             }
         }
@@ -356,7 +376,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
                 Ok(regs) if regs.len() == count as usize => {
                     ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &regs)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadHoldingRegisters,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadHoldingRegisters, e),
             }
         }
@@ -369,7 +392,10 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
                 Ok(regs) if regs.len() == count as usize => {
                     ModbusResponse::registers(FunctionCode::ReadInputRegisters, &regs)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadInputRegisters,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadInputRegisters, e),
             }
         }
@@ -386,18 +412,40 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
 
         // FC10 — Write Multiple Registers
         #[cfg(feature = "registers")]
-        ModbusRequest::WriteMultipleRegisters { address, count, data, .. } => {
-            let result = app.call_method1(py, "handle_write_registers", (address, count, data.as_slice()));
+        ModbusRequest::WriteMultipleRegisters {
+            address,
+            count,
+            data,
+            ..
+        } => {
+            let result = app.call_method1(
+                py,
+                "handle_write_registers",
+                (address, count, data.as_slice()),
+            );
             match result {
-                Ok(_) => ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count),
+                Ok(_) => ModbusResponse::echo_multi_write(
+                    FunctionCode::WriteMultipleRegisters,
+                    address,
+                    count,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteMultipleRegisters, e),
             }
         }
 
         // FC16 — Mask Write Register
         #[cfg(feature = "registers")]
-        ModbusRequest::MaskWriteRegister { address, and_mask, or_mask, .. } => {
-            let result = app.call_method1(py, "handle_mask_write_register", (address, and_mask, or_mask));
+        ModbusRequest::MaskWriteRegister {
+            address,
+            and_mask,
+            or_mask,
+            ..
+        } => {
+            let result = app.call_method1(
+                py,
+                "handle_mask_write_register",
+                (address, and_mask, or_mask),
+            );
             match result {
                 Ok(_) => ModbusResponse::echo_mask_write(address, and_mask, or_mask),
                 Err(e) => py_error_to_response(py, FunctionCode::MaskWriteRegister, e),
@@ -407,38 +455,60 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
         // FC17 — Read/Write Multiple Registers
         #[cfg(feature = "registers")]
         ModbusRequest::ReadWriteMultipleRegisters {
-            read_address, read_count, write_address, write_count, data, ..
+            read_address,
+            read_count,
+            write_address,
+            write_count,
+            data,
+            ..
         } => {
             let result = app.call_method1(
                 py,
                 "handle_read_write_registers",
-                (read_address, read_count, write_address, write_count, data.as_slice()),
+                (
+                    read_address,
+                    read_count,
+                    write_address,
+                    write_count,
+                    data.as_slice(),
+                ),
             );
             match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
                 Ok(regs) if regs.len() == read_count as usize => {
                     ModbusResponse::registers(FunctionCode::ReadWriteMultipleRegisters, &regs)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadWriteMultipleRegisters, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadWriteMultipleRegisters,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadWriteMultipleRegisters, e),
             }
         }
 
         // FC18 — Read FIFO Queue
         #[cfg(feature = "fifo")]
-        ModbusRequest::ReadFifoQueue { pointer_address, .. } => {
+        ModbusRequest::ReadFifoQueue {
+            pointer_address, ..
+        } => {
             let result = app.call_method1(py, "handle_read_fifo_queue", (pointer_address,));
             match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
                 Ok(values) if values.len() <= 31 => {
                     // Payload: fifo_count (2 BE) + values (2 BE each)
                     let fifo_count = values.len() as u16;
-                    let mut payload = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::new();
+                    let mut payload = heapless::Vec::<
+                        u8,
+                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                    >::new();
                     let _ = payload.extend_from_slice(&fifo_count.to_be_bytes());
                     for v in &values {
                         let _ = payload.extend_from_slice(&v.to_be_bytes());
                     }
                     ModbusResponse::fifo_response(&payload)
                 }
-                Ok(_) => ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::IllegalDataAddress),
+                Ok(_) => ModbusResponse::exception(
+                    FunctionCode::ReadFifoQueue,
+                    ExceptionCode::IllegalDataAddress,
+                ),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadFifoQueue, e),
             }
         }
@@ -446,7 +516,8 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
         // FC07 — Read Exception Status
         #[cfg(feature = "diagnostics")]
         ModbusRequest::ReadExceptionStatus { .. } => {
-            match app.call_method0(py, "handle_read_exception_status")
+            match app
+                .call_method0(py, "handle_read_exception_status")
                 .and_then(|v| v.extract::<u8>(py))
             {
                 Ok(status) => ModbusResponse::read_exception_status(status),
@@ -456,7 +527,9 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
 
         // FC08 — Diagnostics
         #[cfg(feature = "diagnostics")]
-        ModbusRequest::Diagnostics { sub_function, data, .. } => {
+        ModbusRequest::Diagnostics {
+            sub_function, data, ..
+        } => {
             let result = app.call_method1(py, "handle_diagnostics", (sub_function, data));
             match result.and_then(|v| v.extract::<(u16, u16)>(py)) {
                 Ok((response_sub_fn, response_data)) => {
@@ -472,7 +545,8 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
         // FC0B — Get Comm Event Counter
         #[cfg(feature = "diagnostics")]
         ModbusRequest::GetCommEventCounter { .. } => {
-            match app.call_method0(py, "handle_get_comm_event_counter")
+            match app
+                .call_method0(py, "handle_get_comm_event_counter")
                 .and_then(|v| v.extract::<(u16, u16)>(py))
             {
                 Ok((status, count)) => ModbusResponse::comm_event_counter(status, count),

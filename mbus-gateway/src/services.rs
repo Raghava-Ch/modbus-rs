@@ -13,8 +13,8 @@
 
 use heapless::Vec;
 use mbus_core::data_unit::common::{
-    compile_adu_frame, decompile_adu_frame, derive_length_from_bytes, ModbusMessage,
-    Pdu, MAX_ADU_FRAME_LEN,
+    MAX_ADU_FRAME_LEN, ModbusMessage, Pdu, compile_adu_frame, decompile_adu_frame,
+    derive_length_from_bytes,
 };
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
@@ -150,10 +150,7 @@ where
     }
 
     /// Return a mutable reference to a downstream channel.
-    pub fn downstream_mut(
-        &mut self,
-        idx: usize,
-    ) -> Option<&mut DownstreamChannel<DownstreamT>> {
+    pub fn downstream_mut(&mut self, idx: usize) -> Option<&mut DownstreamChannel<DownstreamT>> {
         self.downstream.get_mut(idx)
     }
 
@@ -241,14 +238,13 @@ where
 
         // ── Step 2: try to extract a complete upstream frame ──────────────────
         let upstream_type = UpstreamT::TRANSPORT_TYPE;
-        let expected_len =
-            match derive_length_from_bytes(&self.upstream_rxbuf, upstream_type) {
-                Some(len) => len,
-                None => {
-                    // Incomplete frame — wait for more bytes.
-                    return Ok(());
-                }
-            };
+        let expected_len = match derive_length_from_bytes(&self.upstream_rxbuf, upstream_type) {
+            Some(len) => len,
+            None => {
+                // Incomplete frame — wait for more bytes.
+                return Ok(());
+            }
+        };
 
         if self.upstream_rxbuf.len() < expected_len {
             return Ok(());
@@ -348,15 +344,19 @@ where
         let downstream_unit = self.router.rewrite(unit);
 
         let downstream_type = DownstreamT::TRANSPORT_TYPE;
-        let downstream_adu =
-            match compile_adu_frame(internal_txn, downstream_unit.get(), upstream_msg.pdu.clone(), downstream_type) {
-                Ok(adu) => adu,
-                Err(e) => {
-                    gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
-                    let _ = self.txn_map.remove(internal_txn);
-                    return Ok(());
-                }
-            };
+        let downstream_adu = match compile_adu_frame(
+            internal_txn,
+            downstream_unit.get(),
+            upstream_msg.pdu.clone(),
+            downstream_type,
+        ) {
+            Ok(adu) => adu,
+            Err(e) => {
+                gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
+                let _ = self.txn_map.remove(internal_txn);
+                return Ok(());
+            }
+        };
 
         // ── Step 6: send to downstream ────────────────────────────────────────
         let max_attempts = self.max_downstream_recv_attempts;
@@ -444,7 +444,8 @@ where
             unit.get()
         );
 
-        self.event_handler.on_response_returned(0, entry.upstream_txn);
+        self.event_handler
+            .on_response_returned(0, entry.upstream_txn);
 
         Ok(())
     }
@@ -475,11 +476,7 @@ where
     for attempt in 0..max_attempts {
         match channel.transport.recv() {
             Ok(bytes) => {
-                gateway_log_trace!(
-                    "downstream rx attempt {}: {} bytes",
-                    attempt,
-                    bytes.len()
-                );
+                gateway_log_trace!("downstream rx attempt {}: {} bytes", attempt, bytes.len());
                 if channel.rxbuf.extend_from_slice(&bytes).is_err() {
                     // Overflow — discard and try again.
                     channel.rxbuf.clear();

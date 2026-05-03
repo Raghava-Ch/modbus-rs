@@ -21,14 +21,11 @@
 //! - `txn_id` is always the original id supplied by the caller, including Serial modes where
 //!   transaction ids are not transmitted on the wire.
 
-use mbus_core::{
-    errors::MbusError,
-    transport::UnitIdOrSlaveAddr,
-};
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::EncapsulatedInterfaceType;
+use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
 
 #[cfg(feature = "coils")]
 use crate::services::coil::Coils;

@@ -6,11 +6,11 @@ use mbus_core::transport::SerialMode;
 use super::app::CApp;
 use super::callbacks::MbusCallbacks;
 use super::config::{MbusSerialConfig, serial_config_from_c};
-use crate::c::error::MbusStatusCode;
 use super::pool::{
     MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial_ascii, pool_allocate_serial_rtu,
     pool_free, with_serial_client_uniform,
 };
+use crate::c::error::MbusStatusCode;
 use crate::c::transport::{
     CAsciiTransport, CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks,
 };

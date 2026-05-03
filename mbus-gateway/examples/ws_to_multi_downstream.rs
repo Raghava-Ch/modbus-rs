@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Routing table ─────────────────────────────────────────────────────────
     // RangeRouteTable maps contiguous unit-ID ranges to channel indices.
     let mut router: RangeRouteTable<4> = RangeRouteTable::new();
-    router.add(1, 10, 0).unwrap();  // units  1–10  → channel 0 (device A)
+    router.add(1, 10, 0).unwrap(); // units  1–10  → channel 0 (device A)
     router.add(11, 20, 1).unwrap(); // units 11–20  → channel 1 (device B)
 
     // ── Gateway (no extra security for this dev example) ──────────────────────

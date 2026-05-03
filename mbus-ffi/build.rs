@@ -284,8 +284,12 @@ fn main() {
             }
         };
         println!("cargo::rerun-if-changed={}", app_config_path.display());
-        let app_config_text = std::fs::read_to_string(&app_config_path)
-            .unwrap_or_else(|e| panic!("failed to read MBUS_SERVER_APP_CONFIG={}: {e}", app_config_path.display()));
+        let app_config_text = std::fs::read_to_string(&app_config_path).unwrap_or_else(|e| {
+            panic!(
+                "failed to read MBUS_SERVER_APP_CONFIG={}: {e}",
+                app_config_path.display()
+            )
+        });
         let app_config = mbus_codegen::parse_yaml(&app_config_text)
             .unwrap_or_else(|e| panic!("invalid YAML in {}: {e}", app_config_path.display()));
         mbus_codegen::validate_config(&app_config)
@@ -410,7 +414,10 @@ fn prune_go_header(path: &std::path::Path) {
     let original = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            println!("cargo::warning=cannot read {} for pruning: {e}", path.display());
+            println!(
+                "cargo::warning=cannot read {} for pruning: {e}",
+                path.display()
+            );
             return;
         }
     };

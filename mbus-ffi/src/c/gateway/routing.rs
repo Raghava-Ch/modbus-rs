@@ -56,9 +56,7 @@ impl CGatewayRouter {
         if min > max {
             return false;
         }
-        self.ranges
-            .push(RangeEntry { min, max, channel })
-            .is_ok()
+        self.ranges.push(RangeEntry { min, max, channel }).is_ok()
     }
 }
 

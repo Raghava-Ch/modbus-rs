@@ -49,7 +49,9 @@ pub struct MbusTransportCallbacks {
 }
 
 #[cfg(any(feature = "c", feature = "c-server", feature = "c-gateway"))]
-pub(crate) use c_impl::{CAsciiTransport, CRtuTransport, CTcpTransport, validate_transport_callbacks};
+pub(crate) use c_impl::{
+    CAsciiTransport, CRtuTransport, CTcpTransport, validate_transport_callbacks,
+};
 
 /// Implementation types — only compiled when the `c`, `c-server`, or `c-gateway` feature is active.
 #[cfg(any(feature = "c", feature = "c-server", feature = "c-gateway"))]

@@ -39,7 +39,10 @@ pub struct WsUpstreamTransport {
 impl WsUpstreamTransport {
     /// Wrap an already-accepted WebSocket stream.
     pub fn new(ws: WebSocketStream<TcpStream>) -> Self {
-        Self { ws, connected: true }
+        Self {
+            ws,
+            connected: true,
+        }
     }
 }
 
@@ -58,13 +61,10 @@ impl AsyncTransport for WsUpstreamTransport {
         }
         // Copy the ADU bytes into a binary WebSocket message and flush.
         let bytes = bytes::Bytes::copy_from_slice(adu);
-        self.ws
-            .send(Message::Binary(bytes))
-            .await
-            .map_err(|_| {
-                self.connected = false;
-                MbusError::IoError
-            })
+        self.ws.send(Message::Binary(bytes)).await.map_err(|_| {
+            self.connected = false;
+            MbusError::IoError
+        })
     }
 
     async fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, MbusError> {

@@ -7,8 +7,10 @@
 pub mod client;
 pub mod server;
 
-pub use client::{WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, request_serial_port};
+pub use client::{
+    WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, request_serial_port,
+};
 pub use server::{
-	WasmSerialServer, WasmSerialServerConfig, WasmServerBindingPlan, WasmServerStatusSnapshot,
-	WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
+    WasmSerialServer, WasmSerialServerConfig, WasmServerBindingPlan, WasmServerStatusSnapshot,
+    WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
 };

@@ -20,31 +20,23 @@ pub struct MbusGatewayCallbacks {
 
     /// Called after a request has been forwarded to a downstream channel.
     pub on_forward: Option<
-        unsafe extern "C" fn(
-            session_id: u8,
-            unit_id: u8,
-            channel_idx: u16,
-            userdata: *mut c_void,
-        ),
+        unsafe extern "C" fn(session_id: u8, unit_id: u8, channel_idx: u16, userdata: *mut c_void),
     >,
 
     /// Called after a response has been delivered to the upstream client.
-    pub on_response_returned: Option<
-        unsafe extern "C" fn(session_id: u8, upstream_txn: u16, userdata: *mut c_void),
-    >,
+    pub on_response_returned:
+        Option<unsafe extern "C" fn(session_id: u8, upstream_txn: u16, userdata: *mut c_void)>,
 
     /// Called when no downstream route was found for a unit ID.
     pub on_routing_miss:
         Option<unsafe extern "C" fn(session_id: u8, unit_id: u8, userdata: *mut c_void)>,
 
     /// Called when a downstream device failed to respond before timeout.
-    pub on_downstream_timeout: Option<
-        unsafe extern "C" fn(session_id: u8, internal_txn: u16, userdata: *mut c_void),
-    >,
+    pub on_downstream_timeout:
+        Option<unsafe extern "C" fn(session_id: u8, internal_txn: u16, userdata: *mut c_void)>,
 
     /// Called when the upstream session disconnects (transport-level error).
-    pub on_upstream_disconnect:
-        Option<unsafe extern "C" fn(session_id: u8, userdata: *mut c_void)>,
+    pub on_upstream_disconnect: Option<unsafe extern "C" fn(session_id: u8, userdata: *mut c_void)>,
 }
 
 // SAFETY: The C application is responsible for ensuring the userdata pointer

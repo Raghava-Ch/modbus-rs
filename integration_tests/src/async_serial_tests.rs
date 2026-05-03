@@ -2,8 +2,8 @@ use anyhow::Result;
 use heapless::Vec as HVec;
 use modbus_rs::mbus_async::{AsyncError, AsyncSerialClient};
 use modbus_rs::{
-    crc16, BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MbusError,
-    ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TransportType, MAX_ADU_FRAME_LEN,
+    BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MAX_ADU_FRAME_LEN,
+    MbusError, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TransportType, crc16,
 };
 use std::collections::VecDeque;
 use std::str::FromStr;

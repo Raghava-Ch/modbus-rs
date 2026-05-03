@@ -11,7 +11,7 @@ use mbus_network::TokioTcpTransport;
 use tokio::sync::{Mutex as TokioMutex, Notify};
 use tokio::task::JoinHandle;
 
-use crate::nodejs::errors::{to_napi_err, ERR_MODBUS_INTERNAL, ERR_MODBUS_INVALID_ARGUMENT};
+use crate::nodejs::errors::{ERR_MODBUS_INTERNAL, ERR_MODBUS_INVALID_ARGUMENT, to_napi_err};
 use crate::nodejs::runtime;
 
 // ── Option structs ───────────────────────────────────────────────────────────
@@ -124,9 +124,10 @@ impl AsyncTcpGateway {
         self.stop_signal.notify_one();
 
         let handle = {
-            let mut guard = self.join_handle.lock().map_err(|_| {
-                napi::Error::new(Status::GenericFailure, "Failed to acquire lock")
-            })?;
+            let mut guard = self
+                .join_handle
+                .lock()
+                .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
             guard.take()
         };
         if let Some(h) = handle {

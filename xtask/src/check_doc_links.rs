@@ -27,13 +27,27 @@ fn use_color() -> bool {
     std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal()
 }
 fn paint(s: &str, code: &str) -> String {
-    if use_color() { format!("{code}{s}{ANSI_RESET}") } else { s.to_string() }
+    if use_color() {
+        format!("{code}{s}{ANSI_RESET}")
+    } else {
+        s.to_string()
+    }
 }
-fn ok(s: &str) -> String    { paint(s, ANSI_GREEN) }
-fn warn(s: &str) -> String  { paint(s, ANSI_YELLOW) }
-fn err(s: &str) -> String   { paint(s, ANSI_RED) }
+fn ok(s: &str) -> String {
+    paint(s, ANSI_GREEN)
+}
+fn warn(s: &str) -> String {
+    paint(s, ANSI_YELLOW)
+}
+fn err(s: &str) -> String {
+    paint(s, ANSI_RED)
+}
 fn section(s: &str) -> String {
-    if use_color() { format!("{ANSI_BOLD}{ANSI_CYAN}{s}{ANSI_RESET}") } else { s.to_string() }
+    if use_color() {
+        format!("{ANSI_BOLD}{ANSI_CYAN}{s}{ANSI_RESET}")
+    } else {
+        s.to_string()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -120,7 +134,10 @@ fn find_paren_end(s: &str) -> Option<usize> {
 fn clean_href(raw: &str) -> &str {
     let h = raw.trim();
     // Strip < > angle brackets used for href delimiters
-    let h = h.strip_prefix('<').and_then(|s| s.strip_suffix('>')).unwrap_or(h);
+    let h = h
+        .strip_prefix('<')
+        .and_then(|s| s.strip_suffix('>'))
+        .unwrap_or(h);
     // Strip optional title after a space: `url "title"` → `url`
     let h = if let Some(pos) = h.find(" \"").or_else(|| h.find(" '")) {
         &h[..pos]
@@ -150,7 +167,9 @@ fn extract_md_links(content: &str) -> Vec<(usize, String)> {
         // Scan for `](` within this line
         let mut search_from = 0usize;
         while search_from < line.len() {
-            let Some(rel) = line[search_from..].find("](") else { break };
+            let Some(rel) = line[search_from..].find("](") else {
+                break;
+            };
             let href_start = search_from + rel + 2; // skip `](`
 
             match find_paren_end(&line[href_start..]) {
@@ -212,7 +231,11 @@ fn check_link(source_file: &Path, href: &str, root: &Path) -> Option<PathBuf> {
     let base = source_file.parent().unwrap_or(root);
     let resolved = base.join(path_part);
 
-    if resolved.exists() { None } else { Some(resolved) }
+    if resolved.exists() {
+        None
+    } else {
+        Some(resolved)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -248,8 +271,8 @@ pub fn cmd_check_doc_links(root: &Path, args: &[String]) -> Result<(), String> {
     let mut total_links = 0usize;
 
     for file in &files {
-        let content = fs::read_to_string(file)
-            .map_err(|e| format!("cannot read {}: {e}", file.display()))?;
+        let content =
+            fs::read_to_string(file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
 
         for (line, href) in extract_md_links(&content) {
             total_links += 1;

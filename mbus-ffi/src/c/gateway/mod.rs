@@ -17,7 +17,7 @@ pub mod routing;
 
 pub use callbacks::MbusGatewayCallbacks;
 pub use gateway::{
-    mbus_gateway_add_downstream, mbus_gateway_add_range_route, mbus_gateway_add_unit_route,
-    mbus_gateway_free, mbus_gateway_new, mbus_gateway_poll, MBUS_INVALID_GATEWAY_ID,
-    MbusGatewayId,
+    MBUS_INVALID_GATEWAY_ID, MbusGatewayId, mbus_gateway_add_downstream,
+    mbus_gateway_add_range_route, mbus_gateway_add_unit_route, mbus_gateway_free, mbus_gateway_new,
+    mbus_gateway_poll,
 };

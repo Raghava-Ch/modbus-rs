@@ -5,12 +5,12 @@
 //! encode → network → decode → app → encode → network → decode round-trip works.
 
 use anyhow::Result;
+use mbus_async::AsyncTcpClient;
 #[cfg(feature = "file-record")]
 use mbus_async::client::SubRequest;
 #[cfg(feature = "diagnostics")]
 use mbus_async::client::{ObjectId, ReadDeviceIdCode};
 use mbus_async::server::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusResponse};
-use mbus_async::AsyncTcpClient;
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use std::future::Future;
@@ -1294,7 +1294,7 @@ async fn broadcast_write_suppression_config_api() -> Result<()> {
 #[cfg(feature = "async-server")]
 #[tokio::test]
 async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
-    use mbus_macros::{async_modbus_app, CoilsModel, HoldingRegistersModel};
+    use mbus_macros::{CoilsModel, HoldingRegistersModel, async_modbus_app};
 
     #[derive(Debug, Default, Clone, HoldingRegistersModel)]
     struct Regs {
@@ -1348,8 +1348,8 @@ async fn traffic_notifier_rx_tx_counts() -> Result<()> {
     use mbus_async::server::AsyncTrafficNotifier;
     use mbus_core::errors::MbusError;
     use std::sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     };
 
     #[derive(Clone, Default)]
