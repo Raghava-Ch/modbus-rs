@@ -101,14 +101,43 @@ jobs:
         with:
           path: mbus-ffi/nodejs/artifacts
 
-      - name: Prepare npm artifacts
+      - name: Stage platform binaries
         working-directory: mbus-ffi/nodejs
         shell: bash
         run: |
+          shopt -s nullglob
           for dir in artifacts/bindings-*; do
-            cp "$dir"/*.node . 2>/dev/null || true
+            for bin in "$dir"/*.node; do
+              target_file=$(basename "$bin")
+              case "$target_file" in
+                modbus-rs.win32-x64-msvc.node)
+                  cp "$bin" npm/win32-x64-msvc/
+                  ;;
+                modbus-rs.linux-x64-gnu.node)
+                  cp "$bin" npm/linux-x64-gnu/
+                  ;;
+                modbus-rs.darwin-x64.node)
+                  cp "$bin" npm/darwin-x64/
+                  ;;
+                modbus-rs.darwin-arm64.node)
+                  cp "$bin" npm/darwin-arm64/
+                  ;;
+                modbus-rs.linux-arm64-gnu.node)
+                  cp "$bin" npm/linux-arm64-gnu/
+                  ;;
+                *)
+                  echo "Unexpected binary artifact: $target_file"
+                  exit 1
+                  ;;
+              esac
+            done
           done
-          npm run prepublishOnly
+
+          for pkg_dir in npm/*; do
+            if [ -d "$pkg_dir" ]; then
+              ls -la "$pkg_dir"
+            fi
+          done
 
       - name: Publish platform packages
         working-directory: mbus-ffi/nodejs
@@ -127,4 +156,4 @@ jobs:
         working-directory: mbus-ffi/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --ignore-scripts
