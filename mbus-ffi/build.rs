@@ -2,6 +2,12 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(cbindgen)");
     println!("cargo::rustc-check-cfg=cfg(has_unwind)");
 
+    // napi-build setup for Node.js bindings — generates the native addon registration glue.
+    // Only called when the `nodejs` feature is active.
+    if std::env::var("CARGO_FEATURE_NODEJS").is_ok() {
+        napi_build::setup();
+    }
+
     let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
 
     // Link the C standard library for intrinsics (memcpy, memset, strlen, etc.)
@@ -278,8 +284,12 @@ fn main() {
             }
         };
         println!("cargo::rerun-if-changed={}", app_config_path.display());
-        let app_config_text = std::fs::read_to_string(&app_config_path)
-            .unwrap_or_else(|e| panic!("failed to read MBUS_SERVER_APP_CONFIG={}: {e}", app_config_path.display()));
+        let app_config_text = std::fs::read_to_string(&app_config_path).unwrap_or_else(|e| {
+            panic!(
+                "failed to read MBUS_SERVER_APP_CONFIG={}: {e}",
+                app_config_path.display()
+            )
+        });
         let app_config = mbus_codegen::parse_yaml(&app_config_text)
             .unwrap_or_else(|e| panic!("invalid YAML in {}: {e}", app_config_path.display()));
         mbus_codegen::validate_config(&app_config)
@@ -404,7 +414,10 @@ fn prune_go_header(path: &std::path::Path) {
     let original = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            println!("cargo::warning=cannot read {} for pruning: {e}", path.display());
+            println!(
+                "cargo::warning=cannot read {} for pruning: {e}",
+                path.display()
+            );
             return;
         }
     };

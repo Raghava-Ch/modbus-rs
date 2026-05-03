@@ -1,5 +1,5 @@
-use mbus_server_async::AsyncTcpServer as InnerAsyncTcpServer;
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_server_async::AsyncTcpServer as InnerAsyncTcpServer;
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
@@ -48,8 +48,7 @@ impl AsyncTcpServer {
     #[new]
     #[pyo3(signature = (host, app, port=502, unit_id=1))]
     fn new(host: &str, app: Py<ModbusApp>, port: u16, unit_id: u8) -> PyResult<Self> {
-        let _ = UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(crate::python::errors::mbus_error_to_py)?;
+        let _ = UnitIdOrSlaveAddr::new(unit_id).map_err(crate::python::errors::mbus_error_to_py)?;
         let bind_addr = format!("{}:{}", host, port);
         Ok(Self {
             bind_addr,
@@ -104,8 +103,8 @@ impl AsyncTcpServer {
     /// This method returns ``self`` and does not implicitly start serving.
     /// Use :meth:`serve_forever` to run the listener.
     fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let _ = UnitIdOrSlaveAddr::new(slf.unit_id)
-            .map_err(crate::python::errors::mbus_error_to_py)?;
+        let _ =
+            UnitIdOrSlaveAddr::new(slf.unit_id).map_err(crate::python::errors::mbus_error_to_py)?;
         let this = slf.into_pyobject(py)?.into_any().unbind();
         future_into_py(py, async move { Ok::<Py<PyAny>, PyErr>(this) })
     }
@@ -153,8 +152,7 @@ impl TcpServer {
     #[new]
     #[pyo3(signature = (host, app, port=502, unit_id=1))]
     fn new(host: &str, app: Py<ModbusApp>, port: u16, unit_id: u8) -> PyResult<Self> {
-        let _ = UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(crate::python::errors::mbus_error_to_py)?;
+        let _ = UnitIdOrSlaveAddr::new(unit_id).map_err(crate::python::errors::mbus_error_to_py)?;
         let bind_addr = format!("{}:{}", host, port);
         Ok(Self {
             bind_addr,
@@ -178,14 +176,12 @@ impl TcpServer {
         let adapter = PythonAppAdapter::new(self.app.clone_ref(py));
         let stop_signal = self.stop_signal.clone();
         py.detach(|| {
-            rt.block_on(
-                InnerAsyncTcpServer::serve_with_shutdown(
-                    addr.as_str(),
-                    adapter,
-                    unit,
-                    stop_signal.notified(),
-                ),
-            )
+            rt.block_on(InnerAsyncTcpServer::serve_with_shutdown(
+                addr.as_str(),
+                adapter,
+                unit,
+                stop_signal.notified(),
+            ))
             .map(|_| ())
             .map_err(async_server_error_to_py)
         })

@@ -15,7 +15,7 @@
 use anyhow::{Context, Result};
 use mbus_async::server::AsyncTcpServer;
 use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
-use mbus_server::{FileRecord, FifoQueue, async_modbus_app};
+use mbus_server::{FifoQueue, FileRecord, async_modbus_app};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
@@ -77,7 +77,9 @@ struct AlarmFile {
 impl Default for AlarmFile {
     fn default() -> Self {
         Self {
-            words: [0x1001, 0x0000, 0x0001, 0x0032, 0x2002, 0x0001, 0x0002, 0x0045],
+            words: [
+                0x1001, 0x0000, 0x0001, 0x0032, 0x2002, 0x0001, 0x0002, 0x0045,
+            ],
         }
     }
 }
@@ -230,8 +232,14 @@ async fn main() -> Result<()> {
     let bind = format!("{host}:{port}");
     let unit = unit_id(unit_raw);
 
-    println!("Async FIFO/FileRecord Modbus TCP server on {bind} (unit {})", unit.get());
-    println!("FC18 FIFO pointer address : 0x{:04X}", TemperatureHistory::POINTER_ADDRESS);
+    println!(
+        "Async FIFO/FileRecord Modbus TCP server on {bind} (unit {})",
+        unit.get()
+    );
+    println!(
+        "FC18 FIFO pointer address : 0x{:04X}",
+        TemperatureHistory::POINTER_ADDRESS
+    );
     println!("FC14/FC15 file number    : {}", AlarmFile::FILE_NUMBER);
     println!("File record words        : 0..7");
     println!("Background task updates FIFO samples and alarm metadata every second");

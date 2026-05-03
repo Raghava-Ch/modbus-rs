@@ -11,7 +11,7 @@ fn js_echo_handler() -> Function {
 }
 
 fn install_fake_websocket() {
-        let script = r#"
+    let script = r#"
 if (!globalThis.__fakeWsInstalledSB) {
     class FakeWebSocket {
         constructor(url) {
@@ -70,23 +70,23 @@ if (!globalThis.__fakeWsInstalledSB) {
 }
 "#;
 
-        let _ = js_sys::eval(script).expect("failed to install fake websocket");
+    let _ = js_sys::eval(script).expect("failed to install fake websocket");
 }
 
 fn call_global_1(name: &str, a1: &JsValue) -> JsValue {
-        let global = js_sys::global();
-        let f = Reflect::get(&global, &JsValue::from_str(name))
-                .expect("global function not found")
-                .dyn_into::<Function>()
-                .expect("global is not function");
-        f.call1(&JsValue::NULL, a1).expect("global call failed")
+    let global = js_sys::global();
+    let f = Reflect::get(&global, &JsValue::from_str(name))
+        .expect("global function not found")
+        .dyn_into::<Function>()
+        .expect("global is not function");
+    f.call1(&JsValue::NULL, a1).expect("global call failed")
 }
 
 fn open_fake_ws(url: &str) {
-        let ok = call_global_1("__fake_ws_open_sb", &JsValue::from_str(url))
-                .as_bool()
-                .unwrap_or(false);
-        assert!(ok, "failed to open fake websocket for {url}");
+    let ok = call_global_1("__fake_ws_open_sb", &JsValue::from_str(url))
+        .as_bool()
+        .unwrap_or(false);
+    assert!(ok, "failed to open fake websocket for {url}");
 }
 
 #[wasm_bindgen_test]
@@ -158,7 +158,9 @@ async fn tcp_start_is_idempotent_does_not_recreate_socket() {
         .unwrap_or(-1.0) as u32;
     assert_eq!(created_1, 1);
 
-    server.start().expect("second start should be no-op and succeed");
+    server
+        .start()
+        .expect("second start should be no-op and succeed");
     let created_2 = call_global_1("__fake_ws_created_count_sb", &JsValue::from_str(url))
         .as_f64()
         .unwrap_or(-1.0) as u32;

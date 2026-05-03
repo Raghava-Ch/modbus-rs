@@ -4,9 +4,7 @@
 //! `cargo run -p modbus-rs --example fifo_file_record_demo --features server,network-tcp`
 
 use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
-use mbus_server::{
-    FileRecord, FifoQueue, ServerFifoHandler, ServerFileRecordHandler, modbus_app,
-};
+use mbus_server::{FifoQueue, FileRecord, ServerFifoHandler, ServerFileRecordHandler, modbus_app};
 
 #[derive(Default)]
 struct TemperatureHistory;
@@ -92,8 +90,9 @@ fn main() -> Result<(), MbusError> {
     assert_eq!(&fifo_out[..6], &[0x00, 0x02, 0x00, 0xFB, 0x00, 0xFC]);
 
     // Unknown pointer address -> macro-generated fallback.
-    let fifo_err = ServerFifoHandler::read_fifo_queue_request(&mut app, 2, unit, 0x9999, &mut fifo_out)
-        .expect_err("unknown FIFO pointer should fail");
+    let fifo_err =
+        ServerFifoHandler::read_fifo_queue_request(&mut app, 2, unit, 0x9999, &mut fifo_out)
+            .expect_err("unknown FIFO pointer should fail");
     assert_eq!(fifo_err, MbusError::InvalidAddress);
 
     // FC14 route: file number selects the field from `file_record(...)`.

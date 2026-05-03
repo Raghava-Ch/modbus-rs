@@ -132,7 +132,7 @@ Example (minimal feature set):
 
 ```toml
 [dependencies]
-mbus-client = { version = "0.8.0", default-features = false, features = ["coils"] }
+mbus-client = { version = "0.9.0", default-features = false, features = ["coils"] }
 ```
 
 ## Traffic Callbacks (optional `traffic` feature)
@@ -372,7 +372,7 @@ cargo check -p mbus-client --no-default-features --features registers,discrete-i
 
 This crate is licensed under **GPL-3.0**.
 
-If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 
 ## Disclaimer
 

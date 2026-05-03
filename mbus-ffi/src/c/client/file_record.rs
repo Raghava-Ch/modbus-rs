@@ -5,8 +5,8 @@ use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 use mbus_core::models::file_record::SubRequest;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use crate::c::error::MbusStatusCode;
 use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+use crate::c::error::MbusStatusCode;
 
 /// A single sub-request passed to [`mbus_tcp_read_file_record`] /
 /// [`mbus_tcp_write_file_record`] (and their serial equivalents).

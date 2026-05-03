@@ -46,7 +46,7 @@ use mbus_network::WsUpstreamTransport;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::{Mutex, Semaphore};
 
-use crate::async_gateway::{run_async_session, AsyncGatewayError};
+use crate::async_gateway::{AsyncGatewayError, run_async_session};
 use crate::log_compat::{gateway_log_debug, gateway_log_warn};
 use crate::router::GatewayRoutingPolicy;
 
@@ -263,11 +263,7 @@ impl AsyncWsGatewayServer {
                 let ws_stream = match ws_stream {
                     Ok(ws) => ws,
                     Err(e) => {
-                        gateway_log_debug!(
-                            "WS handshake failed for {:?}: {:?}",
-                            peer,
-                            e
-                        );
+                        gateway_log_debug!("WS handshake failed for {:?}: {:?}", peer, e);
                         return;
                     }
                 };
@@ -282,17 +278,11 @@ impl AsyncWsGatewayServer {
                         };
                         run_async_session(timed, router_ref, downstreams_ref).await
                     }
-                    None => {
-                        run_async_session(upstream, router_ref, downstreams_ref).await
-                    }
+                    None => run_async_session(upstream, router_ref, downstreams_ref).await,
                 };
 
                 if let Err(e) = result {
-                    gateway_log_debug!(
-                        "WS session from {:?} ended with error: {:?}",
-                        peer,
-                        e
-                    );
+                    gateway_log_debug!("WS session from {:?} ended with error: {:?}", peer, e);
                 }
             });
         }
@@ -426,9 +416,7 @@ async fn perform_handshake(
     tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     tokio_tungstenite::tungstenite::Error,
 > {
-    use tokio_tungstenite::tungstenite::handshake::server::{
-        ErrorResponse, Request, Response,
-    };
+    use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
     use tokio_tungstenite::tungstenite::http::{HeaderValue, StatusCode};
 
     // Clone config data needed inside the FnOnce callback.
@@ -438,53 +426,49 @@ async fn perform_handshake(
     // tungstenite's server callback type requires `Result<Response, ErrorResponse>`
     // where `ErrorResponse` is a large HTTP response type.
     #[allow(clippy::result_large_err)]
-    let callback =
-        move |req: &Request, mut response: Response| -> Result<Response, ErrorResponse> {
-            // ── Origin check ──────────────────────────────────────────────────
-            if !allowed_origins.is_empty() {
-                let origin_ok = req
-                    .headers()
-                    .get("origin")
-                    .or_else(|| req.headers().get("Origin"))
-                    .and_then(|v: &HeaderValue| v.to_str().ok())
-                    .map(|origin_str: &str| {
-                        allowed_origins.iter().any(|o| o == origin_str)
-                    })
-                    .unwrap_or(false);
+    let callback = move |req: &Request,
+                         mut response: Response|
+          -> Result<Response, ErrorResponse> {
+        // ── Origin check ──────────────────────────────────────────────────
+        if !allowed_origins.is_empty() {
+            let origin_ok = req
+                .headers()
+                .get("origin")
+                .or_else(|| req.headers().get("Origin"))
+                .and_then(|v: &HeaderValue| v.to_str().ok())
+                .map(|origin_str: &str| allowed_origins.iter().any(|o| o == origin_str))
+                .unwrap_or(false);
 
-                if !origin_ok {
-                    let mut err = ErrorResponse::new(Some("Origin not allowed".to_string()));
-                    *err.status_mut() = StatusCode::FORBIDDEN;
-                    return Err(err);
-                }
+            if !origin_ok {
+                let mut err = ErrorResponse::new(Some("Origin not allowed".to_string()));
+                *err.status_mut() = StatusCode::FORBIDDEN;
+                return Err(err);
+            }
+        }
+
+        // ── Subprotocol negotiation ───────────────────────────────────────
+        if require_subprotocol {
+            let has_modbus = req
+                .headers()
+                .get("sec-websocket-protocol")
+                .and_then(|v: &HeaderValue| v.to_str().ok())
+                .map(|s: &str| s.split(',').any(|p: &str| p.trim() == "modbus"))
+                .unwrap_or(false);
+
+            if !has_modbus {
+                let mut err = ErrorResponse::new(Some("modbus subprotocol required".to_string()));
+                *err.status_mut() = StatusCode::BAD_REQUEST;
+                return Err(err);
             }
 
-            // ── Subprotocol negotiation ───────────────────────────────────────
-            if require_subprotocol {
-                let has_modbus = req
-                    .headers()
-                    .get("sec-websocket-protocol")
-                    .and_then(|v: &HeaderValue| v.to_str().ok())
-                    .map(|s: &str| s.split(',').any(|p: &str| p.trim() == "modbus"))
-                    .unwrap_or(false);
+            // Echo the subprotocol back to the client.
+            response
+                .headers_mut()
+                .insert("Sec-WebSocket-Protocol", HeaderValue::from_static("modbus"));
+        }
 
-                if !has_modbus {
-                    let mut err = ErrorResponse::new(Some(
-                        "modbus subprotocol required".to_string(),
-                    ));
-                    *err.status_mut() = StatusCode::BAD_REQUEST;
-                    return Err(err);
-                }
-
-                // Echo the subprotocol back to the client.
-                response.headers_mut().insert(
-                    "Sec-WebSocket-Protocol",
-                    HeaderValue::from_static("modbus"),
-                );
-            }
-
-            Ok(response)
-        };
+        Ok(response)
+    };
 
     tokio_tungstenite::accept_hdr_async(stream, callback).await
 }

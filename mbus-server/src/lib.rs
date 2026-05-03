@@ -244,8 +244,8 @@ pub mod prelude {
     pub use crate::CoilMap;
     #[cfg(feature = "discrete-inputs")]
     pub use crate::DiscreteInputMap;
-    pub use crate::FileRecord;
     pub use crate::FifoQueue;
+    pub use crate::FileRecord;
     #[cfg(feature = "holding-registers")]
     pub use crate::HoldingRegisterMap;
     #[cfg(feature = "input-registers")]

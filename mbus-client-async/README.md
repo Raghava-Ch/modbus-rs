@@ -14,7 +14,7 @@ existing `mbus-async` crate unchanged for backward compatibility.
 
 ```toml
 [dependencies]
-mbus-client-async = "0.8.0"
+mbus-client-async = "0.9.0"
 ```
 
 ```rust

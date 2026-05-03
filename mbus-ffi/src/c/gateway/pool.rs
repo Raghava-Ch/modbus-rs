@@ -20,9 +20,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use mbus_gateway::GatewayServices;
 
+use crate::MAX_GATEWAYS;
 use crate::c::error::MbusStatusCode;
 use crate::c::transport::CTcpTransport;
-use crate::MAX_GATEWAYS;
 
 use super::event_adapter::CGatewayEventAdapter;
 use super::routing::CGatewayRouter;

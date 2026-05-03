@@ -1,0 +1,60 @@
+name: Release .NET (NuGet)
+
+on:
+  push:
+    tags:
+      - "dotnet-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack-and-publish:
+    name: Pack and Publish NuGet
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mbus-ffi/dotnet/ModbusRs
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore ModbusRs.csproj
+
+      - name: Build
+        run: dotnet build ModbusRs.csproj -c Release --no-restore
+
+      - name: Pack
+        run: |
+          dotnet pack ModbusRs.csproj \
+            -c Release \
+            --no-build \
+            -o artifacts/nuget \
+            /p:IncludeSymbols=true \
+            /p:SymbolPackageFormat=snupkg
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/nuget/*
+
+      - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push artifacts/nuget/*.nupkg \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+          dotnet nuget push artifacts/nuget/*.snupkg \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

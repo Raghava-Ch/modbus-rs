@@ -1,6 +1,6 @@
 # mbus-ffi
 
-WASM/JS, Native C/C++ FFI, **Python**, and **.NET (C#)** bindings for the `modbus-rs` stack.
+WASM/JS, Native C/C++ FFI, **Python**, **.NET (C#)**, **Go**, and **Node.js** bindings for the `modbus-rs` stack.
 
 ---
 
@@ -456,6 +456,48 @@ await client.DisconnectAsync();
 
 ---
 
+## Node.js Bindings (`modbus-rs` on npm)
+
+The `nodejs` feature compiles `mbus-ffi` into a Node.js native addon via
+[napi-rs](https://napi.rs/), exposing an idiomatic Promise-based JavaScript
+and TypeScript API. The package source lives in
+[`mbus-ffi/nodejs/`](nodejs/).
+
+```bash
+# Build the native addon with all Modbus features
+cargo build -p mbus-ffi --features nodejs,full
+
+# Then build the npm package
+cd mbus-ffi/nodejs
+npm install
+npm run build
+```
+
+Minimum supported Node.js version: **20 LTS**. Prebuilt binaries are
+published per-platform via the `optionalDependencies` mechanism so end
+users do not need a Rust toolchain.
+
+### Quick start (JavaScript)
+
+```js
+import { AsyncTcpModbusClient } from 'modbus-rs';
+
+const client = await AsyncTcpModbusClient.connect({
+  host: '192.168.1.10',
+  port: 502,
+  unitId: 1,
+  timeoutMs: 2000,
+});
+
+const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
+await client.writeMultipleRegisters({ address: 10, values: [1, 2, 3, 4] });
+await client.close();
+```
+
+📖 **[Full Node.js Binding Documentation →](../documentation/nodejs_bindings.md)**
+
+---
+
 ## Thread Safety
 
 The C FFI layer is designed to be thread-safe, but it requires the **host application** to provide
@@ -720,11 +762,11 @@ Notes:
 
 Copyright (C) 2025 Raghava Challari
 
-This project is currently licensed under the GNU General Public License v3.0 (GPLv3).
+This project is licensed under the GNU General Public License v3.0 (GPLv3).
 
 For details, refer to the [LICENSE](../LICENSE) file or the [GPLv3 official site](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
-This crate is licensed under GPLv3. If you require a commercial license to use this crate in a proprietary project, please contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com) to purchase a license.
+This crate is licensed under GPLv3. Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
 
 ## Contact
 

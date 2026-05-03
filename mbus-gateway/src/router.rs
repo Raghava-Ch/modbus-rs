@@ -169,11 +169,7 @@ impl<const N: usize> RangeRouteTable<N> {
             return Err(MbusError::InvalidAddress);
         }
         // Check for overlap with existing ranges.
-        if self
-            .ranges
-            .iter()
-            .any(|r| !(r.max < min || r.min > max))
-        {
+        if self.ranges.iter().any(|r| !(r.max < min || r.min > max)) {
             return Err(MbusError::InvalidAddress);
         }
         self.ranges

@@ -108,23 +108,13 @@ pub struct MbusDnServerVtable {
     ///    write_count, out_u16_values, out_count) -> i32`
     #[cfg(feature = "registers")]
     pub read_write_multiple_registers: Option<
-        unsafe extern "C" fn(
-            *mut c_void,
-            u16,
-            u16,
-            u16,
-            *const u8,
-            u16,
-            *mut u16,
-            *mut u16,
-        ) -> i32,
+        unsafe extern "C" fn(*mut c_void, u16, u16, u16, *const u8, u16, *mut u16, *mut u16) -> i32,
     >,
 
     // ── FC24 — Read FIFO Queue ───────────────────────────────────────────────
     /// `fn(ctx, pointer_address, out_u16_values, out_count) -> i32`
     #[cfg(feature = "fifo")]
-    pub read_fifo_queue:
-        Option<unsafe extern "C" fn(*mut c_void, u16, *mut u16, *mut u16) -> i32>,
+    pub read_fifo_queue: Option<unsafe extern "C" fn(*mut c_void, u16, *mut u16, *mut u16) -> i32>,
 
     // ── FC07 — Read Exception Status ─────────────────────────────────────────
     /// `fn(ctx, out_status_byte) -> i32`
@@ -134,8 +124,7 @@ pub struct MbusDnServerVtable {
     // ── FC08 — Diagnostics ───────────────────────────────────────────────────
     /// `fn(ctx, sub_fn, data, out_sub_fn, out_data) -> i32`
     #[cfg(feature = "diagnostics")]
-    pub diagnostics:
-        Option<unsafe extern "C" fn(*mut c_void, u16, u16, *mut u16, *mut u16) -> i32>,
+    pub diagnostics: Option<unsafe extern "C" fn(*mut c_void, u16, u16, *mut u16, *mut u16) -> i32>,
 
     // ── FC0B — Get Comm Event Counter ────────────────────────────────────────
     /// `fn(ctx, out_status_word, out_event_count) -> i32`
@@ -230,15 +219,11 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             };
             let mut buf = [0u8; VTABLE_BUF_BYTES];
             let mut written: u16 = 0;
-            let rc =
-                unsafe { f(vt.ctx, address, count, buf.as_mut_ptr(), &mut written) };
+            let rc = unsafe { f(vt.ctx, address, count, buf.as_mut_ptr(), &mut written) };
             if rc != 0 {
                 return exception_from_i32(FunctionCode::ReadCoils, rc);
             }
-            ModbusResponse::packed_bits(
-                FunctionCode::ReadCoils,
-                &buf[..written as usize],
-            )
+            ModbusResponse::packed_bits(FunctionCode::ReadCoils, &buf[..written as usize])
         }
 
         // ── FC05 — Write Single Coil ─────────────────────────────────────────
@@ -271,15 +256,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
                     ExceptionCode::IllegalFunction,
                 );
             };
-            let rc = unsafe {
-                f(
-                    vt.ctx,
-                    address,
-                    data.as_ptr(),
-                    data.len() as u16,
-                    count,
-                )
-            };
+            let rc = unsafe { f(vt.ctx, address, data.as_ptr(), data.len() as u16, count) };
             if rc != 0 {
                 return exception_from_i32(FunctionCode::WriteMultipleCoils, rc);
             }
@@ -297,15 +274,11 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             };
             let mut buf = [0u8; VTABLE_BUF_BYTES];
             let mut written: u16 = 0;
-            let rc =
-                unsafe { f(vt.ctx, address, count, buf.as_mut_ptr(), &mut written) };
+            let rc = unsafe { f(vt.ctx, address, count, buf.as_mut_ptr(), &mut written) };
             if rc != 0 {
                 return exception_from_i32(FunctionCode::ReadDiscreteInputs, rc);
             }
-            ModbusResponse::packed_bits(
-                FunctionCode::ReadDiscreteInputs,
-                &buf[..written as usize],
-            )
+            ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &buf[..written as usize])
         }
 
         // ── FC03 — Read Holding Registers ────────────────────────────────────
@@ -323,10 +296,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             if rc != 0 {
                 return exception_from_i32(FunctionCode::ReadHoldingRegisters, rc);
             }
-            ModbusResponse::registers(
-                FunctionCode::ReadHoldingRegisters,
-                &buf[..written as usize],
-            )
+            ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &buf[..written as usize])
         }
 
         // ── FC04 — Read Input Registers ──────────────────────────────────────
@@ -344,10 +314,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             if rc != 0 {
                 return exception_from_i32(FunctionCode::ReadInputRegisters, rc);
             }
-            ModbusResponse::registers(
-                FunctionCode::ReadInputRegisters,
-                &buf[..written as usize],
-            )
+            ModbusResponse::registers(FunctionCode::ReadInputRegisters, &buf[..written as usize])
         }
 
         // ── FC06 — Write Single Register ─────────────────────────────────────
@@ -466,7 +433,8 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
             }
             // Encode FIFO payload: fifo_count (2 BE) + values (2 BE each)
             let count = written as usize;
-            let mut payload = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>::new();
+            let mut payload =
+                heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>::new();
             let _ = payload.extend_from_slice(&(count as u16).to_be_bytes());
             for v in &buf[..count] {
                 let _ = payload.extend_from_slice(&v.to_be_bytes());

@@ -32,9 +32,7 @@ pub unsafe extern "C" fn mbus_server_lock(_id: u16) {}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_server_unlock(_id: u16) {}
 
-use mbus_ffi::c::server::{
-    MbusServerExceptionCode, MbusServerHandlers, MBUS_INVALID_SERVER_ID,
-};
+use mbus_ffi::c::error::MbusStatusCode;
 use mbus_ffi::c::server::callbacks::{
     MbusServerReadCoilsReq, MbusServerReadHoldingRegistersReq, MbusServerWriteSingleCoilReq,
 };
@@ -43,8 +41,8 @@ use mbus_ffi::c::server::tcp_server::{
     mbus_tcp_server_connect, mbus_tcp_server_disconnect, mbus_tcp_server_free,
     mbus_tcp_server_is_connected, mbus_tcp_server_new, mbus_tcp_server_poll,
 };
+use mbus_ffi::c::server::{MBUS_INVALID_SERVER_ID, MbusServerExceptionCode, MbusServerHandlers};
 use mbus_ffi::c::transport::MbusTransportCallbacks;
-use mbus_ffi::c::error::MbusStatusCode;
 
 // ── Shared test state ─────────────────────────────────────────────────────────
 
@@ -56,12 +54,10 @@ static SENT_BYTES: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
 static RECV_FRAME: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 /// Counter: number of times the `on_read_coils` handler was invoked.
-static COIL_CB_CALLS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static COIL_CB_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Counter: number of times the `on_write_single_coil` handler was invoked.
-static WRITE_COIL_CB_CALLS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static WRITE_COIL_CB_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Serialization lock: acquired at the start of every test that reads or writes
 /// shared global state (`SENT_BYTES`, `RECV_FRAME`, counters) or the global
@@ -94,7 +90,10 @@ unsafe extern "C" fn test_send(
 ) -> MbusStatusCode {
     let bytes = unsafe { core::slice::from_raw_parts(data, len as usize) };
     // Must not panic: this function is called from within `extern "C"` context.
-    SENT_BYTES.lock().unwrap_or_else(|e| e.into_inner()).push(bytes.to_vec());
+    SENT_BYTES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(bytes.to_vec());
     MbusStatusCode::MbusOk
 }
 
@@ -118,7 +117,9 @@ unsafe extern "C" fn test_recv(
         None => {
             // No data — return OK with out_len=0; `c_recv` converts zero-length
             // to `MbusError::Timeout` which is non-fatal.
-            unsafe { *out_len = 0; }
+            unsafe {
+                *out_len = 0;
+            }
             MbusStatusCode::MbusOk
         }
     }
@@ -242,30 +243,33 @@ fn make_test_config() -> MbusServerConfig {
 fn tcp_server_new_null_transport_returns_invalid_id() {
     let handlers = make_test_handlers();
     let config = make_test_config();
-    let id = unsafe {
-        mbus_tcp_server_new(core::ptr::null(), &handlers, &config)
-    };
-    assert_eq!(id, MBUS_INVALID_SERVER_ID, "null transport should return MBUS_INVALID_SERVER_ID");
+    let id = unsafe { mbus_tcp_server_new(core::ptr::null(), &handlers, &config) };
+    assert_eq!(
+        id, MBUS_INVALID_SERVER_ID,
+        "null transport should return MBUS_INVALID_SERVER_ID"
+    );
 }
 
 #[test]
 fn tcp_server_new_null_handlers_returns_invalid_id() {
     let transport = make_transport_callbacks();
     let config = make_test_config();
-    let id = unsafe {
-        mbus_tcp_server_new(&transport, core::ptr::null(), &config)
-    };
-    assert_eq!(id, MBUS_INVALID_SERVER_ID, "null handlers should return MBUS_INVALID_SERVER_ID");
+    let id = unsafe { mbus_tcp_server_new(&transport, core::ptr::null(), &config) };
+    assert_eq!(
+        id, MBUS_INVALID_SERVER_ID,
+        "null handlers should return MBUS_INVALID_SERVER_ID"
+    );
 }
 
 #[test]
 fn tcp_server_new_null_config_returns_invalid_id() {
     let transport = make_transport_callbacks();
     let handlers = make_test_handlers();
-    let id = unsafe {
-        mbus_tcp_server_new(&transport, &handlers, core::ptr::null())
-    };
-    assert_eq!(id, MBUS_INVALID_SERVER_ID, "null config should return MBUS_INVALID_SERVER_ID");
+    let id = unsafe { mbus_tcp_server_new(&transport, &handlers, core::ptr::null()) };
+    assert_eq!(
+        id, MBUS_INVALID_SERVER_ID,
+        "null config should return MBUS_INVALID_SERVER_ID"
+    );
 }
 
 #[test]
@@ -333,13 +337,21 @@ fn tcp_server_is_connected_after_connect() {
 #[test]
 fn tcp_server_connect_with_invalid_id_returns_error() {
     let status = mbus_tcp_server_connect(MBUS_INVALID_SERVER_ID);
-    assert_ne!(status, MbusStatusCode::MbusOk, "invalid ID should not succeed");
+    assert_ne!(
+        status,
+        MbusStatusCode::MbusOk,
+        "invalid ID should not succeed"
+    );
 }
 
 #[test]
 fn tcp_server_poll_with_invalid_id_returns_error() {
     let status = mbus_tcp_server_poll(MBUS_INVALID_SERVER_ID);
-    assert_ne!(status, MbusStatusCode::MbusOk, "invalid ID should not succeed");
+    assert_ne!(
+        status,
+        MbusStatusCode::MbusOk,
+        "invalid ID should not succeed"
+    );
 }
 
 // ── Round-trip dispatch tests ─────────────────────────────────────────────────
@@ -459,8 +471,15 @@ fn fc03_read_holding_registers_dispatches_callback() {
     let frame = &sent[0];
     // FC03 response: FC=0x03, byte_count=4 (2 regs * 2 bytes), then 0xDEAD 0xDEAD.
     assert_eq!(frame[MBAP_HEADER_LEN], 0x03);
-    assert_eq!(frame[MBAP_HEADER_LEN + 1], 4, "byte_count should be 4 for 2 registers");
-    assert_eq!(&frame[MBAP_HEADER_LEN + 2..MBAP_HEADER_LEN + 6], &[0xDE, 0xAD, 0xDE, 0xAD]);
+    assert_eq!(
+        frame[MBAP_HEADER_LEN + 1],
+        4,
+        "byte_count should be 4 for 2 registers"
+    );
+    assert_eq!(
+        &frame[MBAP_HEADER_LEN + 2..MBAP_HEADER_LEN + 6],
+        &[0xDE, 0xAD, 0xDE, 0xAD]
+    );
 
     mbus_tcp_server_free(id);
 }
@@ -526,7 +545,11 @@ fn null_callback_slot_returns_illegal_function_exception() {
     // Exception response: FC = 0x81 (0x01 | 0x80), ExCode = 0x01 (IllegalFunction).
     assert!(frame.len() >= MBAP_HEADER_LEN + 2);
     assert_eq!(frame[MBAP_HEADER_LEN], 0x81, "exception FC should be 0x81");
-    assert_eq!(frame[MBAP_HEADER_LEN + 1], 0x01, "exception code should be IllegalFunction");
+    assert_eq!(
+        frame[MBAP_HEADER_LEN + 1],
+        0x01,
+        "exception code should be IllegalFunction"
+    );
 
     mbus_tcp_server_free(id);
 }

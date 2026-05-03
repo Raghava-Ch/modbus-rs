@@ -5,9 +5,9 @@
 //! feature flag and live here so neither sub-module must depend on the other.
 
 use heapless::Vec;
-use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, ModbusMessage, Pdu};
 #[cfg(any(feature = "file-record", feature = "diagnostics"))]
 use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
+use mbus_core::data_unit::common::{self, MAX_ADU_FRAME_LEN, ModbusMessage, Pdu};
 use mbus_core::errors::MbusError;
 #[cfg(any(
     feature = "coils",
