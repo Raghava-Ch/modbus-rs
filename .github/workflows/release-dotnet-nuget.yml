@@ -45,9 +45,18 @@ jobs:
           name: nuget-packages
           path: artifacts/nuget/*
 
+      - name: Validate NuGet API key
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY || vars.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::NUGET_API_KEY is missing. Add it as a Repository Secret (preferred) or Repository Variable."
+            exit 1
+          fi
+
       - name: Publish to NuGet.org
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY || vars.NUGET_API_KEY }}
         run: |
           dotnet nuget push artifacts/nuget/*.nupkg \
             --api-key "$NUGET_API_KEY" \

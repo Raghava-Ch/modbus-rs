@@ -45,10 +45,7 @@
       "x86_64-unknown-linux-gnu",
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",
-      "x86_64-unknown-linux-musl",
-      "aarch64-unknown-linux-gnu",
-      "aarch64-unknown-linux-musl",
-      "armv7-unknown-linux-gnueabihf"
+      "aarch64-unknown-linux-gnu"
     ]
   },
   "devDependencies": {
@@ -59,11 +56,15 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "*.node",
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {
-    "modbus-rs": "file:"
+  "dependencies": {},
+  "optionalDependencies": {
+    "modbus-rs-win32-x64-msvc": "0.9.0",
+    "modbus-rs-linux-x64-gnu": "0.9.0",
+    "modbus-rs-darwin-x64": "0.9.0",
+    "modbus-rs-darwin-arm64": "0.9.0",
+    "modbus-rs-linux-arm64-gnu": "0.9.0"
   }
 }

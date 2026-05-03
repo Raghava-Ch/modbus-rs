@@ -1,7 +1,7 @@
 # `ModbusRs` — .NET (C#) bindings for `modbus-rs`
 
 `ModbusRs` is the managed C# wrapper around the native `mbus_ffi` cdylib.
-It exposes the [`mbus-client-async`](../../mbus-client-async/) Modbus
+It exposes the [`mbus-client-async`](https://github.com/Raghava-Ch/modbus-rs) Modbus
 TCP client through a `Task`-based async API on top of `[LibraryImport]`
 P/Invoke declarations.
 
@@ -240,5 +240,5 @@ await client.DisconnectAsync();
   only the `mbus_dn_*` family of entry points. The PyO3- and
   C-static-pool-based bindings are independent.
 
-📖 **[Full .NET Binding Documentation →](../../documentation/dotnet_bindings.md)**
+📖 **[Full .NET Binding Documentation →](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/dotnet_bindings.md)**
 

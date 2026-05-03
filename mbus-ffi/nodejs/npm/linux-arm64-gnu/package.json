@@ -1,13 +1,23 @@
 {
   "name": "modbus-rs-linux-arm64-gnu",
   "version": "0.9.0",
-  "os": ["linux"],
-  "cpu": ["arm64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "main": "modbus-rs.linux-arm64-gnu.node",
-  "files": ["modbus-rs.linux-arm64-gnu.node"],
+  "files": [
+    "modbus-rs.linux-arm64-gnu.node"
+  ],
   "license": "GPL-3.0-only",
-  "engines": { "node": ">=20" },
-  "libc": ["glibc"],
+  "engines": {
+    "node": ">=20"
+  },
+  "libc": [
+    "glibc"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
