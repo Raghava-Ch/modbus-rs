@@ -47,9 +47,9 @@ jobs:
           shared-key: nodejs-release-${{ matrix.settings.target }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24.15.0
 
       - name: Install dependencies
         working-directory: mbus-ffi/nodejs
@@ -87,9 +87,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24.15.0
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -145,15 +145,37 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          published_version() {
+            npm view "$1@$2" version 2>/dev/null || true
+          }
+
           for pkg_dir in npm/*; do
             if [ -d "$pkg_dir" ]; then
-              echo "Publishing $pkg_dir"
+              pkg_name=$(npm pkg get name --prefix "$pkg_dir" | tr -d '"')
+              pkg_version=$(npm pkg get version --prefix "$pkg_dir" | tr -d '"')
+
+              if [ "$(published_version "$pkg_name" "$pkg_version")" = "$pkg_version" ]; then
+                echo "Skipping $pkg_name@$pkg_version (already published)"
+                continue
+              fi
+
+              echo "Publishing $pkg_name@$pkg_version from $pkg_dir"
               (cd "$pkg_dir" && npm publish --access public)
             fi
           done
 
       - name: Publish main package
         working-directory: mbus-ffi/nodejs
+        shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --ignore-scripts
+        run: |
+          pkg_name=$(npm pkg get name | tr -d '"')
+          pkg_version=$(npm pkg get version | tr -d '"')
+
+          if [ "$(npm view "$pkg_name@$pkg_version" version 2>/dev/null || true)" = "$pkg_version" ]; then
+            echo "Skipping $pkg_name@$pkg_version (already published)"
+            exit 0
+          fi
+
+          npm publish --access public --ignore-scripts
