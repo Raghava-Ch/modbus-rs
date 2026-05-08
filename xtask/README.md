@@ -170,6 +170,10 @@ The demo is now automatically visible to `list-c-demos`, `build-c-demo`, and `ru
 
 ### `gen-server-app`
 
+Two‑mode operation:
+
+#### Codegen Mode
+
 Generate the C header from a YAML device config:
 
 ```bash
@@ -183,6 +187,37 @@ generated at compile time by `mbus-ffi/build.rs` when `MBUS_SERVER_APP_CONFIG` i
 Pass `--out-dir <path>` only if you need a standalone Rust file outside the normal build.
 
 Flags: `--check` (verify without writing), `--dry-run` (print what would be written).
+
+#### Full Mode (cross‑compile + bundle)
+
+Parse the YAML, generate artifacts, cross‑compile `mbus-ffi` with **only** the
+features required by the YAML config, and bundle the result:
+
+```bash
+cargo run -p xtask -- gen-server-app \
+  --config mbus-ffi/examples/my_device.yaml \
+  --target thumbv7em-none-eabi \
+  --profile release \
+  /path/to/output-dir
+```
+
+This will:
+1. Parse the YAML and determine which memory‑map sections are non‑empty
+2. Build `mbus-ffi` with features like `c-server,server-coils,server-holding-registers`
+   (instead of the catch‑all `c-server,full`)
+3. Populate `<output-dir>/` with:
+   - `include/mbus_server_app.h` — generated C header
+   - `include/modbus_rs_server.h` — server FFI header (from cbindgen)
+   - `lib/libmbus_ffi.a` — cross‑compiled static library
+   - `generated_server.rs` — Rust dispatcher for reference
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config <path>` | *(required)* | Path to YAML server app config |
+| `--target <triple>` | *(required for full mode)* | Target triple for cross‑compilation |
+| `--profile release\|debug` | `release` | Build profile |
+| `--emit-c-header <path>` | — | Also write a standalone copy of the C header |
+| `--dry-run` | false | Print what would be done without executing |
 
 ### `check-server-gen`
 

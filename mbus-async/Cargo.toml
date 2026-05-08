@@ -19,6 +19,7 @@ mbus-serial = { workspace = true, optional = true }
 heapless = { workspace = true }
 tokio = { version = "1", features = ["sync", "macros", "rt", "time"] }
 log = { workspace = true, optional = true }
+defmt ={ workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
