@@ -470,10 +470,11 @@ where
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         err: <TRANSPORT as Transport>::Error,
     ) {
+        let mbus_err: MbusError = err.into();
         server_log_debug!(
             "txn_id={}: transport send failed ({:?}); queuing for retry",
             txn_id,
-            err
+            mbus_err
         );
 
         #[cfg(feature = "traffic")]
@@ -983,10 +984,11 @@ where
             pending.frame.as_slice(),
         );
 
+        let mbus_err: MbusError = err.into();
         server_log_debug!(
             "queued response retry {} failed: {:?}; requeueing",
             pending.retry_count + 1,
-            err
+            mbus_err
         );
         pending.retry_count += 1;
         pending.queued_at_ms = self.now_ms();

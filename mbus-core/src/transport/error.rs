@@ -1,6 +1,6 @@
 //! Transport-layer error and type-classification types.
 
-use core::fmt;
+use defmt;
 
 use crate::errors::MbusError;
 
@@ -25,21 +25,19 @@ pub enum TransportError {
     InvalidConfiguration,
 }
 
-impl fmt::Display for TransportError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl defmt::Format for TransportError {
+    fn format(&self, f: defmt::Formatter) {
         match self {
-            TransportError::ConnectionFailed => write!(f, "Connection failed"),
-            TransportError::ConnectionClosed => write!(f, "Connection closed"),
-            TransportError::IoError => write!(f, "I/O error"),
-            TransportError::Timeout => write!(f, "Timeout"),
-            TransportError::BufferTooSmall => write!(f, "Buffer too small"),
-            TransportError::Unexpected => write!(f, "An unexpected error occurred"),
-            TransportError::InvalidConfiguration => write!(f, "Invalid configuration"),
+            TransportError::ConnectionFailed => defmt::write!(f, "Connection failed"),
+            TransportError::ConnectionClosed => defmt::write!(f, "Connection closed"),
+            TransportError::IoError => defmt::write!(f, "I/O error"),
+            TransportError::Timeout => defmt::write!(f, "Timeout"),
+            TransportError::BufferTooSmall => defmt::write!(f, "Buffer too small"),
+            TransportError::Unexpected => defmt::write!(f, "An unexpected error occurred"),
+            TransportError::InvalidConfiguration => defmt::write!(f, "Invalid configuration"),
         }
     }
 }
-
-impl core::error::Error for TransportError {}
 
 impl From<TransportError> for MbusError {
     fn from(err: TransportError) -> Self {

@@ -1,4 +1,6 @@
 //! C API lifecycle functions for Modbus Serial servers (RTU and ASCII).
+
+#![cfg(feature = "c-server")]
 //!
 //! Uses the same pool as TCP servers but a separate sub-pool with `QUEUE_DEPTH = 1`
 //! (half-duplex serial allows only one request in flight at a time).

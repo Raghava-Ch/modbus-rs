@@ -13,6 +13,8 @@ description = "Protocol types, errors, function codes, and transport traits for 
 [dependencies]
 heapless = { workspace = true }
 
+defmt ={ workspace = true }
+
 [features]
 # By default, all Modbus client services are enabled.
 # To reduce binary size or exclude unused functionality,

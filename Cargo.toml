@@ -48,6 +48,7 @@ mbus-macros = { version = "0.9.0", path = "./mbus-macros" }
 
 mbus-gateway = { version = "0.9.0", path = "./mbus-gateway" }
 
+defmt = "1.0.1"
 heapless = { version = "0.9.0" }
 bitfields = { version = "1.0.0" }
 anyhow = { version = "1.0" }
@@ -62,4 +63,8 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 panic = "abort"
 
 [profile.release]
+opt-level = "z"      # Optimize aggressively for binary size
+lto = "fat"          # Enable full Link Time Optimization (crucial for dead-code elimination)
+codegen-units = 1    # Compile everything in one unit for maximum optimization
 panic = "abort"
+strip = "symbols"    # Drop debug symbols and string metadata
