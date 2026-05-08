@@ -32,6 +32,7 @@ pub use network_client::AsyncTcpClient;
 #[cfg(feature = "traffic")]
 pub use notifier::AsyncClientNotifier;
 pub use serial_client::AsyncSerialClient;
+use defmt;
 
 use mbus_core::errors::MbusError;
 #[cfg(feature = "diagnostics")]
@@ -80,22 +81,13 @@ impl From<MbusError> for AsyncError {
     }
 }
 
-impl std::fmt::Display for AsyncError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl defmt::Format for AsyncError {
+    fn format(&self, f: defmt::Formatter) {
         match self {
-            Self::Mbus(err) => write!(f, "Modbus error: {err}"),
-            Self::WorkerClosed => write!(f, "async worker channel closed"),
-            Self::UnexpectedResponseType => write!(f, "unexpected response type from worker"),
-            Self::Timeout => write!(f, "request timed out"),
-        }
-    }
-}
-
-impl std::error::Error for AsyncError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Mbus(err) => Some(err),
-            _ => None,
+            Self::Mbus(err) => defmt::write!(f, "Modbus error: {}", err),
+            Self::WorkerClosed => defmt::write!(f, "async worker channel closed"),
+            Self::UnexpectedResponseType => defmt::write!(f, "unexpected response type from worker"),
+            Self::Timeout => defmt::write!(f, "request timed out"),
         }
     }
 }

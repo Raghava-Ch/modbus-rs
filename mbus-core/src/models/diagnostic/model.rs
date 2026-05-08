@@ -28,7 +28,7 @@
 //! ```
 
 use crate::{data_unit::common::MAX_PDU_DATA_LEN, errors::MbusError};
-use core::fmt;
+use defmt;
 use heapless::Vec;
 
 /// Represents an object ID.
@@ -167,12 +167,12 @@ impl TryFrom<u8> for BasicObjectId {
     }
 }
 
-impl fmt::Display for BasicObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl defmt::Format for BasicObjectId {
+    fn format(&self, f: defmt::Formatter) {
         match self {
-            BasicObjectId::VendorName => write!(f, "VendorName"),
-            BasicObjectId::ProductCode => write!(f, "ProductCode"),
-            BasicObjectId::MajorMinorRevision => write!(f, "MajorMinorRevision"),
+            BasicObjectId::VendorName => defmt::write!(f, "VendorName"),
+            BasicObjectId::ProductCode => defmt::write!(f, "ProductCode"),
+            BasicObjectId::MajorMinorRevision => defmt::write!(f, "MajorMinorRevision"),
         }
     }
 }
@@ -208,13 +208,13 @@ impl TryFrom<u8> for RegularObjectId {
     }
 }
 
-impl fmt::Display for RegularObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl defmt::Format for RegularObjectId {
+    fn format(&self, f: defmt::Formatter) {
         match self {
-            RegularObjectId::VendorUrl => write!(f, "VendorUrl"),
-            RegularObjectId::ProductName => write!(f, "ProductName"),
-            RegularObjectId::ModelName => write!(f, "ModelName"),
-            RegularObjectId::UserApplicationName => write!(f, "UserApplicationName"),
+            RegularObjectId::VendorUrl => defmt::write!(f, "VendorUrl"),
+            RegularObjectId::ProductName => defmt::write!(f, "ProductName"),
+            RegularObjectId::ModelName => defmt::write!(f, "ModelName"),
+            RegularObjectId::UserApplicationName => defmt::write!(f, "UserApplicationName"),
         }
     }
 }
@@ -343,14 +343,14 @@ impl From<u8> for ObjectId {
     }
 }
 
-impl fmt::Display for ObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl defmt::Format for ObjectId {
+    fn format(&self, f: defmt::Formatter) {
         match self {
-            ObjectId::Basic(id) => write!(f, "Basic({})", id),
-            ObjectId::Regular(id) => write!(f, "Regular({})", id),
-            ObjectId::Extended(id) => write!(f, "Extended({:#04X})", id.value()),
-            ObjectId::Reserved(id) => write!(f, "Reserved({:#04X})", id),
-            ObjectId::Err => write!(f, "Err (sentinel default)"),
+            ObjectId::Basic(id) => defmt::write!(f, "Basic({})", id),
+            ObjectId::Regular(id) => defmt::write!(f, "Regular({})", id),
+            ObjectId::Extended(id) => defmt::write!(f, "Extended({:#04X})", id.value()),
+            ObjectId::Reserved(id) => defmt::write!(f, "Reserved({:#04X})", id),
+            ObjectId::Err => defmt::write!(f, "Err (sentinel default)"),
         }
     }
 }

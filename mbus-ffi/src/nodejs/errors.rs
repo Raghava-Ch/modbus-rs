@@ -2,7 +2,6 @@
 //!
 //! Maps Rust Modbus errors to napi::Error with stable error code strings.
 
-use core::fmt::Display;
 use mbus_client_async::AsyncError;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use napi::Status;
@@ -59,14 +58,15 @@ pub fn from_mbus_error(e: MbusError) -> napi::Error {
         ),
         other => napi::Error::new(
             Status::GenericFailure,
-            format!("[{ERR_MODBUS_TRANSPORT}] {other}"),
+            format!("[{ERR_MODBUS_TRANSPORT}] {:?}", other),
         ),
     }
 }
 
-/// Helper to convert any Display-able error to a napi::Error with a prefix.
-pub fn to_napi_err<E: Display>(prefix: &str, e: E) -> napi::Error {
-    napi::Error::new(Status::GenericFailure, format!("[{prefix}] {e}"))
+/// Helper to convert any Format-able error to a napi::Error with a prefix.
+pub fn to_napi_err<E: defmt::Format>(prefix: &str, _e: E) -> napi::Error {
+    // defmt::Format types cannot be converted to a String natively using format!
+    napi::Error::new(Status::GenericFailure, format!("[{prefix}] <defmt error payload hidden>"))
 }
 
 /// Convert ExceptionCode to its numeric value for error messages.

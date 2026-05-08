@@ -33,14 +33,18 @@ c-server = ["dep:mbus-server"]
 c-gateway = ["dep:mbus-gateway"]
 ## Enables traffic notification callbacks on the C server (mbus-server `traffic` feature).
 server-traffic = ["c-server", "mbus-server/traffic"]
-coils = ["mbus-client/coils"]
-registers = ["mbus-client/registers"]
-discrete-inputs = ["mbus-client/discrete-inputs"]
-fifo = ["mbus-client/fifo"]
-file-record = ["mbus-client/file-record"]
-diagnostics = ["mbus-client/diagnostics"]
+
+## Feature forwarding — each feature enables the corresponding FC group on
+## mbus-client AND (when c-server is active) on mbus-server.
+coils = ["mbus-client/coils", "mbus-server?/coils"]
+registers = ["mbus-client/registers", "mbus-server?/registers"]
+discrete-inputs = ["mbus-client/discrete-inputs", "mbus-server?/discrete-inputs"]
+fifo = ["mbus-client/fifo", "mbus-server?/fifo"]
+file-record = ["mbus-client/file-record", "mbus-server?/file-record"]
+diagnostics = ["mbus-client/diagnostics", "mbus-server?/diagnostics"]
+
 traffic = ["mbus-client/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
-## Convenience alias — enables every Modbus client feature at once
+## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
     "coils",
     "registers",
@@ -50,8 +54,16 @@ full = [
     "diagnostics",
     "traffic",
 ]
-## Convenience alias — enables every Modbus server feature at once (c-server must still be enabled)
-server-full = ["c-server"]
+## Convenience alias — enables all server features (c-server must also be enabled)
+server-full = [
+    "c-server",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
 
 ## Enables Python bindings for the gateway. Requires `python` to be enabled too;
 ## build with `--features python,python-gateway,full`.
@@ -157,7 +169,7 @@ dotnet = [
 [dependencies]
 mbus-core = { workspace = true }
 mbus-client = { workspace = true }
-mbus-server = { workspace = true, optional = true }
+mbus-server = { version = "0.9.0", path = "../mbus-server", optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
