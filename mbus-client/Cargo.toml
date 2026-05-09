@@ -34,7 +34,7 @@ registers = [
     "mbus-core/registers",
 ] # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
 discrete-inputs = [
-    "mbus-core/discrete-inputs",
+    "mbus-core/registers",
 ] # Enables Modbus Discrete Input (FC 0x02) services
 fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
 file-record = [

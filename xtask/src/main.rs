@@ -645,14 +645,15 @@ fn print_help() {
         "      The Rust dispatcher is generated at compile time by build.rs (set MBUS_SERVER_APP_CONFIG)."
     );
     println!("      --out-dir is optional; omit it for the normal build.rs-driven workflow.");
-    println!();
     println!("  FULL MODE (cross-compile + bundle):");
-    println!("    gen-server-app --config <path> --target <triple> <output-dir> [--profile release|debug]");
+    println!("    gen-server-app --config <path> --target <triple> <output-dir> [--profile release|debug] [--optimize-size]");
     println!("      Parse the YAML, generate artifacts, cross-compile mbus-ffi with");
     println!("      only the features required by the config, and bundle into");
     println!("      <output-dir>/include/ and <output-dir>/lib/.");
     println!("      --target       Target triple (e.g. thumbv7em-none-eabi)");
     println!("      --profile      Build profile: release (default) or debug");
+    println!("      --optimize-size Automatically use Nightly Rust and build-std to aggressively shrink binary size");
+    println!();
     println!("      <output-dir>   Output directory root (positional argument)");
     println!("  check-server-gen");
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");

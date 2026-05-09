@@ -63,8 +63,8 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 panic = "abort"
 
 [profile.release]
-opt-level = "z"      # Optimize aggressively for binary size
-lto = "fat"          # Enable full Link Time Optimization (crucial for dead-code elimination)
-codegen-units = 1    # Compile everything in one unit for maximum optimization
-panic = "abort"
-strip = "symbols"    # Drop debug symbols and string metadata
+opt-level = "z"       # Optimize aggressively for binary size
+lto = "fat"           # Perform cross-crate Link Time Optimization
+codegen-units = 1     # Slower compile time, but maximum optimization
+panic = "abort"       # Completely removes unwinding landing pads (saves massive space)
+strip = "debuginfo"   # Ensure no debug symbols linger

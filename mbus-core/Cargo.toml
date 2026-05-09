@@ -12,8 +12,7 @@ description = "Protocol types, errors, function codes, and transport traits for 
 
 [dependencies]
 heapless = { workspace = true }
-
-defmt ={ workspace = true }
+defmt = { workspace = true, optional = true }
 
 [features]
 # By default, all Modbus client services are enabled.
@@ -23,7 +22,6 @@ default = [
     "serial-ascii",
     "coils",
     "registers",
-    "discrete-inputs",
     "fifo",
     "file-record",
     "diagnostics",
@@ -31,8 +29,8 @@ default = [
 serial-ascii = []
 coils = []
 registers = []
-discrete-inputs = []
 fifo = []
 file-record = []
 diagnostics = []
 async = []
+defmt = ["dep:defmt"]

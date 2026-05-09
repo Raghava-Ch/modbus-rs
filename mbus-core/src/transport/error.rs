@@ -1,5 +1,6 @@
 //! Transport-layer error and type-classification types.
 
+#[cfg(feature = "defmt")]
 use defmt;
 
 use crate::errors::MbusError;
@@ -25,6 +26,7 @@ pub enum TransportError {
     InvalidConfiguration,
 }
 
+#[cfg(feature = "defmt")]
 impl defmt::Format for TransportError {
     fn format(&self, f: defmt::Formatter) {
         match self {
