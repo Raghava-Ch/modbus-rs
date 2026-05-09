@@ -4,6 +4,7 @@
 //! - Implement [`AsyncAppHandler`] manually (Level 2 — full control), or
 //! - Let the `#[async_modbus_app]` macro generate the impl (Level 1 — zero boilerplate).
 
+#[cfg(feature = "defmt")]
 use defmt;
 use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu, compile_adu_frame};
@@ -42,6 +43,7 @@ pub enum AsyncServerError {
     BindFailed(std::io::Error),
 }
 
+#[cfg(feature = "defmt")]
 impl defmt::Format for AsyncServerError {
     fn format(&self, f: defmt::Formatter) {
         match self {

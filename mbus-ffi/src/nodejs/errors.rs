@@ -64,6 +64,7 @@ pub fn from_mbus_error(e: MbusError) -> napi::Error {
 }
 
 /// Helper to convert any Format-able error to a napi::Error with a prefix.
+#[cfg(feature = "defmt")]
 pub fn to_napi_err<E: defmt::Format>(prefix: &str, _e: E) -> napi::Error {
     // defmt::Format types cannot be converted to a String natively using format!
     napi::Error::new(Status::GenericFailure, format!("[{prefix}] <defmt error payload hidden>"))

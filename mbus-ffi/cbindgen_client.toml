@@ -79,7 +79,7 @@ exclude = [
 [struct]
 
 [defines]
-'feature = "c"' = "MBUS_FEATURE_C"
+'feature = "c-client"' = "MBUS_FEATURE_C"
 'feature = "c-server"' = "MBUS_FEATURE_C_SERVER"
 'feature = "server-traffic"' = "MBUS_FEATURE_SERVER_TRAFFIC"
 'feature = "coils"' = "MBUS_FEATURE_COILS"
