@@ -14,8 +14,19 @@ description = "Native C FFI and browser WASM bindings for modbus-rs client APIs,
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
 
+[profile.release]
+opt-level = "z"       # Optimize aggressively for binary size
+lto = "fat"           # Perform cross-crate Link Time Optimization
+codegen-units = 1     # Slower compile time, but maximum optimization
+panic = "abort"       # Completely removes unwinding landing pads (saves massive space)
+strip = "debuginfo"   # Ensure no debug symbols linger
+
 [features]
 default = []
+## Enables defmt logging support for embedded/no_std targets.
+defmt = ["dep:defmt", "mbus-core/defmt"]
+## Enables Display trait implementations for error types.
+display = []
 ## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
 wasm = [
     "dep:wasm-bindgen",
@@ -26,7 +37,7 @@ wasm = [
     "mbus-serial/wasm",
 ]
 ## Enables native C FFI bindings for the Modbus client stack.
-c = []
+c-client = ["dep:mbus-client"]
 ## Enables native C FFI bindings for the Modbus server stack.
 c-server = ["dep:mbus-server"]
 ## Enables native C FFI bindings for the Modbus gateway stack.
@@ -36,14 +47,14 @@ server-traffic = ["c-server", "mbus-server/traffic"]
 
 ## Feature forwarding — each feature enables the corresponding FC group on
 ## mbus-client AND (when c-server is active) on mbus-server.
-coils = ["mbus-client/coils", "mbus-server?/coils"]
-registers = ["mbus-client/registers", "mbus-server?/registers"]
-discrete-inputs = ["mbus-client/discrete-inputs", "mbus-server?/discrete-inputs"]
-fifo = ["mbus-client/fifo", "mbus-server?/fifo"]
-file-record = ["mbus-client/file-record", "mbus-server?/file-record"]
-diagnostics = ["mbus-client/diagnostics", "mbus-server?/diagnostics"]
+coils = ["mbus-client?/coils", "mbus-server?/coils"]
+registers = ["mbus-client?/registers", "mbus-server?/registers"]
+discrete-inputs = ["mbus-client?/discrete-inputs", "mbus-server?/discrete-inputs"]
+fifo = ["mbus-client?/fifo", "mbus-server?/fifo"]
+file-record = ["mbus-client?/file-record", "mbus-server?/file-record"]
+diagnostics = ["mbus-client?/diagnostics", "mbus-server?/diagnostics"]
 
-traffic = ["mbus-client/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
+traffic = ["mbus-client?/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
 ## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
     "coils",
@@ -168,11 +179,14 @@ dotnet = [
 
 [dependencies]
 mbus-core = { workspace = true }
-mbus-client = { workspace = true }
+# mbus-client is optional to prevent its symbols from being unconditionally baked
+# into the C static library. This avoids binary bloat for server-only builds on bare-metal targets.
+mbus-client = { workspace = true, optional = true }
 mbus-server = { version = "0.9.0", path = "../mbus-server", optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
+defmt = { workspace = true, optional = true }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }

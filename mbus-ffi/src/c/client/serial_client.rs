@@ -1,6 +1,6 @@
 //! Modbus Serial (RTU / ASCII) client — ID-based C API.
 
-#![cfg(feature = "c")]
+#![cfg(feature = "c-client")]
 
 use mbus_client::services::ClientServices;
 use mbus_core::transport::SerialMode;

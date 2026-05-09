@@ -32,6 +32,7 @@ pub use network_client::AsyncTcpClient;
 #[cfg(feature = "traffic")]
 pub use notifier::AsyncClientNotifier;
 pub use serial_client::AsyncSerialClient;
+#[cfg(feature = "defmt")]
 use defmt;
 
 use mbus_core::errors::MbusError;
@@ -81,6 +82,7 @@ impl From<MbusError> for AsyncError {
     }
 }
 
+#[cfg(feature = "defmt")]
 impl defmt::Format for AsyncError {
     fn format(&self, f: defmt::Formatter) {
         match self {

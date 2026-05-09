@@ -18,7 +18,7 @@
 pub mod coil;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostic;
-#[cfg(feature = "discrete-inputs")]
+#[cfg(feature = "registers")]
 pub mod discrete_input;
 #[cfg(feature = "fifo")]
 pub mod fifo_queue;

@@ -18,6 +18,7 @@ mbus-macros.workspace = true
 
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
+defmt = { workspace = true, optional = true }
 
 [features]
 # By default, all Modbus function code services are enabled for ease of use.
@@ -41,7 +42,7 @@ input-registers = [
 ] # Enables input-register service (FC 0x04)
 registers = ["holding-registers", "input-registers"] # Backward-compat alias
 discrete-inputs = [
-    "mbus-core/discrete-inputs",
+    "mbus-core/registers",
 ] # Enables Modbus Discrete Input (FC 0x02) services
 fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
 file-record = [
@@ -58,6 +59,8 @@ serial-ascii = [
 ] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
 logging = ["dep:log"]
 traffic = []
+defmt = ["dep:defmt", "mbus-core/defmt"]
+display = []
 
 [[example]]
 name = "broadcast"

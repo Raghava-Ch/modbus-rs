@@ -42,6 +42,8 @@ pub struct GenServerAppOptions {
     pub output_root: Option<PathBuf>,
     /// Build profile (`release` or `debug`).  Defaults to `release`.
     pub profile: Option<String>,
+    /// Whether to use Nightly Rust and build-std to aggressively optimize binary size.
+    pub optimize_size: bool,
 }
 
 pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, String> {
@@ -54,6 +56,7 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
     let mut target: Option<String> = None;
     let mut output_root: Option<PathBuf> = None;
     let mut profile: Option<String> = None;
+    let mut optimize_size = false;
 
     let mut i = 0usize;
     while i < args.len() {
@@ -96,6 +99,7 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
                 }
                 profile = Some(v.clone());
             }
+            "--optimize-size" => optimize_size = true,
             "--check" => check = true,
             "--dry-run" => dry_run = true,
             // Positional: the first non-flag argument before --target is the output root
@@ -121,6 +125,7 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
         target,
         output_root,
         profile,
+        optimize_size,
     })
 }
 
@@ -208,25 +213,41 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
         let features = compute_features(&config);
 
         let features_str = features.join(",");
+        let nightly_msg = if opts.optimize_size { " with build-std size optimizations" } else { "" };
         println!(
-            "Building mbus-ffi for target '{target}' with features: {features_str} (profile={profile})"
+            "Building mbus-ffi for target '{target}' with features: {features_str} (profile={profile}){nightly_msg}"
         );
 
         // 6a. Execute cargo build
         let mut cmd = Command::new("cargo");
+        
+        if opts.optimize_size {
+            cmd.arg("+nightly");
+        }
+        
         cmd.args(["build", "-p", "mbus-ffi"])
             .arg("--target")
             .arg(target)
             .arg("--features")
-            .arg(&features_str)
-            .current_dir(
-                // repo root is the CWD from which xtask is invoked
-                Path::new("."),
-            );
+            .arg(&features_str);
 
         if profile == "release" {
             cmd.arg("--release");
         }
+
+        if opts.optimize_size {
+            cmd.arg("-Z").arg("build-std=core,alloc");
+            let existing_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+            cmd.env(
+                "RUSTFLAGS",
+                format!("{existing_flags} -Zunstable-options -Cpanic=immediate-abort"),
+            );
+        }
+
+        cmd.current_dir(
+            // repo root is the CWD from which xtask is invoked
+            Path::new("."),
+        );
 
         // Pass MBUS_SERVER_APP_CONFIG so mbus-ffi/build.rs generates the dispatcher
         cmd.env(
