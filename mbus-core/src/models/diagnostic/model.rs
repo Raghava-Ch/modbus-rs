@@ -28,7 +28,7 @@
 //! ```
 
 use crate::{data_unit::common::MAX_PDU_DATA_LEN, errors::MbusError};
-#[cfg(feature = "defmt")]
+#[cfg(feature = "logging")]
 use defmt;
 use heapless::Vec;
 
@@ -168,7 +168,7 @@ impl TryFrom<u8> for BasicObjectId {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "logging")]
 impl defmt::Format for BasicObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -210,7 +210,7 @@ impl TryFrom<u8> for RegularObjectId {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "logging")]
 impl defmt::Format for RegularObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -346,7 +346,7 @@ impl From<u8> for ObjectId {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "logging")]
 impl defmt::Format for ObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {

@@ -650,11 +650,14 @@ fn print_help() {
     println!("      Parse the YAML, generate artifacts, cross-compile mbus-ffi with");
     println!("      only the features required by the config, and bundle into");
     println!("      <output-dir>/include/ and <output-dir>/lib/.");
-    println!("      --target       Target triple (e.g. thumbv7em-none-eabi)");
-    println!("      --profile      Build profile: release (default) or debug");
+    println!("      --target        Target triple (e.g. thumbv7em-none-eabi)");
+    println!("      --profile       Build profile: release (default) or debug");
     println!("      --optimize-size Automatically use Nightly Rust and build-std to aggressively shrink binary size");
+    println!("      --network-tcp   Enable TCP transport support (feature = \"network-tcp\")");
+    println!("      --serial-rtu    Enable RTU serial transport support (feature = \"serial-rtu\")");
+    println!("      --serial-ascii  Enable ASCII serial transport support (feature = \"serial-ascii\")");
     println!();
-    println!("      <output-dir>   Output directory root (positional argument)");
+    println!("      <output-dir>    Output directory root (positional argument)");
     println!("  check-server-gen");
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
     println!();

@@ -211,7 +211,7 @@ impl ServerDiscreteInputHandler for CServerApp {}
 
 // ── ServerHoldingRegisterHandler ──────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 impl ServerHoldingRegisterHandler for CServerApp {
     fn read_multiple_holding_registers_request(
         &mut self,
@@ -348,7 +348,7 @@ impl ServerHoldingRegisterHandler for CServerApp {
 
 // ── ServerInputRegisterHandler ────────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 impl ServerInputRegisterHandler for CServerApp {
     fn read_multiple_input_registers_request(
         &mut self,
@@ -378,11 +378,11 @@ impl ServerInputRegisterHandler for CServerApp {
     }
 }
 
-// When the `registers` feature is not enabled, provide blank impls
+// When the `holding-registers` feature is not enabled, provide blank impls
 // so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
-#[cfg(not(feature = "registers"))]
+#[cfg(not(feature = "holding-registers"))]
 impl ServerHoldingRegisterHandler for CServerApp {}
-#[cfg(not(feature = "registers"))]
+#[cfg(not(feature = "input-registers"))]
 impl ServerInputRegisterHandler for CServerApp {}
 
 // ── ServerFifoHandler ─────────────────────────────────────────────────────────

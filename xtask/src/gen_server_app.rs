@@ -44,6 +44,13 @@ pub struct GenServerAppOptions {
     pub profile: Option<String>,
     /// Whether to use Nightly Rust and build-std to aggressively optimize binary size.
     pub optimize_size: bool,
+    // ── Transport feature gates ──────────────────────────────────────
+    /// Enable TCP transport support (feature = "network-tcp").
+    pub network_tcp: bool,
+    /// Enable RTU serial transport support (feature = "serial-rtu").
+    pub serial_rtu: bool,
+    /// Enable ASCII serial transport support (feature = "serial-ascii").
+    pub serial_ascii: bool,
 }
 
 pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, String> {
@@ -57,6 +64,10 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
     let mut output_root: Option<PathBuf> = None;
     let mut profile: Option<String> = None;
     let mut optimize_size = false;
+    // Transport feature flags
+    let mut network_tcp = false;
+    let mut serial_rtu = false;
+    let mut serial_ascii = false;
 
     let mut i = 0usize;
     while i < args.len() {
@@ -99,6 +110,9 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
                 }
                 profile = Some(v.clone());
             }
+            "--network-tcp" => network_tcp = true,
+            "--serial-rtu" => serial_rtu = true,
+            "--serial-ascii" => serial_ascii = true,
             "--optimize-size" => optimize_size = true,
             "--check" => check = true,
             "--dry-run" => dry_run = true,
@@ -126,6 +140,9 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
         output_root,
         profile,
         optimize_size,
+        network_tcp,
+        serial_rtu,
+        serial_ascii,
     })
 }
 
@@ -172,7 +189,7 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
             println!("dry-run: would write {}", header_path.display());
         }
         if opts.target.is_some() {
-            let features = compute_features(&config);
+            let features = compute_features(&config, opts.network_tcp, opts.serial_rtu, opts.serial_ascii);
             println!(
                 "dry-run: would build with --features \"{}\"",
                 features.join(",")
@@ -210,7 +227,7 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
     let output_root = opts.output_root.as_ref().or(opts.out_dir.as_ref());
     if let (Some(target), Some(output_root)) = (&opts.target, output_root) {
         let profile = opts.profile.as_deref().unwrap_or("release");
-        let features = compute_features(&config);
+        let features = compute_features(&config, opts.network_tcp, opts.serial_rtu, opts.serial_ascii);
 
         let features_str = features.join(",");
         let nightly_msg = if opts.optimize_size { " with build-std size optimizations" } else { "" };
@@ -386,11 +403,30 @@ const SECTION_TO_FEATURE: &[(&str, &str)] = &[
 ///
 /// Always includes `c-server`.  Individual mbus-server features are added
 /// only for non‑empty memory‑map sections.
-fn compute_features(config: &ServerAppConfig) -> Vec<String> {
+///
+/// Transport features (`network-tcp`, `serial-rtu`, `serial-ascii`) are added
+/// based on the corresponding CLI flags.
+fn compute_features(
+    config: &ServerAppConfig,
+    network_tcp: bool,
+    serial_rtu: bool,
+    serial_ascii: bool,
+) -> Vec<String> {
     let mut features: Vec<String> = Vec::new();
 
     // c-server is always needed — it enables dep:mbus-server
     features.push("c-server".to_string());
+
+    // Transport features from CLI flags
+    if network_tcp {
+        features.push("network-tcp".to_string());
+    }
+    if serial_rtu {
+        features.push("serial-rtu".to_string());
+    }
+    if serial_ascii {
+        features.push("serial-ascii".to_string());
+    }
 
     for (section, feature_name) in SECTION_TO_FEATURE {
         let entries: &[MapEntry] = match *section {

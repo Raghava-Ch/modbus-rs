@@ -57,9 +57,8 @@ diagnostics-stats = [
 serial-ascii = [
     "mbus-core/serial-ascii",
 ] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
-logging = ["dep:log"]
+logging = ["dep:log", "dep:defmt", "mbus-core/logging"]
 traffic = []
-defmt = ["dep:defmt", "mbus-core/defmt"]
 display = []
 
 [[example]]

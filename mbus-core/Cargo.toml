@@ -22,6 +22,7 @@ default = [
     "serial-ascii",
     "coils",
     "registers",
+    "discrete-inputs",
     "fifo",
     "file-record",
     "diagnostics",
@@ -29,8 +30,9 @@ default = [
 serial-ascii = []
 coils = []
 registers = []
+discrete-inputs = []
 fifo = []
 file-record = []
 diagnostics = []
 async = []
-defmt = ["dep:defmt"]
+logging = ["dep:defmt"]

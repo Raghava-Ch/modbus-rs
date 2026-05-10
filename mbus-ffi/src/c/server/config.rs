@@ -1,4 +1,5 @@
-//! Server-side configuration passed to `mbus_tcp_server_new` / `mbus_serial_server_new`.
+//! Server-side configuration passed to `mbus_tcp_server_new`,
+//! `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`.
 //!
 //! [`MbusServerConfig`] is a C-friendly configuration struct. Internally it is
 //! converted to the `mbus-server` types (`ModbusConfig`, `UnitIdOrSlaveAddr`,
@@ -48,12 +49,14 @@ impl MbusServerConfig {
     ///
     /// The host/port fields in `ModbusTcpConfig` are not used by the server
     /// runtime (transport is handled via callbacks). Dummy values are used.
+    #[cfg(feature = "network-tcp")]
     pub(super) fn tcp_modbus_config(&self) -> Result<ModbusConfig, MbusError> {
         let inner = ModbusTcpConfig::new("", 502).map_err(|_| MbusError::InvalidConfiguration)?;
         Ok(ModbusConfig::Tcp(inner))
     }
 
     /// Builds a `ModbusConfig` suitable for an RTU serial server.
+    #[cfg(feature = "serial-rtu")]
     pub(super) fn rtu_modbus_config(&self) -> Result<ModbusConfig, MbusError> {
         let inner = ModbusSerialConfig {
             port_path: heapless::String::new(),
@@ -72,6 +75,7 @@ impl MbusServerConfig {
     }
 
     /// Builds a `ModbusConfig` suitable for an ASCII serial server.
+    #[cfg(feature = "serial-ascii")]
     pub(super) fn ascii_modbus_config(&self) -> Result<ModbusConfig, MbusError> {
         let inner = ModbusSerialConfig {
             port_path: heapless::String::new(),
