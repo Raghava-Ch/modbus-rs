@@ -231,6 +231,16 @@ impl ServerPool {
     #[cfg(feature = "network-tcp")]
     /// Allocate a TCP server in the pool and return its id.
     fn allocate_tcp(&mut self, value: TcpServerInner) -> Option<MbusServerId> {
+        if MAX_TCP_SERVERS == 1 {
+            let slot = &mut self.tcp_slots[0];
+            if !slot.occupied {
+                slot.value = MaybeUninit::new(value);
+                slot.borrow_flag.store(false, Ordering::SeqCst);
+                slot.occupied = true;
+                return Some(encode_server_id(TAG_TCP_SERVER, 0));
+            }
+            return None;
+        }
         for (i, slot) in self.tcp_slots.iter_mut().enumerate() {
             if !slot.occupied {
                 slot.value = MaybeUninit::new(value);
@@ -245,6 +255,16 @@ impl ServerPool {
     #[cfg(feature = "serial-rtu")]
     /// Allocate a Serial RTU server in the pool and return its id.
     fn allocate_serial_rtu(&mut self, value: SerialRtuServerInner) -> Option<MbusServerId> {
+        if MAX_SERIAL_SERVERS == 1 {
+            let slot = &mut self.serial_rtu_slots[0];
+            if !slot.occupied {
+                slot.value = MaybeUninit::new(value);
+                slot.borrow_flag.store(false, Ordering::SeqCst);
+                slot.occupied = true;
+                return Some(encode_server_id(TAG_SERIAL_RTU_SERVER, 0));
+            }
+            return None;
+        }
         for (i, slot) in self.serial_rtu_slots.iter_mut().enumerate() {
             if !slot.occupied {
                 slot.value = MaybeUninit::new(value);
@@ -259,6 +279,16 @@ impl ServerPool {
     #[cfg(feature = "serial-ascii")]
     /// Allocate a Serial ASCII server in the pool and return its id.
     fn allocate_serial_ascii(&mut self, value: SerialAsciiServerInner) -> Option<MbusServerId> {
+        if MAX_SERIAL_SERVERS == 1 {
+            let slot = &mut self.serial_ascii_slots[0];
+            if !slot.occupied {
+                slot.value = MaybeUninit::new(value);
+                slot.borrow_flag.store(false, Ordering::SeqCst);
+                slot.occupied = true;
+                return Some(encode_server_id(TAG_SERIAL_ASCII_SERVER, 0));
+            }
+            return None;
+        }
         for (i, slot) in self.serial_ascii_slots.iter_mut().enumerate() {
             if !slot.occupied {
                 slot.value = MaybeUninit::new(value);
@@ -279,7 +309,11 @@ impl ServerPool {
                 if idx >= MAX_TCP_SERVERS {
                     return false;
                 }
-                let slot = &mut self.tcp_slots[idx];
+                let slot = if MAX_TCP_SERVERS == 1 {
+                    &mut self.tcp_slots[0]
+                } else {
+                    &mut self.tcp_slots[idx]
+                };
                 if !slot.occupied {
                     return false;
                 }
@@ -293,7 +327,11 @@ impl ServerPool {
                 if idx >= MAX_SERIAL_SERVERS {
                     return false;
                 }
-                let slot = &mut self.serial_rtu_slots[idx];
+                let slot = if MAX_SERIAL_SERVERS == 1 {
+                    &mut self.serial_rtu_slots[0]
+                } else {
+                    &mut self.serial_rtu_slots[idx]
+                };
                 if !slot.occupied {
                     return false;
                 }
@@ -307,7 +345,11 @@ impl ServerPool {
                 if idx >= MAX_SERIAL_SERVERS {
                     return false;
                 }
-                let slot = &mut self.serial_ascii_slots[idx];
+                let slot = if MAX_SERIAL_SERVERS == 1 {
+                    &mut self.serial_ascii_slots[0]
+                } else {
+                    &mut self.serial_ascii_slots[idx]
+                };
                 if !slot.occupied {
                     return false;
                 }
@@ -325,14 +367,28 @@ impl ServerPool {
         let idx = server_id_index(id);
         match server_id_tag(id) {
             #[cfg(feature = "network-tcp")]
-            TAG_TCP_SERVER => idx < MAX_TCP_SERVERS && self.tcp_slots[idx].occupied,
+            TAG_TCP_SERVER => {
+                if MAX_TCP_SERVERS == 1 {
+                    idx == 0 && self.tcp_slots[0].occupied
+                } else {
+                    idx < MAX_TCP_SERVERS && self.tcp_slots[idx].occupied
+                }
+            }
             #[cfg(feature = "serial-rtu")]
             TAG_SERIAL_RTU_SERVER => {
-                idx < MAX_SERIAL_SERVERS && self.serial_rtu_slots[idx].occupied
+                if MAX_SERIAL_SERVERS == 1 {
+                    idx == 0 && self.serial_rtu_slots[0].occupied
+                } else {
+                    idx < MAX_SERIAL_SERVERS && self.serial_rtu_slots[idx].occupied
+                }
             }
             #[cfg(feature = "serial-ascii")]
             TAG_SERIAL_ASCII_SERVER => {
-                idx < MAX_SERIAL_SERVERS && self.serial_ascii_slots[idx].occupied
+                if MAX_SERIAL_SERVERS == 1 {
+                    idx == 0 && self.serial_ascii_slots[0].occupied
+                } else {
+                    idx < MAX_SERIAL_SERVERS && self.serial_ascii_slots[idx].occupied
+                }
             }
             _ => false,
         }
@@ -403,7 +459,11 @@ where
     }
 
     let idx = server_id_index(id);
-    let slot = &mut pool.tcp_slots[idx];
+    let slot = if MAX_TCP_SERVERS == 1 {
+        &mut pool.tcp_slots[0]
+    } else {
+        &mut pool.tcp_slots[idx]
+    };
     if slot.borrow_flag.swap(true, Ordering::SeqCst) {
         return Err(MbusStatusCode::MbusErrBusy);
     }
@@ -417,7 +477,11 @@ where
 macro_rules! dispatch_serial_server {
     ($id:expr, $pool:expr, $slots:ident, $f:expr) => {{
         let idx = server_id_index($id);
-        let slot = &mut $pool.$slots[idx];
+        let slot = if MAX_SERIAL_SERVERS == 1 {
+            &mut $pool.$slots[0]
+        } else {
+            &mut $pool.$slots[idx]
+        };
         if slot.borrow_flag.swap(true, Ordering::SeqCst) {
             return Err(MbusStatusCode::MbusErrBusy);
         }

@@ -1046,7 +1046,7 @@ where
         }
     }
 
-    fn append_to_rxed_frame(&mut self, frame: Vec<u8, 513>) {
+    fn append_to_rxed_frame(&mut self, frame: Vec<u8, MAX_ADU_FRAME_LEN>) {
         client_log_trace!("received {} transport bytes", frame.len());
         if self.rxed_frame.extend_from_slice(frame.as_slice()).is_err() {
             // Buffer overflowed without forming a valid frame. Must be noise.
