@@ -152,6 +152,10 @@ where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
 {
+    /// Evaluates to `true` if the configured queue depth is greater than 1.
+    /// Used to statically eradicate queue logic on memory-constrained devices.
+    const HAS_QUEUE: bool = QUEUE_DEPTH > 1;
+
     /// Creates a [`ServerServices`] with an explicitly-sized queue depth `QUEUE_DEPTH`.
     ///
     /// Prefer [`ServerServices::new`] for the default depth of `8`.  Use this
@@ -388,12 +392,20 @@ where
 
     /// Returns the number of requests currently waiting in the priority queue.
     pub fn pending_request_count(&self) -> usize {
-        self.request_queue.len()
+        if Self::HAS_QUEUE {
+            self.request_queue.len()
+        } else {
+            0
+        }
     }
 
     /// Returns the number of responses currently waiting in the retry queue.
     pub fn pending_response_count(&self) -> usize {
-        self.response_queue.len()
+        if Self::HAS_QUEUE {
+            self.response_queue.len()
+        } else {
+            0
+        }
     }
 
     /// Returns the number of responses that have been dropped due to queue overflow.
@@ -475,11 +487,19 @@ where
     ) {
         #[cfg(not(feature = "logging"))]
         let mbus_err: MbusError = err.into();
-        server_log_debug!(
-            "txn_id={}: transport send failed ({:?}); queuing for retry",
-            txn_id,
-            mbus_err
-        );
+        if Self::HAS_QUEUE {
+            server_log_debug!(
+                "txn_id={}: transport send failed ({:?}); queuing for retry",
+                txn_id,
+                mbus_err
+            );
+        } else {
+            server_log_debug!(
+                "txn_id={}: transport send failed ({:?}); dropping response",
+                txn_id,
+                mbus_err
+            );
+        }
 
         #[cfg(feature = "traffic")]
         self.app
@@ -852,7 +872,7 @@ where
         self.process_rxed_frame();
 
         // Steps 4 & 5 — only relevant when the priority queue is active.
-        if QUEUE_DEPTH > 0 && self.resilience.enable_priority_queue {
+        if Self::HAS_QUEUE && self.resilience.enable_priority_queue {
             self.expire_stale_queued_requests();
 
             // Dispatch all queued requests in priority order.
@@ -1316,7 +1336,7 @@ where
     /// Routes an already-validated inbound message to the priority queue or
     /// dispatches it immediately on the hot path.
     fn enqueue_or_dispatch_inbound(&mut self, message: &ModbusMessage, expected_length: usize) {
-        if QUEUE_DEPTH > 0 && self.resilience.enable_priority_queue {
+        if Self::HAS_QUEUE && self.resilience.enable_priority_queue {
             self.try_enqueue_request(message, expected_length);
         } else {
             self.dispatch_immediately(message);
