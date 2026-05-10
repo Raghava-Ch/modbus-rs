@@ -17,10 +17,10 @@ pub mod client;
 
 // ── Server bindings ───────────────────────────────────────────────────────────
 
-#[cfg(feature = "c-server")]
+#[cfg(all(feature = "c-server", any(feature = "network-tcp", feature = "serial-rtu", feature = "serial-ascii")))]
 pub mod server;
 
-#[cfg(feature = "c-server")]
+#[cfg(all(feature = "c-server", any(feature = "network-tcp", feature = "serial-rtu", feature = "serial-ascii")))]
 pub mod server_gen;
 
 // ── Gateway bindings ──────────────────────────────────────────────────────────

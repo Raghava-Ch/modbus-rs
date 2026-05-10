@@ -45,7 +45,7 @@ pub enum FunctionCode {
     /// Section 6.1
     ReadCoils = 0x01,
 
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "discrete-inputs")]
     /// 0x02 — Read Discrete Inputs
     ///
     /// Reads the ON/OFF status of discrete input contacts.
@@ -192,7 +192,7 @@ pub enum FunctionCode {
     ReadCoilsException = 0x81,
 
     /// 0x82 — Exception Response for Read Discrete Inputs (0x02 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "discrete-inputs")]
     ReadDiscreteInputsException = 0x82,
 
     /// 0x83 — Exception Response for Read Holding Registers (0x03 | 0x80)
@@ -274,7 +274,7 @@ impl TryFrom<u8> for FunctionCode {
         match value {
             #[cfg(feature = "coils")]
             0x01 => Ok(ReadCoils),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "discrete-inputs")]
             0x02 => Ok(ReadDiscreteInputs),
             #[cfg(feature = "registers")]
             0x03 => Ok(ReadHoldingRegisters),
@@ -313,7 +313,7 @@ impl TryFrom<u8> for FunctionCode {
             // Exception responses (0x80 bit set)
             #[cfg(feature = "coils")]
             0x81 => Ok(ReadCoilsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "discrete-inputs")]
             0x82 => Ok(ReadDiscreteInputsException),
             #[cfg(feature = "registers")]
             0x83 => Ok(ReadHoldingRegistersException),
@@ -424,7 +424,7 @@ impl FunctionCode {
         match self {
             #[cfg(feature = "coils")]
             FunctionCode::ReadCoils => Some(FunctionCode::ReadCoilsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "discrete-inputs")]
             FunctionCode::ReadDiscreteInputs => Some(FunctionCode::ReadDiscreteInputsException),
             #[cfg(feature = "registers")]
             FunctionCode::ReadHoldingRegisters => Some(FunctionCode::ReadHoldingRegistersException),

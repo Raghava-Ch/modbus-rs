@@ -10,7 +10,7 @@
 //!
 //! Modbus Specification Reference: V1.1b3, Section 7 (MODBUS Exception Responses).
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "loggging")]
 use defmt;
 
 /// Modbus exception codes as defined in the Modbus Application Protocol Specification V1.1b3.

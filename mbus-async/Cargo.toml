@@ -27,7 +27,6 @@ mbus-server = { version = "0.9.0", path = "../mbus-server" }
 anyhow = "1.0"
 
 [features]
-defmt = ["dep:defmt", "mbus-core/defmt"]
 default = [
     "network-tcp",
     "coils",
@@ -52,13 +51,15 @@ serial-ascii = [
     "mbus-serial/async",
 ]
 coils = ["mbus-core/coils", "mbus-client/coils"]
-registers = ["mbus-core/registers", "mbus-client/registers"]
+holding-registers = ["mbus-core/registers", "mbus-client/holding-registers"]
+input-registers = ["mbus-core/registers", "mbus-client/input-registers"]
+registers = ["holding-registers", "input-registers"]
 discrete-inputs = ["mbus-core/registers", "mbus-client/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-client/fifo"]
 file-record = ["mbus-core/file-record", "mbus-client/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-client/diagnostics"]
 diagnostics-stats = ["diagnostics"]
-logging = ["dep:log"]
+logging = ["dep:log", "dep:defmt", "mbus-core/logging"]
 traffic = ["mbus-client/traffic"]
 server-tcp = ["dep:mbus-network", "mbus-network/async", "tokio/net", "tokio/rt"]
 server-serial = ["dep:mbus-serial", "mbus-serial/async"]

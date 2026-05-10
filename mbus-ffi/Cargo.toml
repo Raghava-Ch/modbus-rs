@@ -24,7 +24,7 @@ strip = "debuginfo"   # Ensure no debug symbols linger
 [features]
 default = []
 ## Enables defmt logging support for embedded/no_std targets.
-defmt = ["dep:defmt", "mbus-core/defmt"]
+logging = ["dep:defmt", "mbus-core/logging"]
 ## Enables Display trait implementations for error types.
 display = []
 ## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
@@ -48,13 +48,32 @@ server-traffic = ["c-server", "mbus-server/traffic"]
 ## Feature forwarding — each feature enables the corresponding FC group on
 ## mbus-client AND (when c-server is active) on mbus-server.
 coils = ["mbus-client?/coils", "mbus-server?/coils"]
-registers = ["mbus-client?/registers", "mbus-server?/registers"]
+holding-registers = ["mbus-client?/holding-registers", "mbus-server?/holding-registers"]
+input-registers = ["mbus-client?/input-registers", "mbus-server?/input-registers"]
+registers = ["holding-registers", "input-registers"]
 discrete-inputs = ["mbus-client?/discrete-inputs", "mbus-server?/discrete-inputs"]
 fifo = ["mbus-client?/fifo", "mbus-server?/fifo"]
 file-record = ["mbus-client?/file-record", "mbus-server?/file-record"]
 diagnostics = ["mbus-client?/diagnostics", "mbus-server?/diagnostics"]
 
 traffic = ["mbus-client?/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
+## Enables TCP network transport support (mbus-client-async, mbus-gateway).
+network-tcp = [
+    "mbus-client-async?/network-tcp",
+    "mbus-gateway?/network",
+]
+## Enables Modbus RTU serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
+serial-rtu = [
+    "mbus-client-async?/serial-rtu",
+    "mbus-gateway?/serial-rtu",
+]
+## Enables Modbus ASCII serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
+serial-ascii = [
+    "mbus-client-async?/serial-ascii",
+    "mbus-gateway?/serial-ascii",
+    "mbus-client?/serial-ascii",
+    "mbus-server?/serial-ascii",
+]
 ## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
     "coils",
@@ -192,8 +211,8 @@ defmt = { workspace = true, optional = true }
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
 pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
-mbus-client-async = { version = "0.9.0", path = "../mbus-client-async", features = ["network-tcp", "serial-rtu", "serial-ascii", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
-mbus-server-async = { version = "0.9.0", path = "../mbus-server-async", features = ["server-tcp", "server-serial", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-client-async = { version = "0.9.0", path = "../mbus-client-async", features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-server-async = { version = "0.9.0", path = "../mbus-server-async", features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
 ## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
 napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async"], optional = true }

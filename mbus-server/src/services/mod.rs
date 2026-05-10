@@ -375,6 +375,9 @@ where
     /// Returns `true` if the response queue utilization exceeds 80% and the configured
     /// overflow policy is `RejectRequest`.
     fn should_apply_back_pressure(&self) -> bool {
+        if QUEUE_DEPTH == 0 {
+            return false;
+        }
         if self.resilience.timeouts.overflow_policy != OverflowPolicy::RejectRequest {
             return false;
         }
@@ -470,6 +473,7 @@ where
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         err: <TRANSPORT as Transport>::Error,
     ) {
+        #[cfg(not(feature = "logging"))]
         let mbus_err: MbusError = err.into();
         server_log_debug!(
             "txn_id={}: transport send failed ({:?}); queuing for retry",
@@ -481,8 +485,10 @@ where
         self.app
             .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed, frame);
 
-        self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
-        self.update_peak_response_queue_size();
+        if QUEUE_DEPTH > 0 {
+            self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
+            self.update_peak_response_queue_size();
+        }
     }
 
     fn queue_response_for_retry(
@@ -827,7 +833,9 @@ where
     ///    priority order (only reached when `enable_priority_queue` is `true`).
     pub fn poll(&mut self) {
         // Step 1 — retry queued responses from previous failed sends.
-        self.drain_response_queue();
+        if QUEUE_DEPTH > 0 {
+            self.drain_response_queue();
+        }
 
         // Step 2 — receive bytes from the transport.
         match self.transport.recv() {
@@ -844,7 +852,7 @@ where
         self.process_rxed_frame();
 
         // Steps 4 & 5 — only relevant when the priority queue is active.
-        if self.resilience.enable_priority_queue {
+        if QUEUE_DEPTH > 0 && self.resilience.enable_priority_queue {
             self.expire_stale_queued_requests();
 
             // Dispatch all queued requests in priority order.
@@ -1308,7 +1316,7 @@ where
     /// Routes an already-validated inbound message to the priority queue or
     /// dispatches it immediately on the hot path.
     fn enqueue_or_dispatch_inbound(&mut self, message: &ModbusMessage, expected_length: usize) {
-        if self.resilience.enable_priority_queue {
+        if QUEUE_DEPTH > 0 && self.resilience.enable_priority_queue {
             self.try_enqueue_request(message, expected_length);
         } else {
             self.dispatch_immediately(message);

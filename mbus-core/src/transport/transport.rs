@@ -24,12 +24,12 @@ use super::{config::ModbusConfig, error::TransportType};
 pub trait Transport {
     /// The specific error type returned by this transport implementation.
     /// It must be convertible into the common `MbusError` for upper-layer processing.
-    #[cfg(feature = "defmt")]
+    #[cfg(feature = "logging")]
     type Error: Into<MbusError> + defmt::Format;
 
     /// The specific error type returned by this transport implementation.
     /// It must be convertible into the common `MbusError` for upper-layer processing.
-    #[cfg(not(feature = "defmt"))]
+    #[cfg(not(feature = "logging"))]
     type Error: Into<MbusError>;
 
     /// Compile-time capability flag for Serial-style broadcast write semantics.

@@ -30,9 +30,15 @@ default = [
 ]
 
 coils = ["mbus-core/coils"] # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
-registers = [
+holding-registers = [
     "mbus-core/registers",
-] # Enables Modbus Register (FC 0x03, 0x04, 0x06, 0x10) services
+] # Enables Modbus Holding Register (FC 0x03, 0x06, 0x10) services
+input-registers = [
+    "mbus-core/registers",
+] # Enables Modbus Input Register (FC 0x04) services
+registers = [
+    "holding-registers", "input-registers"
+] # Backward-compat alias
 discrete-inputs = [
     "mbus-core/registers",
 ] # Enables Modbus Discrete Input (FC 0x02) services
