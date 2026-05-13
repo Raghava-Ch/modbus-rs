@@ -43,7 +43,7 @@ mbus-async = { version = "0.9.0", path = "./mbus-async" }
 mbus-client-async = { version = "0.9.0", path = "./mbus-client-async" }
 mbus-server-async = { version = "0.9.0", path = "./mbus-server-async" }
 mbus-ffi    = { version = "0.9.0", path = "./mbus-ffi" }
-mbus-server = { version = "0.9.0", path = "./mbus-server" }
+mbus-server = { version = "0.9.0", path = "./mbus-server", default-features = false }
 mbus-macros = { version = "0.9.0", path = "./mbus-macros" }
 
 mbus-gateway = { version = "0.9.0", path = "./mbus-gateway" }
