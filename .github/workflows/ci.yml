@@ -203,7 +203,7 @@ jobs:
         run: pip install maturin pytest pytest-asyncio
 
       - name: Build Python wheel
-        run: maturin build --features python,python-gateway,full
+        run: maturin build --features python,python-gateway,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
         working-directory: mbus-ffi
 
       - name: Install built wheel
@@ -246,7 +246,7 @@ jobs:
         run: cargo run -p xtask -- check-header
 
       - name: Build C client demo
-        run: cargo run -p xtask -- build-c-demo --demo c_client_demo
+        run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers
 
       - name: Build C server demo
         run: cargo run -p xtask -- build-c-demo --demo c_server_demo
