@@ -1,6 +1,6 @@
 //! Transport-layer error and type-classification types.
 
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 use defmt;
 
 use crate::errors::MbusError;
@@ -26,7 +26,7 @@ pub enum TransportError {
     InvalidConfiguration,
 }
 
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 impl defmt::Format for TransportError {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -40,6 +40,24 @@ impl defmt::Format for TransportError {
         }
     }
 }
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for TransportError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            TransportError::ConnectionFailed => write!(f, "Connection failed"),
+            TransportError::ConnectionClosed => write!(f, "Connection closed"),
+            TransportError::IoError => write!(f, "I/O error"),
+            TransportError::Timeout => write!(f, "Timeout"),
+            TransportError::BufferTooSmall => write!(f, "Buffer too small"),
+            TransportError::Unexpected => write!(f, "Unexpected error"),
+            TransportError::InvalidConfiguration => write!(f, "Invalid configuration"),
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::error::Error for TransportError {}
 
 impl From<TransportError> for MbusError {
     fn from(err: TransportError) -> Self {

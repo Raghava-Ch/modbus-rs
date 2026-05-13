@@ -25,22 +25,25 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use mbus_server::ServerServices;
 
 use super::app::CServerApp;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use crate::MAX_SERIAL_SERVERS;
+#[cfg(feature = "network-tcp")]
+use crate::MAX_TCP_SERVERS;
 use crate::c::error::MbusStatusCode;
+#[cfg(feature = "serial-ascii")]
+use crate::c::transport::CAsciiTransport;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use crate::c::transport::CRtuTransport;
 #[cfg(feature = "network-tcp")]
 use crate::c::transport::CTcpTransport;
-#[cfg(feature = "serial-ascii")]
-use crate::c::transport::CAsciiTransport;
-#[cfg(feature = "network-tcp")]
-use crate::MAX_TCP_SERVERS;
-#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
-use crate::MAX_SERIAL_SERVERS;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Queue depth (max concurrent in-flight requests) for TCP servers.
+#[cfg(feature = "network-tcp")]
 pub(super) const SERVER_TCP_QUEUE_DEPTH: usize = 8;
 /// Queue depth for serial servers (half-duplex = 1).
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub(super) const SERVER_SERIAL_QUEUE_DEPTH: usize = 1;
 
 /// Server ID type: an opaque `u16` index into one of the server sub-pools.
@@ -179,11 +182,9 @@ pub(super) fn is_serial_server_id(id: MbusServerId) -> bool {
     return is_serial_rtu_server_id(id) || is_serial_ascii_server_id(id);
     #[cfg(all(feature = "serial-rtu", not(feature = "serial-ascii")))]
     return is_serial_rtu_server_id(id);
-    #[cfg(feature = "serial-ascii")]
-    is_serial_ascii_server_id(id)
+    #[cfg(all(feature = "serial-ascii", not(feature = "serial-rtu")))]
+    return is_serial_ascii_server_id(id);
 }
-
-
 
 // ── Typed slot ────────────────────────────────────────────────────────────────
 
@@ -513,9 +514,9 @@ where
     }
 
     if is_serial_rtu_server_id(id) {
-        return dispatch_serial_server!(id, pool, serial_rtu_slots, f_rtu);
+        dispatch_serial_server!(id, pool, serial_rtu_slots, f_rtu)
     } else {
-        return dispatch_serial_server!(id, pool, serial_ascii_slots, f_ascii);
+        dispatch_serial_server!(id, pool, serial_ascii_slots, f_ascii)
     }
 }
 
@@ -523,7 +524,7 @@ where
 pub(super) fn with_serial_server<F1, F2, R>(
     id: MbusServerId,
     f_rtu: F1,
-    f_ascii: F2,
+    _f_ascii: F2,
 ) -> Result<R, MbusStatusCode>
 where
     F1: FnOnce(&mut SerialRtuServerInner) -> R,
@@ -566,8 +567,6 @@ where
 
     dispatch_serial_server!(id, pool, serial_ascii_slots, f_ascii)
 }
-
-
 
 /// Convenience macro to dispatch the same body to both serial variants.
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]

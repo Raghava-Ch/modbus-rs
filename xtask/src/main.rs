@@ -646,16 +646,24 @@ fn print_help() {
     );
     println!("      --out-dir is optional; omit it for the normal build.rs-driven workflow.");
     println!("  FULL MODE (cross-compile + bundle):");
-    println!("    gen-server-app --config <path> --target <triple> <output-dir> [--profile release|debug] [--optimize-size]");
+    println!(
+        "    gen-server-app --config <path> --target <triple> <output-dir> [--profile release|debug] [--optimize-size]"
+    );
     println!("      Parse the YAML, generate artifacts, cross-compile mbus-ffi with");
     println!("      only the features required by the config, and bundle into");
     println!("      <output-dir>/include/ and <output-dir>/lib/.");
     println!("      --target        Target triple (e.g. thumbv7em-none-eabi)");
     println!("      --profile       Build profile: release (default) or debug");
-    println!("      --optimize-size Automatically use Nightly Rust and build-std to aggressively shrink binary size");
+    println!(
+        "      --optimize-size Automatically use Nightly Rust and build-std to aggressively shrink binary size"
+    );
     println!("      --network-tcp   Enable TCP transport support (feature = \"network-tcp\")");
-    println!("      --serial-rtu    Enable RTU serial transport support (feature = \"serial-rtu\")");
-    println!("      --serial-ascii  Enable ASCII serial transport support (feature = \"serial-ascii\")");
+    println!(
+        "      --serial-rtu    Enable RTU serial transport support (feature = \"serial-rtu\")"
+    );
+    println!(
+        "      --serial-ascii  Enable ASCII serial transport support (feature = \"serial-ascii\")"
+    );
     println!();
     println!("      <output-dir>    Output directory root (positional argument)");
     println!("  check-server-gen");

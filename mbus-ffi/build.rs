@@ -301,25 +301,36 @@ fn main() {
         // Feature-gate memory sections: clear YAML sections whose corresponding
         // Cargo features are not enabled, so the generated code never references
         // types / trait impls behind disabled `#[cfg(feature = "...")]` gates.
-        if std::env::var("CARGO_FEATURE_COILS").is_err() && !app_config.memory_map.coils.is_empty() {
-            println!("cargo::warning=YAML defines {} coil(s) but the `coils` feature is not enabled; coil handlers will NOT be compiled.",
-                     app_config.memory_map.coils.len());
+        if std::env::var("CARGO_FEATURE_COILS").is_err() && !app_config.memory_map.coils.is_empty()
+        {
+            println!(
+                "cargo::warning=YAML defines {} coil(s) but the `coils` feature is not enabled; coil handlers will NOT be compiled.",
+                app_config.memory_map.coils.len()
+            );
             app_config.memory_map.coils.clear();
         }
-        if std::env::var("CARGO_FEATURE_DISCRETE_INPUTS").is_err() && !app_config.memory_map.discrete_inputs.is_empty() {
-            println!("cargo::warning=YAML defines {} discrete input(s) but the `discrete-inputs` feature is not enabled; discrete-input handlers will NOT be compiled.",
-                     app_config.memory_map.discrete_inputs.len());
+        if std::env::var("CARGO_FEATURE_DISCRETE_INPUTS").is_err()
+            && !app_config.memory_map.discrete_inputs.is_empty()
+        {
+            println!(
+                "cargo::warning=YAML defines {} discrete input(s) but the `discrete-inputs` feature is not enabled; discrete-input handlers will NOT be compiled.",
+                app_config.memory_map.discrete_inputs.len()
+            );
             app_config.memory_map.discrete_inputs.clear();
         }
         if std::env::var("CARGO_FEATURE_REGISTERS").is_err() {
             if !app_config.memory_map.holding_registers.is_empty() {
-                println!("cargo::warning=YAML defines {} holding register(s) but the `registers` feature is not enabled; holding-register handlers will NOT be compiled.",
-                         app_config.memory_map.holding_registers.len());
+                println!(
+                    "cargo::warning=YAML defines {} holding register(s) but the `registers` feature is not enabled; holding-register handlers will NOT be compiled.",
+                    app_config.memory_map.holding_registers.len()
+                );
                 app_config.memory_map.holding_registers.clear();
             }
             if !app_config.memory_map.input_registers.is_empty() {
-                println!("cargo::warning=YAML defines {} input register(s) but the `registers` feature is not enabled; input-register handlers will NOT be compiled.",
-                         app_config.memory_map.input_registers.len());
+                println!(
+                    "cargo::warning=YAML defines {} input register(s) but the `registers` feature is not enabled; input-register handlers will NOT be compiled.",
+                    app_config.memory_map.input_registers.len()
+                );
                 app_config.memory_map.input_registers.clear();
             }
         }
