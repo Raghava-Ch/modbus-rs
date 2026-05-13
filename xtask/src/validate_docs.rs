@@ -16,6 +16,7 @@
 //! | `<!-- validate: run -->` | Execute the command instead of just compile‐checking |
 //! | `<!-- validate: skip -->` | Skip the block entirely |
 //! | `<!-- validate: no_run -->` | Compile-check the block without running it |
+//! | `<!-- validate: verify -->` | Compile-check even without `fn main` (auto-appends one) |
 //!
 //! Rust fence modifiers do not control xtask validation. Only HTML markers do.
 
@@ -553,7 +554,7 @@ fn validate_rust_blocks(
          \n\
          [dependencies.mbus-server]\n\
          path = \"{mbus_server}\"\n\
-         default-features = false\n\
+         default-features = true\n\
          \n\
          [dependencies.mbus-async]\n\
          path = \"{mbus_async}\"\n\

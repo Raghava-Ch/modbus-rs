@@ -32,7 +32,7 @@ use crate::MAX_TCP_SERVERS;
 use crate::c::error::MbusStatusCode;
 #[cfg(feature = "serial-ascii")]
 use crate::c::transport::CAsciiTransport;
-#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+#[cfg(feature = "serial-rtu")]
 use crate::c::transport::CRtuTransport;
 #[cfg(feature = "network-tcp")]
 use crate::c::transport::CTcpTransport;
