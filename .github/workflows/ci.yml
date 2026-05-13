@@ -169,13 +169,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check mbus-ffi WASM bindings
-        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,full
+        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Run WASM server binding tests (Node)
-        run: wasm-pack test --node --features wasm,full --test wasm_server_bindings
+        run: wasm-pack test --node --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait --test wasm_server_bindings
         working-directory: mbus-ffi
 
   # ── 7. Python bindings ────────────────────────────────────────────────────
@@ -235,9 +235,9 @@ jobs:
 
       - name: Check C FFI feature slices
         run: |
-          cargo check -p mbus-ffi --no-default-features --features c,full
-          cargo check -p mbus-ffi --no-default-features --features c,c-server,server-traffic,full
-          cargo check -p mbus-ffi --no-default-features --features c,c-gateway,full
+          cargo check -p mbus-ffi --no-default-features --features c-client,full
+          cargo check -p mbus-ffi --no-default-features --features c-server,server-traffic,full
+          cargo check -p mbus-ffi --no-default-features --features c-gateway,full
 
       - name: Install cbindgen
         run: cargo install cbindgen --locked

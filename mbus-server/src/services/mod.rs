@@ -291,6 +291,7 @@ where
             return false;
         }
 
+        #[cfg(feature = "logging")]
         if wire_addr == 0 {
             server_log_trace!(
                 "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast disabled or unsupported transport)",
@@ -486,20 +487,25 @@ where
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         err: <TRANSPORT as Transport>::Error,
     ) {
-        let _mbus_err: MbusError = err.into();
-        if Self::HAS_QUEUE {
-            server_log_debug!(
-                "txn_id={}: transport send failed ({:?}); queuing for retry",
-                txn_id,
-                _mbus_err
-            );
-        } else {
-            server_log_debug!(
-                "txn_id={}: transport send failed ({:?}); dropping response",
-                txn_id,
-                _mbus_err
-            );
+        #[cfg(feature = "logging")]
+        {
+            let mbus_err: MbusError = err.into();
+            if Self::HAS_QUEUE {
+                server_log_debug!(
+                    "txn_id={}: transport send failed ({:?}); queuing for retry",
+                    txn_id,
+                    mbus_err
+                );
+            } else {
+                server_log_debug!(
+                    "txn_id={}: transport send failed ({:?}); dropping response",
+                    txn_id,
+                    mbus_err
+                );
+            }
         }
+        #[cfg(not(feature = "logging"))]
+        let _ = err;
 
         #[cfg(feature = "traffic")]
         self.app
