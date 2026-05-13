@@ -70,6 +70,9 @@ serial-ascii = [
 ]
 ## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
+    "c-client",
+    "c-server",
+    "c-gateway",
     "coils",
     "registers",
     "discrete-inputs",
@@ -114,6 +117,9 @@ python = [
     "fifo",
     "file-record",
     "diagnostics",
+    "mbus-client-async/serial-rtu",
+    "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
 ]
 
 ## Enables native Go (cgo) bindings for the Modbus client/server/gateway stack.
@@ -198,7 +204,7 @@ mbus-core = { workspace = true }
 # mbus-client is optional to prevent its symbols from being unconditionally baked
 # into the C static library. This avoids binary bloat for server-only builds on bare-metal targets.
 mbus-client = { workspace = true, optional = true }
-mbus-server = { version = "0.9.0", path = "../mbus-server", optional = true, default-features = false }
+mbus-server = { workspace = true, optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
@@ -207,8 +213,8 @@ heapless = { workspace = true }
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
 pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
-mbus-client-async = { version = "0.9.0", path = "../mbus-client-async", features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
-mbus-server-async = { version = "0.9.0", path = "../mbus-server-async", features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-client-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-server-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
 ## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
 napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async"], optional = true }
