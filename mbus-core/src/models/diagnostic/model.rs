@@ -28,7 +28,7 @@
 //! ```
 
 use crate::{data_unit::common::MAX_PDU_DATA_LEN, errors::MbusError};
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 use defmt;
 use heapless::Vec;
 
@@ -168,13 +168,24 @@ impl TryFrom<u8> for BasicObjectId {
     }
 }
 
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 impl defmt::Format for BasicObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {
             BasicObjectId::VendorName => defmt::write!(f, "VendorName"),
             BasicObjectId::ProductCode => defmt::write!(f, "ProductCode"),
             BasicObjectId::MajorMinorRevision => defmt::write!(f, "MajorMinorRevision"),
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for BasicObjectId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            BasicObjectId::VendorName => write!(f, "VendorName"),
+            BasicObjectId::ProductCode => write!(f, "ProductCode"),
+            BasicObjectId::MajorMinorRevision => write!(f, "MajorMinorRevision"),
         }
     }
 }
@@ -210,7 +221,7 @@ impl TryFrom<u8> for RegularObjectId {
     }
 }
 
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 impl defmt::Format for RegularObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -218,6 +229,18 @@ impl defmt::Format for RegularObjectId {
             RegularObjectId::ProductName => defmt::write!(f, "ProductName"),
             RegularObjectId::ModelName => defmt::write!(f, "ModelName"),
             RegularObjectId::UserApplicationName => defmt::write!(f, "UserApplicationName"),
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for RegularObjectId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            RegularObjectId::VendorUrl => write!(f, "VendorUrl"),
+            RegularObjectId::ProductName => write!(f, "ProductName"),
+            RegularObjectId::ModelName => write!(f, "ModelName"),
+            RegularObjectId::UserApplicationName => write!(f, "UserApplicationName"),
         }
     }
 }
@@ -346,7 +369,7 @@ impl From<u8> for ObjectId {
     }
 }
 
-#[cfg(feature = "logging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 impl defmt::Format for ObjectId {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -355,6 +378,19 @@ impl defmt::Format for ObjectId {
             ObjectId::Extended(id) => defmt::write!(f, "Extended({:#04X})", id.value()),
             ObjectId::Reserved(id) => defmt::write!(f, "Reserved({:#04X})", id),
             ObjectId::Err => defmt::write!(f, "Err (sentinel default)"),
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for ObjectId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ObjectId::Basic(id) => write!(f, "Basic({})", id),
+            ObjectId::Regular(id) => write!(f, "Regular({})", id),
+            ObjectId::Extended(id) => write!(f, "Extended({:#04X})", id.value()),
+            ObjectId::Reserved(id) => write!(f, "Reserved({:#04X})", id),
+            ObjectId::Err => write!(f, "Err (sentinel default)"),
         }
     }
 }

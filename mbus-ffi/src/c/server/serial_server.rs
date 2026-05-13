@@ -1,6 +1,9 @@
 //! C API lifecycle functions for Modbus Serial servers (RTU and ASCII).
 
-#![cfg(all(feature = "c-server", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#![cfg(all(
+    feature = "c-server",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 //!
 //! Uses the same pool as TCP servers but a separate sub-pool with `QUEUE_DEPTH = 1`
 //! (half-duplex serial allows only one request in flight at a time).
@@ -21,27 +24,28 @@
 
 use mbus_server::ServerServices;
 
-use crate::c::{
-    error::MbusStatusCode,
-    transport::{CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks},
-};
 #[cfg(feature = "serial-ascii")]
 use crate::c::transport::CAsciiTransport;
+#[cfg(feature = "serial-rtu")]
+use crate::c::transport::CRtuTransport;
+use crate::c::{
+    error::MbusStatusCode,
+    transport::{MbusTransportCallbacks, validate_transport_callbacks},
+};
 
+#[cfg(feature = "serial-ascii")]
+use super::pool::server_pool_allocate_serial_ascii;
+#[cfg(feature = "serial-rtu")]
+use super::pool::server_pool_allocate_serial_rtu;
 use super::{
     app::CServerApp,
     callbacks::MbusServerHandlers,
     config::MbusServerConfig,
     pool::{
-        MBUS_INVALID_SERVER_ID, MbusServerId,
-        server_pool_free, with_serial_server, with_serial_server_uniform,
+        MBUS_INVALID_SERVER_ID, MbusServerId, server_pool_free, with_serial_server,
+        with_serial_server_uniform,
     },
 };
-#[cfg(feature = "serial-rtu")]
-use super::pool::server_pool_allocate_serial_rtu;
-#[cfg(feature = "serial-ascii")]
-use super::pool::server_pool_allocate_serial_ascii;
-
 
 // ── mbus_serial_rtu_server_new ────────────────────────────────────────────────
 

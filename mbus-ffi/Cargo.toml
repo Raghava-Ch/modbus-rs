@@ -14,19 +14,13 @@ description = "Native C FFI and browser WASM bindings for modbus-rs client APIs,
 [lib]
 crate-type = ["cdylib", "rlib", "staticlib"]
 
-[profile.release]
-opt-level = "z"       # Optimize aggressively for binary size
-lto = "fat"           # Perform cross-crate Link Time Optimization
-codegen-units = 1     # Slower compile time, but maximum optimization
-panic = "abort"       # Completely removes unwinding landing pads (saves massive space)
-strip = "debuginfo"   # Ensure no debug symbols linger
-
 [features]
 default = []
 ## Enables defmt logging support for embedded/no_std targets.
-logging = ["dep:defmt", "mbus-core/logging"]
+logging = []
 ## Enables Display trait implementations for error types.
 display = []
+error-trait = ["mbus-core/error-trait"]
 ## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
 wasm = [
     "dep:wasm-bindgen",
@@ -83,6 +77,7 @@ full = [
     "file-record",
     "diagnostics",
     "traffic",
+    "error-trait",
 ]
 ## Convenience alias — enables all server features (c-server must also be enabled)
 server-full = [
@@ -142,6 +137,7 @@ go = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
 ]
@@ -192,6 +188,7 @@ dotnet = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
 ]
@@ -205,7 +202,6 @@ mbus-server = { version = "0.9.0", path = "../mbus-server", optional = true, def
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
-defmt = { workspace = true, optional = true }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }

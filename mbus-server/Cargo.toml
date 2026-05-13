@@ -18,7 +18,6 @@ mbus-macros.workspace = true
 
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
-defmt = { workspace = true, optional = true }
 
 [features]
 # By default, all Modbus function code services are enabled for ease of use.
@@ -57,7 +56,7 @@ diagnostics-stats = [
 serial-ascii = [
     "mbus-core/serial-ascii",
 ] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
-logging = ["dep:log", "dep:defmt", "mbus-core/logging"]
+logging = ["dep:log", "mbus-core/logging", "mbus-core/defmt-format"]
 traffic = []
 display = []
 
@@ -91,7 +90,15 @@ required-features = ["file-record"]
 
 [[example]]
 name = "full_server"
-required-features = ["coils", "discrete-inputs", "holding-registers", "input-registers", "fifo", "file-record", "diagnostics"]
+required-features = [
+    "coils",
+    "discrete-inputs",
+    "holding-registers",
+    "input-registers",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
 
 [[example]]
 name = "holding_registers_read"

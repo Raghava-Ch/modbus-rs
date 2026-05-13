@@ -4,8 +4,6 @@
 //! - Implement [`AsyncAppHandler`] manually (Level 2 — full control), or
 //! - Let the `#[async_modbus_app]` macro generate the impl (Level 1 — zero boilerplate).
 
-#[cfg(feature = "logging")]
-use defmt;
 use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
@@ -43,17 +41,18 @@ pub enum AsyncServerError {
     BindFailed(std::io::Error),
 }
 
-#[cfg(feature = "defmt")]
-impl defmt::Format for AsyncServerError {
-    fn format(&self, f: defmt::Formatter) {
+impl std::fmt::Display for AsyncServerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AsyncServerError::Transport(e) => defmt::write!(f, "transport error: {}", e),
-            AsyncServerError::ConnectionClosed => defmt::write!(f, "connection closed"),
-            AsyncServerError::FramingError(e) => defmt::write!(f, "framing error: {}", e),
-            AsyncServerError::BindFailed(e) => defmt::write!(f, "bind failed: {:?}", defmt::Debug2Format(e)),
+            AsyncServerError::Transport(e) => write!(f, "transport error: {e:?}"),
+            AsyncServerError::ConnectionClosed => write!(f, "connection closed"),
+            AsyncServerError::FramingError(e) => write!(f, "framing error: {e:?}"),
+            AsyncServerError::BindFailed(e) => write!(f, "bind failed: {e}"),
         }
     }
 }
+
+impl std::error::Error for AsyncServerError {}
 
 impl From<MbusError> for AsyncServerError {
     fn from(e: MbusError) -> Self {

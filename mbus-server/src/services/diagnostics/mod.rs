@@ -576,6 +576,7 @@ where
 
     #[cfg(feature = "diagnostics")]
     fn enable_listen_only_mode(&mut self, txn_id: u16) {
+        let _ = txn_id;
         self.listen_only_mode = true;
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_no_response_count();

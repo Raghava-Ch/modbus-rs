@@ -41,6 +41,7 @@ name = "tcp_to_rtu"
 required-features = ["network", "serial-rtu"]
 
 [dev-dependencies]
+anyhow = "1.0"
 mbus-network = { workspace = true, features = ["async"] }
 mbus-core = { workspace = true }
 tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread", "signal"] }

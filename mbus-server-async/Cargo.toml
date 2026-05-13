@@ -15,7 +15,7 @@ description = "Role-focused async Modbus server facade re-exported from mbus-asy
 mbus-async = { version = "0.9.0", path = "../mbus-async", default-features = false }
 
 [dev-dependencies]
-mbus-core = { workspace = true }
+mbus-core = { workspace = true, features = ["error-trait"] }
 mbus-server = { workspace = true }
 heapless = { workspace = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -36,7 +36,7 @@ server-serial = ["mbus-async/server-serial"]
 coils = ["mbus-async/coils"]
 holding-registers = ["mbus-async/holding-registers"]
 input-registers = ["mbus-async/input-registers"]
-registers = ["holding-registers", "input-registers"]
+registers = ["holding-registers", "input-registers", "mbus-async/registers"]
 discrete-inputs = ["mbus-async/discrete-inputs"]
 fifo = ["mbus-async/fifo"]
 file-record = ["mbus-async/file-record"]

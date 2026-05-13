@@ -1,18 +1,11 @@
-#[cfg(all(feature = "logging", not(feature = "defmt")))]
+#[cfg(feature = "logging")]
 macro_rules! server_log_debug {
     ($($arg:tt)*) => {
         log::debug!($($arg)*)
     };
 }
 
-#[cfg(feature = "defmt")]
-macro_rules! server_log_debug {
-    ($($arg:tt)*) => {
-        defmt::debug!($($arg)*)
-    };
-}
-
-#[cfg(not(any(feature = "logging", feature = "defmt")))]
+#[cfg(not(feature = "logging"))]
 macro_rules! server_log_debug {
     ($($arg:tt)*) => {{
         // Evaluates to nothing.
@@ -21,21 +14,14 @@ macro_rules! server_log_debug {
     }};
 }
 
-#[cfg(all(feature = "logging", not(feature = "defmt")))]
+#[cfg(feature = "logging")]
 macro_rules! server_log_trace {
     ($($arg:tt)*) => {
         log::trace!($($arg)*)
     };
 }
 
-#[cfg(feature = "defmt")]
-macro_rules! server_log_trace {
-    ($($arg:tt)*) => {
-        defmt::trace!($($arg)*)
-    };
-}
-
-#[cfg(not(any(feature = "logging", feature = "defmt")))]
+#[cfg(not(feature = "logging"))]
 macro_rules! server_log_trace {
     ($($arg:tt)*) => {{
         // Evaluates to nothing.
