@@ -476,6 +476,7 @@ where
 }
 
 /// Internal serial dispatch helper.
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 macro_rules! dispatch_serial_server {
     ($id:expr, $pool:expr, $slots:ident, $f:expr) => {{
         let idx = server_id_index($id);
