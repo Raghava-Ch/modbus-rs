@@ -76,7 +76,9 @@ mod c_impl {
     use heapless::Vec;
     use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
     use mbus_core::errors::MbusError;
-    use mbus_core::transport::{ModbusConfig, SerialMode, Transport, TransportType};
+    use mbus_core::transport::{ModbusConfig, Transport, TransportType};
+    #[cfg(any(feature = "c-client", all(feature = "c-server", any(feature = "serial-rtu", feature = "serial-ascii"))))]
+    use mbus_core::transport::SerialMode;
 
     use super::MbusTransportCallbacks;
     use crate::c::error::MbusStatusCode;
