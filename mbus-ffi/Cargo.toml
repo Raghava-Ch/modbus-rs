@@ -221,6 +221,8 @@ napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt
 napi-derive = { version = "3", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+## mbus-client provides the sync client state machine (used by WASM bindings)
+mbus-client = { workspace = true }
 ## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)
 mbus-network = { workspace = true }
 ## mbus-serial provides WasmSerialTransport for browser Web Serial integration.
