@@ -220,11 +220,21 @@ let mut server: modbus_rs::ServerServices<_, _, 16> =
     );
 ```
 
+### Unbuffered Execution (`QUEUE_DEPTH = 0`)
+
+Setting the queue depth to `0` completely bypasses the internal queue mechanisms:
+- Requests are dispatched immediately as they are received.
+- Priority dispatch is effectively disabled.
+- Failed response sends are dropped immediately (no automatic retries).
+- Backpressure logic is disabled.
+
+This mode is ideal for resource-constrained environments (saving memory) or when purely synchronous, unbuffered execution is preferred.
+
 Timeouts, retry cadence, overflow behavior, broadcast writes, and priority dispatch all live under `ResilienceConfig`.
 
 ---
 
-## Shared State
+## Shared State 
 
 `ServerServices` owns the app object. If your application state must also be updated from elsewhere, use `ForwardingApp` with a `ModbusAppAccess` implementation.
 

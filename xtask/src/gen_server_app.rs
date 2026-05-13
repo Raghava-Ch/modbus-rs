@@ -189,7 +189,12 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
             println!("dry-run: would write {}", header_path.display());
         }
         if opts.target.is_some() {
-            let features = compute_features(&config, opts.network_tcp, opts.serial_rtu, opts.serial_ascii);
+            let features = compute_features(
+                &config,
+                opts.network_tcp,
+                opts.serial_rtu,
+                opts.serial_ascii,
+            );
             println!(
                 "dry-run: would build with --features \"{}\"",
                 features.join(",")
@@ -227,21 +232,30 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
     let output_root = opts.output_root.as_ref().or(opts.out_dir.as_ref());
     if let (Some(target), Some(output_root)) = (&opts.target, output_root) {
         let profile = opts.profile.as_deref().unwrap_or("release");
-        let features = compute_features(&config, opts.network_tcp, opts.serial_rtu, opts.serial_ascii);
+        let features = compute_features(
+            &config,
+            opts.network_tcp,
+            opts.serial_rtu,
+            opts.serial_ascii,
+        );
 
         let features_str = features.join(",");
-        let nightly_msg = if opts.optimize_size { " with build-std size optimizations" } else { "" };
+        let nightly_msg = if opts.optimize_size {
+            " with build-std size optimizations"
+        } else {
+            ""
+        };
         println!(
             "Building mbus-ffi for target '{target}' with features: {features_str} (profile={profile}){nightly_msg}"
         );
 
         // 6a. Execute cargo build
         let mut cmd = Command::new("cargo");
-        
+
         if opts.optimize_size {
             cmd.arg("+nightly");
         }
-        
+
         cmd.args(["build", "-p", "mbus-ffi"])
             .arg("--target")
             .arg(target)
@@ -297,8 +311,16 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
 
         // Also create include/lib dirs under --out-dir if it differs from output_root,
         // so the library is always available at the --out-dir location.
-        let alt_include_dir = opts.out_dir.as_ref().filter(|d| *d != output_root).map(|d| d.join("include"));
-        let alt_lib_dir = opts.out_dir.as_ref().filter(|d| *d != output_root).map(|d| d.join("lib"));
+        let alt_include_dir = opts
+            .out_dir
+            .as_ref()
+            .filter(|d| *d != output_root)
+            .map(|d| d.join("include"));
+        let alt_lib_dir = opts
+            .out_dir
+            .as_ref()
+            .filter(|d| *d != output_root)
+            .map(|d| d.join("lib"));
         if let Some(ref dir) = alt_include_dir {
             fs::create_dir_all(dir)
                 .map_err(|e| format!("failed to create {}: {e}", dir.display()))?;

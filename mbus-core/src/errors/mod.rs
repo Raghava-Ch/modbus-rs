@@ -10,7 +10,7 @@
 //!
 //! Modbus Specification Reference: V1.1b3, Section 7 (MODBUS Exception Responses).
 
-#[cfg(feature = "loggging")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 use defmt;
 
 /// Modbus exception codes as defined in the Modbus Application Protocol Specification V1.1b3.
@@ -138,7 +138,7 @@ impl MbusError {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(all(feature = "defmt-format", target_os = "none"))]
 impl defmt::Format for MbusError {
     fn format(&self, f: defmt::Formatter) {
         match self {
@@ -163,7 +163,9 @@ impl defmt::Format for MbusError {
                 f,
                 "I/O error: An I/O error occurred during TCP communication"
             ),
-            MbusError::Unexpected => defmt::write!(f, "Unexpected error: An unexpected error occurred"),
+            MbusError::Unexpected => {
+                defmt::write!(f, "Unexpected error: An unexpected error occurred")
+            }
             MbusError::ConnectionLost => defmt::write!(
                 f,
                 "Connection lost: The connection was lost during an active transaction"
@@ -238,7 +240,9 @@ impl defmt::Format for MbusError {
             MbusError::InvalidQuantity => {
                 defmt::write!(f, "Invalid quantity: The provided quantity is invalid")
             }
-            MbusError::InvalidValue => defmt::write!(f, "Invalid value: The provided value is invalid"),
+            MbusError::InvalidValue => {
+                defmt::write!(f, "Invalid value: The provided value is invalid")
+            }
             MbusError::InvalidAndMask => {
                 defmt::write!(f, "Invalid AND mask: The provided AND mask is invalid")
             }
@@ -266,7 +270,62 @@ impl defmt::Format for MbusError {
             MbusError::BroadcastNotAllowed => {
                 defmt::write!(f, "Broadcast not allowed: Broadcast not allowed")
             }
-            MbusError::InvalidOffset => defmt::write!(f, "Invalid offset: The provided offset is invalid"),
+            MbusError::InvalidOffset => {
+                defmt::write!(f, "Invalid offset: The provided offset is invalid")
+            }
         }
     }
 }
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for MbusError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            MbusError::ParseError => write!(f, "Parse error"),
+            MbusError::BasicParseError => write!(f, "Basic parse error"),
+            MbusError::Timeout => write!(f, "Timeout"),
+            MbusError::ModbusException(code) => write!(f, "Modbus exception 0x{code:02X}"),
+            MbusError::IoError => write!(f, "I/O error"),
+            MbusError::Unexpected => write!(f, "Unexpected error"),
+            MbusError::ConnectionLost => write!(f, "Connection lost"),
+            MbusError::UnsupportedFunction(code) => write!(f, "Unsupported function 0x{code:02X}"),
+            MbusError::ReservedSubFunction(code) => write!(f, "Reserved sub-function 0x{code:04X}"),
+            MbusError::InvalidPduLength => write!(f, "Invalid PDU length"),
+            MbusError::InvalidAduLength => write!(f, "Invalid ADU length"),
+            MbusError::ConnectionFailed => write!(f, "Connection failed"),
+            MbusError::ConnectionClosed => write!(f, "Connection closed"),
+            MbusError::BufferTooSmall => write!(f, "Buffer too small"),
+            MbusError::BufferLenMissmatch => write!(f, "Buffer length mismatch"),
+            MbusError::SendFailed => write!(f, "Send failed"),
+            MbusError::InvalidAddress => write!(f, "Invalid address"),
+            MbusError::InvalidOffset => write!(f, "Invalid offset"),
+            MbusError::TooManyRequests => write!(f, "Too many requests"),
+            MbusError::InvalidFunctionCode => write!(f, "Invalid function code"),
+            MbusError::NoRetriesLeft => write!(f, "No retries left"),
+            MbusError::TooManyFileReadSubRequests => write!(f, "Too many file read sub-requests"),
+            MbusError::FileReadPduOverflow => write!(f, "File read PDU overflow"),
+            MbusError::UnexpectedResponse => write!(f, "Unexpected response"),
+            MbusError::InvalidTransport => write!(f, "Invalid transport"),
+            MbusError::InvalidSlaveAddress => write!(f, "Invalid slave address"),
+            MbusError::ChecksumError => write!(f, "Checksum error"),
+            MbusError::InvalidConfiguration => write!(f, "Invalid configuration"),
+            MbusError::InvalidNumOfExpectedRsps => {
+                write!(f, "Invalid number of expected responses")
+            }
+            MbusError::InvalidDataLen => write!(f, "Invalid data length"),
+            MbusError::InvalidQuantity => write!(f, "Invalid quantity"),
+            MbusError::InvalidValue => write!(f, "Invalid value"),
+            MbusError::InvalidAndMask => write!(f, "Invalid AND mask"),
+            MbusError::InvalidOrMask => write!(f, "Invalid OR mask"),
+            MbusError::InvalidByteCount => write!(f, "Invalid byte count"),
+            MbusError::InvalidDeviceIdentification => write!(f, "Invalid device identification"),
+            MbusError::InvalidDeviceIdCode => write!(f, "Invalid device ID code"),
+            MbusError::InvalidMeiType => write!(f, "Invalid MEI type"),
+            MbusError::InvalidBroadcastAddress => write!(f, "Invalid broadcast address"),
+            MbusError::BroadcastNotAllowed => write!(f, "Broadcast not allowed"),
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::error::Error for MbusError {}

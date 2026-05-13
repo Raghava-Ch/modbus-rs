@@ -19,7 +19,6 @@ mbus-serial = { workspace = true, optional = true }
 heapless = { workspace = true }
 tokio = { version = "1", features = ["sync", "macros", "rt", "time"] }
 log = { workspace = true, optional = true }
-defmt = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -59,7 +58,7 @@ fifo = ["mbus-core/fifo", "mbus-client/fifo"]
 file-record = ["mbus-core/file-record", "mbus-client/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-client/diagnostics"]
 diagnostics-stats = ["diagnostics"]
-logging = ["dep:log", "dep:defmt", "mbus-core/logging"]
+logging = ["dep:log", "mbus-core/logging"]
 traffic = ["mbus-client/traffic"]
 server-tcp = ["dep:mbus-network", "mbus-network/async", "tokio/net", "tokio/rt"]
 server-serial = ["dep:mbus-serial", "mbus-serial/async"]

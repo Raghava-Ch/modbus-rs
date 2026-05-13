@@ -5,15 +5,16 @@
 //! converted to the `mbus-server` types (`ModbusConfig`, `UnitIdOrSlaveAddr`,
 //! `ResilienceConfig`) before being handed to `ServerServices`.
 
+#[cfg(feature = "network-tcp")]
+use mbus_core::transport::ModbusTcpConfig;
 use mbus_core::{
     errors::MbusError,
     transport::{
         BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-        ModbusTcpConfig, Parity, SerialMode, UnitIdOrSlaveAddr,
+        Parity, SerialMode, UnitIdOrSlaveAddr,
     },
 };
 use mbus_server::ResilienceConfig;
-
 // ── MbusServerConfig ──────────────────────────────────────────────────────────
 
 /// Common server configuration shared by TCP and Serial server types.

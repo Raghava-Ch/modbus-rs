@@ -49,9 +49,26 @@ pub struct MbusTransportCallbacks {
 }
 
 #[cfg(any(feature = "c-client", feature = "c-server", feature = "c-gateway"))]
-pub(crate) use c_impl::{
-    CAsciiTransport, CRtuTransport, CTcpTransport, validate_transport_callbacks,
-};
+pub(crate) use c_impl::validate_transport_callbacks;
+
+#[cfg(any(
+    feature = "c-client",
+    all(feature = "c-server", feature = "serial-rtu")
+))]
+pub(crate) use c_impl::CRtuTransport;
+
+#[cfg(any(
+    feature = "c-client",
+    all(feature = "c-server", feature = "serial-ascii")
+))]
+pub(crate) use c_impl::CAsciiTransport;
+
+#[cfg(any(
+    feature = "c-client",
+    feature = "c-gateway",
+    all(feature = "c-server", feature = "network-tcp")
+))]
+pub(crate) use c_impl::CTcpTransport;
 
 /// Implementation types — only compiled when the `c`, `c-server`, or `c-gateway` feature is active.
 #[cfg(any(feature = "c-client", feature = "c-server", feature = "c-gateway"))]
@@ -64,20 +81,44 @@ mod c_impl {
     use super::MbusTransportCallbacks;
     use crate::c::error::MbusStatusCode;
 
+    #[cfg(any(
+        feature = "c-client",
+        feature = "c-gateway",
+        all(feature = "c-server", feature = "network-tcp")
+    ))]
     pub struct CTcpTransport {
         pub(crate) callbacks: MbusTransportCallbacks,
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        feature = "c-gateway",
+        all(feature = "c-server", feature = "network-tcp")
+    ))]
     impl CTcpTransport {
         pub fn new(callbacks: MbusTransportCallbacks) -> Self {
             Self { callbacks }
         }
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        all(
+            feature = "c-server",
+            any(feature = "serial-rtu", feature = "serial-ascii")
+        )
+    ))]
     pub struct CSerialTransport<const ASCII: bool = false> {
         pub(crate) callbacks: MbusTransportCallbacks,
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        all(
+            feature = "c-server",
+            any(feature = "serial-rtu", feature = "serial-ascii")
+        )
+    ))]
     impl<const ASCII: bool> CSerialTransport<ASCII> {
         pub const MODE: SerialMode = if ASCII {
             SerialMode::Ascii
@@ -90,7 +131,15 @@ mod c_impl {
         }
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        all(feature = "c-server", feature = "serial-rtu")
+    ))]
     pub type CRtuTransport = CSerialTransport<false>;
+    #[cfg(any(
+        feature = "c-client",
+        all(feature = "c-server", feature = "serial-ascii")
+    ))]
     pub type CAsciiTransport = CSerialTransport<true>;
 
     pub fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
@@ -164,6 +213,11 @@ mod c_impl {
         }
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        feature = "c-gateway",
+        all(feature = "c-server", feature = "network-tcp")
+    ))]
     impl Transport for CTcpTransport {
         type Error = MbusError;
         const TRANSPORT_TYPE: TransportType = TransportType::CustomTcp;
@@ -189,6 +243,13 @@ mod c_impl {
         }
     }
 
+    #[cfg(any(
+        feature = "c-client",
+        all(
+            feature = "c-server",
+            any(feature = "serial-rtu", feature = "serial-ascii")
+        )
+    ))]
     impl<const ASCII: bool> Transport for CSerialTransport<ASCII> {
         type Error = MbusError;
         const SUPPORTS_BROADCAST_WRITES: bool = true;
