@@ -33,6 +33,7 @@ use crate::c::error::MbusStatusCode;
 #[cfg(feature = "serial-ascii")]
 use crate::c::transport::CAsciiTransport;
 #[cfg(feature = "serial-rtu")]
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use crate::c::transport::CRtuTransport;
 #[cfg(feature = "network-tcp")]
 use crate::c::transport::CTcpTransport;

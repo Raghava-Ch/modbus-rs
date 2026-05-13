@@ -68,7 +68,7 @@ jobs:
       - name: Build native module
         working-directory: mbus-ffi/nodejs
         shell: bash
-        run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs,full --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir .
+        run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs,coils,registers,discrete-inputs,fifo,file-record,diagnostics,traffic,error-trait --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir .
         env:
           CARGO_BUILD_TARGET: ${{ matrix.settings.target }}
 
