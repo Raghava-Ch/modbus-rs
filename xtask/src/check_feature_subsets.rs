@@ -846,12 +846,19 @@ pub fn cmd_check_feature_subsets(root: &Path, opts: &Opts) -> Result<(), String>
             println!("FAIL");
             failed += 1;
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Collect the error plus 2 lines of surrounding context.
+            // Collect the full error block: error line(s), location, note/help.
             let err_block = stderr
                 .lines()
                 .skip_while(|l| !l.starts_with("error"))
-                .take_while(|l| !l.trim().is_empty())
-                .take(4)
+                .take_while(|l| {
+                    let t = l.trim();
+                    !t.is_empty()
+                        && (t.starts_with("error")
+                            || t.starts_with("-->")
+                            || t.starts_with("=")
+                            || t.starts_with("|"))
+                })
+                .take(8)
                 .collect::<Vec<_>>()
                 .join("\n       ");
             let detail = if err_block.is_empty() {
