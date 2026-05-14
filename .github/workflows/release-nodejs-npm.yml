@@ -44,7 +44,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: nodejs-release-${{ matrix.settings.target }}
+          shared-key: nodejs-release-v2-${{ matrix.settings.target }}
+          cache-bin: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
