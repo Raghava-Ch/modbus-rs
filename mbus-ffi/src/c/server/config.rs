@@ -1,5 +1,5 @@
 //! Server-side configuration passed to `mbus_tcp_server_new`,
-//! `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`.
+//! `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new` (if ASCII support is enabled).
 //!
 //! [`MbusServerConfig`] is a C-friendly configuration struct. Internally it is
 //! converted to the `mbus-server` types (`ModbusConfig`, `UnitIdOrSlaveAddr`,
