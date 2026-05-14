@@ -31,6 +31,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use mbus_client::services::ClientServices;
 
+#[cfg(feature = "internal-lock-stubs")]
+use crate::c::lock_stubs::*;
+
 use super::app::CApp;
 use crate::c::error::MbusStatusCode;
 use crate::c::transport::{CAsciiTransport, CRtuTransport, CTcpTransport};
@@ -58,6 +61,7 @@ const TAG_SERIAL_ASCII: u8 = 0x02;
 
 // ── Extern Locks ──────────────────────────────────────────────────────────────
 
+#[cfg(not(feature = "internal-lock-stubs"))]
 unsafe extern "C" {
     /// Lock the global pool (used only during client creation/destruction).
     fn mbus_pool_lock();
