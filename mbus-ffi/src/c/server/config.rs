@@ -5,14 +5,14 @@
 //! converted to the `mbus-server` types (`ModbusConfig`, `UnitIdOrSlaveAddr`,
 //! `ResilienceConfig`) before being handed to `ServerServices`.
 
+use mbus_core::transport::ModbusConfig;
 #[cfg(feature = "network-tcp")]
 use mbus_core::transport::ModbusTcpConfig;
-use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
-use mbus_core::transport::ModbusConfig;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
 };
+use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
 use mbus_server::ResilienceConfig;
 // ── MbusServerConfig ──────────────────────────────────────────────────────────
 

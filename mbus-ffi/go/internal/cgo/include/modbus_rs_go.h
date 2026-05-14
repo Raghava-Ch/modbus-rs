@@ -13,6 +13,7 @@ typedef struct MbusGoTcpClient MbusGoTcpClient;
 typedef struct MbusGoSerialClient MbusGoSerialClient;
 typedef struct MbusGoTcpServer MbusGoTcpServer;
 typedef struct MbusGoTcpGateway MbusGoTcpGateway;
+
 /* Forward declarations for sibling-binding types that cbindgen leaks
    into this header even though their cfgs are disabled.  They are not
    reachable from the Go ABI; the typedefs make the header
@@ -24,6 +25,8 @@ typedef struct MbusRegisters MbusRegisters;
 typedef uint16_t MbusClientId;
 typedef uint16_t MbusServerId;
 typedef uint16_t MbusGatewayId;
+
+
 /**
  * C-compatible status code returned by every `mbus_*` function.
  *
@@ -220,6 +223,7 @@ typedef enum MbusStatusCode {
      */
     MbusErrBusy,
 } MbusStatusCode;
+
 /**
  * Serial framing mode.
  */
@@ -233,6 +237,7 @@ typedef enum MbusSerialMode {
      */
     MbusSerialAscii,
 } MbusSerialMode;
+
 /**
  * Backoff strategy selector for retry logic.
  */
@@ -254,6 +259,7 @@ typedef enum MbusBackoffStrategy {
      */
     MbusBackoffLinear,
 } MbusBackoffStrategy;
+
 /**
  * Exception code returned by every C server callback.
  *
@@ -288,10 +294,7 @@ typedef enum MbusServerExceptionCode {
      */
     ServerDeviceFailure = 4,
 } MbusServerExceptionCode;
-/**
- * Opaque handle to an asynchronous Modbus serial client (RTU or ASCII).
- */
-typedef struct MbusDnSerialClient MbusDnSerialClient;
+
 /**
  * Configuration for a Modbus Serial (RTU or ASCII) client.
  *
@@ -335,6 +338,7 @@ typedef struct MbusSerialConfig {
      */
     uint8_t jitter_percent;
 } MbusSerialConfig;
+
 /**
  * C-provided transport callbacks.
  *
@@ -370,6 +374,7 @@ typedef struct MbusTransportCallbacks {
      */
     uint8_t (*on_is_connected)(void *userdata);
 } MbusTransportCallbacks;
+
 /**
  * Configuration for a Modbus TCP client.
  *
@@ -416,6 +421,7 @@ typedef struct MbusTcpConfig {
      */
     uint8_t jitter_percent;
 } MbusTcpConfig;
+
 /**
  * A single sub-request passed to [`mbus_tcp_read_file_record`] /
  * [`mbus_tcp_write_file_record`] (and their serial equivalents).
@@ -449,6 +455,7 @@ typedef struct MbusSubRequest {
      */
     uint16_t data_len;
 } MbusSubRequest;
+
 /**
  * Request context for FC 0x01 — Read Coils.
  *
@@ -485,11 +492,13 @@ typedef struct MbusServerReadCoilsReq {
      */
     uint8_t out_byte_count;
 } MbusServerReadCoilsReq;
+
 /**
  * C callback type for FC 0x01.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadCoilsFn)(struct MbusServerReadCoilsReq *req,
                                                               void *userdata);
+
 /**
  * Request context for FC 0x05 — Write Single Coil.
  */
@@ -502,11 +511,13 @@ typedef struct MbusServerWriteSingleCoilReq {
      */
     bool value;
 } MbusServerWriteSingleCoilReq;
+
 /**
  * C callback type for FC 0x05.
  */
 typedef enum MbusServerExceptionCode (*MbusServerWriteSingleCoilFn)(const struct MbusServerWriteSingleCoilReq *req,
                                                                     void *userdata);
+
 /**
  * Request context for FC 0x0F — Write Multiple Coils.
  *
@@ -527,11 +538,13 @@ typedef struct MbusServerWriteMultipleCoilsReq {
      */
     uintptr_t values_len;
 } MbusServerWriteMultipleCoilsReq;
+
 /**
  * C callback type for FC 0x0F.
  */
 typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleCoilsFn)(const struct MbusServerWriteMultipleCoilsReq *req,
                                                                        void *userdata);
+
 /**
  * Request context for FC 0x02 — Read Discrete Inputs.
  */
@@ -544,11 +557,13 @@ typedef struct MbusServerReadDiscreteInputsReq {
     uintptr_t out_data_len;
     uint8_t out_byte_count;
 } MbusServerReadDiscreteInputsReq;
+
 /**
  * C callback type for FC 0x02.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadDiscreteInputsFn)(struct MbusServerReadDiscreteInputsReq *req,
                                                                        void *userdata);
+
 /**
  * Request context for FC 0x03 — Read Holding Registers.
  *
@@ -564,11 +579,13 @@ typedef struct MbusServerReadHoldingRegistersReq {
     uintptr_t out_data_len;
     uint8_t out_byte_count;
 } MbusServerReadHoldingRegistersReq;
+
 /**
  * C callback type for FC 0x03.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadHoldingRegistersFn)(struct MbusServerReadHoldingRegistersReq *req,
                                                                          void *userdata);
+
 /**
  * Request context for FC 0x06 — Write Single Register.
  */
@@ -578,11 +595,13 @@ typedef struct MbusServerWriteSingleRegisterReq {
     uint16_t address;
     uint16_t value;
 } MbusServerWriteSingleRegisterReq;
+
 /**
  * C callback type for FC 0x06.
  */
 typedef enum MbusServerExceptionCode (*MbusServerWriteSingleRegisterFn)(const struct MbusServerWriteSingleRegisterReq *req,
                                                                         void *userdata);
+
 /**
  * Request context for FC 0x10 — Write Multiple Registers.
  *
@@ -602,11 +621,13 @@ typedef struct MbusServerWriteMultipleRegistersReq {
      */
     uintptr_t values_len;
 } MbusServerWriteMultipleRegistersReq;
+
 /**
  * C callback type for FC 0x10.
  */
 typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleRegistersFn)(const struct MbusServerWriteMultipleRegistersReq *req,
                                                                            void *userdata);
+
 /**
  * Request context for FC 0x16 — Mask Write Register.
  */
@@ -617,11 +638,13 @@ typedef struct MbusServerMaskWriteRegisterReq {
     uint16_t and_mask;
     uint16_t or_mask;
 } MbusServerMaskWriteRegisterReq;
+
 /**
  * C callback type for FC 0x16.
  */
 typedef enum MbusServerExceptionCode (*MbusServerMaskWriteRegisterFn)(const struct MbusServerMaskWriteRegisterReq *req,
                                                                       void *userdata);
+
 /**
  * Request context for FC 0x17 — Read/Write Multiple Registers.
  *
@@ -646,11 +669,13 @@ typedef struct MbusServerReadWriteMultipleRegistersReq {
      */
     uint8_t out_byte_count;
 } MbusServerReadWriteMultipleRegistersReq;
+
 /**
  * C callback type for FC 0x17.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadWriteMultipleRegistersFn)(struct MbusServerReadWriteMultipleRegistersReq *req,
                                                                                void *userdata);
+
 /**
  * Request context for FC 0x04 — Read Input Registers.
  */
@@ -663,11 +688,13 @@ typedef struct MbusServerReadInputRegistersReq {
     uintptr_t out_data_len;
     uint8_t out_byte_count;
 } MbusServerReadInputRegistersReq;
+
 /**
  * C callback type for FC 0x04.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadInputRegistersFn)(struct MbusServerReadInputRegistersReq *req,
                                                                        void *userdata);
+
 /**
  * Request context for FC 0x18 — Read FIFO Queue.
  */
@@ -682,11 +709,13 @@ typedef struct MbusServerReadFifoQueueReq {
      */
     uint8_t out_byte_count;
 } MbusServerReadFifoQueueReq;
+
 /**
  * C callback type for FC 0x18.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadFifoQueueFn)(struct MbusServerReadFifoQueueReq *req,
                                                                   void *userdata);
+
 /**
  * Request context for FC 0x14 — Read File Record (one sub-request at a time).
  *
@@ -705,11 +734,13 @@ typedef struct MbusServerReadFileRecordReq {
      */
     uint8_t out_byte_count;
 } MbusServerReadFileRecordReq;
+
 /**
  * C callback type for FC 0x14.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadFileRecordFn)(struct MbusServerReadFileRecordReq *req,
                                                                    void *userdata);
+
 /**
  * Request context for FC 0x15 — Write File Record (one sub-request at a time).
  *
@@ -727,11 +758,13 @@ typedef struct MbusServerWriteFileRecordReq {
     const uint16_t *record_data;
     uintptr_t record_data_len;
 } MbusServerWriteFileRecordReq;
+
 /**
  * C callback type for FC 0x15.
  */
 typedef enum MbusServerExceptionCode (*MbusServerWriteFileRecordFn)(const struct MbusServerWriteFileRecordReq *req,
                                                                     void *userdata);
+
 /**
  * Request context for FC 0x07 — Read Exception Status.
  *
@@ -745,11 +778,13 @@ typedef struct MbusServerReadExceptionStatusReq {
      */
     uint8_t out_status;
 } MbusServerReadExceptionStatusReq;
+
 /**
  * C callback type for FC 0x07.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadExceptionStatusFn)(struct MbusServerReadExceptionStatusReq *req,
                                                                         void *userdata);
+
 /**
  * Request context for FC 0x08 — Diagnostics.
  *
@@ -772,11 +807,13 @@ typedef struct MbusServerDiagnosticsReq {
      */
     uint16_t out_result;
 } MbusServerDiagnosticsReq;
+
 /**
  * C callback type for FC 0x08.
  */
 typedef enum MbusServerExceptionCode (*MbusServerDiagnosticsFn)(struct MbusServerDiagnosticsReq *req,
                                                                 void *userdata);
+
 /**
  * Request context for FC 0x0B — Get Comm Event Counter.
  *
@@ -794,11 +831,13 @@ typedef struct MbusServerGetCommEventCounterReq {
      */
     uint16_t out_event_count;
 } MbusServerGetCommEventCounterReq;
+
 /**
  * C callback type for FC 0x0B.
  */
 typedef enum MbusServerExceptionCode (*MbusServerGetCommEventCounterFn)(struct MbusServerGetCommEventCounterReq *req,
                                                                         void *userdata);
+
 /**
  * Request context for FC 0x0C — Get Comm Event Log.
  *
@@ -833,11 +872,13 @@ typedef struct MbusServerGetCommEventLogReq {
      */
     uint8_t out_num_events;
 } MbusServerGetCommEventLogReq;
+
 /**
  * C callback type for FC 0x0C.
  */
 typedef enum MbusServerExceptionCode (*MbusServerGetCommEventLogFn)(struct MbusServerGetCommEventLogReq *req,
                                                                     void *userdata);
+
 /**
  * Request context for FC 0x11 — Report Server ID.
  *
@@ -864,11 +905,13 @@ typedef struct MbusServerReportServerIdReq {
      */
     uint8_t out_run_indicator_status;
 } MbusServerReportServerIdReq;
+
 /**
  * C callback type for FC 0x11.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReportServerIdFn)(struct MbusServerReportServerIdReq *req,
                                                                    void *userdata);
+
 /**
  * Request context for FC 0x2B / MEI 0x0E — Read Device Identification.
  *
@@ -902,16 +945,18 @@ typedef struct MbusServerReadDeviceIdentificationReq {
      */
     uint8_t out_byte_count;
 } MbusServerReadDeviceIdentificationReq;
+
 /**
  * C callback type for FC 0x2B / MEI 0x0E.
  */
 typedef enum MbusServerExceptionCode (*MbusServerReadDeviceIdentificationFn)(struct MbusServerReadDeviceIdentificationReq *req,
                                                                              void *userdata);
+
 /**
  * Master callback table for a C Modbus server application.
  *
  * Pass a populated instance of this struct to `mbus_tcp_server_new`,
- * `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`. Any callback
+ * `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new` (if ASCII support is enabled). Any callback
  * left as `NULL` will cause the server
  * to respond with `ExceptionCode::IllegalFunction` for that function code.
  *
@@ -954,6 +999,7 @@ typedef struct MbusServerHandlers {
     MbusServerReportServerIdFn on_report_server_id;
     MbusServerReadDeviceIdentificationFn on_read_device_identification;
 } MbusServerHandlers;
+
 /**
  * Common server configuration shared by TCP and Serial server types.
  *
@@ -974,17 +1020,6 @@ typedef struct MbusServerConfig {
      */
     uint32_t response_timeout_ms;
 } MbusServerConfig;
-/**
- * A sub-request descriptor for serial file record operations.
- *
- * Identical layout to `MbusDnSubRequest` in `tcp.rs` — shared by both
- * transport variants so C# can use the same struct definition.
- */
-typedef struct MbusDnSerialSubRequest {
-    /**
-     * File number (1–65535).
-     */
-    uint16_t file_number;
     /**
      * Starting record number within the file (0–9999).
      */
@@ -1001,22 +1036,6 @@ typedef struct MbusDnSerialSubRequest {
      * Number of valid words pointed to by `data` (0 for reads).
      */
     uint16_t data_len;
-} MbusDnSerialSubRequest;
-/**
- * A sub-request descriptor used by [`mbus_dn_tcp_client_read_file_record`] and
- * [`mbus_dn_tcp_client_write_file_record`].
- *
- * **Read** sub-requests: set `data` to `null` and `data_len` to `0`; fill
- * `file_number`, `record_number`, and `record_length` with the target record.
- *
- * **Write** sub-requests: set `data` to a pointer to `data_len` `u16` words and
- * ensure `record_length == data_len`.
- */
-typedef struct MbusDnSubRequest {
-    /**
-     * File number (1–65535).
-     */
-    uint16_t file_number;
     /**
      * Starting record number within the file (0–9999).
      */
@@ -1033,13 +1052,14 @@ typedef struct MbusDnSubRequest {
      * Number of valid words pointed to by `data` (0 for reads).
      */
     uint16_t data_len;
-} MbusDnSubRequest;
+
 /**
  * Status code returned by every `mbus_go_*` function.
  *
  * Numerically identical to [`crate::c::error::MbusStatusCode`].
  */
 typedef enum MbusStatusCode MbusGoStatus;
+
 /**
  * A sub-request descriptor for serial file record operations.
  *
@@ -1068,6 +1088,7 @@ typedef struct MbusGoSerialSubRequest {
      */
     uint16_t data_len;
 } MbusGoSerialSubRequest;
+
 /**
  * A sub-request descriptor used by [`mbus_go_tcp_client_read_file_record`] and
  * [`mbus_go_tcp_client_write_file_record`].
@@ -1100,6 +1121,7 @@ typedef struct MbusGoSubRequest {
      */
     uint16_t data_len;
 } MbusGoSubRequest;
+
 /**
  * C-compatible vtable of optional Modbus request handler callbacks.
  *
@@ -1194,58 +1216,647 @@ typedef struct MbusGoServerVtable {
      */
     int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
 } MbusGoServerVtable;
+
+/**
+ * Returns a static null-terminated C string describing the status code.
+ *
+ * The returned pointer is always valid (points to a static string literal).
+ * The caller must NOT free it.
+ */
+const char *mbus_status_str(enum MbusStatusCode code);
+
+/**
+ * No-op stub for pool lock (used when no external C caller provides it).
+ */
+void mbus_pool_lock(void);
+
+/**
+ * No-op stub for pool unlock.
+ */
+void mbus_pool_unlock(void);
+
+/**
+ * Returns the starting address of the coils range.
+ *
+ * # Safety
+ * `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
+ */
+uint16_t mbus_coils_from_address(const MbusCoils *coils);
+
+/**
+ * Returns the number of coils.
+ *
+ * # Safety
+ * `coils` must either be null (returns 0) or point to a valid `MbusCoils`.
+ */
+uint16_t mbus_coils_quantity(const MbusCoils *coils);
+
+/**
+ * Reads a single coil value by address into `out_value`.
+ *
+ * # Safety
+ * `coils` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_coils_value(const MbusCoils *coils, uint16_t address, bool *out_value);
+
 /**
  * Reads a single coil value by 0-based index into `out_value`.
  *
  * `index` must be less than [`mbus_coils_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_coils_value`], no knowledge of
+ * the Modbus starting address is required.
+ *
+ * # Safety
+ * `coils` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
+                                              uint16_t index,
+                                              bool *out_value);
+
+/**
+ * Returns a raw pointer to the packed coil bit-values. Valid during callback only.
+ *
+ * # Safety
+ * `coils` must either be null (returns a null pointer) or point to a valid `MbusCoils`.
+ */
+const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
+
+/**
+ * Returns the starting address of the discrete inputs range.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
+ */
+uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_inputs);
+
+/**
+ * Returns the number of discrete inputs.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns 0) or point to a valid `MbusDiscreteInputs`.
+ */
+uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs);
+
+/**
+ * Reads a single discrete input value by address into `out_value`.
+ *
+ * # Safety
+ * `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discrete_inputs,
+                                               uint16_t address,
+                                               bool *out_value);
+
 /**
  * Reads a single discrete input value by 0-based index into `out_value`.
  *
  * `index` must be less than [`mbus_discrete_inputs_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_discrete_inputs_value`], no knowledge
+ * of the Modbus starting address is required.
+ *
+ * # Safety
+ * `discrete_inputs` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs *discrete_inputs,
+                                                        uint16_t index,
+                                                        bool *out_value);
+
+/**
+ * Returns a raw pointer to the discrete input bit-values. Valid during callback only.
+ *
+ * # Safety
+ * `discrete_inputs` must either be null (returns a null pointer) or point to a valid
+ * `MbusDiscreteInputs`.
+ */
+const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discrete_inputs);
+
+/**
+ * Returns the FIFO pointer address.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
+ */
+uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
+
+/**
+ * Returns the number of values in the FIFO queue.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns 0) or point to a valid `MbusFifoQueue`.
+ */
+uint16_t mbus_fifo_queue_count(const MbusFifoQueue *fifo_queue);
+
+/**
+ * Reads a FIFO value by index.
+ *
+ * # Safety
+ * `fifo_queue` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
+                                          uint16_t index,
+                                          uint16_t *out_value);
+
+/**
+ * Returns a raw pointer to the FIFO values. Valid during callback only.
+ *
+ * # Safety
+ * `fifo_queue` must either be null (returns a null pointer) or point to a valid `MbusFifoQueue`.
+ */
+const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
+
+/**
+ * Returns the starting address of the registers range.
+ *
+ * # Safety
+ * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
+ */
+uint16_t mbus_registers_from_address(const MbusRegisters *registers);
+
+/**
+ * Returns the number of registers.
+ *
+ * # Safety
+ * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
+ */
+uint16_t mbus_registers_quantity(const MbusRegisters *registers);
+
+/**
+ * Reads a single register value by address into `out_value`.
+ *
+ * # Safety
+ * `registers` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
+                                         uint16_t address,
+                                         uint16_t *out_value);
+
 /**
  * Reads a single register value by 0-based index into `out_value`.
  *
  * `index` must be less than [`mbus_registers_quantity`]; otherwise returns
+ * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
+ * the Modbus starting address is required.
+ *
+ * # Safety
+ * `registers` and `out_value` must be non-null and point to valid memory, or null
+ * (returns `MBUS_ERR_NULL_POINTER` for null).
+ */
+enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers,
+                                                  uint16_t index,
+                                                  uint16_t *out_value);
+
+/**
+ * Returns a raw pointer to the register values. Valid during callback only.
+ *
+ * # Safety
+ * `registers` must either be null (returns a null pointer) or point to a valid `MbusRegisters`.
+ */
+const uint16_t *mbus_registers_values_ptr(const MbusRegisters *registers);
+
+/**
+ * Lock the global pool (used only during client creation/destruction).
+ */
+extern void mbus_pool_lock(void);
+
+/**
+ * Unlock the global pool.
+ */
+extern void mbus_pool_unlock(void);
+
+/**
+ * Open the serial port with the configured parameters.
+ */
+enum MbusStatusCode mbus_serial_connect(MbusClientId id);
+
 /**
  * Close the serial port.
  *
  * Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
  * The client ID remains valid; call [`mbus_serial_connect`] to reopen the port.
+ */
+enum MbusStatusCode mbus_serial_disconnect(MbusClientId id);
+
+/**
+ * Returns `1` if the serial port is currently open, `0` otherwise.
+ */
+uint8_t mbus_serial_is_connected(MbusClientId id);
+
+/**
+ * Drive the serial Modbus state machine once.
+ *
+ * Call periodically from your application loop. All registered callbacks are
+ * invoked synchronously from within this call.
+ */
+void mbus_serial_poll(MbusClientId id);
+
+/**
+ * Returns `1` if the client has in-flight requests awaiting response/timeout,
+ * `0` otherwise.
+ */
+uint8_t mbus_serial_has_pending_requests(MbusClientId id);
+
+/**
+ * Disconnect then reconnect the serial port.
+ */
+enum MbusStatusCode mbus_serial_reconnect(MbusClientId id);
+
+/**
+ * Open the TCP connection to the configured host:port.
+ *
+ * Returns `MBUS_OK` on success or a specific error code on failure.
+ */
+enum MbusStatusCode mbus_tcp_connect(MbusClientId id);
+
 /**
  * Close the TCP connection.
  *
  * Pending in-flight requests are failed immediately with `MBUS_ERR_CONNECTION_LOST`.
  * The client ID remains valid; call [`mbus_tcp_connect`] to reconnect.
+ */
+enum MbusStatusCode mbus_tcp_disconnect(MbusClientId id);
+
 /**
- * Sets a per-request timeout in milliseconds; `0` disables the timeout.
+ * Returns `1` if the TCP connection is currently open, `0` otherwise.
+ */
+uint8_t mbus_tcp_is_connected(MbusClientId id);
+
 /**
- * Returns `1` when there are requests in flight awaiting a response, `0`
- * otherwise; returns `0` when `handle` is null.
-/**
- * Writes a single holding register (FC06).
+ * Drive the Modbus state machine: receive pending frames, match responses to
+ * outstanding requests, fire any ready callbacks, and handle timeouts / retries.
  *
- * On success, writes the echoed `(address, value)` to `out_address` and
- * `out_value` if those pointers are non-null.
+ * Call this function periodically (e.g. every 5–20 ms) from your application
+ * loop. All registered callbacks are invoked synchronously from within this call.
+ */
+void mbus_tcp_poll(MbusClientId id);
+
+/**
+ * Returns `1` if the client has in-flight requests awaiting response/timeout,
+ * `0` otherwise.
+ */
+uint8_t mbus_tcp_has_pending_requests(MbusClientId id);
+
+/**
+ * Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.
+ */
+enum MbusStatusCode mbus_tcp_reconnect(MbusClientId id);
+
+/**
+ * Queue a Read Coils (FC 0x01) request.
+ *
+ * The response is delivered via `MbusCallbacks::on_read_coils`.
+ */
+enum MbusStatusCode mbus_tcp_read_coils(MbusClientId id,
+                                        uint16_t txn_id,
+                                        uint8_t unit_id,
+                                        uint16_t address,
+                                        uint16_t quantity);
+
+/**
+ * Queue a Read Coils (FC 0x01) request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_coils(MbusClientId id,
+                                           uint16_t txn_id,
+                                           uint8_t unit_id,
+                                           uint16_t address,
+                                           uint16_t quantity);
+
+/**
+ * Queue a Read Single Coil request (reads FC 0x01 with quantity=1).
+ */
+enum MbusStatusCode mbus_tcp_read_single_coil(MbusClientId id,
+                                              uint16_t txn_id,
+                                              uint8_t unit_id,
+                                              uint16_t address);
+
+/**
+ * Queue a Read Single Coil request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_single_coil(MbusClientId id,
+                                                 uint16_t txn_id,
+                                                 uint8_t unit_id,
+                                                 uint16_t address);
+
+/**
+ * Queue a Write Single Coil (FC 0x05) request. `value`: 1 = ON, 0 = OFF.
+ */
+enum MbusStatusCode mbus_tcp_write_single_coil(MbusClientId id,
+                                               uint16_t txn_id,
+                                               uint8_t unit_id,
+                                               uint16_t address,
+                                               uint8_t value);
+
+/**
+ * Queue a Write Single Coil (FC 0x05) request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_write_single_coil(MbusClientId id,
+                                                  uint16_t txn_id,
+                                                  uint8_t unit_id,
+                                                  uint16_t address,
+                                                  uint8_t value);
+
+/**
+ * Queue a Write Multiple Coils (FC 0x0F) request.
+ *
+ * `values` must point to at least `ceil(quantity / 8)` bytes of bit-packed coil
+ * data (LSB-first). Valid for the duration of this call only.
  *
  * # Safety
- *
- * * `handle` must be a valid client pointer.
- * * `out_address` and `out_value` may be null; if non-null they must
+ * `values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_tcp_write_multiple_coils(MbusClientId id,
+                                                  uint16_t txn_id,
+                                                  uint8_t unit_id,
+                                                  uint16_t address,
+                                                  const uint8_t *values,
+                                                  uint16_t quantity);
+
 /**
- * Reads `quantity` coils (FC01) starting at `address` from `unit_id`.
+ * Queue a Write Multiple Coils (FC 0x0F) request on a serial client.
  *
- * Writes bit-packed coil bytes (Modbus wire format, LSB-first) into `out_buf`.
- * `out_buf_len` is the buffer length in bytes; must be ≥ `ceil(quantity / 8)`.
+ * # Safety
+ * `values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_serial_write_multiple_coils(MbusClientId id,
+                                                     uint16_t txn_id,
+                                                     uint8_t unit_id,
+                                                     uint16_t address,
+                                                     const uint8_t *values,
+                                                     uint16_t quantity);
+
 /**
- * Writes multiple coils (FC15) starting at `address`.
+ * Queue a Diagnostics (FC 0x08) request.
  *
- * `packed_coils` is Modbus bit-packed coil data (LSB-first). `byte_count` is
- * the number of bytes in `packed_coils`; `coil_count` is the number of coils.
+ * # Safety
+ * If `data_len > 0`, `data` must be valid for that many `u16` words.
+ */
+enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
+                                         uint16_t txn_id,
+                                         uint8_t unit_id,
+                                         uint16_t sub_fn,
+                                         const uint16_t *data,
+                                         uint16_t data_len);
+
 /**
- * Starts the gateway on a new background OS thread.
+ * Queue a Diagnostics (FC 0x08) request on a serial client.
  *
- * Connects all registered downstreams and begins forwarding requests.
- * Returns `MbusOk` immediately; the thread runs until
+ * # Safety
+ * If `data_len > 0`, `data` must be valid for that many `u16` words.
+ */
+enum MbusStatusCode mbus_serial_diagnostics(MbusClientId id,
+                                            uint16_t txn_id,
+                                            uint8_t unit_id,
+                                            uint16_t sub_fn,
+                                            const uint16_t *data,
+                                            uint16_t data_len);
+
+/**
+ * Queue a Read Device Identification (FC 0x2B/0x0E) request.
+ *
+ * `dev_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
+ * `object_id`: starting object ID (0x00–0xFF).
+ */
+enum MbusStatusCode mbus_tcp_read_device_identification(MbusClientId id,
+                                                        uint16_t txn_id,
+                                                        uint8_t unit_id,
+                                                        uint8_t dev_id_code,
+                                                        uint8_t object_id);
+
+/**
+ * Queue a Read Device Identification request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_device_identification(MbusClientId id,
+                                                           uint16_t txn_id,
+                                                           uint8_t unit_id,
+                                                           uint8_t dev_id_code,
+                                                           uint8_t object_id);
+
+/**
+ * Queue a Read Discrete Inputs (FC 0x02) request.
+ *
+ * The response is delivered via `MbusCallbacks::on_read_discrete_inputs`.
+ */
+enum MbusStatusCode mbus_tcp_read_discrete_inputs(MbusClientId id,
+                                                  uint16_t txn_id,
+                                                  uint8_t unit_id,
+                                                  uint16_t address,
+                                                  uint16_t quantity);
+
+/**
+ * Queue a Read Discrete Inputs (FC 0x02) request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_discrete_inputs(MbusClientId id,
+                                                     uint16_t txn_id,
+                                                     uint8_t unit_id,
+                                                     uint16_t address,
+                                                     uint16_t quantity);
+
+/**
+ * Queue a Read Single Discrete Input request (FC 0x02 with quantity=1).
+ */
+enum MbusStatusCode mbus_tcp_read_single_discrete_input(MbusClientId id,
+                                                        uint16_t txn_id,
+                                                        uint8_t unit_id,
+                                                        uint16_t address);
+
+/**
+ * Queue a Read Single Discrete Input request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_single_discrete_input(MbusClientId id,
+                                                           uint16_t txn_id,
+                                                           uint8_t unit_id,
+                                                           uint16_t address);
+
+/**
+ * Queue a Read FIFO Queue (FC 0x18) request.
+ *
+ * The response is delivered via `MbusCallbacks::on_read_fifo_queue`.
+ */
+enum MbusStatusCode mbus_tcp_read_fifo_queue(MbusClientId id,
+                                             uint16_t txn_id,
+                                             uint8_t unit_id,
+                                             uint16_t address);
+
+/**
+ * Queue a Read FIFO Queue (FC 0x18) request on a serial client.
+ */
+enum MbusStatusCode mbus_serial_read_fifo_queue(MbusClientId id,
+                                                uint16_t txn_id,
+                                                uint8_t unit_id,
+                                                uint16_t address);
+
+/**
+ * Queue a Read File Record (FC 0x14) request.
+ *
+ * # Safety
+ * `sub_reqs` must be a valid non-null pointer to `count` items.
+ */
+enum MbusStatusCode mbus_tcp_read_file_record(MbusClientId id,
+                                              uint16_t txn_id,
+                                              uint8_t unit_id,
+                                              const struct MbusSubRequest *sub_reqs,
+                                              uint16_t count);
+
+/**
+ * Queue a Read File Record (FC 0x14) request on a serial client.
+ *
+ * # Safety
+ * `sub_reqs` must be a valid non-null pointer to `count` items.
+ */
+enum MbusStatusCode mbus_serial_read_file_record(MbusClientId id,
+                                                 uint16_t txn_id,
+                                                 uint8_t unit_id,
+                                                 const struct MbusSubRequest *sub_reqs,
+                                                 uint16_t count);
+
+/**
+ * Queue a Write File Record (FC 0x15) request.
+ *
+ * # Safety
+ * `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
+ * `sub_reqs[i].data_len` words.
+ */
+enum MbusStatusCode mbus_tcp_write_file_record(MbusClientId id,
+                                               uint16_t txn_id,
+                                               uint8_t unit_id,
+                                               const struct MbusSubRequest *sub_reqs,
+                                               uint16_t count);
+
+/**
+ * Queue a Write File Record (FC 0x15) request on a serial client.
+ *
+ * # Safety
+ * `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
+ * `sub_reqs[i].data_len` words.
+ */
+enum MbusStatusCode mbus_serial_write_file_record(MbusClientId id,
+                                                  uint16_t txn_id,
+                                                  uint8_t unit_id,
+                                                  const struct MbusSubRequest *sub_reqs,
+                                                  uint16_t count);
+
+/**
+ * Queue a Write Multiple Registers (FC 0x10) request.
+ *
+ * `values` must point to at least `quantity` `u16` words, valid for this call only.
+ *
+ * # Safety
+ * `values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
+                                                      uint16_t txn_id,
+                                                      uint8_t unit_id,
+                                                      uint16_t address,
+                                                      const uint16_t *values,
+                                                      uint16_t quantity);
+
+/**
+ * Queue a Write Multiple Registers (FC 0x10) request on a serial client.
+ *
+ * # Safety
+ * `values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
+                                                         uint16_t txn_id,
+                                                         uint8_t unit_id,
+                                                         uint16_t address,
+                                                         const uint16_t *values,
+                                                         uint16_t quantity);
+
+/**
+ * Queue a Read/Write Multiple Registers (FC 0x17) request.
+ *
+ * `write_values` must point to at least `write_qty` valid `u16` words.
+ *
+ * # Safety
+ * `write_values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
+                                                           uint16_t txn_id,
+                                                           uint8_t unit_id,
+                                                           uint16_t read_address,
+                                                           uint16_t read_qty,
+                                                           uint16_t write_address,
+                                                           const uint16_t *write_values,
+                                                           uint16_t write_qty);
+
+/**
+ * Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
+ *
+ * # Safety
+ * `write_values` must be a valid non-null pointer.
+ */
+enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
+                                                              uint16_t txn_id,
+                                                              uint8_t unit_id,
+                                                              uint16_t read_address,
+                                                              uint16_t read_qty,
+                                                              uint16_t write_address,
+                                                              const uint16_t *write_values,
+                                                              uint16_t write_qty);
+
+/**
+ * Lock the global server pool (used only during server creation/destruction).
+ */
+extern void mbus_pool_lock(void);
+
+/**
+ * Unlock the global server pool.
+ */
+extern void mbus_pool_unlock(void);
+
+/**
+ * Creates a new Modbus Serial RTU server and returns an opaque server ID.
+ *
+ * # Parameters
+ * - `transport` — Transport callbacks providing connect/disconnect/send/recv.
+ * - `handlers`  — Application callback table.
+ * - `config`    — Server configuration (slave address, timeout).
+ *
+ * # Returns
+ * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
+ *
+ * # Safety
+ * Same requirements as `mbus_tcp_server_new`.
+ */
+MbusServerId mbus_serial_rtu_server_new(const struct MbusTransportCallbacks *transport,
+                                        const struct MbusServerHandlers *handlers,
+                                        const struct MbusServerConfig *config);
+
+/**
+ * Creates a new Modbus Serial ASCII server and returns an opaque server ID.
+ *
+ * # Parameters
+ * - `transport` — Transport callbacks providing connect/disconnect/send/recv.
+ * - `handlers`  — Application callback table.
+ * - `config`    — Server configuration (slave address, timeout).
+ *
+ * # Returns
+ * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
+ *
+ * # Safety
+ * Same requirements as `mbus_tcp_server_new`.
+ */
+MbusServerId mbus_serial_ascii_server_new(const struct MbusTransportCallbacks *transport,
+                                          const struct MbusServerHandlers *handlers,
+                                          const struct MbusServerConfig *config);
+
+/**
+ * Global pool lock — held only during create/destroy operations. Reuses
+ * the same symbol exported by the client pool.
+ */
+extern void mbus_pool_lock(void);
+
+/**
+ * Release the global pool lock.
+ */
+extern void mbus_pool_unlock(void);
+
 /**
  * Creates a new RTU serial client.
  *
@@ -1263,6 +1874,7 @@ MbusGoSerialClient *mbus_go_serial_client_new_rtu(const char *port,
                                                   uint8_t parity,
                                                   uint8_t stop_bits,
                                                   uint32_t response_timeout_ms);
+
 /**
  * Creates a new ASCII serial client.
  *
@@ -1278,6 +1890,7 @@ MbusGoSerialClient *mbus_go_serial_client_new_ascii(const char *port,
                                                     uint8_t parity,
                                                     uint8_t stop_bits,
                                                     uint32_t response_timeout_ms);
+
 /**
  * Destroys the serial client and releases all associated resources.
  *
@@ -1288,6 +1901,7 @@ MbusGoSerialClient *mbus_go_serial_client_new_ascii(const char *port,
  * than once with the same pointer is undefined behaviour.
  */
 void mbus_go_serial_client_free(MbusGoSerialClient *handle);
+
 /**
  * Opens the underlying serial port.
  *
@@ -1296,6 +1910,7 @@ void mbus_go_serial_client_free(MbusGoSerialClient *handle);
  * `handle` must be a valid client pointer.
  */
 MbusGoStatus mbus_go_serial_client_connect(MbusGoSerialClient *handle);
+
 /**
  * Closes the underlying serial port.
  *
@@ -1304,6 +1919,7 @@ MbusGoStatus mbus_go_serial_client_connect(MbusGoSerialClient *handle);
  * `handle` must be a valid client pointer.
  */
 MbusGoStatus mbus_go_serial_client_disconnect(MbusGoSerialClient *handle);
+
 /**
  * Sets the per-request timeout in milliseconds (`0` = no timeout).
  *
@@ -1312,6 +1928,7 @@ MbusGoStatus mbus_go_serial_client_disconnect(MbusGoSerialClient *handle);
  * `handle` must be a valid client pointer.
  */
 void mbus_go_serial_client_set_request_timeout_ms(MbusGoSerialClient *handle, uint64_t timeout_ms);
+
 /**
  * Reads `quantity` holding registers (FC03).
  *
@@ -1326,6 +1943,7 @@ MbusGoStatus mbus_go_serial_client_read_holding_registers(MbusGoSerialClient *ha
                                                           uint16_t *out_buf,
                                                           uint16_t out_buf_len,
                                                           uint16_t *out_count);
+
 /**
  * Writes a single holding register (FC06).
  *
@@ -1339,6 +1957,7 @@ MbusGoStatus mbus_go_serial_client_write_single_register(MbusGoSerialClient *han
                                                          uint16_t value,
                                                          uint16_t *out_address,
                                                          uint16_t *out_value);
+
 /**
  * Writes multiple holding registers (FC16).
  *
@@ -1355,6 +1974,7 @@ MbusGoStatus mbus_go_serial_client_write_multiple_registers(MbusGoSerialClient *
                                                             uint16_t quantity,
                                                             uint16_t *out_address,
                                                             uint16_t *out_quantity);
+
 /**
  * Reads `quantity` input registers (FC04).
  *
@@ -1369,6 +1989,7 @@ MbusGoStatus mbus_go_serial_client_read_input_registers(MbusGoSerialClient *hand
                                                         uint16_t *out_buf,
                                                         uint16_t out_buf_len,
                                                         uint16_t *out_count);
+
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -1381,6 +2002,7 @@ MbusGoStatus mbus_go_serial_client_mask_write_register(MbusGoSerialClient *handl
                                                        uint16_t address,
                                                        uint16_t and_mask,
                                                        uint16_t or_mask);
+
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *
@@ -1398,6 +2020,7 @@ MbusGoStatus mbus_go_serial_client_read_write_multiple_registers(MbusGoSerialCli
                                                                  uint16_t *out_buf,
                                                                  uint16_t out_buf_len,
                                                                  uint16_t *out_count);
+
 /**
  * Reads `quantity` coils (FC01).
  *
@@ -1412,6 +2035,7 @@ MbusGoStatus mbus_go_serial_client_read_coils(MbusGoSerialClient *handle,
                                               uint8_t *out_buf,
                                               uint16_t out_buf_len,
                                               uint16_t *out_count);
+
 /**
  * Writes a single coil (FC05).
  *
@@ -1425,6 +2049,7 @@ MbusGoStatus mbus_go_serial_client_write_single_coil(MbusGoSerialClient *handle,
                                                      uint8_t value,
                                                      uint16_t *out_address,
                                                      uint8_t *out_value);
+
 /**
  * Writes multiple coils (FC15).
  *
@@ -1440,6 +2065,7 @@ MbusGoStatus mbus_go_serial_client_write_multiple_coils(MbusGoSerialClient *hand
                                                         uint16_t coil_count,
                                                         uint16_t *out_address,
                                                         uint16_t *out_quantity);
+
 /**
  * Reads `quantity` discrete inputs (FC02).
  *
@@ -1454,6 +2080,7 @@ MbusGoStatus mbus_go_serial_client_read_discrete_inputs(MbusGoSerialClient *hand
                                                         uint8_t *out_buf,
                                                         uint16_t out_buf_len,
                                                         uint16_t *out_count);
+
 /**
  * Reads the FIFO queue (FC24).
  *
@@ -1467,6 +2094,7 @@ MbusGoStatus mbus_go_serial_client_read_fifo_queue(MbusGoSerialClient *handle,
                                                    uint16_t *out_buf,
                                                    uint16_t out_buf_len,
                                                    uint16_t *out_count);
+
 /**
  * Reads the device exception status (FC07).
  *
@@ -1477,6 +2105,7 @@ MbusGoStatus mbus_go_serial_client_read_fifo_queue(MbusGoSerialClient *handle,
 MbusGoStatus mbus_go_serial_client_read_exception_status(MbusGoSerialClient *handle,
                                                          uint8_t unit_id,
                                                          uint8_t *out_status);
+
 /**
  * Reads the communication event counter (FC11).
  *
@@ -1488,6 +2117,7 @@ MbusGoStatus mbus_go_serial_client_get_comm_event_counter(MbusGoSerialClient *ha
                                                           uint8_t unit_id,
                                                           uint16_t *out_status,
                                                           uint16_t *out_event_count);
+
 /**
  * Reads the communication event log (FC12).
  *
@@ -1500,6 +2130,7 @@ MbusGoStatus mbus_go_serial_client_get_comm_event_log(MbusGoSerialClient *handle
                                                       uint8_t *out_buf,
                                                       uint16_t out_buf_len,
                                                       uint16_t *out_count);
+
 /**
  * Reports the server identifier (FC17).
  *
@@ -1512,6 +2143,7 @@ MbusGoStatus mbus_go_serial_client_report_server_id(MbusGoSerialClient *handle,
                                                     uint8_t *out_buf,
                                                     uint16_t out_buf_len,
                                                     uint16_t *out_count);
+
 /**
  * Sends a Diagnostics (FC08) request.
  *
@@ -1530,6 +2162,7 @@ MbusGoStatus mbus_go_serial_client_diagnostics(MbusGoSerialClient *handle,
                                                uint16_t *out_buf,
                                                uint16_t out_buf_len,
                                                uint16_t *out_count);
+
 /**
  * Reads one or more file records (FC14) over a serial connection.
  *
@@ -1545,6 +2178,7 @@ MbusGoStatus mbus_go_serial_client_read_file_record(MbusGoSerialClient *handle,
                                                     uint16_t *out_buf,
                                                     uint16_t out_buf_len,
                                                     uint16_t *out_count);
+
 /**
  * Writes one or more file records (FC15) over a serial connection.
  *
@@ -1557,6 +2191,7 @@ MbusGoStatus mbus_go_serial_client_write_file_record(MbusGoSerialClient *handle,
                                                      uint8_t unit_id,
                                                      const struct MbusGoSerialSubRequest *sub_reqs,
                                                      uint16_t sub_req_count);
+
 /**
  * Creates a new async TCP client targeting `host:port`.
  *
@@ -1571,6 +2206,7 @@ MbusGoStatus mbus_go_serial_client_write_file_record(MbusGoSerialClient *handle,
  * this call.
  */
 MbusGoTcpClient *mbus_go_tcp_client_new(const char *host, uint16_t port);
+
 /**
  * Releases an `MbusGoTcpClient` previously returned from
  * [`mbus_go_tcp_client_new`].
@@ -1585,6 +2221,7 @@ MbusGoTcpClient *mbus_go_tcp_client_new(const char *host, uint16_t port);
  * [`mbus_go_tcp_client_new`] that has not already been freed.
  */
 void mbus_go_tcp_client_free(MbusGoTcpClient *handle);
+
 /**
  * Establishes the TCP transport connection.
  *
@@ -1596,6 +2233,7 @@ void mbus_go_tcp_client_free(MbusGoTcpClient *handle);
  * [`mbus_go_tcp_client_new`] and still alive.
  */
 MbusGoStatus mbus_go_tcp_client_connect(MbusGoTcpClient *handle);
+
 /**
  * Closes the TCP transport gracefully.
  *
@@ -1608,6 +2246,7 @@ MbusGoStatus mbus_go_tcp_client_connect(MbusGoTcpClient *handle);
  * See [`mbus_go_tcp_client_connect`].
  */
 MbusGoStatus mbus_go_tcp_client_disconnect(MbusGoTcpClient *handle);
+
 /**
  * Sets a per-request timeout in milliseconds; `0` disables the timeout.
  *
@@ -1617,6 +2256,7 @@ MbusGoStatus mbus_go_tcp_client_disconnect(MbusGoTcpClient *handle);
  */
 MbusGoStatus mbus_go_tcp_client_set_request_timeout_ms(MbusGoTcpClient *handle,
                                                        uint64_t timeout_ms);
+
 /**
  * Returns `1` when there are requests in flight awaiting a response, `0`
  * otherwise; returns `0` when `handle` is null.
@@ -1626,6 +2266,7 @@ MbusGoStatus mbus_go_tcp_client_set_request_timeout_ms(MbusGoTcpClient *handle,
  * See [`mbus_go_tcp_client_connect`].
  */
 uint8_t mbus_go_tcp_client_has_pending_requests(MbusGoTcpClient *handle);
+
 /**
  * Reads `quantity` holding registers (FC03) starting at `address` from
  * the given `unit_id` and copies them, in declaration order, into the
@@ -1650,6 +2291,7 @@ MbusGoStatus mbus_go_tcp_client_read_holding_registers(MbusGoTcpClient *handle,
                                                        uint16_t *out_buf,
                                                        uint16_t out_buf_len,
                                                        uint16_t *out_count);
+
 /**
  * Writes a single holding register (FC06).
  *
@@ -1668,6 +2310,7 @@ MbusGoStatus mbus_go_tcp_client_write_single_register(MbusGoTcpClient *handle,
                                                       uint16_t value,
                                                       uint16_t *out_address,
                                                       uint16_t *out_value);
+
 /**
  * Writes `quantity` holding registers (FC16) starting at `address`.
  *
@@ -1689,6 +2332,7 @@ MbusGoStatus mbus_go_tcp_client_write_multiple_registers(MbusGoTcpClient *handle
                                                          uint16_t quantity,
                                                          uint16_t *out_address,
                                                          uint16_t *out_quantity);
+
 /**
  * Reads `quantity` coils (FC01) starting at `address` from `unit_id`.
  *
@@ -1707,6 +2351,7 @@ MbusGoStatus mbus_go_tcp_client_read_coils(MbusGoTcpClient *handle,
                                            uint8_t *out_buf,
                                            uint16_t out_buf_len,
                                            uint16_t *out_count);
+
 /**
  * Writes a single coil (FC05). `value != 0` means ON.
  *
@@ -1723,6 +2368,7 @@ MbusGoStatus mbus_go_tcp_client_write_single_coil(MbusGoTcpClient *handle,
                                                   uint8_t value,
                                                   uint16_t *out_address,
                                                   uint8_t *out_value);
+
 /**
  * Writes multiple coils (FC15) starting at `address`.
  *
@@ -1741,6 +2387,7 @@ MbusGoStatus mbus_go_tcp_client_write_multiple_coils(MbusGoTcpClient *handle,
                                                      uint16_t coil_count,
                                                      uint16_t *out_address,
                                                      uint16_t *out_quantity);
+
 /**
  * Reads `quantity` discrete inputs (FC02) starting at `address` from `unit_id`.
  *
@@ -1757,6 +2404,7 @@ MbusGoStatus mbus_go_tcp_client_read_discrete_inputs(MbusGoTcpClient *handle,
                                                      uint8_t *out_buf,
                                                      uint16_t out_buf_len,
                                                      uint16_t *out_count);
+
 /**
  * Reads `quantity` input registers (FC04) starting at `address` from `unit_id`.
  *
@@ -1771,6 +2419,7 @@ MbusGoStatus mbus_go_tcp_client_read_input_registers(MbusGoTcpClient *handle,
                                                      uint16_t *out_buf,
                                                      uint16_t out_buf_len,
                                                      uint16_t *out_count);
+
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -1783,6 +2432,7 @@ MbusGoStatus mbus_go_tcp_client_mask_write_register(MbusGoTcpClient *handle,
                                                     uint16_t address,
                                                     uint16_t and_mask,
                                                     uint16_t or_mask);
+
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *
@@ -1800,6 +2450,7 @@ MbusGoStatus mbus_go_tcp_client_read_write_multiple_registers(MbusGoTcpClient *h
                                                               uint16_t *out_buf,
                                                               uint16_t out_buf_len,
                                                               uint16_t *out_count);
+
 /**
  * Reads the FIFO queue (FC24) at `address` from `unit_id`.
  *
@@ -1813,6 +2464,7 @@ MbusGoStatus mbus_go_tcp_client_read_fifo_queue(MbusGoTcpClient *handle,
                                                 uint16_t *out_buf,
                                                 uint16_t out_buf_len,
                                                 uint16_t *out_count);
+
 /**
  * Reads the device exception status (FC07).
  *
@@ -1823,6 +2475,7 @@ MbusGoStatus mbus_go_tcp_client_read_fifo_queue(MbusGoTcpClient *handle,
 MbusGoStatus mbus_go_tcp_client_read_exception_status(MbusGoTcpClient *handle,
                                                       uint8_t unit_id,
                                                       uint8_t *out_status);
+
 /**
  * Reads the communication event counter (FC11).
  *
@@ -1836,6 +2489,7 @@ MbusGoStatus mbus_go_tcp_client_get_comm_event_counter(MbusGoTcpClient *handle,
                                                        uint8_t unit_id,
                                                        uint16_t *out_status,
                                                        uint16_t *out_event_count);
+
 /**
  * Reads the communication event log (FC12).
  *
@@ -1850,6 +2504,7 @@ MbusGoStatus mbus_go_tcp_client_get_comm_event_log(MbusGoTcpClient *handle,
                                                    uint8_t *out_buf,
                                                    uint16_t out_buf_len,
                                                    uint16_t *out_count);
+
 /**
  * Reports the server identifier (FC17).
  *
@@ -1864,6 +2519,7 @@ MbusGoStatus mbus_go_tcp_client_report_server_id(MbusGoTcpClient *handle,
                                                  uint8_t *out_buf,
                                                  uint16_t out_buf_len,
                                                  uint16_t *out_count);
+
 /**
  * Sends a Diagnostics (FC08) request.
  *
@@ -1888,6 +2544,7 @@ MbusGoStatus mbus_go_tcp_client_diagnostics(MbusGoTcpClient *handle,
                                             uint16_t *out_buf,
                                             uint16_t out_buf_len,
                                             uint16_t *out_count);
+
 /**
  * Reads one or more file records (FC14).
  *
@@ -1911,6 +2568,7 @@ MbusGoStatus mbus_go_tcp_client_read_file_record(MbusGoTcpClient *handle,
                                                  uint16_t *out_buf,
                                                  uint16_t out_buf_len,
                                                  uint16_t *out_count);
+
 /**
  * Writes one or more file records (FC15).
  *
@@ -1928,7 +2586,9 @@ MbusGoStatus mbus_go_tcp_client_write_file_record(MbusGoTcpClient *handle,
                                                   uint8_t unit_id,
                                                   const struct MbusGoSubRequest *sub_reqs,
                                                   uint16_t sub_req_count);
+
 uintptr_t mbus_go_tcp_client_handle_size(void);
+
 /**
  * Creates a new gateway handle.
  *
@@ -1940,6 +2600,7 @@ uintptr_t mbus_go_tcp_client_handle_size(void);
  * `host` must point to a valid NUL-terminated string.
  */
 MbusGoTcpGateway *mbus_go_tcp_gateway_new(const char *host, uint16_t port);
+
 /**
  * Destroys the gateway handle.
  *
@@ -1950,6 +2611,7 @@ MbusGoTcpGateway *mbus_go_tcp_gateway_new(const char *host, uint16_t port);
  * `handle` must be a valid pointer returned by [`mbus_go_tcp_gateway_new`].
  */
 void mbus_go_tcp_gateway_free(MbusGoTcpGateway *handle);
+
 /**
  * Adds a TCP downstream and returns its zero-based channel index.
  *
@@ -1962,6 +2624,7 @@ void mbus_go_tcp_gateway_free(MbusGoTcpGateway *handle);
 uint32_t mbus_go_tcp_gateway_add_downstream(MbusGoTcpGateway *handle,
                                             const char *host,
                                             uint16_t port);
+
 /**
  * Routes a single unit ID to a downstream channel.
  *
@@ -1975,6 +2638,7 @@ uint32_t mbus_go_tcp_gateway_add_downstream(MbusGoTcpGateway *handle,
 MbusGoStatus mbus_go_tcp_gateway_add_unit_route(MbusGoTcpGateway *handle,
                                                 uint8_t unit_id,
                                                 uint32_t channel);
+
 /**
  * Routes an inclusive unit-ID range `[min, max]` to a downstream channel.
  *
@@ -1989,6 +2653,7 @@ MbusGoStatus mbus_go_tcp_gateway_add_range_route(MbusGoTcpGateway *handle,
                                                  uint8_t unit_min,
                                                  uint8_t unit_max,
                                                  uint32_t channel);
+
 /**
  * Starts the gateway on a new background OS thread.
  *
@@ -2004,6 +2669,7 @@ MbusGoStatus mbus_go_tcp_gateway_add_range_route(MbusGoTcpGateway *handle,
  * `handle` must be a valid gateway pointer.
  */
 MbusGoStatus mbus_go_tcp_gateway_start(MbusGoTcpGateway *handle);
+
 /**
  * Signals the running gateway to stop.
  *
@@ -2012,6 +2678,7 @@ MbusGoStatus mbus_go_tcp_gateway_start(MbusGoTcpGateway *handle);
  * `handle` must be a valid gateway pointer.
  */
 void mbus_go_tcp_gateway_stop(MbusGoTcpGateway *handle);
+
 /**
  * Creates a new TCP server handle.
  *
@@ -2031,6 +2698,7 @@ MbusGoTcpServer *mbus_go_tcp_server_new(const char *host,
                                         uint16_t port,
                                         uint8_t unit_id,
                                         const struct MbusGoServerVtable *vtable);
+
 /**
  * Destroys the server handle.
  *
@@ -2043,6 +2711,7 @@ MbusGoTcpServer *mbus_go_tcp_server_new(const char *host,
  * Calling this more than once is undefined behaviour.
  */
 void mbus_go_tcp_server_free(MbusGoTcpServer *handle);
+
 /**
  * Starts the server on a new background OS thread.
  *
@@ -2054,6 +2723,7 @@ void mbus_go_tcp_server_free(MbusGoTcpServer *handle);
  * `handle` must be a valid server pointer.
  */
 MbusGoStatus mbus_go_tcp_server_start(MbusGoTcpServer *handle);
+
 /**
  * Signals the running server to stop.
  *
@@ -2064,6 +2734,7 @@ MbusGoStatus mbus_go_tcp_server_start(MbusGoTcpServer *handle);
  * `handle` must be a valid server pointer.
  */
 void mbus_go_tcp_server_stop(MbusGoTcpServer *handle);
+
 /**
  * Returns a static C string describing `status`.
  *
@@ -2074,4 +2745,5 @@ void mbus_go_tcp_server_stop(MbusGoTcpServer *handle);
  * The caller must NOT free it.
  */
 const char *mbus_go_status_str(MbusGoStatus status);
+
 #endif  /* MODBUS_RS_GO_H */

@@ -258,7 +258,9 @@ fn main() {
                     if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
                         mbus_kept = false;
                     }
-                    if !has_serial && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial")) {
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
                         mbus_kept = false;
                     }
                     // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
@@ -325,7 +327,9 @@ fn main() {
                     if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
                         mbus_kept = false;
                     }
-                    if !has_serial && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial")) {
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
                         mbus_kept = false;
                     }
                     // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
@@ -495,7 +499,9 @@ fn main() {
                     if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
                         mbus_kept = false;
                     }
-                    if !has_serial && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial")) {
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
                         mbus_kept = false;
                     }
                     // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
@@ -563,7 +569,9 @@ fn main() {
                     if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
                         mbus_kept = false;
                     }
-                    if !has_serial && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial")) {
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
                         mbus_kept = false;
                     }
                     // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
@@ -643,7 +651,9 @@ fn main() {
                     if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
                         mbus_kept = false;
                     }
-                    if !has_serial && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial")) {
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
                         mbus_kept = false;
                     }
                     // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
@@ -732,11 +742,11 @@ where
         }
 
         if in_block_comment {
-            if c == '*' {
-                if let Some(&'/') = chars.peek() {
-                    current_chunk.push(chars.next().unwrap());
-                    in_block_comment = false;
-                }
+            if c == '*'
+                && let Some(&'/') = chars.peek()
+            {
+                current_chunk.push(chars.next().unwrap());
+                in_block_comment = false;
             }
             continue;
         }

@@ -84,6 +84,9 @@ full = [
     "diagnostics",
     "traffic",
     "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
 ]
 ## Convenience alias — enables all server features (c-server must also be enabled)
 server-full = [
@@ -94,6 +97,9 @@ server-full = [
     "fifo",
     "file-record",
     "diagnostics",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
 ]
 
 ## Enables Python bindings for the gateway. Requires `python` to be enabled too;
