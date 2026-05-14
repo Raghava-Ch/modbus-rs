@@ -41,7 +41,7 @@ input-registers = [
 ] # Enables input-register service (FC 0x04)
 registers = ["holding-registers", "input-registers"] # Backward-compat alias
 discrete-inputs = [
-    "mbus-core/discrete-inputs",
+    "mbus-core/registers",
 ] # Enables Modbus Discrete Input (FC 0x02) services
 fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
 file-record = [
@@ -56,8 +56,9 @@ diagnostics-stats = [
 serial-ascii = [
     "mbus-core/serial-ascii",
 ] # Enables ASCII-sized ADU buffers (513 bytes) in mbus-core
-logging = ["dep:log"]
+logging = ["dep:log", "mbus-core/logging", "mbus-core/defmt-format"]
 traffic = []
+display = []
 
 [[example]]
 name = "broadcast"
@@ -89,7 +90,15 @@ required-features = ["file-record"]
 
 [[example]]
 name = "full_server"
-required-features = ["coils", "discrete-inputs", "holding-registers", "input-registers", "fifo", "file-record", "diagnostics"]
+required-features = [
+    "coils",
+    "discrete-inputs",
+    "holding-registers",
+    "input-registers",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
 
 [[example]]
 name = "holding_registers_read"

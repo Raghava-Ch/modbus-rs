@@ -38,6 +38,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -64,6 +66,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -88,6 +92,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -119,6 +125,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev
@@ -140,6 +148,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Check mbus-core (coils+registers, no_std)
         run: cargo check -p mbus-core --no-default-features --features coils,registers --target thumbv7em-none-eabihf
@@ -167,15 +177,17 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Check mbus-ffi WASM bindings
-        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,full
+        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Run WASM server binding tests (Node)
-        run: wasm-pack test --node --features wasm,full --test wasm_server_bindings
+        run: wasm-pack test --node --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait --test wasm_server_bindings
         working-directory: mbus-ffi
 
   # ── 7. Python bindings ────────────────────────────────────────────────────
@@ -190,6 +202,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev
@@ -203,7 +217,7 @@ jobs:
         run: pip install maturin pytest pytest-asyncio
 
       - name: Build Python wheel
-        run: maturin build --features python,python-gateway,full
+        run: maturin build --features python,python-gateway,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
         working-directory: mbus-ffi
 
       - name: Install built wheel
@@ -227,6 +241,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies
         run: |
@@ -235,9 +251,9 @@ jobs:
 
       - name: Check C FFI feature slices
         run: |
-          cargo check -p mbus-ffi --no-default-features --features c,full
-          cargo check -p mbus-ffi --no-default-features --features c,c-server,server-traffic,full
-          cargo check -p mbus-ffi --no-default-features --features c,c-gateway,full
+          cargo check -p mbus-ffi --no-default-features --features c-client,full
+          cargo check -p mbus-ffi --no-default-features --features c-server,server-traffic,full
+          cargo check -p mbus-ffi --no-default-features --features c-gateway,full
 
       - name: Install cbindgen
         run: cargo install cbindgen --locked
@@ -246,7 +262,7 @@ jobs:
         run: cargo run -p xtask -- check-header
 
       - name: Build C client demo
-        run: cargo run -p xtask -- build-c-demo --demo c_client_demo
+        run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers
 
       - name: Build C server demo
         run: cargo run -p xtask -- build-c-demo --demo c_server_demo
@@ -263,6 +279,8 @@ jobs:
 
       - name: Cache cargo registry + build
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Install system dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev

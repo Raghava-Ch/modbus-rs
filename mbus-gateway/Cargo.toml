@@ -12,7 +12,7 @@ categories.workspace = true
 description = "Modbus gateway runtime — bridges upstream TCP/serial masters to downstream slave buses with PDU-level framing translation"
 
 [dependencies]
-mbus-core = { workspace = true, features = ["coils", "registers", "discrete-inputs", "diagnostics", "fifo", "file-record"] }
+mbus-core = { workspace = true, features = ["coils", "registers", "diagnostics", "fifo", "file-record"] }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
@@ -41,6 +41,7 @@ name = "tcp_to_rtu"
 required-features = ["network", "serial-rtu"]
 
 [dev-dependencies]
+anyhow = "1.0"
 mbus-network = { workspace = true, features = ["async"] }
 mbus-core = { workspace = true }
 tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread", "signal"] }

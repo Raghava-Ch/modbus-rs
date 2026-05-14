@@ -20,15 +20,20 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use mbus_gateway::{AsyncWsGatewayServer, RangeRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
 use tokio::sync::Mutex;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // ── Downstream connections ────────────────────────────────────────────────
-    let device_a = TokioTcpTransport::connect("192.168.1.10:502").await?;
-    let device_b = TokioTcpTransport::connect("192.168.1.11:502").await?;
+    let device_a = TokioTcpTransport::connect("192.168.1.10:502")
+        .await
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+    let device_b = TokioTcpTransport::connect("192.168.1.11:502")
+        .await
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     // Indices in this Vec must match the channel index returned by the router.
     let downstreams = vec![

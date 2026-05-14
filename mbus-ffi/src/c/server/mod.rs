@@ -24,8 +24,12 @@ pub mod app;
 pub mod callbacks;
 pub mod config;
 pub mod pool;
+#[cfg(all(
+    feature = "c-server",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 pub mod serial_server;
+#[cfg(all(feature = "c-server", feature = "network-tcp"))]
 pub mod tcp_server;
-
 pub use callbacks::{MbusServerExceptionCode, MbusServerHandlers};
 pub use pool::{MBUS_INVALID_SERVER_ID, MbusServerId};

@@ -41,12 +41,12 @@ pub enum AsyncServerError {
     BindFailed(std::io::Error),
 }
 
-impl core::fmt::Display for AsyncServerError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl std::fmt::Display for AsyncServerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AsyncServerError::Transport(e) => write!(f, "transport error: {e}"),
+            AsyncServerError::Transport(e) => write!(f, "transport error: {e:?}"),
             AsyncServerError::ConnectionClosed => write!(f, "connection closed"),
-            AsyncServerError::FramingError(e) => write!(f, "framing error: {e}"),
+            AsyncServerError::FramingError(e) => write!(f, "framing error: {e:?}"),
             AsyncServerError::BindFailed(e) => write!(f, "bind failed: {e}"),
         }
     }

@@ -8,19 +8,35 @@
 // ── Shared types (no feature gate — server also needs these) ─────────────────
 
 pub mod error;
+#[cfg(feature = "internal-lock-stubs")]
+pub(crate) mod lock_stubs;
 pub mod transport;
 
 // ── Client bindings ───────────────────────────────────────────────────────────
 
-#[cfg(feature = "c")]
+#[cfg(feature = "c-client")]
 pub mod client;
 
 // ── Server bindings ───────────────────────────────────────────────────────────
 
-#[cfg(feature = "c-server")]
+#[cfg(all(
+    feature = "c-server",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 pub mod server;
 
-#[cfg(feature = "c-server")]
+#[cfg(all(
+    feature = "c-server",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 pub mod server_gen;
 
 // ── Gateway bindings ──────────────────────────────────────────────────────────
@@ -32,7 +48,7 @@ pub mod gateway;
 
 pub use error::MbusStatusCode;
 
-#[cfg(feature = "c")]
+#[cfg(feature = "c-client")]
 pub use client::{MBUS_INVALID_CLIENT_ID, MbusClientId};
 
 #[cfg(feature = "c-gateway")]

@@ -1,4 +1,6 @@
 //! C API lifecycle functions for Modbus TCP servers.
+
+#![cfg(all(feature = "c-server", feature = "network-tcp"))]
 //!
 //! # Usage
 //!

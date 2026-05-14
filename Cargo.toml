@@ -43,11 +43,12 @@ mbus-async = { version = "0.9.0", path = "./mbus-async" }
 mbus-client-async = { version = "0.9.0", path = "./mbus-client-async" }
 mbus-server-async = { version = "0.9.0", path = "./mbus-server-async" }
 mbus-ffi    = { version = "0.9.0", path = "./mbus-ffi" }
-mbus-server = { version = "0.9.0", path = "./mbus-server" }
+mbus-server = { version = "0.9.0", path = "./mbus-server", default-features = false }
 mbus-macros = { version = "0.9.0", path = "./mbus-macros" }
 
 mbus-gateway = { version = "0.9.0", path = "./mbus-gateway" }
 
+defmt = "1.0.1"
 heapless = { version = "0.9.0" }
 bitfields = { version = "1.0.0" }
 anyhow = { version = "1.0" }
@@ -62,4 +63,8 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 panic = "abort"
 
 [profile.release]
-panic = "abort"
+opt-level = "z"       # Optimize aggressively for binary size
+lto = "fat"           # Perform cross-crate Link Time Optimization
+codegen-units = 1     # Slower compile time, but maximum optimization
+panic = "abort"       # Completely removes unwinding landing pads (saves massive space)
+strip = "debuginfo"   # Ensure no debug symbols linger

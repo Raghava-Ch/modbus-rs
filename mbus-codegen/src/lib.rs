@@ -1262,21 +1262,29 @@ fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
     out.push_str("    MbusServerHandlers {\n");
     out.push_str("        userdata,\n");
 
+    // Each field must be gated by its feature so the generated code compiles
+    // when building with a minimal feature set (e.g. `--features c-server,coils`).
+    // The `else` branches emit `None` with a `#[cfg]` gate because the field
+    // does not exist in `MbusServerHandlers` when the feature is disabled.
     if has_coils {
         out.push_str("        on_read_coils: Some(mbus_gen_on_read_coils),\n");
     } else {
+        out.push_str("        #[cfg(feature = \"coils\")]\n");
         out.push_str("        on_read_coils: None,\n");
     }
     if !coil_write_entries.is_empty() {
         out.push_str("        on_write_single_coil: Some(mbus_gen_on_write_single_coil),\n");
         out.push_str("        on_write_multiple_coils: Some(mbus_gen_on_write_multiple_coils),\n");
     } else {
+        out.push_str("        #[cfg(feature = \"coils\")]\n");
         out.push_str("        on_write_single_coil: None,\n");
+        out.push_str("        #[cfg(feature = \"coils\")]\n");
         out.push_str("        on_write_multiple_coils: None,\n");
     }
     if has_discrete {
         out.push_str("        on_read_discrete_inputs: Some(mbus_gen_on_read_discrete_inputs),\n");
     } else {
+        out.push_str("        #[cfg(feature = \"discrete-inputs\")]\n");
         out.push_str("        on_read_discrete_inputs: None,\n");
     }
     if has_holding {
@@ -1284,6 +1292,7 @@ fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
             "        on_read_holding_registers: Some(mbus_gen_on_read_holding_registers),\n",
         );
     } else {
+        out.push_str("        #[cfg(feature = \"registers\")]\n");
         out.push_str("        on_read_holding_registers: None,\n");
     }
     if !holding_write_entries.is_empty() {
@@ -1294,24 +1303,38 @@ fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
             "        on_write_multiple_registers: Some(mbus_gen_on_write_multiple_registers),\n",
         );
     } else {
+        out.push_str("        #[cfg(feature = \"registers\")]\n");
         out.push_str("        on_write_single_register: None,\n");
+        out.push_str("        #[cfg(feature = \"registers\")]\n");
         out.push_str("        on_write_multiple_registers: None,\n");
     }
+    out.push_str("        #[cfg(feature = \"registers\")]\n");
     out.push_str("        on_mask_write_register: None,\n");
+    out.push_str("        #[cfg(feature = \"registers\")]\n");
     out.push_str("        on_read_write_multiple_registers: None,\n");
     if has_input {
         out.push_str("        on_read_input_registers: Some(mbus_gen_on_read_input_registers),\n");
     } else {
+        out.push_str("        #[cfg(feature = \"registers\")]\n");
         out.push_str("        on_read_input_registers: None,\n");
     }
+    out.push_str("        #[cfg(feature = \"fifo\")]\n");
     out.push_str("        on_read_fifo_queue: None,\n");
+    out.push_str("        #[cfg(feature = \"file-record\")]\n");
     out.push_str("        on_read_file_record: None,\n");
+    out.push_str("        #[cfg(feature = \"file-record\")]\n");
     out.push_str("        on_write_file_record: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_read_exception_status: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_diagnostics: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_get_comm_event_counter: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_get_comm_event_log: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_report_server_id: None,\n");
+    out.push_str("        #[cfg(feature = \"diagnostics\")]\n");
     out.push_str("        on_read_device_identification: None,\n");
     out.push_str("    }\n");
     out.push_str("}\n");

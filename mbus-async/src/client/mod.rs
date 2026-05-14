@@ -80,10 +80,10 @@ impl From<MbusError> for AsyncError {
     }
 }
 
-impl std::fmt::Display for AsyncError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for AsyncError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Mbus(err) => write!(f, "Modbus error: {err}"),
+            Self::Mbus(err) => write!(f, "Modbus error: {err:?}"),
             Self::WorkerClosed => write!(f, "async worker channel closed"),
             Self::UnexpectedResponseType => write!(f, "unexpected response type from worker"),
             Self::Timeout => write!(f, "request timed out"),
@@ -91,11 +91,4 @@ impl std::fmt::Display for AsyncError {
     }
 }
 
-impl std::error::Error for AsyncError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Mbus(err) => Some(err),
-            _ => None,
-        }
-    }
-}
+impl std::error::Error for AsyncError {}

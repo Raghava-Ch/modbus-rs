@@ -188,17 +188,17 @@ where
 
         let (address, value) = match parse_write_single_request(message) {
             Ok(values) => values,
-            Err(err) => {
+            Err(_err) => {
                 server_log_debug!(
                     "FC06 broadcast ignored due to invalid request: txn_id={}, error={:?}",
                     txn_id,
-                    err
+                    _err
                 );
                 return;
             }
         };
 
-        if let Err(err) =
+        if let Err(_err) =
             self.app
                 .write_single_register_request(txn_id, unit_id_or_slave_addr, address, value)
         {
@@ -206,7 +206,7 @@ where
                 "FC06 broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
                 txn_id,
                 unit_id_or_slave_addr.get(),
-                err
+                _err
             );
         }
     }
@@ -422,7 +422,7 @@ where
             return;
         }
 
-        let Some(end_addr) = address.checked_add(quantity - 1) else {
+        let Some(_end_addr) = address.checked_add(quantity - 1) else {
             self.send_exception_response(
                 txn_id,
                 unit_id_or_slave_addr,
@@ -435,7 +435,7 @@ where
             "FC{:02X}: validated request range start={}, end={}, quantity={}",
             function_code as u8,
             address,
-            end_addr,
+            _end_addr,
             quantity
         );
 
@@ -494,11 +494,11 @@ where
 
         let (address, quantity, byte_count, values) = match parse_write_multiple_request(message) {
             Ok(values) => values,
-            Err(err) => {
+            Err(_err) => {
                 server_log_debug!(
                     "FC10 broadcast ignored due to invalid request: txn_id={}, error={:?}",
                     txn_id,
-                    err
+                    _err
                 );
                 return;
             }
@@ -538,7 +538,7 @@ where
             registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
         }
 
-        if let Err(err) = self.app.write_multiple_registers_request(
+        if let Err(_err) = self.app.write_multiple_registers_request(
             txn_id,
             unit_id_or_slave_addr,
             address,
@@ -548,7 +548,7 @@ where
                 "FC10 broadcast app callback failed: txn_id={}, unit_id_or_slave_addr={}, error={:?}",
                 txn_id,
                 unit_id_or_slave_addr.get(),
-                err
+                _err
             );
         }
     }

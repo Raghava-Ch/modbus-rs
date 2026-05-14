@@ -16,6 +16,14 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 
 [features]
 default = []
+## Enables defmt logging support for embedded/no_std targets.
+logging = []
+## Enables Display trait implementations for error types.
+display = []
+error-trait = ["mbus-core/error-trait"]
+## Internal feature: provides stub implementations for extern "C" locking functions
+## when building as a cdylib without a C caller (NAPI, Python, Go, .NET).
+internal-lock-stubs = []
 ## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
 wasm = [
     "dep:wasm-bindgen",
@@ -26,22 +34,48 @@ wasm = [
     "mbus-serial/wasm",
 ]
 ## Enables native C FFI bindings for the Modbus client stack.
-c = []
+c-client = ["dep:mbus-client"]
 ## Enables native C FFI bindings for the Modbus server stack.
 c-server = ["dep:mbus-server"]
 ## Enables native C FFI bindings for the Modbus gateway stack.
 c-gateway = ["dep:mbus-gateway"]
 ## Enables traffic notification callbacks on the C server (mbus-server `traffic` feature).
 server-traffic = ["c-server", "mbus-server/traffic"]
-coils = ["mbus-client/coils"]
-registers = ["mbus-client/registers"]
-discrete-inputs = ["mbus-client/discrete-inputs"]
-fifo = ["mbus-client/fifo"]
-file-record = ["mbus-client/file-record"]
-diagnostics = ["mbus-client/diagnostics"]
-traffic = ["mbus-client/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
-## Convenience alias — enables every Modbus client feature at once
+
+## Feature forwarding — each feature enables the corresponding FC group on
+## mbus-client AND (when c-server is active) on mbus-server.
+coils = ["mbus-client?/coils", "mbus-server?/coils"]
+holding-registers = ["mbus-client?/holding-registers", "mbus-server?/holding-registers"]
+input-registers = ["mbus-client?/input-registers", "mbus-server?/input-registers"]
+registers = ["holding-registers", "input-registers"]
+discrete-inputs = ["mbus-client?/discrete-inputs", "mbus-server?/discrete-inputs"]
+fifo = ["mbus-client?/fifo", "mbus-server?/fifo"]
+file-record = ["mbus-client?/file-record", "mbus-server?/file-record"]
+diagnostics = ["mbus-client?/diagnostics", "mbus-server?/diagnostics"]
+
+traffic = ["mbus-client?/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
+## Enables TCP network transport support (mbus-client-async, mbus-gateway).
+network-tcp = [
+    "mbus-client-async?/network-tcp",
+    "mbus-gateway?/network",
+]
+## Enables Modbus RTU serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
+serial-rtu = [
+    "mbus-client-async?/serial-rtu",
+    "mbus-gateway?/serial-rtu",
+]
+## Enables Modbus ASCII serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
+serial-ascii = [
+    "mbus-client-async?/serial-ascii",
+    "mbus-gateway?/serial-ascii",
+    "mbus-client?/serial-ascii",
+    "mbus-server?/serial-ascii",
+]
+## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
+    "c-client",
+    "c-server",
+    "c-gateway",
     "coils",
     "registers",
     "discrete-inputs",
@@ -49,9 +83,18 @@ full = [
     "file-record",
     "diagnostics",
     "traffic",
+    "error-trait",
 ]
-## Convenience alias — enables every Modbus server feature at once (c-server must still be enabled)
-server-full = ["c-server"]
+## Convenience alias — enables all server features (c-server must also be enabled)
+server-full = [
+    "c-server",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+]
 
 ## Enables Python bindings for the gateway. Requires `python` to be enabled too;
 ## build with `--features python,python-gateway,full`.
@@ -77,6 +120,10 @@ python = [
     "fifo",
     "file-record",
     "diagnostics",
+    "mbus-client-async/serial-rtu",
+    "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
+    "internal-lock-stubs",
 ]
 
 ## Enables native Go (cgo) bindings for the Modbus client/server/gateway stack.
@@ -100,8 +147,10 @@ go = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Go server (mbus-server-async `traffic` feature).
 go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
@@ -129,6 +178,7 @@ nodejs = [
     "mbus-client-async/serial-ascii",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Node.js server/client.
 nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
@@ -150,14 +200,18 @@ dotnet = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 
 [dependencies]
 mbus-core = { workspace = true }
-mbus-client = { workspace = true }
-mbus-server = { workspace = true, optional = true }
+# mbus-client is optional to prevent its symbols from being unconditionally baked
+# into the C static library. This avoids binary bloat for server-only builds on bare-metal targets.
+mbus-client = { workspace = true, optional = true }
+mbus-server = { workspace = true, optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
@@ -166,14 +220,16 @@ heapless = { workspace = true }
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
 pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
-mbus-client-async = { version = "0.9.0", path = "../mbus-client-async", features = ["network-tcp", "serial-rtu", "serial-ascii", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
-mbus-server-async = { version = "0.9.0", path = "../mbus-server-async", features = ["server-tcp", "server-serial", "coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-client-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-server-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
 ## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
 napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async"], optional = true }
 napi-derive = { version = "3", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+## mbus-client provides the sync client state machine (used by WASM bindings)
+mbus-client = { workspace = true }
 ## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)
 mbus-network = { workspace = true }
 ## mbus-serial provides WasmSerialTransport for browser Web Serial integration.
