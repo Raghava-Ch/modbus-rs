@@ -581,7 +581,7 @@ pub type MbusServerReadDeviceIdentificationFn = Option<
 /// Master callback table for a C Modbus server application.
 ///
 /// Pass a populated instance of this struct to `mbus_tcp_server_new`,
-/// `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`. Any callback
+/// `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new` (if ASCII support is enabled). Any callback
 /// left as `NULL` will cause the server
 /// to respond with `ExceptionCode::IllegalFunction` for that function code.
 ///
