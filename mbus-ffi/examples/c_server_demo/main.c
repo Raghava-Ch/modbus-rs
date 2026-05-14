@@ -3,7 +3,7 @@
 // `demo.yaml`. Changing `demo.yaml` affects CI, the release check
 // (`cmd_check_release`), and the output of `list-c-demos`.
 //
-// Current rust_features: c-server,network-tcp,coils,registers,error-trait
+// Current rust_features: server-full,network-tcp,error-trait
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -262,6 +262,19 @@ static void load_fc03_read_holding(struct TransportCtx *ctx,
     ctx->tx_len = 0;
 }
 
+static void dump_tx_frame(const struct TransportCtx *ctx) {
+    uint16_t i;
+
+    fprintf(stderr, "tx_len=%u tx=", (unsigned)ctx->tx_len);
+    for (i = 0; i < ctx->tx_len; i++) {
+        fprintf(stderr, "%02X", ctx->tx_buf[i]);
+        if (i + 1u < ctx->tx_len) {
+            fprintf(stderr, " ");
+        }
+    }
+    fprintf(stderr, "\n");
+}
+
 static int pump_until_response(MbusServerId id, struct TransportCtx *ctx) {
     int i;
     for (i = 0; i < 50; i++) {
@@ -339,6 +352,7 @@ int main(void) {
     load_fc03_read_holding(&tctx, 0x1003u, 1u, 0u, 2u);
     if (pump_until_response(id, &tctx) != 0 || tctx.tx_len < 13 || tctx.tx_buf[7] != 0x03) {
         fprintf(stderr, "FC03 response validation failed\n");
+        dump_tx_frame(&tctx);
         goto fail;
     }
     if (tctx.tx_buf[8] != 0x04u || tctx.tx_buf[9] != 0x12u || tctx.tx_buf[10] != 0x34u ||

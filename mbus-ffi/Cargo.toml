@@ -21,6 +21,9 @@ logging = []
 ## Enables Display trait implementations for error types.
 display = []
 error-trait = ["mbus-core/error-trait"]
+## Internal feature: provides stub implementations for extern "C" locking functions
+## when building as a cdylib without a C caller (NAPI, Python, Go, .NET).
+internal-lock-stubs = []
 ## Enables all WASM bindings for browser transports (`mbus-network` + `mbus-serial`).
 wasm = [
     "dep:wasm-bindgen",
@@ -120,6 +123,7 @@ python = [
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
     "mbus-server-async/server-serial",
+    "internal-lock-stubs",
 ]
 
 ## Enables native Go (cgo) bindings for the Modbus client/server/gateway stack.
@@ -146,6 +150,7 @@ go = [
     "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Go server (mbus-server-async `traffic` feature).
 go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
@@ -173,6 +178,7 @@ nodejs = [
     "mbus-client-async/serial-ascii",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Node.js server/client.
 nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
@@ -197,6 +203,7 @@ dotnet = [
     "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
+    "internal-lock-stubs",
 ]
 
 [dependencies]

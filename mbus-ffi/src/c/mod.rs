@@ -8,6 +8,8 @@
 // ── Shared types (no feature gate — server also needs these) ─────────────────
 
 pub mod error;
+#[cfg(feature = "internal-lock-stubs")]
+pub(crate) mod lock_stubs;
 pub mod transport;
 
 // ── Client bindings ───────────────────────────────────────────────────────────
