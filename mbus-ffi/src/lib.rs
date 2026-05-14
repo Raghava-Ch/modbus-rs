@@ -60,8 +60,15 @@ pub use wasm::{
     WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
 #[allow(missing_docs)]
+#[cfg(any(
+    feature = "c-client",
+    feature = "c-server",
+    feature = "dotnet",
+    feature = "python",
+    feature = "go",
+    feature = "nodejs"
+))]
 pub mod c;
 
 #[cfg(feature = "python")]

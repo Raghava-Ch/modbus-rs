@@ -16,6 +16,7 @@
 //! | `<!-- validate: run -->` | Execute the command instead of just compile‐checking |
 //! | `<!-- validate: skip -->` | Skip the block entirely |
 //! | `<!-- validate: no_run -->` | Compile-check the block without running it |
+//! | `<!-- validate: verify -->` | Compile-check even without `fn main` (auto-appends one) |
 //!
 //! Rust fence modifiers do not control xtask validation. Only HTML markers do.
 
@@ -410,6 +411,9 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
         if !cmd.features.is_empty() {
             cargo.args(["--features", &cmd.features.join(",")]);
         }
+        // Force all-features to ensure documentation examples compile regardless
+        // of missing explicit features (like error-trait, gateway, etc.) in the markdown snippets.
+        cargo.arg("--all-features");
 
         match cargo.output() {
             Ok(o) if o.status.success() => {
@@ -538,18 +542,19 @@ fn validate_rust_blocks(
          [dependencies.modbus-rs]\n\
          path             = \"{modbus_rs}\"\n\
          default-features = true\n\
-         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\"]\n\
+         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\", \"error-trait\"]\n\
          \n\
          # ── workspace members referenced directly in doc snippets ────\n\
          [dependencies.mbus-core]\n\
          path = \"{mbus_core}\"\n\
+         features = [\"error-trait\"]\n\
          \n\
          [dependencies.mbus-client]\n\
          path = \"{mbus_client}\"\n\
          \n\
          [dependencies.mbus-server]\n\
          path = \"{mbus_server}\"\n\
-         default-features = false\n\
+         default-features = true\n\
          \n\
          [dependencies.mbus-async]\n\
          path = \"{mbus_async}\"\n\
@@ -705,6 +710,7 @@ fn parse_cargo_toml_examples(root: &Path) -> Vec<String> {
         root.join("modbus-rs/Cargo.toml"),
         root.join("mbus-client-async/Cargo.toml"),
         root.join("mbus-server-async/Cargo.toml"),
+        root.join("mbus-ffi/Cargo.toml"),
     ];
 
     for path in manifests {

@@ -155,7 +155,7 @@ fn main() -> Result<()> {
     };
 
     let mut server = ServerServices::new(transport, app, config, unit_id(unit_raw), resilience);
-    server.connect()?;
+    let _ = server.connect();
 
     println!("Modbus RTU server running on {}", port_path);
     println!("Unit id: {}", unit_raw);

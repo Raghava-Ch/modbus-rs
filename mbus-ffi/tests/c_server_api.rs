@@ -1,7 +1,7 @@
 //! Integration tests for the C server FFI layer (`c-server` feature).
 //!
 //! These tests exercise:
-//! 1. Null-pointer safety of `mbus_tcp_server_new` / `mbus_serial_server_new`.
+//! 1. Null-pointer safety of `mbus_tcp_server_new` / `mbus_serial_rtu_server_new` / `mbus_serial_ascii_server_new`.
 //! 2. Server lifecycle: allocate → connect → poll → disconnect → free.
 //! 3. Round-trip callback dispatch: a full FC01 TCP request processed through
 //!    the C callback layer produces a well-formed Modbus exception or success response.
@@ -33,9 +33,12 @@ pub unsafe extern "C" fn mbus_server_lock(_id: u16) {}
 pub unsafe extern "C" fn mbus_server_unlock(_id: u16) {}
 
 use mbus_ffi::c::error::MbusStatusCode;
-use mbus_ffi::c::server::callbacks::{
-    MbusServerReadCoilsReq, MbusServerReadHoldingRegistersReq, MbusServerWriteSingleCoilReq,
-};
+#[cfg(feature = "coils")]
+use mbus_ffi::c::server::callbacks::MbusServerReadCoilsReq;
+#[cfg(feature = "registers")]
+use mbus_ffi::c::server::callbacks::MbusServerReadHoldingRegistersReq;
+#[cfg(feature = "coils")]
+use mbus_ffi::c::server::callbacks::MbusServerWriteSingleCoilReq;
 use mbus_ffi::c::server::config::MbusServerConfig;
 use mbus_ffi::c::server::tcp_server::{
     mbus_tcp_server_connect, mbus_tcp_server_disconnect, mbus_tcp_server_free,
@@ -146,6 +149,7 @@ fn make_transport_callbacks() -> MbusTransportCallbacks {
 ///
 /// For a request of N coils, this writes ceil(N/8) bytes with a fixed
 /// bit pattern `0b0000_0101` in the first byte.
+#[cfg(feature = "coils")]
 unsafe extern "C" fn test_on_read_coils(
     req: *mut MbusServerReadCoilsReq,
     _userdata: *mut c_void,
@@ -167,6 +171,7 @@ unsafe extern "C" fn test_on_read_coils(
 }
 
 /// FC05 — Write Single Coil: echoes successfully.
+#[cfg(feature = "coils")]
 unsafe extern "C" fn test_on_write_single_coil(
     _req: *const MbusServerWriteSingleCoilReq,
     _userdata: *mut c_void,
@@ -176,6 +181,7 @@ unsafe extern "C" fn test_on_write_single_coil(
 }
 
 /// FC03 — Read Holding Registers: returns fixed 0xDEAD pattern.
+#[cfg(feature = "registers")]
 unsafe extern "C" fn test_on_read_holding_registers(
     req: *mut MbusServerReadHoldingRegistersReq,
     _userdata: *mut c_void,
@@ -199,32 +205,54 @@ unsafe extern "C" fn test_on_read_holding_registers(
 fn make_all_null_handlers() -> MbusServerHandlers {
     MbusServerHandlers {
         userdata: core::ptr::null_mut(),
+        #[cfg(feature = "coils")]
         on_read_coils: None,
+        #[cfg(feature = "coils")]
         on_write_single_coil: None,
+        #[cfg(feature = "coils")]
         on_write_multiple_coils: None,
+        #[cfg(feature = "discrete-inputs")]
         on_read_discrete_inputs: None,
+        #[cfg(feature = "registers")]
         on_read_holding_registers: None,
+        #[cfg(feature = "registers")]
         on_write_single_register: None,
+        #[cfg(feature = "registers")]
         on_write_multiple_registers: None,
+        #[cfg(feature = "registers")]
         on_mask_write_register: None,
+        #[cfg(feature = "registers")]
         on_read_write_multiple_registers: None,
+        #[cfg(feature = "registers")]
         on_read_input_registers: None,
+        #[cfg(feature = "fifo")]
         on_read_fifo_queue: None,
+        #[cfg(feature = "file-record")]
         on_read_file_record: None,
+        #[cfg(feature = "file-record")]
         on_write_file_record: None,
+        #[cfg(feature = "diagnostics")]
         on_read_exception_status: None,
+        #[cfg(feature = "diagnostics")]
         on_diagnostics: None,
+        #[cfg(feature = "diagnostics")]
         on_get_comm_event_counter: None,
+        #[cfg(feature = "diagnostics")]
         on_get_comm_event_log: None,
+        #[cfg(feature = "diagnostics")]
         on_report_server_id: None,
+        #[cfg(feature = "diagnostics")]
         on_read_device_identification: None,
     }
 }
 
 fn make_test_handlers() -> MbusServerHandlers {
     MbusServerHandlers {
+        #[cfg(feature = "coils")]
         on_read_coils: Some(test_on_read_coils),
+        #[cfg(feature = "coils")]
         on_write_single_coil: Some(test_on_write_single_coil),
+        #[cfg(feature = "registers")]
         on_read_holding_registers: Some(test_on_read_holding_registers),
         ..make_all_null_handlers()
     }
@@ -396,6 +424,7 @@ fn build_fc05_request() -> Vec<u8> {
 /// Returns the offset after the 7-byte MBAP header within a TCP response frame.
 const MBAP_HEADER_LEN: usize = 7;
 
+#[cfg(feature = "coils")]
 #[test]
 fn fc01_read_coils_dispatches_callback_and_returns_success_response() {
     let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -448,6 +477,7 @@ fn fc01_read_coils_dispatches_callback_and_returns_success_response() {
     mbus_tcp_server_free(id);
 }
 
+#[cfg(feature = "registers")]
 #[test]
 fn fc03_read_holding_registers_dispatches_callback() {
     let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -484,6 +514,7 @@ fn fc03_read_holding_registers_dispatches_callback() {
     mbus_tcp_server_free(id);
 }
 
+#[cfg(feature = "coils")]
 #[test]
 fn fc05_write_single_coil_dispatches_callback_and_echoes() {
     let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -517,6 +548,7 @@ fn fc05_write_single_coil_dispatches_callback_and_echoes() {
     mbus_tcp_server_free(id);
 }
 
+#[cfg(feature = "coils")]
 #[test]
 fn null_callback_slot_returns_illegal_function_exception() {
     let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());

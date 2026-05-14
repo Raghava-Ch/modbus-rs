@@ -8,7 +8,9 @@ macro_rules! server_log_debug {
 #[cfg(not(feature = "logging"))]
 macro_rules! server_log_debug {
     ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
+        // Evaluates to nothing.
+        // We do not use `core::format_args!` here to avoid dragging in the `core::fmt` machinery,
+        // which can add massive bloat (like `core::num::flt2dec`) to bare-metal builds.
     }};
 }
 
@@ -22,7 +24,9 @@ macro_rules! server_log_trace {
 #[cfg(not(feature = "logging"))]
 macro_rules! server_log_trace {
     ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
+        // Evaluates to nothing.
+        // We do not use `core::format_args!` here to avoid dragging in the `core::fmt` machinery,
+        // which can add massive bloat (like `core::num::flt2dec`) to bare-metal builds.
     }};
 }
 

@@ -52,7 +52,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: nodejs-check
+          shared-key: nodejs-check-v2
+          cache-bin: false
 
       - name: cargo check (nodejs feature)
         run: cargo check -p mbus-ffi --features nodejs
@@ -89,7 +90,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: nodejs-build-${{ matrix.settings.target }}
+          shared-key: nodejs-build-v2-${{ matrix.settings.target }}
+          cache-bin: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v5

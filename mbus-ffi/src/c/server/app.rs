@@ -17,15 +17,26 @@
 //! | `IllegalDataAddress (2)`  | `InvalidAddress`      | `0x02` IllegalDataAddress   |
 //! | `IllegalDataValue (3)`    | `InvalidValue`        | `0x03` IllegalDataValue     |
 //! | `ServerDeviceFailure (4)` | `Unexpected`          | `0x04` ServerDeviceFailure  |
+//!
+//! ## Feature gates
+//!
+//! Each trait implementation is gated by the corresponding `mbus-ffi` feature
+//! (`coils`, `discrete-inputs`, `registers`, `fifo`, `file-record`, `diagnostics`)
+//! so that unused handler code is not compiled when building with a minimal
+//! feature set (e.g. `--features c-server,coils`).
 
 use mbus_core::errors::MbusError;
+#[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{
-    ServerCoilHandler, ServerDiagnosticsHandler, ServerDiscreteInputHandler,
-    ServerExceptionHandler, ServerFifoHandler, ServerFileRecordHandler,
-    ServerHoldingRegisterHandler, ServerInputRegisterHandler,
-};
+use mbus_server::ServerCoilHandler;
+use mbus_server::ServerDiagnosticsHandler;
+use mbus_server::ServerDiscreteInputHandler;
+use mbus_server::ServerExceptionHandler;
+use mbus_server::ServerFifoHandler;
+use mbus_server::ServerFileRecordHandler;
+use mbus_server::ServerHoldingRegisterHandler;
+use mbus_server::ServerInputRegisterHandler;
 
 use super::callbacks::*;
 
@@ -77,6 +88,7 @@ impl ServerExceptionHandler for CServerApp {}
 
 // ── ServerCoilHandler ─────────────────────────────────────────────────────────
 
+#[cfg(feature = "coils")]
 impl ServerCoilHandler for CServerApp {
     fn read_coils_request(
         &mut self,
@@ -155,8 +167,14 @@ impl ServerCoilHandler for CServerApp {
     }
 }
 
+// When the `coils` feature is not enabled, provide a blank impl
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "coils"))]
+impl ServerCoilHandler for CServerApp {}
+
 // ── ServerDiscreteInputHandler ────────────────────────────────────────────────
 
+#[cfg(feature = "discrete-inputs")]
 impl ServerDiscreteInputHandler for CServerApp {
     fn read_discrete_inputs_request(
         &mut self,
@@ -186,8 +204,14 @@ impl ServerDiscreteInputHandler for CServerApp {
     }
 }
 
+// When the `discrete-inputs` feature is not enabled, provide a blank impl
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "discrete-inputs"))]
+impl ServerDiscreteInputHandler for CServerApp {}
+
 // ── ServerHoldingRegisterHandler ──────────────────────────────────────────────
 
+#[cfg(feature = "holding-registers")]
 impl ServerHoldingRegisterHandler for CServerApp {
     fn read_multiple_holding_registers_request(
         &mut self,
@@ -324,6 +348,7 @@ impl ServerHoldingRegisterHandler for CServerApp {
 
 // ── ServerInputRegisterHandler ────────────────────────────────────────────────
 
+#[cfg(feature = "input-registers")]
 impl ServerInputRegisterHandler for CServerApp {
     fn read_multiple_input_registers_request(
         &mut self,
@@ -353,8 +378,16 @@ impl ServerInputRegisterHandler for CServerApp {
     }
 }
 
+// When the `holding-registers` feature is not enabled, provide blank impls
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "holding-registers"))]
+impl ServerHoldingRegisterHandler for CServerApp {}
+#[cfg(not(feature = "input-registers"))]
+impl ServerInputRegisterHandler for CServerApp {}
+
 // ── ServerFifoHandler ─────────────────────────────────────────────────────────
 
+#[cfg(feature = "fifo")]
 impl ServerFifoHandler for CServerApp {
     fn read_fifo_queue_request(
         &mut self,
@@ -382,8 +415,14 @@ impl ServerFifoHandler for CServerApp {
     }
 }
 
+// When the `fifo` feature is not enabled, provide a blank impl
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "fifo"))]
+impl ServerFifoHandler for CServerApp {}
+
 // ── ServerFileRecordHandler ───────────────────────────────────────────────────
 
+#[cfg(feature = "file-record")]
 impl ServerFileRecordHandler for CServerApp {
     fn read_file_record_request(
         &mut self,
@@ -443,8 +482,14 @@ impl ServerFileRecordHandler for CServerApp {
     }
 }
 
+// When the `file-record` feature is not enabled, provide a blank impl
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "file-record"))]
+impl ServerFileRecordHandler for CServerApp {}
+
 // ── ServerDiagnosticsHandler ──────────────────────────────────────────────────
 
+#[cfg(feature = "diagnostics")]
 impl ServerDiagnosticsHandler for CServerApp {
     fn read_exception_status_request(
         &mut self,
@@ -602,6 +647,11 @@ impl ServerDiagnosticsHandler for CServerApp {
         ))
     }
 }
+
+// When the `diagnostics` feature is not enabled, provide a blank impl
+// so that `CServerApp` still satisfies the `ModbusAppHandler` supertrait.
+#[cfg(not(feature = "diagnostics"))]
+impl ServerDiagnosticsHandler for CServerApp {}
 
 // ── TrafficNotifier (no-op when server-traffic feature is active) ─────────────
 

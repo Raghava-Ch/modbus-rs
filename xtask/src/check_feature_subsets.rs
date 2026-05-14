@@ -747,33 +747,33 @@ static STEPS: &[Step] = &[
     ),
     // ── mbus-ffi ─────────────────────────────────────────────────────────────
     Step::check(
-        "ffi / c+coils+registers",
+        "ffi / c-client+coils+registers",
         &[
             "-p",
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c,coils,registers",
+            "c-client,coils,registers",
         ],
     ),
     Step::check(
-        "ffi / c+c-server+server-traffic+full",
+        "ffi / c-server+server-traffic+full",
         &[
             "-p",
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c,c-server,server-traffic,full",
+            "c-server,server-traffic,full",
         ],
     ),
     Step::check(
-        "ffi / c+c-gateway+full",
+        "ffi / c-gateway+full",
         &[
             "-p",
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c,c-gateway,full",
+            "c-gateway,full",
         ],
     ),
     Step::check(
@@ -846,13 +846,27 @@ pub fn cmd_check_feature_subsets(root: &Path, opts: &Opts) -> Result<(), String>
             println!("FAIL");
             failed += 1;
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Collect first error line for the summary.
-            let first_error = stderr
+            // Collect the full error block: error line(s), location, note/help.
+            let err_block = stderr
                 .lines()
-                .find(|l| l.starts_with("error"))
-                .unwrap_or("(no error line found)")
-                .to_string();
-            failures.push(format!("{label}\n    {first_error}"));
+                .skip_while(|l| !l.starts_with("error"))
+                .take_while(|l| {
+                    let t = l.trim();
+                    !t.is_empty()
+                        && (t.starts_with("error")
+                            || t.starts_with("-->")
+                            || t.starts_with("=")
+                            || t.starts_with("|"))
+                })
+                .take(8)
+                .collect::<Vec<_>>()
+                .join("\n       ");
+            let detail = if err_block.is_empty() {
+                "(no error line found)".to_string()
+            } else {
+                err_block
+            };
+            failures.push(format!("{label}\n    {detail}"));
         }
     }
 

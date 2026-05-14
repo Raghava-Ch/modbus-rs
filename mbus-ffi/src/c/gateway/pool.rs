@@ -22,6 +22,8 @@ use mbus_gateway::GatewayServices;
 
 use crate::MAX_GATEWAYS;
 use crate::c::error::MbusStatusCode;
+#[cfg(feature = "internal-lock-stubs")]
+use crate::c::lock_stubs::*;
 use crate::c::transport::CTcpTransport;
 
 use super::event_adapter::CGatewayEventAdapter;
@@ -52,6 +54,7 @@ pub(crate) type GatewayInner = GatewayServices<
 
 // ── Extern locks (provided by the C application) ────────────────────────────
 
+#[cfg(not(feature = "internal-lock-stubs"))]
 unsafe extern "C" {
     /// Global pool lock — held only during create/destroy operations. Reuses
     /// the same symbol exported by the client pool.

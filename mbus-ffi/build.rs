@@ -234,6 +234,9 @@ fn main() {
             .with_crate(&crate_dir)
             .with_language(cbindgen::Language::C)
             .with_define("feature", "c-server", "MBUS_FEATURE_C_SERVER")
+            .with_define("feature", "network-tcp", "MBUS_FEATURE_NETWORK_TCP")
+            .with_define("feature", "serial-rtu", "MBUS_FEATURE_SERIAL_RTU")
+            .with_define("feature", "serial-ascii", "MBUS_FEATURE_SERIAL_ASCII")
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate server C header")
@@ -290,10 +293,48 @@ fn main() {
                 app_config_path.display()
             )
         });
-        let app_config = mbus_codegen::parse_yaml(&app_config_text)
+        let mut app_config = mbus_codegen::parse_yaml(&app_config_text)
             .unwrap_or_else(|e| panic!("invalid YAML in {}: {e}", app_config_path.display()));
         mbus_codegen::validate_config(&app_config)
             .unwrap_or_else(|e| panic!("config error in {}: {e}", app_config_path.display()));
+
+        // Feature-gate memory sections: clear YAML sections whose corresponding
+        // Cargo features are not enabled, so the generated code never references
+        // types / trait impls behind disabled `#[cfg(feature = "...")]` gates.
+        if std::env::var("CARGO_FEATURE_COILS").is_err() && !app_config.memory_map.coils.is_empty()
+        {
+            println!(
+                "cargo::warning=YAML defines {} coil(s) but the `coils` feature is not enabled; coil handlers will NOT be compiled.",
+                app_config.memory_map.coils.len()
+            );
+            app_config.memory_map.coils.clear();
+        }
+        if std::env::var("CARGO_FEATURE_DISCRETE_INPUTS").is_err()
+            && !app_config.memory_map.discrete_inputs.is_empty()
+        {
+            println!(
+                "cargo::warning=YAML defines {} discrete input(s) but the `discrete-inputs` feature is not enabled; discrete-input handlers will NOT be compiled.",
+                app_config.memory_map.discrete_inputs.len()
+            );
+            app_config.memory_map.discrete_inputs.clear();
+        }
+        if std::env::var("CARGO_FEATURE_REGISTERS").is_err() {
+            if !app_config.memory_map.holding_registers.is_empty() {
+                println!(
+                    "cargo::warning=YAML defines {} holding register(s) but the `registers` feature is not enabled; holding-register handlers will NOT be compiled.",
+                    app_config.memory_map.holding_registers.len()
+                );
+                app_config.memory_map.holding_registers.clear();
+            }
+            if !app_config.memory_map.input_registers.is_empty() {
+                println!(
+                    "cargo::warning=YAML defines {} input register(s) but the `registers` feature is not enabled; input-register handlers will NOT be compiled.",
+                    app_config.memory_map.input_registers.len()
+                );
+                app_config.memory_map.input_registers.clear();
+            }
+        }
+
         let rust_src = mbus_codegen::render_rust_dispatcher(&app_config);
         let gen_path = format!("{out_dir}/generated_server.rs");
         std::fs::write(&gen_path, rust_src)

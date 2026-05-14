@@ -75,6 +75,7 @@ pub enum MbusServerExceptionCode {
 ///
 /// C reads `address` and `quantity`; writes packed coil bits into `out_data` (at most
 /// `out_data_len` bytes) and sets `out_byte_count` to the number of bytes written.
+#[cfg(feature = "coils")]
 #[repr(C)]
 pub struct MbusServerReadCoilsReq {
     /// Slave/unit address of the request.
@@ -94,6 +95,7 @@ pub struct MbusServerReadCoilsReq {
 }
 
 /// C callback type for FC 0x01.
+#[cfg(feature = "coils")]
 pub type MbusServerReadCoilsFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadCoilsReq,
@@ -102,6 +104,7 @@ pub type MbusServerReadCoilsFn = Option<
 >;
 
 /// Request context for FC 0x02 — Read Discrete Inputs.
+#[cfg(feature = "discrete-inputs")]
 #[repr(C)]
 pub struct MbusServerReadDiscreteInputsReq {
     pub unit_id: u8,
@@ -114,6 +117,7 @@ pub struct MbusServerReadDiscreteInputsReq {
 }
 
 /// C callback type for FC 0x02.
+#[cfg(feature = "discrete-inputs")]
 pub type MbusServerReadDiscreteInputsFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadDiscreteInputsReq,
@@ -125,6 +129,7 @@ pub type MbusServerReadDiscreteInputsFn = Option<
 ///
 /// `out_data` receives big-endian register bytes (2 bytes per register).
 /// `out_byte_count` must be set to `quantity * 2` on success.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerReadHoldingRegistersReq {
     pub unit_id: u8,
@@ -137,6 +142,7 @@ pub struct MbusServerReadHoldingRegistersReq {
 }
 
 /// C callback type for FC 0x03.
+#[cfg(feature = "registers")]
 pub type MbusServerReadHoldingRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadHoldingRegistersReq,
@@ -145,6 +151,7 @@ pub type MbusServerReadHoldingRegistersFn = Option<
 >;
 
 /// Request context for FC 0x04 — Read Input Registers.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerReadInputRegistersReq {
     pub unit_id: u8,
@@ -157,6 +164,7 @@ pub struct MbusServerReadInputRegistersReq {
 }
 
 /// C callback type for FC 0x04.
+#[cfg(feature = "registers")]
 pub type MbusServerReadInputRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadInputRegistersReq,
@@ -167,6 +175,7 @@ pub type MbusServerReadInputRegistersFn = Option<
 // ── FC05 / FC06 — Write single (no output data) ───────────────────────────────
 
 /// Request context for FC 0x05 — Write Single Coil.
+#[cfg(feature = "coils")]
 #[repr(C)]
 pub struct MbusServerWriteSingleCoilReq {
     pub unit_id: u8,
@@ -177,6 +186,7 @@ pub struct MbusServerWriteSingleCoilReq {
 }
 
 /// C callback type for FC 0x05.
+#[cfg(feature = "coils")]
 pub type MbusServerWriteSingleCoilFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteSingleCoilReq,
@@ -185,6 +195,7 @@ pub type MbusServerWriteSingleCoilFn = Option<
 >;
 
 /// Request context for FC 0x06 — Write Single Register.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerWriteSingleRegisterReq {
     pub unit_id: u8,
@@ -194,6 +205,7 @@ pub struct MbusServerWriteSingleRegisterReq {
 }
 
 /// C callback type for FC 0x06.
+#[cfg(feature = "registers")]
 pub type MbusServerWriteSingleRegisterFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteSingleRegisterReq,
@@ -206,6 +218,7 @@ pub type MbusServerWriteSingleRegisterFn = Option<
 /// Request context for FC 0x07 — Read Exception Status.
 ///
 /// C sets `out_status` to the 8-bit exception status byte.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerReadExceptionStatusReq {
     pub unit_id: u8,
@@ -215,6 +228,7 @@ pub struct MbusServerReadExceptionStatusReq {
 }
 
 /// C callback type for FC 0x07.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerReadExceptionStatusFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadExceptionStatusReq,
@@ -228,6 +242,7 @@ pub type MbusServerReadExceptionStatusFn = Option<
 ///
 /// `sub_function` is the raw 16-bit sub-function code (see Modbus spec §6.8).
 /// C sets `out_result` to the 16-bit data echo/result.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerDiagnosticsReq {
     pub unit_id: u8,
@@ -241,6 +256,7 @@ pub struct MbusServerDiagnosticsReq {
 }
 
 /// C callback type for FC 0x08.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerDiagnosticsFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerDiagnosticsReq,
@@ -253,6 +269,7 @@ pub type MbusServerDiagnosticsFn = Option<
 /// Request context for FC 0x0B — Get Comm Event Counter.
 ///
 /// C sets `out_status` (status word) and `out_event_count`.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerGetCommEventCounterReq {
     pub unit_id: u8,
@@ -264,6 +281,7 @@ pub struct MbusServerGetCommEventCounterReq {
 }
 
 /// C callback type for FC 0x0B.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerGetCommEventCounterFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerGetCommEventCounterReq,
@@ -277,6 +295,7 @@ pub type MbusServerGetCommEventCounterFn = Option<
 ///
 /// C writes event bytes into `out_events` (max `out_events_len` bytes) and
 /// sets the four output scalar fields.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerGetCommEventLogReq {
     pub unit_id: u8,
@@ -296,6 +315,7 @@ pub struct MbusServerGetCommEventLogReq {
 }
 
 /// C callback type for FC 0x0C.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerGetCommEventLogFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerGetCommEventLogReq,
@@ -309,6 +329,7 @@ pub type MbusServerGetCommEventLogFn = Option<
 ///
 /// `values` is a packed bit array from the master (LSB of first byte = coil at
 /// `starting_address`). Valid for the duration of the callback only.
+#[cfg(feature = "coils")]
 #[repr(C)]
 pub struct MbusServerWriteMultipleCoilsReq {
     pub unit_id: u8,
@@ -322,6 +343,7 @@ pub struct MbusServerWriteMultipleCoilsReq {
 }
 
 /// C callback type for FC 0x0F.
+#[cfg(feature = "coils")]
 pub type MbusServerWriteMultipleCoilsFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteMultipleCoilsReq,
@@ -335,6 +357,7 @@ pub type MbusServerWriteMultipleCoilsFn = Option<
 ///
 /// `values` contains the decoded `u16` register values (big-endian already parsed).
 /// Valid for the duration of the callback only.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerWriteMultipleRegistersReq {
     pub unit_id: u8,
@@ -347,6 +370,7 @@ pub struct MbusServerWriteMultipleRegistersReq {
 }
 
 /// C callback type for FC 0x10.
+#[cfg(feature = "registers")]
 pub type MbusServerWriteMultipleRegistersFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteMultipleRegistersReq,
@@ -360,6 +384,7 @@ pub type MbusServerWriteMultipleRegistersFn = Option<
 ///
 /// C writes vendor/device identification bytes into `out_server_id` and sets
 /// `out_byte_count` and `out_run_indicator_status`.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerReportServerIdReq {
     pub unit_id: u8,
@@ -375,6 +400,7 @@ pub struct MbusServerReportServerIdReq {
 }
 
 /// C callback type for FC 0x11.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerReportServerIdFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReportServerIdReq,
@@ -387,6 +413,7 @@ pub type MbusServerReportServerIdFn = Option<
 /// Request context for FC 0x14 — Read File Record (one sub-request at a time).
 ///
 /// C writes record data bytes into `out_data` and sets `out_byte_count`.
+#[cfg(feature = "file-record")]
 #[repr(C)]
 pub struct MbusServerReadFileRecordReq {
     pub unit_id: u8,
@@ -401,6 +428,7 @@ pub struct MbusServerReadFileRecordReq {
 }
 
 /// C callback type for FC 0x14.
+#[cfg(feature = "file-record")]
 pub type MbusServerReadFileRecordFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadFileRecordReq,
@@ -413,6 +441,7 @@ pub type MbusServerReadFileRecordFn = Option<
 /// Request context for FC 0x15 — Write File Record (one sub-request at a time).
 ///
 /// `record_data` contains decoded `u16` words. Valid for the callback duration only.
+#[cfg(feature = "file-record")]
 #[repr(C)]
 pub struct MbusServerWriteFileRecordReq {
     pub unit_id: u8,
@@ -426,6 +455,7 @@ pub struct MbusServerWriteFileRecordReq {
 }
 
 /// C callback type for FC 0x15.
+#[cfg(feature = "file-record")]
 pub type MbusServerWriteFileRecordFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteFileRecordReq,
@@ -436,6 +466,7 @@ pub type MbusServerWriteFileRecordFn = Option<
 // ── FC16 — Mask Write Register ────────────────────────────────────────────────
 
 /// Request context for FC 0x16 — Mask Write Register.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerMaskWriteRegisterReq {
     pub unit_id: u8,
@@ -446,6 +477,7 @@ pub struct MbusServerMaskWriteRegisterReq {
 }
 
 /// C callback type for FC 0x16.
+#[cfg(feature = "registers")]
 pub type MbusServerMaskWriteRegisterFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerMaskWriteRegisterReq,
@@ -459,6 +491,7 @@ pub type MbusServerMaskWriteRegisterFn = Option<
 ///
 /// C writes the read result into `out_data` (big-endian register bytes) and sets
 /// `out_byte_count`. `write_values` contains the decoded write values from the master.
+#[cfg(feature = "registers")]
 #[repr(C)]
 pub struct MbusServerReadWriteMultipleRegistersReq {
     pub unit_id: u8,
@@ -476,6 +509,7 @@ pub struct MbusServerReadWriteMultipleRegistersReq {
 }
 
 /// C callback type for FC 0x17.
+#[cfg(feature = "registers")]
 pub type MbusServerReadWriteMultipleRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadWriteMultipleRegistersReq,
@@ -486,6 +520,7 @@ pub type MbusServerReadWriteMultipleRegistersFn = Option<
 // ── FC18 — Read FIFO Queue ────────────────────────────────────────────────────
 
 /// Request context for FC 0x18 — Read FIFO Queue.
+#[cfg(feature = "fifo")]
 #[repr(C)]
 pub struct MbusServerReadFifoQueueReq {
     pub unit_id: u8,
@@ -498,6 +533,7 @@ pub struct MbusServerReadFifoQueueReq {
 }
 
 /// C callback type for FC 0x18.
+#[cfg(feature = "fifo")]
 pub type MbusServerReadFifoQueueFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadFifoQueueReq,
@@ -510,6 +546,7 @@ pub type MbusServerReadFifoQueueFn = Option<
 /// Request context for FC 0x2B / MEI 0x0E — Read Device Identification.
 ///
 /// C writes object data into `out_data` and sets all `out_*` fields.
+#[cfg(feature = "diagnostics")]
 #[repr(C)]
 pub struct MbusServerReadDeviceIdentificationReq {
     pub unit_id: u8,
@@ -531,6 +568,7 @@ pub struct MbusServerReadDeviceIdentificationReq {
 }
 
 /// C callback type for FC 0x2B / MEI 0x0E.
+#[cfg(feature = "diagnostics")]
 pub type MbusServerReadDeviceIdentificationFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadDeviceIdentificationReq,
@@ -542,8 +580,9 @@ pub type MbusServerReadDeviceIdentificationFn = Option<
 
 /// Master callback table for a C Modbus server application.
 ///
-/// Pass a populated instance of this struct to `mbus_tcp_server_new` or
-/// `mbus_serial_server_new`. Any callback left as `NULL` will cause the server
+/// Pass a populated instance of this struct to `mbus_tcp_server_new`,
+/// `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`. Any callback
+/// left as `NULL` will cause the server
 /// to respond with `ExceptionCode::IllegalFunction` for that function code.
 ///
 /// The `userdata` pointer is passed as-is to every callback. It is the caller's
@@ -565,35 +604,54 @@ pub struct MbusServerHandlers {
     pub userdata: *mut c_void,
 
     // ── Coil handlers (FC01, FC05, FC0F) ─────────────────────────────────────
+    #[cfg(feature = "coils")]
     pub on_read_coils: MbusServerReadCoilsFn,
+    #[cfg(feature = "coils")]
     pub on_write_single_coil: MbusServerWriteSingleCoilFn,
+    #[cfg(feature = "coils")]
     pub on_write_multiple_coils: MbusServerWriteMultipleCoilsFn,
 
     // ── Discrete Input handlers (FC02) ────────────────────────────────────────
+    #[cfg(feature = "discrete-inputs")]
     pub on_read_discrete_inputs: MbusServerReadDiscreteInputsFn,
 
     // ── Holding Register handlers (FC03, FC06, FC10, FC16, FC17) ─────────────
+    #[cfg(feature = "registers")]
     pub on_read_holding_registers: MbusServerReadHoldingRegistersFn,
+    #[cfg(feature = "registers")]
     pub on_write_single_register: MbusServerWriteSingleRegisterFn,
+    #[cfg(feature = "registers")]
     pub on_write_multiple_registers: MbusServerWriteMultipleRegistersFn,
+    #[cfg(feature = "registers")]
     pub on_mask_write_register: MbusServerMaskWriteRegisterFn,
+    #[cfg(feature = "registers")]
     pub on_read_write_multiple_registers: MbusServerReadWriteMultipleRegistersFn,
 
     // ── Input Register handlers (FC04) ────────────────────────────────────────
+    #[cfg(feature = "registers")]
     pub on_read_input_registers: MbusServerReadInputRegistersFn,
 
     // ── FIFO Queue handlers (FC18) ────────────────────────────────────────────
+    #[cfg(feature = "fifo")]
     pub on_read_fifo_queue: MbusServerReadFifoQueueFn,
 
     // ── File Record handlers (FC14, FC15) ─────────────────────────────────────
+    #[cfg(feature = "file-record")]
     pub on_read_file_record: MbusServerReadFileRecordFn,
+    #[cfg(feature = "file-record")]
     pub on_write_file_record: MbusServerWriteFileRecordFn,
 
     // ── Diagnostics handlers (FC07, FC08, FC0B, FC0C, FC11, FC2B) ────────────
+    #[cfg(feature = "diagnostics")]
     pub on_read_exception_status: MbusServerReadExceptionStatusFn,
+    #[cfg(feature = "diagnostics")]
     pub on_diagnostics: MbusServerDiagnosticsFn,
+    #[cfg(feature = "diagnostics")]
     pub on_get_comm_event_counter: MbusServerGetCommEventCounterFn,
+    #[cfg(feature = "diagnostics")]
     pub on_get_comm_event_log: MbusServerGetCommEventLogFn,
+    #[cfg(feature = "diagnostics")]
     pub on_report_server_id: MbusServerReportServerIdFn,
+    #[cfg(feature = "diagnostics")]
     pub on_read_device_identification: MbusServerReadDeviceIdentificationFn,
 }

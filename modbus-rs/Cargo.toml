@@ -78,7 +78,7 @@ coils = ["mbus-core/coils", "mbus-async?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
 holding-registers = ["registers"]
 input-registers = ["registers"]
-discrete-inputs = ["mbus-core/discrete-inputs", "mbus-async?/discrete-inputs"]
+discrete-inputs = ["mbus-core/registers", "mbus-async?/discrete-inputs"]
 fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
 file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
 diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
@@ -94,7 +94,8 @@ logging = [
     "std-required",
 ]
 async = ["dep:mbus-async", "std-required"]
-traffic = ["mbus-client?/traffic", "mbus-async?/traffic"]
+traffic = ["mbus-client?/traffic", "mbus-async?/traffic", "mbus-server?/traffic"]
+error-trait = ["mbus-core/error-trait"]
 gateway = ["dep:mbus-gateway"]
 
 # Convenience feature for no_std / embedded targets.
@@ -131,7 +132,7 @@ required-features = ["traffic", "client", "network-tcp", "coils"]
 [[example]]
 name = "modbus_rs_client_traffic_async_tcp"
 path = "examples/client/network-tcp/async/traffic.rs"
-required-features = ["async", "traffic", "network-tcp", "coils"]
+required-features = ["async", "traffic", "network-tcp", "coils", "error-trait"]
 
 [[example]]
 name = "modbus_rs_client_tcp_coils"
@@ -263,9 +264,9 @@ required-features = [
 [[example]]
 name = "modbus_rs_gateway_sync_tcp_to_rtu"
 path = "examples/gateway/sync_tcp_to_rtu.rs"
-required-features = ["gateway", "serial-rtu", "network-tcp"]
+required-features = ["gateway", "serial-rtu", "network-tcp", "error-trait"]
 
 [[example]]
 name = "modbus_rs_gateway_async_tcp_to_tcp"
 path = "examples/gateway/async_tcp_to_tcp.rs"
-required-features = ["gateway", "async", "network-tcp"]
+required-features = ["gateway", "async", "network-tcp", "error-trait"]

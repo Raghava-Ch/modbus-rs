@@ -1,3 +1,10 @@
+// Demos in this directory are built by `xtask build-c-demo`.
+// The Rust feature flags used during automation builds are read from
+// `demo.yaml`. Changing `demo.yaml` affects CI, the release check
+// (`cmd_check_release`), and the output of `list-c-demos`.
+//
+// Current rust_features: c-client,coils,registers
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>

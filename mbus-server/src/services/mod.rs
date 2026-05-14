@@ -152,6 +152,10 @@ where
     TRANSPORT: Transport,
     APP: ModbusAppHandler,
 {
+    /// Evaluates to `true` if the configured queue depth is greater than 0.
+    /// Used to statically eradicate queue logic on memory-constrained devices.
+    const HAS_QUEUE: bool = QUEUE_DEPTH > 0;
+
     /// Creates a [`ServerServices`] with an explicitly-sized queue depth `QUEUE_DEPTH`.
     ///
     /// Prefer [`ServerServices::new`] for the default depth of `8`.  Use this
@@ -277,9 +281,9 @@ where
 
     /// Returns `true` when the frame must be silently discarded due to address filtering.
     fn should_drop_for_address(&self, message: &ModbusMessage) -> bool {
-        let wire_txn_id = message.transaction_id();
+        let _wire_txn_id = message.transaction_id();
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
-        let function_code = message.pdu.function_code();
+        let _function_code = message.pdu.function_code();
         let wire_addr = unit_id_or_slave_addr.get();
         let own_addr = self.slave_address.get();
 
@@ -287,16 +291,17 @@ where
             return false;
         }
 
+        #[cfg(feature = "logging")]
         if wire_addr == 0 {
             server_log_trace!(
                 "ignoring broadcast frame: txn_id={}, fc=0x{:02X} (broadcast disabled or unsupported transport)",
-                wire_txn_id,
-                function_code as u8,
+                _wire_txn_id,
+                _function_code as u8,
             );
         } else {
             server_log_trace!(
                 "dropping misaddressed frame: txn_id={}, wire_addr={}, own_addr={}",
-                wire_txn_id,
+                _wire_txn_id,
                 wire_addr,
                 own_addr,
             );
@@ -375,6 +380,9 @@ where
     /// Returns `true` if the response queue utilization exceeds 80% and the configured
     /// overflow policy is `RejectRequest`.
     fn should_apply_back_pressure(&self) -> bool {
+        if QUEUE_DEPTH == 0 {
+            return false;
+        }
         if self.resilience.timeouts.overflow_policy != OverflowPolicy::RejectRequest {
             return false;
         }
@@ -385,12 +393,20 @@ where
 
     /// Returns the number of requests currently waiting in the priority queue.
     pub fn pending_request_count(&self) -> usize {
-        self.request_queue.len()
+        if Self::HAS_QUEUE {
+            self.request_queue.len()
+        } else {
+            0
+        }
     }
 
     /// Returns the number of responses currently waiting in the retry queue.
     pub fn pending_response_count(&self) -> usize {
-        self.response_queue.len()
+        if Self::HAS_QUEUE {
+            self.response_queue.len()
+        } else {
+            0
+        }
     }
 
     /// Returns the number of responses that have been dropped due to queue overflow.
@@ -445,6 +461,7 @@ where
         start_ms: u64,
     ) {
         let _ = unit_id_or_slave_addr;
+        let _ = txn_id;
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_server_message_count();
 
@@ -470,18 +487,34 @@ where
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         err: <TRANSPORT as Transport>::Error,
     ) {
-        server_log_debug!(
-            "txn_id={}: transport send failed ({:?}); queuing for retry",
-            txn_id,
-            err
-        );
+        #[cfg(feature = "logging")]
+        {
+            let mbus_err: MbusError = err.into();
+            if Self::HAS_QUEUE {
+                server_log_debug!(
+                    "txn_id={}: transport send failed ({:?}); queuing for retry",
+                    txn_id,
+                    mbus_err
+                );
+            } else {
+                server_log_debug!(
+                    "txn_id={}: transport send failed ({:?}); dropping response",
+                    txn_id,
+                    mbus_err
+                );
+            }
+        }
+        #[cfg(not(feature = "logging"))]
+        let _ = err;
 
         #[cfg(feature = "traffic")]
         self.app
             .on_tx_error(txn_id, unit_id_or_slave_addr, MbusError::SendFailed, frame);
 
-        self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
-        self.update_peak_response_queue_size();
+        if QUEUE_DEPTH > 0 {
+            self.queue_response_for_retry(frame, txn_id, unit_id_or_slave_addr);
+            self.update_peak_response_queue_size();
+        }
     }
 
     fn queue_response_for_retry(
@@ -554,11 +587,11 @@ where
             TRANSPORT::TRANSPORT_TYPE,
         ) {
             Ok(adu) => adu,
-            Err(err) => {
+            Err(_err) => {
                 server_log_debug!(
                     "FC{:02X}: failed to build exception ADU: {:?}",
                     function_code as u8,
-                    err
+                    _err
                 );
                 return;
             }
@@ -605,11 +638,11 @@ where
             TRANSPORT::TRANSPORT_TYPE,
         ) {
             Ok(adu) => adu,
-            Err(err) => {
+            Err(_err) => {
                 server_log_debug!(
                     "FC{:02X}: failed to build exception ADU: {:?}",
                     function_code as u8,
-                    err
+                    _err
                 );
                 return;
             }
@@ -826,7 +859,9 @@ where
     ///    priority order (only reached when `enable_priority_queue` is `true`).
     pub fn poll(&mut self) {
         // Step 1 — retry queued responses from previous failed sends.
-        self.drain_response_queue();
+        if QUEUE_DEPTH > 0 {
+            self.drain_response_queue();
+        }
 
         // Step 2 — receive bytes from the transport.
         match self.transport.recv() {
@@ -843,7 +878,7 @@ where
         self.process_rxed_frame();
 
         // Steps 4 & 5 — only relevant when the priority queue is active.
-        if self.resilience.enable_priority_queue {
+        if Self::HAS_QUEUE && self.resilience.enable_priority_queue {
             self.expire_stale_queued_requests();
 
             // Dispatch all queued requests in priority order.
@@ -954,6 +989,7 @@ where
     }
 
     fn on_queued_response_retry_success(&mut self, pending: &PendingResponse) {
+        let _ = pending;
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_server_message_count();
 
@@ -973,7 +1009,7 @@ where
     fn on_queued_response_retry_failure(
         &mut self,
         mut pending: PendingResponse,
-        err: <TRANSPORT as Transport>::Error,
+        _err: <TRANSPORT as Transport>::Error,
     ) {
         #[cfg(feature = "traffic")]
         self.app.on_tx_error(
@@ -983,10 +1019,12 @@ where
             pending.frame.as_slice(),
         );
 
+        #[cfg(feature = "logging")]
+        let mbus_err: MbusError = _err.into();
         server_log_debug!(
             "queued response retry {} failed: {:?}; requeueing",
             pending.retry_count + 1,
-            err
+            mbus_err
         );
         pending.retry_count += 1;
         pending.queued_at_ms = self.now_ms();
@@ -1012,8 +1050,8 @@ where
         let message =
             match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type) {
                 Ok(msg) => msg,
-                Err(err) => {
-                    server_log_debug!("queued request: decompile failed: {:?}; dropping", err);
+                Err(_err) => {
+                    server_log_debug!("queued request: decompile failed: {:?}; dropping", _err);
                     return;
                 }
             };
@@ -1053,10 +1091,10 @@ where
         let message =
             match common::decompile_adu_frame(&pending.frame[..expected_length], transport_type) {
                 Ok(msg) => msg,
-                Err(err) => {
+                Err(_err) => {
                     server_log_debug!(
                         "strict expiry: failed to decompile queued request: {:?}",
-                        err
+                        _err
                     );
                     return;
                 }
@@ -1117,13 +1155,13 @@ where
         }
     }
 
-    fn handle_parse_error(&mut self, err: MbusError) {
+    fn handle_parse_error(&mut self, _err: MbusError) {
         #[cfg(feature = "diagnostics-stats")]
         self.stats.increment_comm_error_count();
 
         server_log_debug!(
             "frame parse/resync event: error={:?}, buffer_len={}; dropping 1 byte",
-            err,
+            _err,
             self.rxed_frame.len()
         );
         let len = self.rxed_frame.len();
@@ -1306,7 +1344,7 @@ where
     /// Routes an already-validated inbound message to the priority queue or
     /// dispatches it immediately on the hot path.
     fn enqueue_or_dispatch_inbound(&mut self, message: &ModbusMessage, expected_length: usize) {
-        if self.resilience.enable_priority_queue {
+        if Self::HAS_QUEUE && self.resilience.enable_priority_queue {
             self.try_enqueue_request(message, expected_length);
         } else {
             self.dispatch_immediately(message);

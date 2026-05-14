@@ -1,14 +1,28 @@
-// Rendering logic has moved to `mbus-codegen`. The local copies below are kept
-// temporarily for reference and will be removed in a follow-up cleanup.
-#![allow(dead_code, unused_imports)]
+//! `gen-server-app` xtask sub‑command.
+//!
+//! Two‑mode operation:
+//!
+//! **Codegen mode** (default when only `--config` is given, optionally
+//! `--emit-c-header` / `--out-dir`):
+//!   - Parse a YAML server‑app config
+//!   - Generate a C header (`mbus_server_app.h`) and/or Rust dispatcher
+//!   - Used during development and by CI (`check-server-gen`)
+//!
+//! **Full mode** (when `--target` and `--out-dir` are supplied):
+//!   - Everything from codegen mode **plus**
+//!   - Parse the YAML to determine which Modbus memory‑map sections are in use
+//!   - Build `mbus-ffi` with **only** the features required by the YAML config
+//!     (instead of the catch‑all `c-server,full`)
+//!   - Cross‑compile for the given target triple
+//!   - Bundle the result into `<out-dir>/include/` and `<out-dir>/lib/` for
+//!     consumption by an external C or C++ project
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Types are provided by mbus-codegen; re-exported here so callers can still use them.
-#[allow(dead_code)]
-pub use mbus_codegen::{Access, DeviceConfig, HooksConfig, MapEntry, MemoryMap, ServerAppConfig};
+pub use mbus_codegen::{MapEntry, ServerAppConfig};
 
 #[derive(Debug, Clone)]
 pub struct GenServerAppOptions {
@@ -19,6 +33,24 @@ pub struct GenServerAppOptions {
     pub emit_c_header: Option<PathBuf>,
     pub check: bool,
     pub dry_run: bool,
+    // ── Full-mode fields ─────────────────────────────────────────────
+    /// Target triple for cross‑compilation (e.g. `thumbv7em-none-eabi`).
+    /// When `None`, only codegen mode runs.
+    pub target: Option<String>,
+    /// Output directory root — `include/` and `lib/` subdirectories are created here.
+    /// Required when `target` is `Some`.
+    pub output_root: Option<PathBuf>,
+    /// Build profile (`release` or `debug`).  Defaults to `release`.
+    pub profile: Option<String>,
+    /// Whether to use Nightly Rust and build-std to aggressively optimize binary size.
+    pub optimize_size: bool,
+    // ── Transport feature gates ──────────────────────────────────────
+    /// Enable TCP transport support (feature = "network-tcp").
+    pub network_tcp: bool,
+    /// Enable RTU serial transport support (feature = "serial-rtu").
+    pub serial_rtu: bool,
+    /// Enable ASCII serial transport support (feature = "serial-ascii").
+    pub serial_ascii: bool,
 }
 
 pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, String> {
@@ -27,6 +59,15 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
     let mut emit_c_header: Option<PathBuf> = None;
     let mut check = false;
     let mut dry_run = false;
+    // Full-mode flags
+    let mut target: Option<String> = None;
+    let mut output_root: Option<PathBuf> = None;
+    let mut profile: Option<String> = None;
+    let mut optimize_size = false;
+    // Transport feature flags
+    let mut network_tcp = false;
+    let mut serial_rtu = false;
+    let mut serial_ascii = false;
 
     let mut i = 0usize;
     while i < args.len() {
@@ -52,8 +93,36 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
                 };
                 emit_c_header = Some(root.join(v));
             }
+            "--target" => {
+                i += 1;
+                let Some(v) = args.get(i) else {
+                    return Err("missing value for --target".to_string());
+                };
+                target = Some(v.clone());
+            }
+            "--profile" => {
+                i += 1;
+                let Some(v) = args.get(i) else {
+                    return Err("missing value for --profile".to_string());
+                };
+                if v != "release" && v != "debug" {
+                    return Err(format!("--profile must be 'release' or 'debug', got '{v}'"));
+                }
+                profile = Some(v.clone());
+            }
+            "--network-tcp" => network_tcp = true,
+            "--serial-rtu" => serial_rtu = true,
+            "--serial-ascii" => serial_ascii = true,
+            "--optimize-size" => optimize_size = true,
             "--check" => check = true,
             "--dry-run" => dry_run = true,
+            // Positional: the first non-flag argument before --target is the output root
+            other if !other.starts_with('-') => {
+                if output_root.is_some() {
+                    return Err(format!("unexpected positional argument: {other}"));
+                }
+                output_root = Some(root.join(other));
+            }
             other => return Err(format!("unknown argument for gen-server-app: {other}")),
         }
         i += 1;
@@ -67,28 +136,40 @@ pub fn parse_args(root: &Path, args: &[String]) -> Result<GenServerAppOptions, S
         emit_c_header,
         check,
         dry_run,
+        target,
+        output_root,
+        profile,
+        optimize_size,
+        network_tcp,
+        serial_rtu,
+        serial_ascii,
     })
 }
 
+/// Run the `gen-server-app` command.
 pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
+    // ── 1. Parse & validate YAML ─────────────────────────────────────
     let config_text = fs::read_to_string(&opts.config_path)
         .map_err(|e| format!("failed to read {}: {e}", opts.config_path.display()))?;
     let config = mbus_codegen::parse_yaml(&config_text)
         .map_err(|e| format!("invalid yaml in {}: {e}", opts.config_path.display()))?;
-
     mbus_codegen::validate_config(&config)?;
 
+    // ── 2. Codegen: Rust dispatcher ──────────────────────────────────
     let rust_text_and_out = opts.out_dir.as_ref().map(|out_dir| {
         (
             mbus_codegen::render_rust_dispatcher(&config),
             out_dir.join("generated_server.rs"),
         )
     });
+
+    // ── 3. Codegen: C header ─────────────────────────────────────────
     let header_text_and_path = opts
         .emit_c_header
         .as_ref()
         .map(|hp| (mbus_codegen::render_c_header(&config), hp.clone()));
 
+    // ── 4. Check / dry-run ───────────────────────────────────────────
     if opts.check {
         if let Some((rust_text, rust_out)) = &rust_text_and_out {
             check_exact(rust_out, rust_text)?;
@@ -107,9 +188,22 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
         if let Some((_, header_path)) = &header_text_and_path {
             println!("dry-run: would write {}", header_path.display());
         }
+        if opts.target.is_some() {
+            let features = compute_features(
+                &config,
+                opts.network_tcp,
+                opts.serial_rtu,
+                opts.serial_ascii,
+            );
+            println!(
+                "dry-run: would build with --features \"{}\"",
+                features.join(",")
+            );
+        }
         return Ok(());
     }
 
+    // ── 5. Write generated artifacts ─────────────────────────────────
     if let Some((rust_text, rust_out)) = &rust_text_and_out {
         let out_dir = rust_out
             .parent()
@@ -131,1422 +225,251 @@ pub fn run(opts: &GenServerAppOptions) -> Result<(), String> {
         "Generated server app artifacts from {}",
         opts.config_path.display()
     );
+
+    // ── 6. Full mode: cross-compile mbus-ffi ─────────────────────────
+    // If no positional output root was given, fall back to --out-dir so the user
+    // doesn't have to repeat the same path twice.  If neither is available, skip.
+    let output_root = opts.output_root.as_ref().or(opts.out_dir.as_ref());
+    if let (Some(target), Some(output_root)) = (&opts.target, output_root) {
+        let profile = opts.profile.as_deref().unwrap_or("release");
+        let features = compute_features(
+            &config,
+            opts.network_tcp,
+            opts.serial_rtu,
+            opts.serial_ascii,
+        );
+
+        let features_str = features.join(",");
+        let nightly_msg = if opts.optimize_size {
+            " with build-std size optimizations"
+        } else {
+            ""
+        };
+        println!(
+            "Building mbus-ffi for target '{target}' with features: {features_str} (profile={profile}){nightly_msg}"
+        );
+
+        // 6a. Execute cargo build
+        let mut cmd = Command::new("cargo");
+
+        if opts.optimize_size {
+            cmd.arg("+nightly");
+        }
+
+        cmd.args(["build", "-p", "mbus-ffi"])
+            .arg("--target")
+            .arg(target)
+            .arg("--features")
+            .arg(&features_str);
+
+        if profile == "release" {
+            cmd.arg("--release");
+        }
+
+        if opts.optimize_size {
+            cmd.arg("-Z").arg("build-std=core,alloc");
+            let existing_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+            cmd.env(
+                "RUSTFLAGS",
+                format!("{existing_flags} -Zunstable-options -Cpanic=immediate-abort"),
+            );
+        }
+
+        cmd.current_dir(
+            // repo root is the CWD from which xtask is invoked
+            Path::new("."),
+        );
+
+        // Pass MBUS_SERVER_APP_CONFIG so mbus-ffi/build.rs generates the dispatcher
+        cmd.env(
+            "MBUS_SERVER_APP_CONFIG",
+            opts.config_path.to_string_lossy().as_ref(),
+        );
+
+        let status = cmd
+            .status()
+            .map_err(|e| format!("failed to launch cargo build: {e}"))?;
+        if !status.success() {
+            return Err("cargo build failed (see above)".to_string());
+        }
+
+        // 6b. Locate the built artifacts
+        let target_dir = Path::new("target").join(target);
+        let base_dir = if profile == "release" {
+            target_dir.join("release")
+        } else {
+            target_dir.join("debug")
+        };
+
+        // 6c. Create output directories
+        let include_dir = output_root.join("include");
+        let lib_dir = output_root.join("lib");
+        fs::create_dir_all(&include_dir)
+            .map_err(|e| format!("failed to create {}: {e}", include_dir.display()))?;
+        fs::create_dir_all(&lib_dir)
+            .map_err(|e| format!("failed to create {}: {e}", lib_dir.display()))?;
+
+        // Also create include/lib dirs under --out-dir if it differs from output_root,
+        // so the library is always available at the --out-dir location.
+        let alt_include_dir = opts
+            .out_dir
+            .as_ref()
+            .filter(|d| *d != output_root)
+            .map(|d| d.join("include"));
+        let alt_lib_dir = opts
+            .out_dir
+            .as_ref()
+            .filter(|d| *d != output_root)
+            .map(|d| d.join("lib"));
+        if let Some(ref dir) = alt_include_dir {
+            fs::create_dir_all(dir)
+                .map_err(|e| format!("failed to create {}: {e}", dir.display()))?;
+        }
+        if let Some(ref dir) = alt_lib_dir {
+            fs::create_dir_all(dir)
+                .map_err(|e| format!("failed to create {}: {e}", dir.display()))?;
+        }
+
+        // 6d. Copy C header into include/
+        if let Some((_, header_path)) = &header_text_and_path {
+            // If the --emit-c-header path is inside the workspace, the file was already
+            // written above.  We still copy it into <output_root>/include/.
+            let dest = include_dir.join("mbus_server_app.h");
+            fs::copy(header_path, &dest)
+                .map_err(|e| format!("failed to copy header to {}: {e}", dest.display()))?;
+            println!("  copied header -> {}", dest.display());
+            // Also copy to alt include dir if present
+            if let Some(ref alt) = alt_include_dir {
+                let alt_dest = alt.join("mbus_server_app.h");
+                let _ = fs::copy(header_path, &alt_dest);
+            }
+        } else {
+            // Even without --emit-c-header, write the header into the output include/
+            let header_text = mbus_codegen::render_c_header(&config);
+            let dest = include_dir.join("mbus_server_app.h");
+            fs::write(&dest, &header_text)
+                .map_err(|e| format!("failed to write {}: {e}", dest.display()))?;
+            println!("  wrote header -> {}", dest.display());
+            // Also write to alt include dir if present
+            if let Some(ref alt) = alt_include_dir {
+                let alt_dest = alt.join("mbus_server_app.h");
+                let _ = fs::write(&alt_dest, &header_text);
+            }
+        }
+
+        // 6e. Copy modbus_rs_server.h into include/
+        // This header is generated by cbindgen at build time; it lives in
+        // target/mbus-ffi/include/modbus_rs_server.h.  We copy it if present.
+        let server_header_src = Path::new("target/mbus-ffi/include/modbus_rs_server.h");
+        if server_header_src.exists() {
+            let dest = include_dir.join("modbus_rs_server.h");
+            fs::copy(server_header_src, &dest)
+                .map_err(|e| format!("failed to copy modbus_rs_server.h: {e}",))?;
+            println!("  copied modbus_rs_server.h -> {}", dest.display());
+            // Also copy to alt include dir if present
+            if let Some(ref alt) = alt_include_dir {
+                let alt_dest = alt.join("modbus_rs_server.h");
+                let _ = fs::copy(server_header_src, &alt_dest);
+            }
+        }
+
+        // 6f. Copy libmbus_ffi.a into lib/
+        let lib_src = base_dir.join("libmbus_ffi.a");
+        if lib_src.exists() {
+            let dest = lib_dir.join("libmbus_ffi.a");
+            fs::copy(&lib_src, &dest)
+                .map_err(|e| format!("failed to copy {}: {e}", lib_src.display()))?;
+            println!("  copied library -> {}", dest.display());
+            // Also copy to alt lib dir if present
+            if let Some(ref alt) = alt_lib_dir {
+                let alt_dest = alt.join("libmbus_ffi.a");
+                let _ = fs::copy(&lib_src, &alt_dest);
+            }
+        } else {
+            // Try the base filename for cdylib (some platforms produce .so/.dylib)
+            eprintln!(
+                "warning: {} not found (static library may not have been produced for target '{target}')",
+                lib_src.display()
+            );
+        }
+
+        // 6g. Copy generated_server.rs into output root for reference
+        if let Some((rust_text, _)) = &rust_text_and_out {
+            let dest = output_root.join("generated_server.rs");
+            fs::write(&dest, rust_text)
+                .map_err(|e| format!("failed to write {}: {e}", dest.display()))?;
+            println!("  wrote generated_server.rs -> {}", dest.display());
+        }
+
+        println!(
+            "Done. Server app bundle for '{target}' is ready at {}",
+            output_root.display()
+        );
+    }
+
     Ok(())
 }
 
-fn validate_config(config: &ServerAppConfig) -> Result<(), String> {
-    if config.schema_version != 1 {
-        return Err(format!(
-            "unsupported schema_version {} (expected 1)",
-            config.schema_version
-        ));
+// ── YAML-aware feature selection ──────────────────────────────────────────
+
+/// Map of YAML memory‑map sections to mbus-server feature name.
+const SECTION_TO_FEATURE: &[(&str, &str)] = &[
+    ("coils", "coils"),
+    ("discrete_inputs", "discrete-inputs"),
+    ("holding_registers", "registers"),
+    ("input_registers", "registers"),
+];
+
+/// Compute the minimal set of cargo features needed to build `mbus-ffi` for
+/// the given YAML server app config.
+///
+/// Always includes `c-server`.  Individual mbus-server features are added
+/// only for non‑empty memory‑map sections.
+///
+/// Transport features (`network-tcp`, `serial-rtu`, `serial-ascii`) are added
+/// based on the corresponding CLI flags.
+fn compute_features(
+    config: &ServerAppConfig,
+    network_tcp: bool,
+    serial_rtu: bool,
+    serial_ascii: bool,
+) -> Vec<String> {
+    let mut features: Vec<String> = Vec::new();
+
+    // c-server is always needed — it enables dep:mbus-server
+    features.push("c-server".to_string());
+
+    // Transport features from CLI flags
+    if network_tcp {
+        features.push("network-tcp".to_string());
+    }
+    if serial_rtu {
+        features.push("serial-rtu".to_string());
+    }
+    if serial_ascii {
+        features.push("serial-ascii".to_string());
     }
 
-    validate_entries_unique("coils", &config.memory_map.coils)?;
-    validate_entries_unique("discrete_inputs", &config.memory_map.discrete_inputs)?;
-    validate_entries_unique("holding_registers", &config.memory_map.holding_registers)?;
-    validate_entries_unique("input_registers", &config.memory_map.input_registers)?;
-
-    for e in &config.memory_map.discrete_inputs {
-        if e.access.is_writable() {
-            return Err(format!(
-                "discrete_input '{}' at address {} cannot be writable (Modbus read-only)",
-                e.name, e.address
-            ));
-        }
-    }
-    for e in &config.memory_map.input_registers {
-        if e.access.is_writable() {
-            return Err(format!(
-                "input_register '{}' at address {} cannot be writable (Modbus read-only)",
-                e.name, e.address
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_entries_unique(section: &str, entries: &[MapEntry]) -> Result<(), String> {
-    let mut seen = std::collections::BTreeSet::new();
-    for entry in entries {
-        if !seen.insert(entry.address) {
-            return Err(format!(
-                "duplicate address {} in section {}",
-                entry.address, section
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn resolve_on_write<'a>(entry: &'a MapEntry, global: &'a Option<String>) -> Option<&'a str> {
-    entry.on_write.as_deref().or(global.as_deref())
-}
-
-// ---------------------------------------------------------------------------
-// Rust code generator
-// ---------------------------------------------------------------------------
-
-fn render_rust_dispatcher(config: &ServerAppConfig) -> String {
-    let coil_read_entries: Vec<&MapEntry> = config
-        .memory_map
-        .coils
-        .iter()
-        .filter(|e| e.access.is_readable())
-        .collect();
-    let coil_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .coils
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let discrete_read_entries: Vec<&MapEntry> = config
-        .memory_map
-        .discrete_inputs
-        .iter()
-        .filter(|e| e.access.is_readable())
-        .collect();
-    let holding_read_entries: Vec<&MapEntry> = config
-        .memory_map
-        .holding_registers
-        .iter()
-        .filter(|e| e.access.is_readable())
-        .collect();
-    let holding_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .holding_registers
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let input_read_entries: Vec<&MapEntry> = config
-        .memory_map
-        .input_registers
-        .iter()
-        .filter(|e| e.access.is_readable())
-        .collect();
-
-    let has_coils = !config.memory_map.coils.is_empty();
-    let has_discrete = !config.memory_map.discrete_inputs.is_empty();
-    let has_holding = !config.memory_map.holding_registers.is_empty();
-    let has_input = !config.memory_map.input_registers.is_empty();
-
-    // Collect extern "C" declarations for write-notification hooks only.
-    let mut extern_lines: BTreeSet<String> = BTreeSet::new();
-    for entry in &coil_write_entries {
-        if let Some(sym) = resolve_on_write(entry, &config.hooks.on_write_coil) {
-            extern_lines.insert(format!(
-                "    fn {sym}(ctx: *mut c_void, address: u16, value: u8) -> MbusHookStatus;"
-            ));
-        }
-    }
-    for entry in &holding_write_entries {
-        if let Some(sym) = resolve_on_write(entry, &config.hooks.on_write_holding) {
-            extern_lines.insert(format!(
-                "    fn {sym}(ctx: *mut c_void, address: u16, value: u16) -> MbusHookStatus;"
-            ));
+    for (section, feature_name) in SECTION_TO_FEATURE {
+        let entries: &[MapEntry] = match *section {
+            "coils" => &config.memory_map.coils,
+            "discrete_inputs" => &config.memory_map.discrete_inputs,
+            "holding_registers" => &config.memory_map.holding_registers,
+            "input_registers" => &config.memory_map.input_registers,
+            _ => unreachable!(),
+        };
+        if !entries.is_empty() {
+            // Forward the feature to mbus-server via the crate's feature forwarding.
+            features.push(feature_name.to_string());
         }
     }
 
-    let mut out = String::new();
-
-    // File header
-    out.push_str("// @generated by xtask gen-server-app. Do not edit manually.\n");
-    out.push_str(
-        "// Rust owns all register/coil state. C receives write-notification callbacks.\n",
-    );
-    out.push_str(
-        "// Uses the hand-written server FFI infrastructure (pool, transport, config).\n\n",
-    );
-
-    // use imports (only what is needed)
-    out.push_str("use core::ffi::c_void;\n");
-    out.push_str("use core::ptr;\n");
-    out.push_str("use crate::c::server::callbacks::*;\n");
-    let mut imports: Vec<&str> = vec!["modbus_app"];
-    if has_coils {
-        imports.push("CoilMap");
-        imports.push("CoilsModel");
-    }
-    if has_discrete {
-        imports.push("DiscreteInputMap");
-        imports.push("DiscreteInputsModel");
-    }
-    if has_holding {
-        imports.push("HoldingRegisterMap");
-        imports.push("HoldingRegistersModel");
-    }
-    if has_input {
-        imports.push("InputRegisterMap");
-        imports.push("InputRegistersModel");
-    }
-    imports.sort_unstable();
-    imports.dedup();
-    out.push_str(&format!("use mbus_server::{{{}}};\n\n", imports.join(", ")));
-
-    // MbusHookStatus enum
-    out.push_str("/// Status returned by write-notification hooks and FFI accessors.\n");
-    out.push_str("#[repr(C)]\n");
-    out.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq)]\n");
-    out.push_str("pub enum MbusHookStatus {\n");
-    out.push_str("    MbusHookOk = 0,\n");
-    out.push_str("    MbusHookIllegalDataAddress = 1,\n");
-    out.push_str("    MbusHookIllegalDataValue = 2,\n");
-    out.push_str("    MbusHookDeviceFailure = 3,\n");
-    out.push_str("}\n\n");
-
-    // extern "C" block
-    out.push_str("unsafe extern \"C\" {\n");
-    for line in &extern_lines {
-        out.push_str(line);
-        out.push('\n');
-    }
-    out.push_str(
-        "    /// Acquire your RTOS mutex / critical section before Rust state is mutated.\n",
-    );
-    out.push_str("    /// Single-threaded bare-metal: implement as an empty function.\n");
-    out.push_str("    fn mbus_app_lock();\n");
-    out.push_str("    /// Release the lock acquired by mbus_app_lock().\n");
-    out.push_str("    fn mbus_app_unlock();\n");
-    out.push_str("}\n\n");
-
-    // Model structs
-    if has_coils {
-        out.push_str(&render_coils_model(&config.memory_map.coils));
-        out.push('\n');
-    }
-    if has_discrete {
-        out.push_str(&render_discrete_inputs_model(
-            &config.memory_map.discrete_inputs,
-        ));
-        out.push('\n');
-    }
-    if has_holding {
-        out.push_str(&render_holding_registers_model(
-            &config.memory_map.holding_registers,
-        ));
-        out.push('\n');
-    }
-    if has_input {
-        out.push_str(&render_input_registers_model(
-            &config.memory_map.input_registers,
-        ));
-        out.push('\n');
-    }
-
-    // AppModel struct with #[modbus_app]
-    out.push_str(&render_app_struct(config));
-    out.push_str("\n\n");
-
-    // Static state — APP_MODEL is initialised in mbus_server_model_init.
-    out.push_str("static mut APP_MODEL: Option<AppModel> = None;\n\n");
-
-    // Write dispatch helpers
-    if !coil_write_entries.is_empty() {
-        out.push_str(&render_write_dispatch_u8(
-            "dispatch_write_coil",
-            &coil_write_entries,
-            &config.hooks.on_write_coil,
-        ));
-        out.push('\n');
-    }
-    if !holding_write_entries.is_empty() {
-        out.push_str(&render_write_dispatch_u16(
-            "dispatch_write_holding",
-            &holding_write_entries,
-            &config.hooks.on_write_holding,
-        ));
-        out.push('\n');
-    }
-
-    // Address-based FFI exports
-    out.push_str(&render_get_coil_ffi(&coil_read_entries, has_coils));
-    out.push('\n');
-    out.push_str(&render_set_coil_ffi(&coil_write_entries, has_coils));
-    out.push('\n');
-    out.push_str(&render_get_discrete_input_ffi(
-        &discrete_read_entries,
-        has_discrete,
-    ));
-    out.push('\n');
-    out.push_str(&render_get_holding_ffi(&holding_read_entries, has_holding));
-    out.push('\n');
-    out.push_str(&render_set_holding_ffi(&holding_write_entries, has_holding));
-    out.push('\n');
-    out.push_str(&render_get_input_ffi(&input_read_entries, has_input));
-    out.push('\n');
-
-    // Hook-to-exception-code helper
-    out.push_str(&render_hook_to_exception_code());
-    out.push('\n');
-
-    // Handler callback functions matching MbusServerHandlers signatures
-    out.push_str(&render_server_handler_callbacks(config));
-    out.push('\n');
-
-    // Model init + default handlers convenience
-    out.push_str(&render_model_init_and_default_handlers(config));
-    out.push('\n');
-
-    // Named field FFI exports
-    out.push_str(&render_named_ffi(config));
-
-    out
+    features.sort();
+    features.dedup();
+    features
 }
 
-// ---------------------------------------------------------------------------
-// Model struct renderers
-// ---------------------------------------------------------------------------
-
-fn render_coils_model(entries: &[MapEntry]) -> String {
-    let mut out = String::new();
-    out.push_str("#[derive(Debug, Default, CoilsModel)]\n");
-    out.push_str("pub struct AppCoils {\n");
-    for e in entries {
-        out.push_str(&format!("    #[coil(addr = {})]\n", e.address));
-        out.push_str(&format!("    pub {}: bool,\n", e.name));
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_discrete_inputs_model(entries: &[MapEntry]) -> String {
-    let mut out = String::new();
-    out.push_str("#[derive(Debug, Default, DiscreteInputsModel)]\n");
-    out.push_str("pub struct AppDiscreteInputs {\n");
-    for e in entries {
-        out.push_str(&format!("    #[discrete_input(addr = {})]\n", e.address));
-        out.push_str(&format!("    pub {}: bool,\n", e.name));
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_holding_registers_model(entries: &[MapEntry]) -> String {
-    let mut out = String::new();
-    out.push_str("#[derive(Debug, Default, HoldingRegistersModel)]\n");
-    out.push_str("pub struct AppHolding {\n");
-    for e in entries {
-        out.push_str(&format!("    #[reg(addr = {})]\n", e.address));
-        out.push_str(&format!("    pub {}: u16,\n", e.name));
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_input_registers_model(entries: &[MapEntry]) -> String {
-    let mut out = String::new();
-    out.push_str("#[derive(Debug, Default, InputRegistersModel)]\n");
-    out.push_str("pub struct AppInput {\n");
-    for e in entries {
-        out.push_str(&format!("    #[reg(addr = {})]\n", e.address));
-        out.push_str(&format!("    pub {}: u16,\n", e.name));
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_app_struct(config: &ServerAppConfig) -> String {
-    let has_coils = !config.memory_map.coils.is_empty();
-    let has_discrete = !config.memory_map.discrete_inputs.is_empty();
-    let has_holding = !config.memory_map.holding_registers.is_empty();
-    let has_input = !config.memory_map.input_registers.is_empty();
-
-    let mut macro_args: Vec<String> = vec![];
-    if has_coils {
-        macro_args.push("coils(coils)".to_string());
-    }
-    if has_discrete {
-        macro_args.push("discrete_inputs(discrete_inputs)".to_string());
-    }
-    if has_holding {
-        macro_args.push("holding_registers(holding)".to_string());
-    }
-    if has_input {
-        macro_args.push("input_registers(input)".to_string());
-    }
-
-    let mut out = String::new();
-    out.push_str(&format!(
-        "/// Generated server app for: {}\n",
-        config.device.name
-    ));
-    out.push_str("#[derive(Debug, Default)]\n");
-    out.push_str(&format!("#[modbus_app({})]\n", macro_args.join(", ")));
-    out.push_str("pub struct AppModel {\n");
-    if has_coils {
-        out.push_str("    pub coils: AppCoils,\n");
-    }
-    if has_discrete {
-        out.push_str("    pub discrete_inputs: AppDiscreteInputs,\n");
-    }
-    if has_holding {
-        out.push_str("    pub holding: AppHolding,\n");
-    }
-    if has_input {
-        out.push_str("    pub input: AppInput,\n");
-    }
-    out.push('}');
-    out
-}
-
-// ---------------------------------------------------------------------------
-// Write dispatch helpers
-// ---------------------------------------------------------------------------
-
-fn render_write_dispatch_u8(name: &str, entries: &[&MapEntry], global: &Option<String>) -> String {
-    let mut out = String::new();
-    out.push_str(&format!(
-        "#[inline(always)]\nfn {name}(ctx: *mut c_void, address: u16, value: u8) -> MbusHookStatus {{\n"
-    ));
-    out.push_str("    match address {\n");
-    for entry in entries {
-        match resolve_on_write(entry, global) {
-            Some(sym) => {
-                out.push_str(&format!(
-                    "        {} => unsafe {{ {sym}(ctx, address, value) }},\n",
-                    entry.address
-                ));
-            }
-            None => {
-                out.push_str(&format!(
-                    "        {} => MbusHookStatus::MbusHookOk,\n",
-                    entry.address
-                ));
-            }
-        }
-    }
-    out.push_str("        _ => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-    out.push_str("    }\n}\n");
-    out
-}
-
-fn render_write_dispatch_u16(name: &str, entries: &[&MapEntry], global: &Option<String>) -> String {
-    let mut out = String::new();
-    out.push_str(&format!(
-        "#[inline(always)]\nfn {name}(ctx: *mut c_void, address: u16, value: u16) -> MbusHookStatus {{\n"
-    ));
-    out.push_str("    match address {\n");
-    for entry in entries {
-        match resolve_on_write(entry, global) {
-            Some(sym) => {
-                out.push_str(&format!(
-                    "        {} => unsafe {{ {sym}(ctx, address, value) }},\n",
-                    entry.address
-                ));
-            }
-            None => {
-                out.push_str(&format!(
-                    "        {} => MbusHookStatus::MbusHookOk,\n",
-                    entry.address
-                ));
-            }
-        }
-    }
-    out.push_str("        _ => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-    out.push_str("    }\n}\n");
-    out
-}
-
-// ---------------------------------------------------------------------------
-// Address-based FFI exports
-// ---------------------------------------------------------------------------
-
-fn render_get_coil_ffi(entries: &[&MapEntry], has_coils: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_get_coil(\n");
-    out.push_str("    _ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    out_value: *mut u8,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_coils || entries.is_empty() {
-        out.push_str("    let _ = (address, out_value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().and_then(|app| match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "            {} => Some(app.coils.{} as u8),\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("            _ => None,\n");
-        out.push_str("        });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_set_coil_ffi(entries: &[&MapEntry], has_coils: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_set_coil(\n");
-    out.push_str("    ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    value: u8,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_coils || entries.is_empty() {
-        out.push_str("    let _ = (ctx, address, value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str("    let st = dispatch_write_coil(ctx, address, value);\n");
-        out.push_str("    if st != MbusHookStatus::MbusHookOk { return st; }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "                {} => app.coils.{} = value != 0,\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("                _ => {}\n");
-        out.push_str("            }\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusHookStatus::MbusHookOk\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_get_discrete_input_ffi(entries: &[&MapEntry], has_discrete: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_get_discrete_input(\n");
-    out.push_str("    _ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    out_value: *mut u8,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_discrete || entries.is_empty() {
-        out.push_str("    let _ = (address, out_value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().and_then(|app| match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "            {} => Some(app.discrete_inputs.{} as u8),\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("            _ => None,\n");
-        out.push_str("        });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_get_holding_ffi(entries: &[&MapEntry], has_holding: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_get_holding_register(\n");
-    out.push_str("    _ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    out_value: *mut u16,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_holding || entries.is_empty() {
-        out.push_str("    let _ = (address, out_value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().and_then(|app| match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "            {} => Some(app.holding.{}()),\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("            _ => None,\n");
-        out.push_str("        });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_set_holding_ffi(entries: &[&MapEntry], has_holding: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_set_holding_register(\n");
-    out.push_str("    ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    value: u16,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_holding || entries.is_empty() {
-        out.push_str("    let _ = (ctx, address, value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str("    let st = dispatch_write_holding(ctx, address, value);\n");
-        out.push_str("    if st != MbusHookStatus::MbusHookOk { return st; }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "                {} => app.holding.set_{}(value),\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("                _ => {}\n");
-        out.push_str("            }\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusHookStatus::MbusHookOk\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_get_input_ffi(entries: &[&MapEntry], has_input: bool) -> String {
-    let mut out = String::new();
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_get_input_register(\n");
-    out.push_str("    _ctx: *mut c_void,\n");
-    out.push_str("    address: u16,\n");
-    out.push_str("    out_value: *mut u16,\n");
-    out.push_str(") -> MbusHookStatus {\n");
-    if !has_input || entries.is_empty() {
-        out.push_str("    let _ = (address, out_value);\n");
-        out.push_str("    MbusHookStatus::MbusHookIllegalDataAddress\n");
-    } else {
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().and_then(|app| match address {\n");
-        for entry in entries {
-            out.push_str(&format!(
-                "            {} => Some(app.input.{}()),\n",
-                entry.address, entry.name
-            ));
-        }
-        out.push_str("            _ => None,\n");
-        out.push_str("        });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookIllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-    }
-    out.push_str("}\n");
-    out
-}
-
-fn render_hook_to_exception_code() -> String {
-    let mut out = String::new();
-    out.push_str("#[inline(always)]\n");
-    out.push_str("fn hook_to_exception(st: MbusHookStatus) -> MbusServerExceptionCode {\n");
-    out.push_str("    match st {\n");
-    out.push_str("        MbusHookStatus::MbusHookOk => MbusServerExceptionCode::Ok,\n");
-    out.push_str("        MbusHookStatus::MbusHookIllegalDataAddress => MbusServerExceptionCode::IllegalDataAddress,\n");
-    out.push_str("        MbusHookStatus::MbusHookIllegalDataValue => MbusServerExceptionCode::IllegalDataValue,\n");
-    out.push_str("        _ => MbusServerExceptionCode::ServerDeviceFailure,\n");
-    out.push_str("    }\n");
-    out.push_str("}\n");
-    out
-}
-
-fn render_server_handler_callbacks(config: &ServerAppConfig) -> String {
-    let coil_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .coils
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let holding_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .holding_registers
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let has_coils = !config.memory_map.coils.is_empty();
-    let has_discrete = !config.memory_map.discrete_inputs.is_empty();
-    let has_holding = !config.memory_map.holding_registers.is_empty();
-    let has_input = !config.memory_map.input_registers.is_empty();
-
-    let mut out = String::new();
-    out.push_str(
-        "// ---------------------------------------------------------------------------\n",
-    );
-    out.push_str("// Handler callbacks matching MbusServerHandlers signatures.\n");
-    out.push_str(
-        "// Wire these into a MbusServerHandlers struct or use mbus_server_default_handlers().\n",
-    );
-    out.push_str(
-        "// ---------------------------------------------------------------------------\n\n",
-    );
-
-    // FC01 — Read Coils
-    if has_coils {
-        out.push_str("/// Handler for FC 0x01 — Read Coils.  Reads from model state.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_read_coils(\n");
-        out.push_str("    req: *mut MbusServerReadCoilsReq,\n");
-        out.push_str("    _userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &mut *req };\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let result = (&*ptr::addr_of!(APP_MODEL))\n");
-        out.push_str("            .as_ref()\n");
-        out.push_str("            .and_then(|app| {\n");
-        out.push_str("                let out = core::slice::from_raw_parts_mut(req.out_data, req.out_data_len);\n");
-        out.push_str("                app.coils.encode(req.address, req.quantity, out).ok()\n");
-        out.push_str("            });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match result {\n");
-        out.push_str(
-            "            Some(n) => { req.out_byte_count = n; MbusServerExceptionCode::Ok }\n",
-        );
-        out.push_str("            None => MbusServerExceptionCode::IllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    // FC05 — Write Single Coil
-    if !coil_write_entries.is_empty() {
-        out.push_str("/// Handler for FC 0x05 — Write Single Coil.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_write_single_coil(\n");
-        out.push_str("    req: *const MbusServerWriteSingleCoilReq,\n");
-        out.push_str("    userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &*req };\n");
-        out.push_str("    let st = dispatch_write_coil(userdata, req.address, req.value as u8);\n");
-        out.push_str("    if st != MbusHookStatus::MbusHookOk { return hook_to_exception(st); }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            let _ = app.coils.write_single(req.address, req.value);\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusServerExceptionCode::Ok\n");
-        out.push_str("}\n\n");
-
-        // FC0F — Write Multiple Coils
-        out.push_str("/// Handler for FC 0x0F — Write Multiple Coils.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_write_multiple_coils(\n");
-        out.push_str("    req: *const MbusServerWriteMultipleCoilsReq,\n");
-        out.push_str("    userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &*req };\n");
-        out.push_str("    let values = unsafe { core::slice::from_raw_parts(req.values, req.values_len) };\n");
-        out.push_str("    for i in 0..req.quantity {\n");
-        out.push_str("        let byte_idx = i as usize / 8;\n");
-        out.push_str("        let bit = if byte_idx < values.len() { (values[byte_idx] >> (i % 8)) & 1 } else { 0 };\n");
-        out.push_str("        let st = dispatch_write_coil(userdata, req.starting_address.wrapping_add(i), bit);\n");
-        out.push_str(
-            "        if st != MbusHookStatus::MbusHookOk { return hook_to_exception(st); }\n",
-        );
-        out.push_str("    }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            let _ = app.coils.write_many_from_packed(\n");
-        out.push_str("                req.starting_address, req.quantity, values, 0,\n");
-        out.push_str("            );\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusServerExceptionCode::Ok\n");
-        out.push_str("}\n\n");
-    }
-
-    // FC02 — Read Discrete Inputs
-    if has_discrete {
-        out.push_str("/// Handler for FC 0x02 — Read Discrete Inputs.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_read_discrete_inputs(\n");
-        out.push_str("    req: *mut MbusServerReadDiscreteInputsReq,\n");
-        out.push_str("    _userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &mut *req };\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let result = (&*ptr::addr_of!(APP_MODEL))\n");
-        out.push_str("            .as_ref()\n");
-        out.push_str("            .and_then(|app| {\n");
-        out.push_str("                let out = core::slice::from_raw_parts_mut(req.out_data, req.out_data_len);\n");
-        out.push_str(
-            "                app.discrete_inputs.encode(req.address, req.quantity, out).ok()\n",
-        );
-        out.push_str("            });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match result {\n");
-        out.push_str(
-            "            Some(n) => { req.out_byte_count = n; MbusServerExceptionCode::Ok }\n",
-        );
-        out.push_str("            None => MbusServerExceptionCode::IllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    // FC03 — Read Holding Registers
-    if has_holding {
-        out.push_str("/// Handler for FC 0x03 — Read Holding Registers.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_read_holding_registers(\n");
-        out.push_str("    req: *mut MbusServerReadHoldingRegistersReq,\n");
-        out.push_str("    _userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &mut *req };\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let result = (&*ptr::addr_of!(APP_MODEL))\n");
-        out.push_str("            .as_ref()\n");
-        out.push_str("            .and_then(|app| {\n");
-        out.push_str("                let out = core::slice::from_raw_parts_mut(req.out_data, req.out_data_len);\n");
-        out.push_str("                app.holding.encode(req.address, req.quantity, out).ok()\n");
-        out.push_str("            });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match result {\n");
-        out.push_str(
-            "            Some(n) => { req.out_byte_count = n; MbusServerExceptionCode::Ok }\n",
-        );
-        out.push_str("            None => MbusServerExceptionCode::IllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    // FC06 — Write Single Register
-    if !holding_write_entries.is_empty() {
-        out.push_str("/// Handler for FC 0x06 — Write Single Register.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_write_single_register(\n");
-        out.push_str("    req: *const MbusServerWriteSingleRegisterReq,\n");
-        out.push_str("    userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &*req };\n");
-        out.push_str("    let st = dispatch_write_holding(userdata, req.address, req.value);\n");
-        out.push_str("    if st != MbusHookStatus::MbusHookOk { return hook_to_exception(st); }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            let _ = app.holding.write_single(req.address, req.value);\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusServerExceptionCode::Ok\n");
-        out.push_str("}\n\n");
-
-        // FC10 — Write Multiple Registers
-        out.push_str("/// Handler for FC 0x10 — Write Multiple Registers.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_write_multiple_registers(\n");
-        out.push_str("    req: *const MbusServerWriteMultipleRegistersReq,\n");
-        out.push_str("    userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &*req };\n");
-        out.push_str("    let values = unsafe { core::slice::from_raw_parts(req.values, req.values_len) };\n");
-        out.push_str("    for (i, &v) in values.iter().enumerate() {\n");
-        out.push_str("        let addr = req.starting_address.wrapping_add(i as u16);\n");
-        out.push_str("        let st = dispatch_write_holding(userdata, addr, v);\n");
-        out.push_str(
-            "        if st != MbusHookStatus::MbusHookOk { return hook_to_exception(st); }\n",
-        );
-        out.push_str("    }\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {\n",
-        );
-        out.push_str("            let _ = app.holding.write_many(req.starting_address, values);\n");
-        out.push_str("        }\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("    MbusServerExceptionCode::Ok\n");
-        out.push_str("}\n\n");
-    }
-
-    // FC04 — Read Input Registers
-    if has_input {
-        out.push_str("/// Handler for FC 0x04 — Read Input Registers.\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str("pub unsafe extern \"C\" fn mbus_gen_on_read_input_registers(\n");
-        out.push_str("    req: *mut MbusServerReadInputRegistersReq,\n");
-        out.push_str("    _userdata: *mut c_void,\n");
-        out.push_str(") -> MbusServerExceptionCode {\n");
-        out.push_str(
-            "    if req.is_null() { return MbusServerExceptionCode::ServerDeviceFailure; }\n",
-        );
-        out.push_str("    let req = unsafe { &mut *req };\n");
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str("        let result = (&*ptr::addr_of!(APP_MODEL))\n");
-        out.push_str("            .as_ref()\n");
-        out.push_str("            .and_then(|app| {\n");
-        out.push_str("                let out = core::slice::from_raw_parts_mut(req.out_data, req.out_data_len);\n");
-        out.push_str("                app.input.encode(req.address, req.quantity, out).ok()\n");
-        out.push_str("            });\n");
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match result {\n");
-        out.push_str(
-            "            Some(n) => { req.out_byte_count = n; MbusServerExceptionCode::Ok }\n",
-        );
-        out.push_str("            None => MbusServerExceptionCode::IllegalDataAddress,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    out
-}
-
-fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
-    let coil_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .coils
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let holding_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .holding_registers
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let has_coils = !config.memory_map.coils.is_empty();
-    let has_discrete = !config.memory_map.discrete_inputs.is_empty();
-    let has_holding = !config.memory_map.holding_registers.is_empty();
-    let has_input = !config.memory_map.input_registers.is_empty();
-
-    let mut out = String::new();
-
-    // mbus_server_model_init
-    out.push_str("/// Initialise the generated Modbus register/coil model.\n");
-    out.push_str("///\n");
-    out.push_str(
-        "/// Must be called once before creating the server with `mbus_tcp_server_new` or\n",
-    );
-    out.push_str("/// `mbus_serial_server_new`.\n");
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_model_init() {\n");
-    out.push_str("    unsafe { APP_MODEL = Some(AppModel::default()); }\n");
-    out.push_str("}\n\n");
-
-    // mbus_server_default_handlers
-    out.push_str("/// Returns a fully-populated `MbusServerHandlers` struct pointing to the\n");
-    out.push_str("/// generated handler callbacks.  Pass the returned struct to\n");
-    out.push_str("/// `mbus_tcp_server_new` or `mbus_serial_server_new`.\n");
-    out.push_str("///\n");
-    out.push_str(
-        "/// `userdata` is forwarded to write-notification hooks as their first argument.\n",
-    );
-    out.push_str("#[unsafe(no_mangle)]\n");
-    out.push_str("pub extern \"C\" fn mbus_server_default_handlers(\n");
-    out.push_str("    userdata: *mut c_void,\n");
-    out.push_str(") -> MbusServerHandlers {\n");
-    out.push_str("    MbusServerHandlers {\n");
-    out.push_str("        userdata,\n");
-
-    // Coil handlers
-    if has_coils {
-        out.push_str("        on_read_coils: Some(mbus_gen_on_read_coils),\n");
-    } else {
-        out.push_str("        on_read_coils: None,\n");
-    }
-    if !coil_write_entries.is_empty() {
-        out.push_str("        on_write_single_coil: Some(mbus_gen_on_write_single_coil),\n");
-        out.push_str("        on_write_multiple_coils: Some(mbus_gen_on_write_multiple_coils),\n");
-    } else {
-        out.push_str("        on_write_single_coil: None,\n");
-        out.push_str("        on_write_multiple_coils: None,\n");
-    }
-
-    // Discrete input handlers
-    if has_discrete {
-        out.push_str("        on_read_discrete_inputs: Some(mbus_gen_on_read_discrete_inputs),\n");
-    } else {
-        out.push_str("        on_read_discrete_inputs: None,\n");
-    }
-
-    // Holding register handlers
-    if has_holding {
-        out.push_str(
-            "        on_read_holding_registers: Some(mbus_gen_on_read_holding_registers),\n",
-        );
-    } else {
-        out.push_str("        on_read_holding_registers: None,\n");
-    }
-    if !holding_write_entries.is_empty() {
-        out.push_str(
-            "        on_write_single_register: Some(mbus_gen_on_write_single_register),\n",
-        );
-        out.push_str(
-            "        on_write_multiple_registers: Some(mbus_gen_on_write_multiple_registers),\n",
-        );
-    } else {
-        out.push_str("        on_write_single_register: None,\n");
-        out.push_str("        on_write_multiple_registers: None,\n");
-    }
-    out.push_str("        on_mask_write_register: None,\n");
-    out.push_str("        on_read_write_multiple_registers: None,\n");
-
-    // Input register handlers
-    if has_input {
-        out.push_str("        on_read_input_registers: Some(mbus_gen_on_read_input_registers),\n");
-    } else {
-        out.push_str("        on_read_input_registers: None,\n");
-    }
-
-    // Unsupported FC groups
-    out.push_str("        on_read_fifo_queue: None,\n");
-    out.push_str("        on_read_file_record: None,\n");
-    out.push_str("        on_write_file_record: None,\n");
-    out.push_str("        on_read_exception_status: None,\n");
-    out.push_str("        on_diagnostics: None,\n");
-    out.push_str("        on_get_comm_event_counter: None,\n");
-    out.push_str("        on_get_comm_event_log: None,\n");
-    out.push_str("        on_report_server_id: None,\n");
-    out.push_str("        on_read_device_identification: None,\n");
-
-    out.push_str("    }\n");
-    out.push_str("}\n");
-    out
-}
-
-// ---------------------------------------------------------------------------
-// Named field FFI exports
-// ---------------------------------------------------------------------------
-
-fn render_named_ffi(config: &ServerAppConfig) -> String {
-    let mut out = String::new();
-    out.push_str("// Named field accessors — push/pull values from your application code.\n");
-    out.push_str(
-        "// These bypass write-notification hooks (app-side push, not a Modbus write).\n\n",
-    );
-
-    for entry in &config.memory_map.coils {
-        let name = &entry.name;
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_set_{name}(value: u8) {{\n"
-        ));
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {{ app.coils.{name} = value != 0; }}\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_get_{name}(out_value: *mut u8) -> MbusHookStatus {{\n"
-        ));
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().map(|app| app.coils.{name} as u8);\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookDeviceFailure,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    for entry in &config.memory_map.discrete_inputs {
-        let name = &entry.name;
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_set_{name}(value: u8) {{\n"
-        ));
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {{ app.discrete_inputs.{name} = value != 0; }}\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_get_{name}(out_value: *mut u8) -> MbusHookStatus {{\n"
-        ));
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().map(|app| app.discrete_inputs.{name} as u8);\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookDeviceFailure,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    for entry in &config.memory_map.holding_registers {
-        let name = &entry.name;
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_set_{name}(value: u16) {{\n"
-        ));
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {{ app.holding.set_{name}(value); }}\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_get_{name}(out_value: *mut u16) -> MbusHookStatus {{\n"
-        ));
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().map(|app| app.holding.{name}());\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookDeviceFailure,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    for entry in &config.memory_map.input_registers {
-        let name = &entry.name;
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_set_{name}(value: u16) {{\n"
-        ));
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        if let Some(app) = (&mut *ptr::addr_of_mut!(APP_MODEL)).as_mut() {{ app.input.set_{name}(value); }}\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-        out.push_str("#[unsafe(no_mangle)]\n");
-        out.push_str(&format!(
-            "pub extern \"C\" fn mbus_server_get_{name}(out_value: *mut u16) -> MbusHookStatus {{\n"
-        ));
-        out.push_str(
-            "    if out_value.is_null() { return MbusHookStatus::MbusHookDeviceFailure; }\n",
-        );
-        out.push_str("    unsafe {\n");
-        out.push_str("        mbus_app_lock();\n");
-        out.push_str(&format!(
-            "        let val = (&*ptr::addr_of!(APP_MODEL)).as_ref().map(|app| app.input.{name}());\n"
-        ));
-        out.push_str("        mbus_app_unlock();\n");
-        out.push_str("        match val {\n");
-        out.push_str("            Some(v) => { *out_value = v; MbusHookStatus::MbusHookOk }\n");
-        out.push_str("            None => MbusHookStatus::MbusHookDeviceFailure,\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    out
-}
-
-// ---------------------------------------------------------------------------
-// C header generator
-// ---------------------------------------------------------------------------
-
-fn render_c_header(config: &ServerAppConfig) -> String {
-    let coil_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .coils
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let holding_write_entries: Vec<&MapEntry> = config
-        .memory_map
-        .holding_registers
-        .iter()
-        .filter(|e| e.access.is_writable())
-        .collect();
-    let has_coils = !config.memory_map.coils.is_empty();
-    let has_discrete = !config.memory_map.discrete_inputs.is_empty();
-    let has_holding = !config.memory_map.holding_registers.is_empty();
-    let has_input = !config.memory_map.input_registers.is_empty();
-
-    let mut write_hook_decls: BTreeSet<String> = BTreeSet::new();
-    for entry in &coil_write_entries {
-        if let Some(sym) = resolve_on_write(entry, &config.hooks.on_write_coil) {
-            write_hook_decls.insert(format!(
-                "MbusHookStatus {sym}(void* ctx, uint16_t address, uint8_t value);"
-            ));
-        }
-    }
-    for entry in &holding_write_entries {
-        if let Some(sym) = resolve_on_write(entry, &config.hooks.on_write_holding) {
-            write_hook_decls.insert(format!(
-                "MbusHookStatus {sym}(void* ctx, uint16_t address, uint16_t value);"
-            ));
-        }
-    }
-
-    let mut out = String::new();
-    out.push_str("/* @generated by xtask gen-server-app. Do not edit manually. */\n");
-    out.push_str("#ifndef MBUS_SERVER_APP_H\n");
-    out.push_str("#define MBUS_SERVER_APP_H\n\n");
-    out.push_str("#include <stdbool.h>\n");
-    out.push_str("#include <stdint.h>\n");
-    out.push_str("#include \"modbus_rs_server.h\"\n\n");
-    out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n");
-
-    out.push_str("typedef enum MbusHookStatus {\n");
-    out.push_str("    MBUS_HOOK_OK = 0,\n");
-    out.push_str("    MBUS_HOOK_ILLEGAL_DATA_ADDRESS = 1,\n");
-    out.push_str("    MBUS_HOOK_ILLEGAL_DATA_VALUE = 2,\n");
-    out.push_str("    MBUS_HOOK_DEVICE_FAILURE = 3\n");
-    out.push_str("} MbusHookStatus;\n\n");
-
-    out.push_str("/*\n");
-    out.push_str(" * mbus_app_lock() / mbus_app_unlock()\n");
-    out.push_str(" *\n");
-    out.push_str(" * Protect concurrent access to the Modbus register state owned by Rust.\n");
-    out.push_str(" * Called around every state mutation (Modbus writes and named push APIs).\n");
-    out.push_str(" *\n");
-    out.push_str(" * Implementation guidance:\n");
-    out.push_str(" *   RTOS / multi-threaded : acquire/release a mutex or binary semaphore.\n");
-    out.push_str(" *   Single-threaded bare-metal : leave both functions empty.\n");
-    out.push_str(
-        " *   Bare-metal with interrupts : enter/exit a critical section (disable/enable IRQ).\n",
-    );
-    out.push_str(" *\n");
-    out.push_str(" * Constraints:\n");
-    out.push_str(
-        " *   - NOT called before write-notification hooks (hooks run outside the lock).\n",
-    );
-    out.push_str(" *     Do NOT call mbus_server_get_* or mbus_server_set_* from inside a hook.\n");
-    out.push_str(" *   - Must not be called recursively (not reentrant).\n");
-    out.push_str(" */\n");
-    out.push_str("void mbus_app_lock(void);\n");
-    out.push_str("void mbus_app_unlock(void);\n\n");
-
-    if !write_hook_decls.is_empty() {
-        out.push_str("/*\n");
-        out.push_str(" * Write-notification hooks\n");
-        out.push_str(" *\n");
-        out.push_str(" * Called BEFORE the value is stored in Rust state.\n");
-        out.push_str(" * Return MBUS_HOOK_OK to allow the write; any other value rejects it\n");
-        out.push_str(" * and leaves the Rust state unchanged.\n");
-        out.push_str(
-            " * Called WITHOUT the lock — do not call mbus_server_get_* / set_* from here.\n",
-        );
-        out.push_str(" */\n");
-        for decl in &write_hook_decls {
-            out.push_str(decl);
-            out.push('\n');
-        }
-        out.push('\n');
-    }
-
-    out.push_str("/*\n");
-    out.push_str(" * Address-based register/coil access.\n");
-    out.push_str(" * Useful for direct reads/writes outside the normal server flow.\n");
-    out.push_str(" * Set functions call the write-notification hook before storing.\n");
-    out.push_str(" */\n");
-    out.push_str(
-        "MbusHookStatus mbus_server_get_coil(void* ctx, uint16_t address, uint8_t* out_value);\n",
-    );
-    out.push_str(
-        "MbusHookStatus mbus_server_set_coil(void* ctx, uint16_t address, uint8_t value);\n",
-    );
-    out.push_str("MbusHookStatus mbus_server_get_discrete_input(void* ctx, uint16_t address, uint8_t* out_value);\n");
-    out.push_str("MbusHookStatus mbus_server_get_holding_register(void* ctx, uint16_t address, uint16_t* out_value);\n");
-    out.push_str("MbusHookStatus mbus_server_set_holding_register(void* ctx, uint16_t address, uint16_t value);\n");
-    out.push_str("MbusHookStatus mbus_server_get_input_register(void* ctx, uint16_t address, uint16_t* out_value);\n\n");
-
-    // Server model init + default handlers
-    out.push_str("/*\n");
-    out.push_str(" * Server lifecycle — uses the standard mbus-ffi server infrastructure\n");
-    out.push_str(" * (MbusTransportCallbacks, MbusServerHandlers, MbusServerConfig).\n");
-    out.push_str(" *\n");
-    out.push_str(" * 1. mbus_server_model_init()           — init Rust-owned register model\n");
-    out.push_str(
-        " * 2. mbus_server_default_handlers(ud)   — get populated MbusServerHandlers struct\n",
-    );
-    out.push_str(
-        " * 3. mbus_tcp_server_new(&t, &h, &cfg)  — create server via standard pool API\n",
-    );
-    out.push_str(" * 4. mbus_tcp_server_connect(id)         — open transport\n");
-    out.push_str(" * 5. mbus_tcp_server_poll(id)            — drive server state machine\n");
-    out.push_str(" * 6. mbus_tcp_server_disconnect(id)      — close transport\n");
-    out.push_str(" * 7. mbus_tcp_server_free(id)            — release pool slot\n");
-    out.push_str(" */\n");
-    out.push_str("void mbus_server_model_init(void);\n");
-    out.push_str("struct MbusServerHandlers mbus_server_default_handlers(void *userdata);\n\n");
-
-    // Generated handler callbacks (for users who want to build MbusServerHandlers manually)
-    out.push_str("/*\n");
-    out.push_str(" * Generated handler callbacks.\n");
-    out.push_str(" * These are automatically wired by mbus_server_default_handlers().\n");
-    out.push_str(" * Declared here for users who want to build MbusServerHandlers manually.\n");
-    out.push_str(" */\n");
-    if has_coils {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_read_coils(\n");
-        out.push_str("    struct MbusServerReadCoilsReq *req, void *userdata);\n");
-    }
-    if !coil_write_entries.is_empty() {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_write_single_coil(\n");
-        out.push_str("    const struct MbusServerWriteSingleCoilReq *req, void *userdata);\n");
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_write_multiple_coils(\n");
-        out.push_str("    const struct MbusServerWriteMultipleCoilsReq *req, void *userdata);\n");
-    }
-    if has_discrete {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_read_discrete_inputs(\n");
-        out.push_str("    struct MbusServerReadDiscreteInputsReq *req, void *userdata);\n");
-    }
-    if has_holding {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_read_holding_registers(\n");
-        out.push_str("    struct MbusServerReadHoldingRegistersReq *req, void *userdata);\n");
-    }
-    if !holding_write_entries.is_empty() {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_write_single_register(\n");
-        out.push_str("    const struct MbusServerWriteSingleRegisterReq *req, void *userdata);\n");
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_write_multiple_registers(\n");
-        out.push_str(
-            "    const struct MbusServerWriteMultipleRegistersReq *req, void *userdata);\n",
-        );
-    }
-    if has_input {
-        out.push_str("enum MbusServerExceptionCode mbus_gen_on_read_input_registers(\n");
-        out.push_str("    struct MbusServerReadInputRegistersReq *req, void *userdata);\n");
-    }
-    out.push('\n');
-
-    out.push_str("/*\n");
-    out.push_str(" * Named field accessors — push/pull values from your application code.\n");
-    out.push_str(" * Bypass write-notification hooks (app-side push, not a Modbus write).\n");
-    out.push_str(
-        " * Use to seed initial sensor values or read coil state from application code.\n",
-    );
-    out.push_str(" */\n");
-    for entry in &config.memory_map.coils {
-        let name = &entry.name;
-        out.push_str(&format!("void mbus_server_set_{name}(uint8_t value);\n"));
-        out.push_str(&format!(
-            "MbusHookStatus mbus_server_get_{name}(uint8_t* out_value);\n"
-        ));
-    }
-    for entry in &config.memory_map.discrete_inputs {
-        let name = &entry.name;
-        out.push_str(&format!("void mbus_server_set_{name}(uint8_t value);\n"));
-        out.push_str(&format!(
-            "MbusHookStatus mbus_server_get_{name}(uint8_t* out_value);\n"
-        ));
-    }
-    for entry in &config.memory_map.holding_registers {
-        let name = &entry.name;
-        out.push_str(&format!("void mbus_server_set_{name}(uint16_t value);\n"));
-        out.push_str(&format!(
-            "MbusHookStatus mbus_server_get_{name}(uint16_t* out_value);\n"
-        ));
-    }
-    for entry in &config.memory_map.input_registers {
-        let name = &entry.name;
-        out.push_str(&format!("void mbus_server_set_{name}(uint16_t value);\n"));
-        out.push_str(&format!(
-            "MbusHookStatus mbus_server_get_{name}(uint16_t* out_value);\n"
-        ));
-    }
-
-    out.push('\n');
-    out.push_str(&format!(
-        "/* Device: {} | Unit ID: {} */\n\n",
-        config.device.name, config.device.unit_id
-    ));
-    out.push_str("#ifdef __cplusplus\n}\n#endif\n\n");
-    out.push_str("#endif /* MBUS_SERVER_APP_H */\n");
-    out
-}
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 fn check_exact(path: &Path, expected: &str) -> Result<(), String> {
     let actual =
