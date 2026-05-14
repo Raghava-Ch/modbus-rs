@@ -30,6 +30,8 @@ use crate::MAX_SERIAL_SERVERS;
 #[cfg(feature = "network-tcp")]
 use crate::MAX_TCP_SERVERS;
 use crate::c::error::MbusStatusCode;
+#[cfg(feature = "internal-lock-stubs")]
+use crate::c::lock_stubs::*;
 #[cfg(feature = "serial-ascii")]
 use crate::c::transport::CAsciiTransport;
 #[cfg(feature = "serial-rtu")]
@@ -65,6 +67,7 @@ const TAG_SERIAL_ASCII_SERVER: u8 = 0x12;
 
 // ── Extern locks ──────────────────────────────────────────────────────────────
 
+#[cfg(not(feature = "internal-lock-stubs"))]
 unsafe extern "C" {
     /// Lock the global server pool (used only during server creation/destruction).
     fn mbus_pool_lock();
