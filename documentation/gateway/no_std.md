@@ -11,7 +11,7 @@ capacity parameters.
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.9.0", default-features = false }
+mbus-gateway = { version = "0.10.0", default-features = false }
 ```
 
 ## Providing a Transport
