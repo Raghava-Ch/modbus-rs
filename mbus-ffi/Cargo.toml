@@ -84,6 +84,9 @@ full = [
     "diagnostics",
     "traffic",
     "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
 ]
 ## Convenience alias — enables all server features (c-server must also be enabled)
 server-full = [
@@ -94,6 +97,29 @@ server-full = [
     "fifo",
     "file-record",
     "diagnostics",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
+]
+
+## Convenience alias for Go bindings — enables client/gateway/server features
+## Note: Does NOT include c-server (YAML-based application server)
+## Go uses vtable-based server interface instead
+go-full = [
+    "go",
+    "c-client",
+    "c-gateway",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "traffic",
+    "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
 ]
 
 ## Enables Python bindings for the gateway. Requires `python` to be enabled too;
@@ -107,7 +133,7 @@ python-gateway = [
 ]
 
 ## Enables Python bindings (PyO3 / Maturin) for the Modbus client + server stack.
-## Requires the `full` feature set; build with `--features python,full`.
+## Requires the `full` feature set; build with `--features python-full`.
 python = [
     "dep:pyo3",
     "dep:pyo3-async-runtimes",
@@ -126,6 +152,26 @@ python = [
     "internal-lock-stubs",
 ]
 
+## Convenience alias for Python bindings — enables client/gateway/server features
+## Note: Does NOT include c-server (YAML-based application server)
+## Python uses its own server interface
+python-full = [
+    "python",
+    "c-client",
+    "c-gateway",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "traffic",
+    "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
+]
+
 ## Enables native Go (cgo) bindings for the Modbus client/server/gateway stack.
 ##
 ## Mirrors the `dotnet` feature: builds the cdylib + staticlib with the same
@@ -133,7 +179,7 @@ python = [
 ## but exports symbols with the `mbus_go_*` prefix so the Go binding can
 ## evolve independently of the .NET binding. Build with:
 ##
-##     cargo build --release -p mbus-ffi --features go,full
+##     cargo build --release -p mbus-ffi --features go-full
 go = [
     "dep:tokio",
     "dep:mbus-client-async",
@@ -157,7 +203,7 @@ go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 
 ## Enables Node.js bindings (napi-rs) for the Modbus client/server/gateway stack.
 ##
-## Build with `cargo build --release -p mbus-ffi --features nodejs,full`.
+## Build with `cargo build --release -p mbus-ffi --features nodejs-full`.
 ## The npm package resides in `mbus-ffi/nodejs/` and uses `napi build` to
 ## produce the native addon.
 nodejs = [
@@ -183,10 +229,30 @@ nodejs = [
 ## Enables traffic notification callbacks on the Node.js server/client.
 nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 
+## Convenience alias for Node.js bindings — enables client/gateway/server features
+## Note: Does NOT include c-server (YAML-based application server)
+## Node.js uses its own server interface
+nodejs-full = [
+    "nodejs",
+    "c-client",
+    "c-gateway",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "traffic",
+    "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
+]
+
 ## Enables native .NET (C#) P/Invoke bindings for the Modbus client stack.
 ## Generates a separate `modbus_rs_dotnet.h` header and exposes async request
 ## functions intended to be wrapped by the managed `ModbusRs` C# project under
-## `mbus-ffi/dotnet/`. Build with `--features dotnet,full`.
+## `mbus-ffi/dotnet/`. Build with `--features dotnet-full`.
 dotnet = [
     "dep:tokio",
     "dep:mbus-client-async",
@@ -204,6 +270,26 @@ dotnet = [
     "mbus-gateway/async",
     "mbus-network/async",
     "internal-lock-stubs",
+]
+
+## Convenience alias for .NET bindings — enables client/gateway/server features
+## Note: Does NOT include c-server (YAML-based application server)
+## .NET uses its own server interface
+dotnet-full = [
+    "dotnet",
+    "c-client",
+    "c-gateway",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "traffic",
+    "error-trait",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
 ]
 
 [dependencies]
