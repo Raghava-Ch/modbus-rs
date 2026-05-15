@@ -24,7 +24,7 @@ modbus-rs = "0.9.0"
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.9.0", default-features = false, features = [
+modbus-rs = { version = "0.10.0", default-features = false, features = [
     "client",
     "network-tcp",
     "coils"
@@ -35,7 +35,7 @@ modbus-rs = { version = "0.9.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.9.0", default-features = false, features = [
+modbus-rs = { version = "0.10.0", default-features = false, features = [
     "client",
     "serial-rtu",
     "registers"
