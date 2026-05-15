@@ -306,37 +306,13 @@ typedef struct MbusSerialConfig {
      */
     const char *port_name;
     /**
-     * Baud rate (e.g. 9600, 19200, 115200).
-     */
-    uint32_t baud_rate;
-    /**
      * Framing mode: RTU or ASCII.
      */
     enum MbusSerialMode mode;
     /**
-     * Timeout waiting for a Modbus response, in milliseconds.
-     */
-    uint32_t response_timeout_ms;
-    /**
-     * Number of retry attempts.
-     */
-    uint8_t retries;
-    /**
      * Backoff strategy between retries.
      */
     enum MbusBackoffStrategy backoff_strategy;
-    /**
-     * Base delay (ms).
-     */
-    uint32_t backoff_base_delay_ms;
-    /**
-     * Maximum delay cap (ms).
-     */
-    uint32_t backoff_max_delay_ms;
-    /**
-     * Jitter percentage (0–100).
-     */
-    uint8_t jitter_percent;
 } MbusSerialConfig;
 
 /**
@@ -369,10 +345,6 @@ typedef struct MbusTransportCallbacks {
                                    uint16_t buffer_cap,
                                    uint16_t *out_len,
                                    void *userdata);
-    /**
-     * Called to query connection state.
-     */
-    uint8_t (*on_is_connected)(void *userdata);
 } MbusTransportCallbacks;
 
 /**
@@ -388,38 +360,9 @@ typedef struct MbusTcpConfig {
      */
     const char *host;
     /**
-     * TCP port (default Modbus port is 502).
-     */
-    uint16_t port;
-    /**
-     * Timeout waiting for the TCP connection to be established, in milliseconds.
-     */
-    uint32_t connection_timeout_ms;
-    /**
-     * Timeout waiting for a Modbus response, in milliseconds.
-     */
-    uint32_t response_timeout_ms;
-    /**
-     * Number of retry attempts before reporting failure via the error callback.
-     */
-    uint8_t retries;
-    /**
      * Backoff strategy between retries.
      */
     enum MbusBackoffStrategy backoff_strategy;
-    /**
-     * Base delay (ms) used by `MbusBackoffFixed`, `MbusBackoffExponential`, and
-     * `MbusBackoffLinear`.
-     */
-    uint32_t backoff_base_delay_ms;
-    /**
-     * Maximum delay cap (ms) used by `MbusBackoffExponential` and `MbusBackoffLinear`.
-     */
-    uint32_t backoff_max_delay_ms;
-    /**
-     * Jitter percentage (0 = no jitter, 1–100 = ±N% random spread on top of backoff).
-     */
-    uint8_t jitter_percent;
 } MbusTcpConfig;
 
 /**
@@ -437,23 +380,6 @@ typedef struct MbusSubRequest {
      * File number (1–65535).
      */
     uint16_t file_number;
-    /**
-     * Starting record number within the file.
-     */
-    uint16_t record_number;
-    /**
-     * Number of 16-bit registers (length). For reads: how many to read.
-     * For writes: must equal `data_len`.
-     */
-    uint16_t record_length;
-    /**
-     * Pointer to write data (NULL for reads). Valid only during the call.
-     */
-    const uint16_t *data;
-    /**
-     * Number of valid words pointed to by `data` (0 for reads).
-     */
-    uint16_t data_len;
 } MbusSubRequest;
 
 /**
@@ -467,30 +393,6 @@ typedef struct MbusServerReadCoilsReq {
      * Slave/unit address of the request.
      */
     uint8_t unit_id;
-    /**
-     * Transaction ID (MBAP) or 0 for serial.
-     */
-    uint16_t txn_id;
-    /**
-     * Starting coil address.
-     */
-    uint16_t address;
-    /**
-     * Number of coils to read.
-     */
-    uint16_t quantity;
-    /**
-     * Buffer to write packed coil bytes into (Rust-allocated, valid for callback duration).
-     */
-    uint8_t *out_data;
-    /**
-     * Capacity of `out_data` in bytes.
-     */
-    uintptr_t out_data_len;
-    /**
-     * C must set this to the number of bytes written into `out_data`.
-     */
-    uint8_t out_byte_count;
 } MbusServerReadCoilsReq;
 
 /**
@@ -504,8 +406,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadCoilsFn)(struct MbusServerR
  */
 typedef struct MbusServerWriteSingleCoilReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
     /**
      * `true` = force coil ON, `false` = force coil OFF.
      */
@@ -526,17 +426,6 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteSingleCoilFn)(const struct
  */
 typedef struct MbusServerWriteMultipleCoilsReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t starting_address;
-    uint16_t quantity;
-    /**
-     * Packed coil bits from the master (read-only, valid for callback duration).
-     */
-    const uint8_t *values;
-    /**
-     * Number of bytes in `values`.
-     */
-    uintptr_t values_len;
 } MbusServerWriteMultipleCoilsReq;
 
 /**
@@ -550,12 +439,6 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleCoilsFn)(const str
  */
 typedef struct MbusServerReadDiscreteInputsReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
-    uint16_t quantity;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    uint8_t out_byte_count;
 } MbusServerReadDiscreteInputsReq;
 
 /**
@@ -572,12 +455,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadDiscreteInputsFn)(struct Mb
  */
 typedef struct MbusServerReadHoldingRegistersReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
-    uint16_t quantity;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    uint8_t out_byte_count;
 } MbusServerReadHoldingRegistersReq;
 
 /**
@@ -591,9 +468,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadHoldingRegistersFn)(struct 
  */
 typedef struct MbusServerWriteSingleRegisterReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
-    uint16_t value;
 } MbusServerWriteSingleRegisterReq;
 
 /**
@@ -610,16 +484,6 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteSingleRegisterFn)(const st
  */
 typedef struct MbusServerWriteMultipleRegistersReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t starting_address;
-    /**
-     * Decoded register values from the master (read-only, valid for callback duration).
-     */
-    const uint16_t *values;
-    /**
-     * Number of elements in `values`.
-     */
-    uintptr_t values_len;
 } MbusServerWriteMultipleRegistersReq;
 
 /**
@@ -633,10 +497,6 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleRegistersFn)(const
  */
 typedef struct MbusServerMaskWriteRegisterReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
-    uint16_t and_mask;
-    uint16_t or_mask;
 } MbusServerMaskWriteRegisterReq;
 
 /**
@@ -653,21 +513,6 @@ typedef enum MbusServerExceptionCode (*MbusServerMaskWriteRegisterFn)(const stru
  */
 typedef struct MbusServerReadWriteMultipleRegistersReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t read_address;
-    uint16_t read_quantity;
-    uint16_t write_address;
-    /**
-     * Decoded write values from the master (read-only, valid for callback duration).
-     */
-    const uint16_t *write_values;
-    uintptr_t write_values_len;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    /**
-     * C must set to the number of bytes written into `out_data`.
-     */
-    uint8_t out_byte_count;
 } MbusServerReadWriteMultipleRegistersReq;
 
 /**
@@ -681,12 +526,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadWriteMultipleRegistersFn)(s
  */
 typedef struct MbusServerReadInputRegistersReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t address;
-    uint16_t quantity;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    uint8_t out_byte_count;
 } MbusServerReadInputRegistersReq;
 
 /**
@@ -700,14 +539,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadInputRegistersFn)(struct Mb
  */
 typedef struct MbusServerReadFifoQueueReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t pointer_address;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    /**
-     * C must set to the number of bytes written.
-     */
-    uint8_t out_byte_count;
 } MbusServerReadFifoQueueReq;
 
 /**
@@ -723,16 +554,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadFifoQueueFn)(struct MbusSer
  */
 typedef struct MbusServerReadFileRecordReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t file_number;
-    uint16_t record_number;
-    uint16_t record_length;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    /**
-     * C must set to the number of bytes written into `out_data`.
-     */
-    uint8_t out_byte_count;
 } MbusServerReadFileRecordReq;
 
 /**
@@ -748,15 +569,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadFileRecordFn)(struct MbusSe
  */
 typedef struct MbusServerWriteFileRecordReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint16_t file_number;
-    uint16_t record_number;
-    uint16_t record_length;
-    /**
-     * Decoded record data words (read-only, valid for callback duration).
-     */
-    const uint16_t *record_data;
-    uintptr_t record_data_len;
 } MbusServerWriteFileRecordReq;
 
 /**
@@ -772,11 +584,6 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteFileRecordFn)(const struct
  */
 typedef struct MbusServerReadExceptionStatusReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    /**
-     * C must set this to the 8-bit exception status byte.
-     */
-    uint8_t out_status;
 } MbusServerReadExceptionStatusReq;
 
 /**
@@ -793,19 +600,6 @@ typedef enum MbusServerExceptionCode (*MbusServerReadExceptionStatusFn)(struct M
  */
 typedef struct MbusServerDiagnosticsReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    /**
-     * Raw sub-function code (e.g. 0x0000 = Return Query Data, 0x0002 = Return Diagnostic Register).
-     */
-    uint16_t sub_function;
-    /**
-     * Data word from the request.
-     */
-    uint16_t data;
-    /**
-     * C must set this to the 16-bit result/echo value.
-     */
-    uint16_t out_result;
 } MbusServerDiagnosticsReq;
 
 /**
@@ -821,15 +615,6 @@ typedef enum MbusServerExceptionCode (*MbusServerDiagnosticsFn)(struct MbusServe
  */
 typedef struct MbusServerGetCommEventCounterReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    /**
-     * C must set this to the status word.
-     */
-    uint16_t out_status;
-    /**
-     * C must set this to the event counter value.
-     */
-    uint16_t out_event_count;
 } MbusServerGetCommEventCounterReq;
 
 /**
@@ -846,31 +631,6 @@ typedef enum MbusServerExceptionCode (*MbusServerGetCommEventCounterFn)(struct M
  */
 typedef struct MbusServerGetCommEventLogReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    /**
-     * Buffer for event log bytes (Rust-allocated, valid for callback duration).
-     */
-    uint8_t *out_events;
-    /**
-     * Capacity of `out_events`.
-     */
-    uintptr_t out_events_len;
-    /**
-     * C must set to the Status word.
-     */
-    uint16_t out_status;
-    /**
-     * C must set to the Event Count.
-     */
-    uint16_t out_event_count;
-    /**
-     * C must set to the Message Count.
-     */
-    uint16_t out_message_count;
-    /**
-     * C must set to the number of events written into `out_events`.
-     */
-    uint8_t out_num_events;
 } MbusServerGetCommEventLogReq;
 
 /**
@@ -887,23 +647,6 @@ typedef enum MbusServerExceptionCode (*MbusServerGetCommEventLogFn)(struct MbusS
  */
 typedef struct MbusServerReportServerIdReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    /**
-     * Buffer for server ID bytes (Rust-allocated).
-     */
-    uint8_t *out_server_id;
-    /**
-     * Capacity of `out_server_id`.
-     */
-    uintptr_t out_server_id_len;
-    /**
-     * C must set to the number of Server ID bytes written.
-     */
-    uint8_t out_byte_count;
-    /**
-     * C must set to the Run Indicator Status byte (0x00 = OFF, 0xFF = ON).
-     */
-    uint8_t out_run_indicator_status;
 } MbusServerReportServerIdReq;
 
 /**
@@ -919,31 +662,10 @@ typedef enum MbusServerExceptionCode (*MbusServerReportServerIdFn)(struct MbusSe
  */
 typedef struct MbusServerReadDeviceIdentificationReq {
     uint8_t unit_id;
-    uint16_t txn_id;
-    uint8_t read_device_id_code;
-    uint8_t start_object_id;
-    uint8_t *out_data;
-    uintptr_t out_data_len;
-    /**
-     * C must set to the conformity level byte.
-     */
-    uint8_t out_conformity_level;
-    /**
-     * C must set to the "more follows" object ID (0x00 if none).
-     */
-    uint8_t out_more_follows_object_id;
     /**
      * C must set to `true` if more objects follow (segmentation).
      */
     bool out_has_more;
-    /**
-     * C must set to the next Object ID to request (only valid when `out_has_more` is true).
-     */
-    uint8_t out_next_object_id;
-    /**
-     * C must set to the number of bytes written into `out_data`.
-     */
-    uint8_t out_byte_count;
 } MbusServerReadDeviceIdentificationReq;
 
 /**
@@ -1013,45 +735,7 @@ typedef struct MbusServerConfig {
      * For TCP-only deployments the conventional value is 1 or 0xFF.
      */
     uint8_t slave_address;
-    /**
-     * Maximum time (ms) allocated to process and respond to a single request.
-     * Passed to `ResilienceConfig::default()` for now; reserved for future
-     * per-request timeout enforcement.
-     */
-    uint32_t response_timeout_ms;
 } MbusServerConfig;
-    /**
-     * Starting record number within the file (0–9999).
-     */
-    uint16_t record_number;
-    /**
-     * Number of 16-bit registers. For reads: how many to read; for writes: must equal `data_len`.
-     */
-    uint16_t record_length;
-    /**
-     * Pointer to write data (`null` for reads).
-     */
-    const uint16_t *data;
-    /**
-     * Number of valid words pointed to by `data` (0 for reads).
-     */
-    uint16_t data_len;
-    /**
-     * Starting record number within the file (0–9999).
-     */
-    uint16_t record_number;
-    /**
-     * Number of 16-bit registers. For reads: how many to read; for writes: must equal `data_len`.
-     */
-    uint16_t record_length;
-    /**
-     * Pointer to write data (`null` for reads). Valid for at least `data_len` words.
-     */
-    const uint16_t *data;
-    /**
-     * Number of valid words pointed to by `data` (0 for reads).
-     */
-    uint16_t data_len;
 
 /**
  * Status code returned by every `mbus_go_*` function.
@@ -1071,22 +755,6 @@ typedef struct MbusGoSerialSubRequest {
      * File number (1–65535).
      */
     uint16_t file_number;
-    /**
-     * Starting record number within the file (0–9999).
-     */
-    uint16_t record_number;
-    /**
-     * Number of 16-bit registers. For reads: how many to read; for writes: must equal `data_len`.
-     */
-    uint16_t record_length;
-    /**
-     * Pointer to write data (`null` for reads).
-     */
-    const uint16_t *data;
-    /**
-     * Number of valid words pointed to by `data` (0 for reads).
-     */
-    uint16_t data_len;
 } MbusGoSerialSubRequest;
 
 /**
@@ -1104,22 +772,6 @@ typedef struct MbusGoSubRequest {
      * File number (1–65535).
      */
     uint16_t file_number;
-    /**
-     * Starting record number within the file (0–9999).
-     */
-    uint16_t record_number;
-    /**
-     * Number of 16-bit registers. For reads: how many to read; for writes: must equal `data_len`.
-     */
-    uint16_t record_length;
-    /**
-     * Pointer to write data (`null` for reads). Valid for at least `data_len` words.
-     */
-    const uint16_t *data;
-    /**
-     * Number of valid words pointed to by `data` (0 for reads).
-     */
-    uint16_t data_len;
 } MbusGoSubRequest;
 
 /**
@@ -1139,82 +791,6 @@ typedef struct MbusGoServerVtable {
      * Caller-supplied opaque context forwarded unchanged to every callback.
      */
     void *ctx;
-    /**
-     * `fn(ctx, address, count, out_packed_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*read_coils)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, value_bool) -> i32`
-     */
-    int32_t (*write_single_coil)(void*, uint16_t, uint8_t);
-    /**
-     * `fn(ctx, address, packed_bytes, byte_count, coil_count) -> i32`
-     */
-    int32_t (*write_multiple_coils)(void*, uint16_t, const uint8_t*, uint16_t, uint16_t);
-    /**
-     * `fn(ctx, address, count, out_packed_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, value) -> i32`
-     */
-    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
-    /**
-     * `fn(ctx, address, values_be_bytes, count) -> i32`
-     */
-    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
-    /**
-     * `fn(ctx, address, and_mask, or_mask) -> i32`
-     */
-    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
-    /**
-     * `fn(ctx, read_addr, read_count, write_addr, write_values_be_bytes,
-     *    write_count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_write_multiple_registers)(void*,
-                                             uint16_t,
-                                             uint16_t,
-                                             uint16_t,
-                                             const uint8_t*,
-                                             uint16_t,
-                                             uint16_t*,
-                                             uint16_t*);
-    /**
-     * `fn(ctx, pointer_address, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_fifo_queue)(void*, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, out_status_byte) -> i32`
-     */
-    int32_t (*read_exception_status)(void*, uint8_t*);
-    /**
-     * `fn(ctx, sub_fn, data, out_sub_fn, out_data) -> i32`
-     */
-    int32_t (*diagnostics)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, out_status_word, out_event_count) -> i32`
-     */
-    int32_t (*get_comm_event_counter)(void*, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, out_payload_bytes, out_byte_count) -> i32`
-     *
-     * The payload must be formatted as:
-     * `[status_hi, status_lo, event_count_hi, event_count_lo,
-     *   msg_count_hi, msg_count_lo, event_bytes...]`
-     */
-    int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*);
-    /**
-     * `fn(ctx, out_payload_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
 } MbusGoServerVtable;
 
 /**

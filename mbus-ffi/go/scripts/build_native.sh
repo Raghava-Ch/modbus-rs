@@ -48,12 +48,12 @@ PLATFORM_DIR="${GOOS}_${GOARCH}"
 if [[ "$GOOS" == "windows" ]]; then
     echo "→ Building mbus-ffi (${PROFILE}) for x86_64-pc-windows-gnu"
     rustup target add x86_64-pc-windows-gnu
-    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go,full \
+    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go-full \
         --target x86_64-pc-windows-gnu)
     LIB_SRC="$ROOT/target/x86_64-pc-windows-gnu/$PROFILE/libmbus_ffi.a"
 else
-    echo "→ Building mbus-ffi (${PROFILE}) with --features go,full"
-    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go,full)
+    echo "→ Building mbus-ffi (${PROFILE}) with --features go-full"
+    (cd "$ROOT" && cargo build $CARGO_FLAG -p mbus-ffi --features go-full)
     LIB_SRC="$ROOT/target/$PROFILE/libmbus_ffi.a"
 fi
 
