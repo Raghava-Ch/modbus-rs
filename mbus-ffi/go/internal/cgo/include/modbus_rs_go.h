@@ -26,6 +26,29 @@ typedef uint16_t MbusClientId;
 typedef uint16_t MbusServerId;
 typedef uint16_t MbusGatewayId;
 
+/* Go server vtable - manually defined because cbindgen doesn't handle conditional fields correctly */
+typedef struct MbusGoServerVtable {
+    void *ctx;
+    int32_t (*read_coils)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*write_single_coil)(void*, uint16_t, uint8_t);
+    int32_t (*write_multiple_coils)(void*, uint16_t, const uint8_t*, uint16_t, uint16_t);
+    int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
+    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
+    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
+    int32_t (*read_write_multiple_registers)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*, uint16_t*);
+    int32_t (*read_fifo_queue)(void*, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_file_record)(void*, uint16_t, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_file_record)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*);
+    int32_t (*read_exception_status)(void*, uint8_t*);
+    int32_t (*diagnostics)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_counter)(void*, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*);
+    int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
+} MbusGoServerVtable;
+
 
 /**
  * C-compatible status code returned by every `mbus_*` function.
@@ -786,12 +809,7 @@ typedef struct MbusGoSubRequest {
  * The struct uses `#[repr(C)]` so that it has a stable, platform-defined
  * layout.  Pass it by pointer to `mbus_go_tcp_server_new`.
  */
-typedef struct MbusGoServerVtable {
-    /**
-     * Caller-supplied opaque context forwarded unchanged to every callback.
-     */
-    void *ctx;
-} MbusGoServerVtable;
+
 
 /**
  * Returns a static null-terminated C string describing the status code.

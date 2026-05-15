@@ -102,10 +102,11 @@ server-full = [
     "serial-ascii",
 ]
 
-## Convenience alias for Go bindings — enables client/gateway features without c-server
+## Convenience alias for Go bindings — enables client/gateway/server features
 go-full = [
     "go",
     "c-client",
+    "c-server",
     "c-gateway",
     "coils",
     "registers",
@@ -150,10 +151,11 @@ python = [
     "internal-lock-stubs",
 ]
 
-## Convenience alias for Python bindings — enables client/gateway features without c-server
+## Convenience alias for Python bindings — enables client/gateway/server features
 python-full = [
     "python",
     "c-client",
+    "c-server",
     "c-gateway",
     "coils",
     "registers",
@@ -225,10 +227,11 @@ nodejs = [
 ## Enables traffic notification callbacks on the Node.js server/client.
 nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 
-## Convenience alias for Node.js bindings — enables client/gateway features without c-server
+## Convenience alias for Node.js bindings — enables client/gateway/server features
 nodejs-full = [
     "nodejs",
     "c-client",
+    "c-server",
     "c-gateway",
     "coils",
     "registers",
@@ -266,10 +269,11 @@ dotnet = [
     "internal-lock-stubs",
 ]
 
-## Convenience alias for .NET bindings — enables client/gateway features without c-server
+## Convenience alias for .NET bindings — enables client/gateway/server features
 dotnet-full = [
     "dotnet",
     "c-client",
+    "c-server",
     "c-gateway",
     "coils",
     "registers",
