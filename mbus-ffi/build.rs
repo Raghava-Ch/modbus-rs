@@ -687,6 +687,65 @@ fn main() {
             true
         });
 
+        // Fix MbusGoServerVtable definition - cbindgen doesn't handle conditional fields correctly
+        let header_content = match std::fs::read_to_string(&output_file) {
+            Ok(content) => content,
+            Err(e) => {
+                println!("cargo::warning=cannot read {} for vtable fix: {e}", output_file.display());
+                return;
+            }
+        };
+        
+        // Replace the incomplete MbusGoServerVtable definition with a complete one
+        let complete_vtable = r#"typedef struct MbusGoServerVtable {
+    void *ctx;
+    int32_t (*read_coils)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*write_single_coil)(void*, uint16_t, uint8_t);
+    int32_t (*write_multiple_coils)(void*, uint16_t, const uint8_t*, uint16_t, uint16_t);
+    int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
+    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
+    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
+    int32_t (*read_write_multiple_registers)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*, uint16_t*);
+    int32_t (*read_fifo_queue)(void*, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_file_record)(void*, uint16_t, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_file_record)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*);
+    int32_t (*read_exception_status)(void*, uint8_t*);
+    int32_t (*diagnostics)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_counter)(void*, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*);
+    int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
+} MbusGoServerVtable;"#;
+        
+        // Find and replace the MbusGoServerVtable definition
+        // We need to find the pattern: "typedef struct MbusGoServerVtable {" ... "} MbusGoServerVtable;"
+        // But there might be two definitions (one from after_includes, one generated).
+        // We'll replace all occurrences.
+        let mut fixed_content = header_content.clone();
+        let mut replaced = false;
+        
+        // Simple pattern matching - find "typedef struct MbusGoServerVtable" and replace until "} MbusGoServerVtable;"
+        let start_pattern = "typedef struct MbusGoServerVtable";
+        let end_pattern = "} MbusGoServerVtable;";
+        
+        if let Some(start_idx) = fixed_content.find(start_pattern) {
+            if let Some(end_idx) = fixed_content[start_idx..].find(end_pattern) {
+                let end_idx = start_idx + end_idx + end_pattern.len();
+                fixed_content.replace_range(start_idx..end_idx, complete_vtable);
+                replaced = true;
+            }
+        }
+        
+        if replaced {
+            if let Err(e) = std::fs::write(&output_file, fixed_content) {
+                println!("cargo::warning=failed to write fixed header {}: {e}", output_file.display());
+            }
+        } else {
+            println!("cargo::warning=could not find MbusGoServerVtable definition to fix in {}", output_file.display());
+        }
+
         // Mirror the freshly-generated header into the Go module so
         // `go build` can find it without the user having to run a
         // separate copy step.  This keeps the vendored header in
@@ -820,6 +879,37 @@ where
         let code = strip_comments(&chunk);
         if should_keep(&code) {
             output.push_str(&chunk);
+        }
+    }
+
+    // Post-process to fix MbusGoServerVtable for Go bindings
+    // cbindgen doesn't handle #[cfg(feature = "...")] fields correctly in #[repr(C)] structs
+    // There are TWO vtable definitions in the header:
+    // 1. Manual definition at the top (from cbindgen_go.toml after_includes) - has all fields
+    // 2. cbindgen-generated definition later - has only ctx field
+    // We need to remove the second (incomplete) definition to avoid duplicate struct errors
+    if path.to_string_lossy().contains("modbus_rs_go.h") {
+        // Find all occurrences of "typedef struct MbusGoServerVtable"
+        let mut positions = Vec::new();
+        let mut search_pos = 0;
+        let pattern = "typedef struct MbusGoServerVtable";
+        
+        while let Some(pos) = output[search_pos..].find(pattern) {
+            let absolute_pos = search_pos + pos;
+            positions.push(absolute_pos);
+            search_pos = absolute_pos + pattern.len();
+        }
+        
+        // If there are 2 or more occurrences, remove all but the first
+        if positions.len() >= 2 {
+            // Find the end of the second definition
+            let second_start = positions[1];
+            let end_pattern = "} MbusGoServerVtable;";
+            if let Some(end_idx) = output[second_start..].find(end_pattern) {
+                let second_end = second_start + end_idx + end_pattern.len();
+                // Remove the second definition
+                output.replace_range(second_start..second_end, "");
+            }
         }
     }
 
