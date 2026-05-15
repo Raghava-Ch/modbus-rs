@@ -730,12 +730,11 @@ fn main() {
         let start_pattern = "typedef struct MbusGoServerVtable";
         let end_pattern = "} MbusGoServerVtable;";
         
-        if let Some(start_idx) = fixed_content.find(start_pattern) {
-            if let Some(end_idx) = fixed_content[start_idx..].find(end_pattern) {
+        if let Some(start_idx) = fixed_content.find(start_pattern)
+            && let Some(end_idx) = fixed_content[start_idx..].find(end_pattern) {
                 let end_idx = start_idx + end_idx + end_pattern.len();
                 fixed_content.replace_range(start_idx..end_idx, complete_vtable);
                 replaced = true;
-            }
         }
         
         if replaced {
