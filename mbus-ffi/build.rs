@@ -183,6 +183,11 @@ fn main() {
         return;
     }
 
+    let has_tcp = std::env::var("CARGO_FEATURE_NETWORK_TCP").is_ok();
+    let has_serial_rtu = std::env::var("CARGO_FEATURE_SERIAL_RTU").is_ok();
+    let has_serial_ascii = std::env::var("CARGO_FEATURE_SERIAL_ASCII").is_ok();
+    let has_serial = has_serial_rtu || has_serial_ascii;
+
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let workspace_root = std::path::Path::new(&crate_dir)
         .parent()
@@ -221,7 +226,57 @@ fn main() {
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate C header")
-            .write_to_file(output_file);
+            .write_to_file(&output_file);
+
+        prune_header(&output_file, |decl| {
+            let code = strip_comments(decl);
+            let trimmed = code.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return true;
+            }
+            let mut mbus_seen = false;
+            let mut mbus_kept = true;
+            for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
+                if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
+                    mbus_seen = true;
+                    // Reject sibling API surface tokens.
+                    if tok.starts_with("mbus_server_")
+                        || tok.starts_with("mbus_tcp_server_")
+                        || tok.starts_with("mbus_serial_server_")
+                        || tok.starts_with("mbus_gateway_")
+                        || tok.starts_with("mbus_tcp_gateway_")
+                        || tok.starts_with("mbus_serial_gateway_")
+                        || tok.starts_with("mbus_go_")
+                        || tok.starts_with("MbusGo")
+                        || tok.starts_with("mbus_dn_")
+                        || tok.starts_with("MbusDn")
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject TCP/Serial tokens if the feature is disabled.
+                    if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
+                    if !has_serial_rtu && (tok.contains("_rtu") || tok.contains("Rtu")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial_ascii && (tok.contains("_ascii") || tok.contains("Ascii")) {
+                        mbus_kept = false;
+                    }
+                }
+            }
+            if mbus_seen {
+                return mbus_kept;
+            }
+            true
+        });
     }
 
     if std::env::var("CARGO_FEATURE_C_SERVER").is_ok() {
@@ -240,7 +295,57 @@ fn main() {
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate server C header")
-            .write_to_file(output_file);
+            .write_to_file(&output_file);
+
+        prune_header(&output_file, |decl| {
+            let code = strip_comments(decl);
+            let trimmed = code.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return true;
+            }
+            let mut mbus_seen = false;
+            let mut mbus_kept = true;
+            for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
+                if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
+                    mbus_seen = true;
+                    // Reject sibling API surface tokens.
+                    if tok.starts_with("mbus_client_")
+                        || tok.starts_with("mbus_tcp_client_")
+                        || tok.starts_with("mbus_serial_client_")
+                        || tok.starts_with("mbus_gateway_")
+                        || tok.starts_with("mbus_tcp_gateway_")
+                        || tok.starts_with("mbus_serial_gateway_")
+                        || tok.starts_with("mbus_go_")
+                        || tok.starts_with("MbusGo")
+                        || tok.starts_with("mbus_dn_")
+                        || tok.starts_with("MbusDn")
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject TCP/Serial tokens if the feature is disabled.
+                    if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
+                    if !has_serial_rtu && (tok.contains("_rtu") || tok.contains("Rtu")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial_ascii && (tok.contains("_ascii") || tok.contains("Ascii")) {
+                        mbus_kept = false;
+                    }
+                }
+            }
+            if mbus_seen {
+                return mbus_kept;
+            }
+            true
+        });
 
         // ── Server app code generation ────────────────────────────────────────
         //
@@ -362,7 +467,57 @@ fn main() {
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate gateway C header")
-            .write_to_file(output_file);
+            .write_to_file(&output_file);
+
+        prune_header(&output_file, |decl| {
+            let code = strip_comments(decl);
+            let trimmed = code.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return true;
+            }
+            let mut mbus_seen = false;
+            let mut mbus_kept = true;
+            for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
+                if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
+                    mbus_seen = true;
+                    // Reject sibling API surface tokens.
+                    if tok.starts_with("mbus_client_")
+                        || tok.starts_with("mbus_tcp_client_")
+                        || tok.starts_with("mbus_serial_client_")
+                        || tok.starts_with("mbus_server_")
+                        || tok.starts_with("mbus_tcp_server_")
+                        || tok.starts_with("mbus_serial_server_")
+                        || tok.starts_with("mbus_go_")
+                        || tok.starts_with("MbusGo")
+                        || tok.starts_with("mbus_dn_")
+                        || tok.starts_with("MbusDn")
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject TCP/Serial tokens if the feature is disabled.
+                    if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
+                    if !has_serial_rtu && (tok.contains("_rtu") || tok.contains("Rtu")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial_ascii && (tok.contains("_ascii") || tok.contains("Ascii")) {
+                        mbus_kept = false;
+                    }
+                }
+            }
+            if mbus_seen {
+                return mbus_kept;
+            }
+            true
+        });
     }
 
     if std::env::var("CARGO_FEATURE_DOTNET").is_ok() {
@@ -381,7 +536,58 @@ fn main() {
             .with_config(config)
             .generate()
             .expect("cbindgen failed to generate .NET C header")
-            .write_to_file(output_file);
+            .write_to_file(&output_file);
+
+        prune_header(&output_file, |decl| {
+            let code = strip_comments(decl);
+            let trimmed = code.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return true;
+            }
+            let mut mbus_seen = false;
+            let mut mbus_kept = true;
+            for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
+                if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
+                    mbus_seen = true;
+                    // Explicitly reject all non-.NET APIs so that generic shared models remain.
+                    if tok.starts_with("mbus_client_")
+                        || tok.starts_with("mbus_tcp_client_")
+                        || tok.starts_with("mbus_serial_client_")
+                        || tok.starts_with("mbus_server_")
+                        || tok.starts_with("mbus_tcp_server_")
+                        || tok.starts_with("mbus_serial_server_")
+                        || tok.starts_with("mbus_gateway_")
+                        || tok.starts_with("mbus_tcp_gateway_")
+                        || tok.starts_with("mbus_serial_gateway_")
+                        || tok.starts_with("mbus_go_")
+                        || tok.starts_with("MbusGo")
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject TCP/Serial tokens if the feature is disabled.
+                    if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
+                    if !has_serial_rtu && (tok.contains("_rtu") || tok.contains("Rtu")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial_ascii && (tok.contains("_ascii") || tok.contains("Ascii")) {
+                        mbus_kept = false;
+                    }
+                }
+            }
+            if mbus_seen {
+                return mbus_kept;
+            }
+            true
+        });
     }
 
     if std::env::var("CARGO_FEATURE_GO").is_ok() {
@@ -414,7 +620,130 @@ fn main() {
         // that references a type we do not forward-declare causes a
         // build failure. Drop every `mbus_*` declaration whose name is
         // NOT in the Go ABI surface (i.e. `mbus_go_*`).
-        prune_go_header(&output_file);
+        prune_header(&output_file, |decl| {
+            let code = strip_comments(decl);
+            let trimmed = code.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return true;
+            }
+            let mut mbus_seen = false;
+            let mut mbus_kept = true;
+            
+            // Check for stray global variable definitions that cbindgen incorrectly generates
+            // These look like: "uint16_t record_number;" or "const uint16_t *data;"
+            // They should be struct fields but cbindgen puts them at top level
+            let trimmed_lower = trimmed.to_lowercase();
+            if (trimmed_lower.starts_with("uint") || trimmed_lower.starts_with("int") || trimmed_lower.starts_with("const")) 
+                && trimmed.ends_with(';')
+                && !trimmed.contains("typedef")
+                && !trimmed.contains('{')
+                && !trimmed.contains('}')
+                && !trimmed.contains("mbus_")
+                && !trimmed.contains("Mbus") {
+                // This looks like a stray global variable definition
+                return false;
+            }
+            
+            for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+                // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
+                if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
+                    mbus_seen = true;
+                    // Explicitly reject all non-Go APIs so that generic shared models remain.
+                    if tok.starts_with("mbus_client_")
+                        || tok.starts_with("mbus_tcp_client_")
+                        || tok.starts_with("mbus_serial_client_")
+                        || tok.starts_with("mbus_server_")
+                        || tok.starts_with("mbus_tcp_server_")
+                        || tok.starts_with("mbus_serial_server_")
+                        || tok.starts_with("mbus_gateway_")
+                        || tok.starts_with("mbus_tcp_gateway_")
+                        || tok.starts_with("mbus_serial_gateway_")
+                        || tok.starts_with("mbus_dn_")
+                        || tok.starts_with("MbusDn")
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject TCP/Serial tokens if the feature is disabled.
+                    if !has_tcp && (tok.starts_with("mbus_tcp_") || tok.starts_with("MbusTcp")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial
+                        && (tok.starts_with("mbus_serial_") || tok.starts_with("MbusSerial"))
+                    {
+                        mbus_kept = false;
+                    }
+                    // Dynamically reject RTU/ASCII specific tokens if the corresponding feature is disabled.
+                    if !has_serial_rtu && (tok.contains("_rtu") || tok.contains("Rtu")) {
+                        mbus_kept = false;
+                    }
+                    if !has_serial_ascii && (tok.contains("_ascii") || tok.contains("Ascii")) {
+                        mbus_kept = false;
+                    }
+                }
+            }
+            if mbus_seen {
+                return mbus_kept;
+            }
+            true
+        });
+
+        // Fix MbusGoServerVtable definition - cbindgen doesn't handle conditional fields correctly
+        let header_content = match std::fs::read_to_string(&output_file) {
+            Ok(content) => content,
+            Err(e) => {
+                println!("cargo::warning=cannot read {} for vtable fix: {e}", output_file.display());
+                return;
+            }
+        };
+        
+        // Replace the incomplete MbusGoServerVtable definition with a complete one
+        let complete_vtable = r#"typedef struct MbusGoServerVtable {
+    void *ctx;
+    int32_t (*read_coils)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*write_single_coil)(void*, uint16_t, uint8_t);
+    int32_t (*write_multiple_coils)(void*, uint16_t, const uint8_t*, uint16_t, uint16_t);
+    int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*);
+    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
+    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
+    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
+    int32_t (*read_write_multiple_registers)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*, uint16_t*);
+    int32_t (*read_fifo_queue)(void*, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_file_record)(void*, uint16_t, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*write_file_record)(void*, uint16_t, uint16_t, uint16_t, const uint16_t*);
+    int32_t (*read_exception_status)(void*, uint8_t*);
+    int32_t (*diagnostics)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_counter)(void*, uint16_t*, uint16_t*);
+    int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*);
+    int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
+} MbusGoServerVtable;"#;
+        
+        // Find and replace the MbusGoServerVtable definition
+        // We need to find the pattern: "typedef struct MbusGoServerVtable {" ... "} MbusGoServerVtable;"
+        // But there might be two definitions (one from after_includes, one generated).
+        // We'll replace all occurrences.
+        let mut fixed_content = header_content.clone();
+        let mut replaced = false;
+        
+        // Simple pattern matching - find "typedef struct MbusGoServerVtable" and replace until "} MbusGoServerVtable;"
+        let start_pattern = "typedef struct MbusGoServerVtable";
+        let end_pattern = "} MbusGoServerVtable;";
+        
+        if let Some(start_idx) = fixed_content.find(start_pattern)
+            && let Some(end_idx) = fixed_content[start_idx..].find(end_pattern) {
+                let end_idx = start_idx + end_idx + end_pattern.len();
+                fixed_content.replace_range(start_idx..end_idx, complete_vtable);
+                replaced = true;
+        }
+        
+        if replaced {
+            if let Err(e) = std::fs::write(&output_file, fixed_content) {
+                println!("cargo::warning=failed to write fixed header {}: {e}", output_file.display());
+            }
+        } else {
+            println!("cargo::warning=could not find MbusGoServerVtable definition to fix in {}", output_file.display());
+        }
 
         // Mirror the freshly-generated header into the Go module so
         // `go build` can find it without the user having to run a
@@ -438,20 +767,16 @@ fn main() {
     }
 }
 
-/// Strip every top-level declaration from the generated Go header that
-/// is not part of the `mbus_go_*` ABI surface.
+/// Strip every top-level declaration from the generated header that
+/// does not match the target's ABI surface.
 ///
 /// We do this because cbindgen can leak declarations from sibling
 /// FFI modules (the C, .NET and WASM bindings) even when their cfg
-/// gates are disabled. Those declarations reference types we do not
-/// forward-declare, which would break the cgo compile.
-///
-/// The implementation walks the file as a stream of top-level
-/// declarations (semicolon-terminated function prototypes and
-/// `#define` lines). Block declarations like `typedef struct { … }`
-/// and `typedef enum { … }` are preserved unconditionally because they
-/// are needed for the structs / enums we DO export.
-fn prune_go_header(path: &std::path::Path) {
+/// gates are disabled.
+fn prune_header<F>(path: &std::path::Path, should_keep: F)
+where
+    F: Fn(&str) -> bool,
+{
     let original = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -463,56 +788,128 @@ fn prune_go_header(path: &std::path::Path) {
         }
     };
 
-    let mut output = String::with_capacity(original.len());
-    let mut buf = String::new();
-    let mut in_brace_block: i32 = 0;
+    let mut chunks = Vec::new();
+    let mut current_chunk = String::new();
+    let mut chars = original.chars().peekable();
 
-    for line in original.lines() {
-        // Track curly-brace nesting so we never split a typedef struct/enum
-        // body across the prune logic.
-        let opens = line.matches('{').count() as i32;
-        let closes = line.matches('}').count() as i32;
+    let mut in_line_comment = false;
+    let mut in_block_comment = false;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut in_directive = false;
 
-        if in_brace_block > 0 {
-            // Inside a struct/enum body – pass through verbatim.
-            output.push_str(line);
-            output.push('\n');
-            in_brace_block += opens - closes;
-            continue;
-        }
+    while let Some(c) = chars.next() {
+        current_chunk.push(c);
 
-        // Buffer lines until we see a terminating ';' at brace-depth 0.
-        if !buf.is_empty() {
-            buf.push('\n');
-        }
-        buf.push_str(line);
-
-        let net_open = opens - closes;
-        if net_open > 0 {
-            // Entering a brace block – flush whatever we've buffered so
-            // far (preamble lines like `/** ... */` should be kept) and
-            // pass-through until the matching close brace.
-            output.push_str(&buf);
-            output.push('\n');
-            buf.clear();
-            in_brace_block += net_open;
-            continue;
-        }
-
-        // Decision point: a buffered declaration ends at `;`.
-        if line.contains(';') && !buf.contains('{') {
-            if should_keep(&buf) {
-                output.push_str(&buf);
-                output.push('\n');
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                current_chunk.push(next);
             }
-            buf.clear();
+            continue;
+        }
+
+        if in_line_comment {
+            if c == '\n' {
+                in_line_comment = false;
+            }
+            continue;
+        }
+
+        if in_block_comment {
+            if c == '*'
+                && let Some(&'/') = chars.peek()
+            {
+                current_chunk.push(chars.next().unwrap());
+                in_block_comment = false;
+            }
+            continue;
+        }
+
+        if in_string {
+            if c == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if in_char {
+            if c == '\'' {
+                in_char = false;
+            }
+            continue;
+        }
+
+        if in_directive {
+            if c == '\n' {
+                in_directive = false;
+                chunks.push(std::mem::take(&mut current_chunk));
+            }
+            continue;
+        }
+
+        match c {
+            '/' => {
+                if let Some(&'/') = chars.peek() {
+                    current_chunk.push(chars.next().unwrap());
+                    in_line_comment = true;
+                } else if let Some(&'*') = chars.peek() {
+                    current_chunk.push(chars.next().unwrap());
+                    in_block_comment = true;
+                }
+            }
+            '"' => in_string = true,
+            '\'' => in_char = true,
+            '#' => {
+                in_directive = true;
+            }
+            ';' => {
+                chunks.push(std::mem::take(&mut current_chunk));
+            }
+            _ => {}
         }
     }
 
-    // Trailing un-flushed content (preprocessor directives, blank lines).
-    if !buf.is_empty() {
-        output.push_str(&buf);
-        output.push('\n');
+    if !current_chunk.is_empty() {
+        chunks.push(current_chunk);
+    }
+
+    let mut output = String::with_capacity(original.len());
+    for chunk in chunks {
+        let code = strip_comments(&chunk);
+        if should_keep(&code) {
+            output.push_str(&chunk);
+        }
+    }
+
+    // Post-process to fix MbusGoServerVtable for Go bindings
+    // cbindgen doesn't handle #[cfg(feature = "...")] fields correctly in #[repr(C)] structs
+    // There are TWO vtable definitions in the header:
+    // 1. Manual definition at the top (from cbindgen_go.toml after_includes) - has all fields
+    // 2. cbindgen-generated definition later - has only ctx field
+    // We need to remove the second (incomplete) definition to avoid duplicate struct errors
+    if path.to_string_lossy().contains("modbus_rs_go.h") {
+        // Find all occurrences of "typedef struct MbusGoServerVtable"
+        let mut positions = Vec::new();
+        let mut search_pos = 0;
+        let pattern = "typedef struct MbusGoServerVtable";
+        
+        while let Some(pos) = output[search_pos..].find(pattern) {
+            let absolute_pos = search_pos + pos;
+            positions.push(absolute_pos);
+            search_pos = absolute_pos + pattern.len();
+        }
+        
+        // If there are 2 or more occurrences, remove all but the first
+        if positions.len() >= 2 {
+            // Find the end of the second definition
+            let second_start = positions[1];
+            let end_pattern = "} MbusGoServerVtable;";
+            if let Some(end_idx) = output[second_start..].find(end_pattern) {
+                let second_end = second_start + end_idx + end_pattern.len();
+                // Remove the second definition
+                output.replace_range(second_start..second_end, "");
+            }
+        }
     }
 
     if let Err(e) = std::fs::write(path, output) {
@@ -520,9 +917,7 @@ fn prune_go_header(path: &std::path::Path) {
     }
 }
 
-fn should_keep(decl: &str) -> bool {
-    // Strip C-style comments before scanning so words inside doc
-    // comments don't accidentally match the `mbus_` filter.
+fn strip_comments(decl: &str) -> String {
     let mut code = String::with_capacity(decl.len());
     let bytes = decl.as_bytes();
     let mut i = 0;
@@ -545,34 +940,5 @@ fn should_keep(decl: &str) -> bool {
         code.push(bytes[i] as char);
         i += 1;
     }
-
-    let trimmed = code.trim();
-    if trimmed.is_empty() {
-        return true; // blank lines & pure-comment blocks always retained
-    }
-
-    // Preprocessor directives are always kept.
-    if trimmed.starts_with('#') {
-        return true;
-    }
-
-    // Look for any `mbus_` identifier in the (comment-free) declaration;
-    // if present, keep only when it starts with `mbus_go_`.
-    let mut mbus_kept = false;
-    let mut mbus_seen = false;
-    for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
-        if tok.starts_with("mbus_") {
-            mbus_seen = true;
-            if tok.starts_with("mbus_go_") {
-                mbus_kept = true;
-            }
-        }
-    }
-    if mbus_seen {
-        return mbus_kept;
-    }
-
-    // No `mbus_` identifier: it is one of the data-model accessors
-    // (e.g. structs/typedefs) — leave it alone.
-    true
+    code
 }

@@ -30,7 +30,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out ../dist --features python,full -i python3.11
+          args: --release --out ../dist --features python-full -i python3.11
           manylinux: auto
           working-directory: mbus-ffi
           before-script-linux: |
@@ -86,7 +86,7 @@ jobs:
           maturin build --release \
             --target ${{ matrix.target }} \
             --out ../dist \
-            --features python,full
+            --features python-full
         working-directory: mbus-ffi
 
       - name: Upload wheels
@@ -116,7 +116,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: x86_64
-          args: --release --out ../dist --features python,full
+          args: --release --out ../dist --features python-full
           working-directory: mbus-ffi
 
       - name: Upload wheels
