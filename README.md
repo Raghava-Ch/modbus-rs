@@ -36,21 +36,21 @@ Use `default-features = false` and opt into only the features you need.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.9.0", default-features = false, features = ["client", "network-tcp", "coils"] }
+modbus-rs = { version = "0.10.0", default-features = false, features = ["client", "network-tcp", "coils"] }
 ```
 
 ### Minimal Embedded / no_std Client
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.9.0", default-features = false, features = ["client", "coils", "registers"] }
+modbus-rs = { version = "0.10.0", default-features = false, features = ["client", "coils", "registers"] }
 ```
 
 ### Core-only (protocol + models)
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.9.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.10.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 📖 **[Full Documentation →](documentation/README.md)**
