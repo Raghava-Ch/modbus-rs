@@ -628,6 +628,22 @@ fn main() {
             }
             let mut mbus_seen = false;
             let mut mbus_kept = true;
+            
+            // Check for stray global variable definitions that cbindgen incorrectly generates
+            // These look like: "uint16_t record_number;" or "const uint16_t *data;"
+            // They should be struct fields but cbindgen puts them at top level
+            let trimmed_lower = trimmed.to_lowercase();
+            if (trimmed_lower.starts_with("uint") || trimmed_lower.starts_with("int") || trimmed_lower.starts_with("const")) 
+                && trimmed.ends_with(';')
+                && !trimmed.contains("typedef")
+                && !trimmed.contains('{')
+                && !trimmed.contains('}')
+                && !trimmed.contains("mbus_")
+                && !trimmed.contains("Mbus") {
+                // This looks like a stray global variable definition
+                return false;
+            }
+            
             for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
                 // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
                 if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
