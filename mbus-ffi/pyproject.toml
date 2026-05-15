@@ -30,7 +30,7 @@ classifiers = [
 Homepage = "https://github.com/Raghava-Ch/modbus-rs"
 Repository = "https://github.com/Raghava-Ch/modbus-rs"
 Documentation = "https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation"
-Commercial-Licensing = "mailto:ch.raghava44@gmail.com?subject=modbus-rs%20commercial%20license"
+Commercial-Licensing = "https://github.com/Raghava-Ch/modbus-rs?tab=License-1-ov-file#readme"
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
