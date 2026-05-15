@@ -74,14 +74,14 @@ network-tcp = [
     "mbus-async?/server-tcp",
     "std-required",
 ]
-coils = ["mbus-core/coils", "mbus-async?/coils"]
+coils = ["mbus-core/coils", "mbus-async?/coils", "mbus-server?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
-holding-registers = ["registers"]
-input-registers = ["registers"]
-discrete-inputs = ["mbus-core/registers", "mbus-async?/discrete-inputs"]
-fifo = ["mbus-core/fifo", "mbus-async?/fifo"]
-file-record = ["mbus-core/file-record", "mbus-async?/file-record"]
-diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics"]
+holding-registers = ["registers", "mbus-server?/holding-registers"]
+input-registers = ["registers", "mbus-server?/input-registers"]
+discrete-inputs = ["mbus-core/registers", "mbus-async?/discrete-inputs", "mbus-server?/discrete-inputs"]
+fifo = ["mbus-core/fifo", "mbus-async?/fifo", "mbus-server?/fifo"]
+file-record = ["mbus-core/file-record", "mbus-async?/file-record", "mbus-server?/file-record"]
+diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics", "mbus-server?/diagnostics"]
 diagnostics-stats = [
     "diagnostics",
     "mbus-async?/diagnostics-stats",
