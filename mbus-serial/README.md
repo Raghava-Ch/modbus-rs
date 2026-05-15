@@ -128,7 +128,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-serial = { version = "0.9.0", features = ["logging"] }
+mbus-serial = { version = "0.10.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 
