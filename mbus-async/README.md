@@ -1,6 +1,13 @@
 # mbus-async
 
-A pure-async Tokio facade for Modbus client communication, with optional async server adapters.
+A pure-async Tokio-based Modbus client stack, with optional async server adapters.
+
+It is recommended to use:
+- [modbus-rs](https://crates.io/crates/modbus-rs) for the complete package.
+
+If you prefer to use individual crates, please note that I am planning to remove this crate in the future. The following crates will consolidate its functionality:
+- [mbus-client-async](https://crates.io/crates/mbus-client-async)
+- [mbus-server-async](https://crates.io/crates/mbus-server-async)
 
 `mbus-async` drives Modbus communication natively in Tokio tasks. Each request is a `Future`
 that resolves when the server responds. The transport layer is owned by a background Tokio task
@@ -12,7 +19,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.10.0", features = ["async"] }
+mbus-async = { version = "0.11.0", features = ["network-tcp", "coils", "registers"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -42,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.10.0", default-features = false, features = [
+modbus-rs = { version = "0.11.0", default-features = false, features = [
     "async", "serial-rtu", "coils", "registers"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -284,7 +291,7 @@ Enable `traffic` when you need raw frame observability in async apps:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.10.0", default-features = false, features = [
+modbus-rs = { version = "0.11.0", default-features = false, features = [
     "async", "traffic", "network-tcp", "coils"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -335,4 +342,3 @@ async fn main() -> anyhow::Result<()> {
 This crate is licensed under **GPL-3.0** — see the repository root [LICENSE](../LICENSE).
 
 Commercial licenses are also available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).
-

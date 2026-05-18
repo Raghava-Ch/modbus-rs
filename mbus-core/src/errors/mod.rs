@@ -126,6 +126,14 @@ pub enum MbusError {
     /// Note: This variant name contains a historical typo and is kept for
     /// compatibility with existing code.
     BroadcastNotAllowed,
+    /// Transport detected a protocol-level framing or timing violation.
+    ///
+    /// For serial transports this typically indicates an inter-character gap
+    /// exceeding t1.5 character times within a frame.  The server must discard
+    /// any partially accumulated frame data and resume listening for new frames.
+    ///
+    /// This is **not** a connection-level error — the bus remains usable.
+    FramingError,
 }
 
 impl MbusError {
@@ -273,6 +281,12 @@ impl defmt::Format for MbusError {
             MbusError::InvalidOffset => {
                 defmt::write!(f, "Invalid offset: The provided offset is invalid")
             }
+            MbusError::FramingError => {
+                defmt::write!(
+                    f,
+                    "Framing error: Transport detected a protocol timing violation"
+                )
+            }
         }
     }
 }
@@ -323,6 +337,7 @@ impl core::fmt::Display for MbusError {
             MbusError::InvalidMeiType => write!(f, "Invalid MEI type"),
             MbusError::InvalidBroadcastAddress => write!(f, "Invalid broadcast address"),
             MbusError::BroadcastNotAllowed => write!(f, "Broadcast not allowed"),
+            MbusError::FramingError => write!(f, "Framing error"),
         }
     }
 }

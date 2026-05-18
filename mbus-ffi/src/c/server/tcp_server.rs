@@ -23,6 +23,18 @@
 //! Pool-mutating calls (`mbus_tcp_server_new` / `mbus_tcp_server_free`) use the pool lock
 //! internally; callers must hold `mbus_server_pool_lock` externally if they need atomicity
 //! with ID inspection.
+//!
+//! # Error Returns
+//!
+//! All lifecycle functions that return `MbusStatusCode` will produce one of:
+//!
+//! | Code | Meaning |
+//! |------|---------|
+//! | `MbusOk` | Operation succeeded. |
+//! | `MbusErrConnectionFailed` | The `connect` transport callback returned an error. |
+//! | `MbusErrConnectionClosed` | The `disconnect` callback (or recv path) reported the connection as closed. |
+//! | `MbusErrInvalidClientId` | The supplied `MbusServerId` is not in the TCP server pool (`MBUS_INVALID_SERVER_ID` or freed slot). |
+//! | `MbusErrBusy` | (Reserved) Re-entrant call attempted while the lock is held by the same thread. |
 
 use mbus_server::ServerServices;
 
@@ -47,17 +59,23 @@ use super::{
 ///
 /// # Parameters
 /// - `transport` — Transport callbacks providing connect/disconnect/send/recv operations.
-/// - `handlers`  — Application callback table. NULL callback slots respond with
-///   `IllegalFunction`.
+/// - `handlers`  — Application callback table.  Slots left `NULL` respond with
+///   `IllegalFunction` automatically.
 /// - `config`    — Server configuration (slave address, timeouts).
 ///
 /// # Returns
-/// A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` if the pool
-/// is full or the configuration is invalid.
+/// A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
+///
+/// `MBUS_INVALID_SERVER_ID` is returned when:
+/// - Any pointer argument is `NULL`.
+/// - Any required function pointer inside `transport` is `NULL`.
+/// - `config.slave_address` is out of the valid Modbus range (1–247).
+/// - The internal server pool is exhausted (all slots occupied).
 ///
 /// # Safety
-/// - `transport` and `handlers` must be non-null for the lifetime of the server.
-/// - All function pointers in both structs must be valid.
+/// - `transport`, `handlers`, and `config` must be non-null and remain valid for
+///   the entire lifetime of the server (until `mbus_tcp_server_free` is called).
+/// - All function pointers inside `transport` must be valid C functions.
 /// - `handlers.userdata` must outlive the server.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_server_new(
@@ -103,13 +121,18 @@ pub unsafe extern "C" fn mbus_tcp_server_new(
 
 /// Destroys a TCP server and releases its pool slot.
 ///
-/// The server's transport is NOT automatically disconnected before freeing. Call
-/// `mbus_tcp_server_disconnect` first if the transport is still connected.
+/// The server's transport is **not** automatically disconnected before freeing.
+/// Call `mbus_tcp_server_disconnect` first if the transport may still be active.
 ///
-/// After this call, `id` is invalid and must not be used.
+/// After this call, `id` becomes invalid and must not be reused.
+///
+/// # Error conditions (no return value)
+/// This function is infallible — an invalid or already-freed `id` is silently
+/// ignored to simplify cleanup paths.
 ///
 /// # Safety
-/// The caller must hold the server lock (`mbus_server_lock(id)`) before calling this.
+/// The caller is responsible for ensuring no other thread is using the server
+/// (poll / connect / disconnect) concurrently when this is called.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_free(id: MbusServerId) {
     server_pool_free(id);
@@ -117,14 +140,20 @@ pub extern "C" fn mbus_tcp_server_free(id: MbusServerId) {
 
 // ── mbus_tcp_server_connect ───────────────────────────────────────────────────
 
-/// Opens the server's transport (e.g. begins listening for connections).
+/// Opens the server's transport (e.g. begins accepting TCP connections).
 ///
-/// For the C transport model, "connect" invokes the `connect` callback supplied
-/// to `mbus_tcp_server_new`. For a Modbus TCP server this typically means
-/// starting the listening socket and accepting a connection.
+/// Invokes the `connect` function-pointer from the `MbusTransportCallbacks` struct
+/// supplied to `mbus_tcp_server_new`.
 ///
 /// # Returns
-/// `MbusOk` on success, or an error code if the transport callback failed.
+/// - `MbusOk` — Transport connected successfully.
+/// - `MbusErrConnectionFailed` — The `connect` callback returned a failure.
+/// - `MbusErrIoError` — A lower-level I/O error occurred in the callback.
+/// - `MbusErrInvalidConfiguration` — The transport was already connected, or the
+///   configuration passed to the callback was rejected.
+/// - `MbusErrInvalidClientId` — `id` does not refer to a live TCP server slot.
+///
+/// The server lock must be held while calling this function.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_connect(id: MbusServerId) -> MbusStatusCode {
     match with_tcp_server(id, |srv| srv.connect().map_err(MbusStatusCode::from)) {
@@ -138,7 +167,15 @@ pub extern "C" fn mbus_tcp_server_connect(id: MbusServerId) -> MbusStatusCode {
 
 /// Closes the server's transport.
 ///
-/// Invokes the `disconnect` transport callback.
+/// Invokes the `disconnect` function-pointer from `MbusTransportCallbacks`.
+/// Outstanding queued responses are discarded; the server pool slot remains
+/// valid and can be reconnected with `mbus_tcp_server_connect`.
+///
+/// # Returns
+/// - `MbusOk` — Transport disconnected (or was already disconnected).
+/// - `MbusErrInvalidClientId` — `id` does not refer to a live TCP server slot.
+///
+/// The server lock must be held while calling this function.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_disconnect(id: MbusServerId) -> MbusStatusCode {
     match with_tcp_server(id, |srv| {
@@ -153,11 +190,25 @@ pub extern "C" fn mbus_tcp_server_disconnect(id: MbusServerId) -> MbusStatusCode
 
 /// Drives the server state machine for one iteration.
 ///
-/// Must be called in a tight loop or event loop. Each call:
-/// 1. Retries any queued, undelivered responses.
-/// 2. Reads bytes from the transport.
-/// 3. Parses complete frames and dispatches them to the application callbacks.
-/// 4. Sends responses back over the transport.
+/// Must be called in a tight loop or cooperative event loop. Each call performs:
+/// 1. **Response retry** — resends queued responses from previous failed sends.
+/// 2. **Receive** — reads bytes from the transport `recv` callback.
+/// 3. **Frame parse** — assembles complete Modbus MBAP + PDU frames.
+/// 4. **Dispatch** — calls the matching `MbusServerHandlers` callback.
+/// 5. **Send** — transmits the response over the transport `send` callback.
+///
+/// # Returns
+/// `mbus_tcp_server_poll` itself always returns `MbusOk`; individual transport
+/// failures are handled internally by the server's resilience layer:
+///
+/// | Internal event | Server behaviour |
+/// |----------------|------------------|
+/// | `recv` returns `Timeout` | No data this poll; move on silently. |
+/// | `recv` returns `IoError` / `ConnectionClosed` | Transport is disconnected; server waits for reconnect. |
+/// | `send` fails | Response is queued for retry on the next poll (up to `max_send_retries`). |
+/// | Frame parse error | One byte is discarded and the sliding window re-syncs. |
+///
+/// - `MbusErrInvalidClientId` — `id` does not refer to a live TCP server slot.
 ///
 /// The server lock must be held while calling this function.
 #[unsafe(no_mangle)]
@@ -173,6 +224,9 @@ pub extern "C" fn mbus_tcp_server_poll(id: MbusServerId) -> MbusStatusCode {
 // ── mbus_tcp_server_is_connected ──────────────────────────────────────────────
 
 /// Returns `true` if the server's transport reports itself as connected.
+///
+/// Delegates to the `is_connected` function-pointer in `MbusTransportCallbacks`.
+/// Returns `false` for an invalid or freed server ID.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_is_connected(id: MbusServerId) -> bool {
     with_tcp_server(id, |srv| srv.is_connected()).unwrap_or(false)
@@ -182,7 +236,9 @@ pub extern "C" fn mbus_tcp_server_is_connected(id: MbusServerId) -> bool {
 
 /// Returns the number of requests currently waiting in the priority queue.
 ///
-/// Non-zero when priority queuing is enabled in the resilience config.
+/// Reflects how many parsed requests are buffered waiting to be dispatched
+/// (only non-zero when `ResilienceConfig::enable_priority_queue` is active).
+/// Returns `0` for an invalid or freed server ID.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_pending_request_count(id: MbusServerId) -> usize {
     with_tcp_server(id, |srv| srv.pending_request_count()).unwrap_or(0)
@@ -191,6 +247,10 @@ pub extern "C" fn mbus_tcp_server_pending_request_count(id: MbusServerId) -> usi
 // ── mbus_tcp_server_pending_response_count ────────────────────────────────────
 
 /// Returns the number of responses waiting for retry (failed sends).
+///
+/// A non-zero value means the `send` transport callback has failed at least
+/// once and the server is holding the unsent frames for retry.
+/// Returns `0` for an invalid or freed server ID.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_server_pending_response_count(id: MbusServerId) -> usize {
     with_tcp_server(id, |srv| srv.pending_response_count()).unwrap_or(0)
