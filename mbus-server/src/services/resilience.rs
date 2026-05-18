@@ -416,6 +416,8 @@ pub(crate) struct PendingResponse {
     pub(crate) retry_count: u8,
     /// Clock value (µs) when this response was first queued.
     pub(crate) queued_at_us: u64,
+    /// True if delayed for protocol turnaround (not due to a send failure).
+    pub(crate) is_turnaround_delay: bool,
 }
 
 // ---------------------------------------------------------------------------
