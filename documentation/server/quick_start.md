@@ -18,7 +18,7 @@ disable defaults and opt in explicitly:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.10.0", default-features = false, features = [
+modbus-rs = { version = "0.11.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",

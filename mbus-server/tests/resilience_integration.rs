@@ -423,28 +423,28 @@ fn txn_id_from_adu(frame: &[u8]) -> u16 {
 }
 
 thread_local! {
-    static TEST_CLOCK_MS: Cell<u64> = const { Cell::new(0) };
-    static MANUAL_CLOCK_MS: Cell<u64> = const { Cell::new(0) };
+    static TEST_CLOCK_US: Cell<u64> = const { Cell::new(0) };
+    static MANUAL_CLOCK_US: Cell<u64> = const { Cell::new(0) };
 }
 
-fn reset_test_clock_ms(value: u64) {
-    TEST_CLOCK_MS.with(|clock| clock.set(value));
+fn reset_test_clock_us(value: u64) {
+    TEST_CLOCK_US.with(|clock| clock.set(value));
 }
 
-fn stepping_clock_ms() -> u64 {
-    TEST_CLOCK_MS.with(|clock| {
+fn stepping_clock_us() -> u64 {
+    TEST_CLOCK_US.with(|clock| {
         let current = clock.get();
-        clock.set(current + 10);
+        clock.set(current + 10_000);
         current
     })
 }
 
-fn reset_manual_clock_ms(value: u64) {
-    MANUAL_CLOCK_MS.with(|clock| clock.set(value));
+fn reset_manual_clock_us(value: u64) {
+    MANUAL_CLOCK_US.with(|clock| clock.set(value));
 }
 
-fn manual_clock_ms() -> u64 {
-    MANUAL_CLOCK_MS.with(|clock| clock.get())
+fn manual_clock_us() -> u64 {
+    MANUAL_CLOCK_US.with(|clock| clock.get())
 }
 
 #[test]
@@ -466,10 +466,11 @@ fn resilience_config_is_applied_at_construction() {
             strict_mode: true,
             overflow_policy: OverflowPolicy::DropResponse,
         },
-        clock_fn: Some(stepping_clock_ms),
+        clock_fn: Some(stepping_clock_us),
         max_send_retries: 4,
         enable_priority_queue: true,
         enable_broadcast_writes: false,
+        turnaround_delay_us: 0,
     };
 
     let server: ServerServices<ScriptedTransport, ProbeApp> = ServerServices::new(
@@ -544,7 +545,7 @@ fn priority_queue_dispatches_write_before_read() {
 
 #[test]
 fn queued_request_expires_when_deadline_is_exceeded() {
-    reset_test_clock_ms(0);
+    reset_test_clock_us(0);
 
     let mut combined = HVec::<u8, MAX_ADU_FRAME_LEN>::new();
     let fc03_a = build_fc03_read_request(0x2001);
@@ -573,7 +574,7 @@ fn queued_request_expires_when_deadline_is_exceeded() {
             request_deadline_ms: 5,
             ..TimeoutConfig::default()
         },
-        clock_fn: Some(stepping_clock_ms),
+        clock_fn: Some(stepping_clock_us),
         ..ResilienceConfig::default()
     };
 
@@ -646,7 +647,7 @@ fn failed_send_is_retried_on_next_poll() {
 
 #[test]
 fn queued_response_retry_waits_for_configured_interval() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let transport = ScriptedTransport {
@@ -662,7 +663,7 @@ fn queued_response_retry_waits_for_configured_interval() {
             response_retry_interval_ms: 50,
             ..TimeoutConfig::default()
         },
-        clock_fn: Some(manual_clock_ms),
+        clock_fn: Some(manual_clock_us),
         ..ResilienceConfig::default()
     };
 
@@ -697,7 +698,7 @@ fn queued_response_retry_waits_for_configured_interval() {
     );
 
     // Poll #3 at t=49ms: still not due.
-    reset_manual_clock_ms(49);
+    reset_manual_clock_us(49_000);
     server.poll();
     assert_eq!(server.pending_response_count(), 1);
     assert_eq!(
@@ -709,7 +710,7 @@ fn queued_response_retry_waits_for_configured_interval() {
     );
 
     // Poll #4 at t=50ms: retry becomes due and should succeed.
-    reset_manual_clock_ms(50);
+    reset_manual_clock_us(50_000);
     server.poll();
     assert_eq!(server.pending_response_count(), 0);
     let sent = sent_frames.lock().expect("sent_frames mutex poisoned");
@@ -901,7 +902,7 @@ fn request_queue_full_falls_back_to_immediate_dispatch() {
 
 #[test]
 fn strict_mode_expiry_sends_exception_responses() {
-    reset_test_clock_ms(0);
+    reset_test_clock_us(0);
 
     let mut combined = HVec::<u8, MAX_ADU_FRAME_LEN>::new();
     let fc03_a = build_fc03_read_request(0x3501);
@@ -930,7 +931,7 @@ fn strict_mode_expiry_sends_exception_responses() {
             strict_mode: true,
             ..TimeoutConfig::default()
         },
-        clock_fn: Some(stepping_clock_ms),
+        clock_fn: Some(stepping_clock_us),
         ..ResilienceConfig::default()
     };
 
@@ -1151,6 +1152,7 @@ fn metrics_track_dropped_responses_on_queue_overflow() {
                 max_send_retries: 3,
                 enable_priority_queue: false, // Direct dispatch, not queued
                 enable_broadcast_writes: false,
+            turnaround_delay_us: 0,
             },
         );
 
@@ -1205,7 +1207,7 @@ fn back_pressure_metrics_initialized() {
 
 #[test]
 fn addressed_unicast_request_is_rejected_with_exception_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1238,10 +1240,11 @@ fn addressed_unicast_request_is_rejected_with_exception_under_back_pressure() {
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: false,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1282,7 +1285,7 @@ fn addressed_unicast_request_is_rejected_with_exception_under_back_pressure() {
 
 #[test]
 fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1315,10 +1318,11 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: false,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1351,7 +1355,7 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
 
 #[test]
 fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1384,10 +1388,11 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: true,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1420,7 +1425,7 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
 
 #[test]
 fn serial_broadcast_write_is_applied_without_response_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1453,10 +1458,11 @@ fn serial_broadcast_write_is_applied_without_response_under_back_pressure() {
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: true,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1483,7 +1489,7 @@ fn serial_broadcast_write_is_applied_without_response_under_back_pressure() {
 #[cfg(feature = "coils")]
 #[test]
 fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1517,10 +1523,11 @@ fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pre
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: true,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1546,7 +1553,7 @@ fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pre
 #[cfg(feature = "coils")]
 #[test]
 fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1580,10 +1587,11 @@ fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: true,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1608,7 +1616,7 @@ fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_
 
 #[test]
 fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_back_pressure() {
-    reset_manual_clock_ms(0);
+    reset_manual_clock_us(0);
 
     let sent_frames = Arc::new(Mutex::new(Vec::new()));
     let app = ProbeApp::default();
@@ -1642,10 +1650,11 @@ fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_b
                 strict_mode: false,
                 overflow_policy: OverflowPolicy::RejectRequest,
             },
-            clock_fn: Some(manual_clock_ms),
+            clock_fn: Some(manual_clock_us),
             max_send_retries: 3,
             enable_priority_queue: true,
             enable_broadcast_writes: true,
+            turnaround_delay_us: 0,
         },
     );
 
@@ -1666,4 +1675,188 @@ fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_b
             .is_empty(),
         "serial broadcast FC10 must not generate a response"
     );
+}
+
+#[derive(Debug)]
+struct TimingTestTransport {
+    actions: VecDeque<Result<HVec<u8, MAX_ADU_FRAME_LEN>, MbusError>>,
+    sent_timestamps_us: Arc<Mutex<Vec<u64>>>,
+    connected: bool,
+}
+
+impl Transport for TimingTestTransport {
+    type Error = MbusError;
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::StdSerial(SerialMode::Rtu);
+
+    fn connect(&mut self, _config: &ModbusConfig) -> Result<(), Self::Error> {
+        self.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&mut self) -> Result<(), Self::Error> {
+        self.connected = false;
+        Ok(())
+    }
+
+    fn send(&mut self, _adu: &[u8]) -> Result<(), Self::Error> {
+        self.sent_timestamps_us
+            .lock()
+            .expect("sent_timestamps mutex poisoned")
+            .push(manual_clock_us());
+        Ok(())
+    }
+
+    fn recv(&mut self) -> Result<HVec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
+        match self.actions.pop_front() {
+            Some(res) => res,
+            None => Err(MbusError::Timeout),
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+}
+
+#[test]
+fn framing_error_clears_receive_buffer_without_disconnecting() {
+    reset_manual_clock_us(0);
+
+    let fc06_full = build_serial_fc06_write_request_for_unit(1, 1);
+
+    // Split the frame: send partial, trigger framing error, then send full frame again
+    let partial_frame = HVec::from_slice(&fc06_full[0..3]).unwrap();
+    let valid_frame = HVec::from_slice(&fc06_full).unwrap();
+
+    let mut actions = VecDeque::new();
+    actions.push_back(Ok(partial_frame));
+    actions.push_back(Err(MbusError::FramingError));
+    actions.push_back(Ok(valid_frame));
+
+    let sent_timestamps_us = Arc::new(Mutex::new(Vec::new()));
+
+    let transport = TimingTestTransport {
+        actions,
+        sent_timestamps_us: sent_timestamps_us.clone(),
+        connected: false,
+    };
+
+    let fc06_calls = Arc::new(AtomicUsize::new(0));
+    let app = ProbeApp {
+        fc06_calls: fc06_calls.clone(),
+        ..ProbeApp::default()
+    };
+
+    let mut server = ServerServices::<_, _, 1>::with_queue_depth(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_us),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: false,
+            turnaround_delay_us: 0,
+        },
+    );
+
+    server.connect().unwrap();
+
+    // Poll 1: Receives partial frame
+    server.poll();
+    assert_eq!(fc06_calls.load(Ordering::SeqCst), 0);
+
+    // Poll 2: Receives FramingError, clears buffer, stays connected
+    server.poll();
+    assert!(server.is_connected());
+    assert_eq!(fc06_calls.load(Ordering::SeqCst), 0);
+
+    // Poll 3: Receives full valid frame, processes it correctly because buffer was cleared
+    server.poll();
+    assert_eq!(fc06_calls.load(Ordering::SeqCst), 1);
+
+    // Poll 4: Sends response
+    server.poll();
+    assert_eq!(sent_timestamps_us.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn turnaround_delay_defers_response_transmission() {
+    reset_manual_clock_us(0);
+
+    let fc06_full = build_serial_fc06_write_request_for_unit(1, 1);
+    let valid_frame = HVec::from_slice(&fc06_full).unwrap();
+
+    let mut actions = VecDeque::new();
+    actions.push_back(Ok(valid_frame));
+
+    let sent_timestamps_us = Arc::new(Mutex::new(Vec::new()));
+
+    let transport = TimingTestTransport {
+        actions,
+        sent_timestamps_us: sent_timestamps_us.clone(),
+        connected: false,
+    };
+
+    let fc06_calls = Arc::new(AtomicUsize::new(0));
+    let app = ProbeApp {
+        fc06_calls: fc06_calls.clone(),
+        ..ProbeApp::default()
+    };
+
+    let mut server = ServerServices::<_, _, 1>::with_queue_depth(
+        transport,
+        app,
+        serial_rtu_config(),
+        unit_id(1),
+        ResilienceConfig {
+            timeouts: TimeoutConfig {
+                app_callback_ms: 0,
+                send_ms: 0,
+                response_retry_interval_ms: 1_000,
+                request_deadline_ms: 0,
+                strict_mode: false,
+                overflow_policy: OverflowPolicy::RejectRequest,
+            },
+            clock_fn: Some(manual_clock_us),
+            max_send_retries: 3,
+            enable_priority_queue: true,
+            enable_broadcast_writes: false,
+            turnaround_delay_us: 3500, // 3.5ms turnaround delay
+        },
+    );
+
+    server.connect().unwrap();
+
+    // Poll 1: Receives request at t=0, processes it, queues response.
+    // Turnaround delay requires response to wait until t >= 3500.
+    server.poll();
+    assert_eq!(fc06_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(server.pending_response_count(), 1);
+    assert_eq!(sent_timestamps_us.lock().unwrap().len(), 0);
+
+    // Poll 2 at t=2000 us: Response still delayed
+    reset_manual_clock_us(2000);
+    server.poll();
+    assert_eq!(server.pending_response_count(), 1);
+    assert_eq!(sent_timestamps_us.lock().unwrap().len(), 0);
+
+    // Poll 3 at t=3500 us: Delay satisfied, response is sent
+    reset_manual_clock_us(3500);
+    server.poll();
+    assert_eq!(server.pending_response_count(), 0);
+
+    let sent_times = sent_timestamps_us.lock().unwrap();
+    assert_eq!(sent_times.len(), 1);
+    assert_eq!(sent_times[0], 3500);
 }

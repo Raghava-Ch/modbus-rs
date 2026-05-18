@@ -82,6 +82,8 @@ pub struct ServerServices<TRANSPORT, APP, const QUEUE_DEPTH: usize = 8> {
     pub(super) config: ModbusConfig,
     /// Internal buffer for partially-received frames.
     pub(super) rxed_frame: Vec<u8, MAX_ADU_FRAME_LEN>,
+    /// Timestamp of the last received bytes, used for serial turnaround delay.
+    pub(super) last_recv_us: u64,
     /// Resilience configuration (timeouts, priority queue, retry policy).
     pub(super) resilience: ResilienceConfig,
     /// Priority-ordered queue for incoming requests.
@@ -178,6 +180,7 @@ where
             transport,
             config,
             rxed_frame: Vec::new(),
+            last_recv_us: 0,
             resilience,
             request_queue: RequestQueue::new(),
             response_queue: ResponseQueue::new(),
@@ -200,10 +203,11 @@ where
     // Internal clock helper
     // -----------------------------------------------------------------------
 
-    /// Returns the current time in milliseconds as provided by the configured
-    /// [`ClockFn`](resilience::ClockFn), or `0` when no clock is available.
+    /// Returns the current time in **microseconds** as provided by the
+    /// configured [`ClockFn`](resilience::ClockFn), or `0` when no clock is
+    /// available.
     #[inline]
-    pub(super) fn now_ms(&self) -> u64 {
+    pub(super) fn now_us(&self) -> u64 {
         match self.resilience.clock_fn {
             Some(f) => f(),
             None => 0,
@@ -446,9 +450,35 @@ where
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     ) {
-        let start = self.now_ms();
+        let now = self.now_us();
+
+        if self.resilience.turnaround_delay_us > 0 {
+            let elapsed_since_recv = now.saturating_sub(self.last_recv_us);
+            if elapsed_since_recv < self.resilience.turnaround_delay_us {
+                let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                let _ = raw_frame.extend_from_slice(frame);
+                let pending = PendingResponse {
+                    frame: raw_frame,
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    queued_at_us: self.last_recv_us, // Key off last_recv_us for turnaround calculation
+                    retry_count: 0,
+                    is_turnaround_delay: true,
+                };
+                if !self.response_queue.push_back(pending) {
+                    server_log_debug!("dropped response (turnaround delayed, queue full)");
+                    self.dropped_response_count = self.dropped_response_count.saturating_add(1);
+                } else {
+                    server_log_trace!("response delayed for turnaround");
+                    self.peak_response_queue_size =
+                        self.peak_response_queue_size.max(self.response_queue.len());
+                }
+                return;
+            }
+        }
+
         match self.transport.send(frame) {
-            Ok(_) => self.handle_send_success(frame, txn_id, unit_id_or_slave_addr, start),
+            Ok(_) => self.handle_send_success(frame, txn_id, unit_id_or_slave_addr, now),
             Err(err) => self.handle_send_failure(frame, txn_id, unit_id_or_slave_addr, err),
         }
     }
@@ -458,7 +488,7 @@ where
         _frame: &[u8],
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        start_ms: u64,
+        start_us: u64,
     ) {
         let _ = unit_id_or_slave_addr;
         let _ = txn_id;
@@ -468,14 +498,14 @@ where
         #[cfg(feature = "traffic")]
         self.app.on_tx_frame(txn_id, unit_id_or_slave_addr, _frame);
 
-        let elapsed = self.now_ms().saturating_sub(start_ms);
-        let threshold = self.resilience.timeouts.send_ms as u64;
-        if threshold > 0 && elapsed > threshold {
+        let elapsed_us = self.now_us().saturating_sub(start_us);
+        let threshold_us = self.resilience.timeouts.send_ms as u64 * 1000;
+        if threshold_us > 0 && elapsed_us > threshold_us {
             server_log_debug!(
-                "txn_id={}: send took {}ms (threshold={}ms)",
+                "txn_id={}: send took {}µs (threshold={}µs)",
                 txn_id,
-                elapsed,
-                threshold
+                elapsed_us,
+                threshold_us
             );
         }
     }
@@ -525,13 +555,14 @@ where
     ) {
         let mut queued: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         if queued.extend_from_slice(frame).is_ok() {
-            let queued_at = self.now_ms();
+            let queued_at = self.now_us();
             if !self.response_queue.push_back(PendingResponse {
                 frame: queued,
                 txn_id,
                 unit_id_or_slave_addr,
                 retry_count: 0,
-                queued_at_ms: queued_at,
+                queued_at_us: queued_at,
+                is_turnaround_delay: false,
             }) {
                 server_log_debug!("txn_id={}: response queue full; dropping response", txn_id);
                 self.dropped_response_count = self.dropped_response_count.saturating_add(1);
@@ -866,6 +897,7 @@ where
         // Step 2 — receive bytes from the transport.
         match self.transport.recv() {
             Ok(frame) => {
+                self.last_recv_us = self.now_us();
                 self.append_to_rxed_frame(frame);
             }
             Err(err) => {
@@ -898,7 +930,7 @@ where
             return;
         }
 
-        let now = self.now_ms();
+        let now = self.now_us();
         if self.resilience.timeouts.strict_mode {
             let expired = self.request_queue.take_expired(now, deadline);
             if !expired.is_empty() {
@@ -968,20 +1000,39 @@ where
         retry_interval_ms: u64,
         has_clock: bool,
     ) -> bool {
-        if retry_interval_ms == 0 || !has_clock {
+        if !has_clock {
             return false;
         }
-        let elapsed = self.now_ms().saturating_sub(pending.queued_at_ms);
-        elapsed < retry_interval_ms
+        let now = self.now_us();
+
+        // Turnaround delay
+        if pending.is_turnaround_delay && self.resilience.turnaround_delay_us > 0 {
+            let elapsed_turnaround_us = now.saturating_sub(self.last_recv_us);
+            if elapsed_turnaround_us < self.resilience.turnaround_delay_us {
+                return true;
+            }
+        }
+
+        // Retry interval (only for responses queued due to send failures)
+        if !pending.is_turnaround_delay && retry_interval_ms > 0 {
+            let elapsed_retry_us = now.saturating_sub(pending.queued_at_us);
+            let interval_us = retry_interval_ms * 1000;
+            if elapsed_retry_us < interval_us {
+                return true;
+            }
+        }
+        false
     }
 
-    fn try_send_queued_response(&mut self, pending: PendingResponse) -> bool {
+    fn try_send_queued_response(&mut self, mut pending: PendingResponse) -> bool {
         match self.transport.send(&pending.frame) {
             Ok(_) => {
                 self.on_queued_response_retry_success(&pending);
                 true
             }
             Err(err) => {
+                // If it fails to send, it is no longer waiting for turnaround, it's a retry
+                pending.is_turnaround_delay = false;
                 self.on_queued_response_retry_failure(pending, err);
                 false
             }
@@ -1027,7 +1078,7 @@ where
             mbus_err
         );
         pending.retry_count += 1;
-        pending.queued_at_ms = self.now_ms();
+        pending.queued_at_us = self.now_us();
         let _ = self.response_queue.push_back(pending);
     }
 
@@ -1061,15 +1112,15 @@ where
             None => return,
         };
 
-        let start = self.now_ms();
+        let start = self.now_us();
         self.dispatch_request_for_frame(&message, pending.frame.as_slice());
-        let elapsed = self.now_ms().saturating_sub(start);
-        let threshold = self.resilience.timeouts.app_callback_ms as u64;
-        if threshold > 0 && elapsed > threshold {
+        let elapsed_us = self.now_us().saturating_sub(start);
+        let threshold_us = self.resilience.timeouts.app_callback_ms as u64 * 1000;
+        if threshold_us > 0 && elapsed_us > threshold_us {
             server_log_debug!(
-                "app callback for queued request took {}ms (threshold={}ms)",
-                elapsed,
-                threshold
+                "app callback for queued request took {}µs (threshold={}µs)",
+                elapsed_us,
+                threshold_us
             );
         }
     }
@@ -1119,6 +1170,19 @@ where
 
     fn handle_recv_error(&mut self, err: <TRANSPORT as Transport>::Error) {
         let recv_error: MbusError = err.into();
+
+        // Framing error: transport detected a timing violation (e.g. t1.5
+        // inter-character gap).  Discard the partially accumulated frame but
+        // keep the connection alive — the bus itself is fine.
+        if matches!(recv_error, MbusError::FramingError) {
+            server_log_debug!(
+                "framing error: discarding {} buffered bytes",
+                self.rxed_frame.len()
+            );
+            self.rxed_frame.clear();
+            return;
+        }
+
         let is_connection_loss = matches!(
             recv_error,
             MbusError::ConnectionClosed
@@ -1380,25 +1444,25 @@ where
         let priority = RequestPriority::from_function_code(message.pdu.function_code());
         let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         let _ = raw_frame.extend_from_slice(&self.rxed_frame[..expected_length]);
-        let received_at = self.now_ms();
+        let received_at = self.now_us();
         if !self.request_queue.push(PendingRequest {
             frame: raw_frame.clone(),
             priority,
-            received_at_ms: received_at,
+            received_at_us: received_at,
         }) {
             server_log_debug!(
                 "request queue full; dispatching immediately (priority={:?})",
                 priority
             );
-            let start = self.now_ms();
+            let start = self.now_us();
             self.dispatch_request_for_frame(message, raw_frame.as_slice());
-            let elapsed = self.now_ms().saturating_sub(start);
-            let threshold = self.resilience.timeouts.app_callback_ms as u64;
-            if threshold > 0 && elapsed > threshold {
+            let elapsed_us = self.now_us().saturating_sub(start);
+            let threshold_us = self.resilience.timeouts.app_callback_ms as u64 * 1000;
+            if threshold_us > 0 && elapsed_us > threshold_us {
                 server_log_debug!(
-                    "app callback took {}ms (threshold={}ms) [queue-full fallback]",
-                    elapsed,
-                    threshold
+                    "app callback took {}µs (threshold={}µs) [queue-full fallback]",
+                    elapsed_us,
+                    threshold_us
                 );
             }
         }
@@ -1407,15 +1471,15 @@ where
     /// Hot-path dispatch: sends the response immediately and logs if the app
     /// callback exceeds the configured threshold.
     fn dispatch_immediately(&mut self, message: &ModbusMessage) {
-        let start = self.now_ms();
+        let start = self.now_us();
         self.dispatch_request(message);
-        let elapsed = self.now_ms().saturating_sub(start);
-        let threshold = self.resilience.timeouts.app_callback_ms as u64;
-        if threshold > 0 && elapsed > threshold {
+        let elapsed_us = self.now_us().saturating_sub(start);
+        let threshold_us = self.resilience.timeouts.app_callback_ms as u64 * 1000;
+        if threshold_us > 0 && elapsed_us > threshold_us {
             server_log_debug!(
-                "app callback took {}ms (threshold={}ms)",
-                elapsed,
-                threshold
+                "app callback took {}µs (threshold={}µs)",
+                elapsed_us,
+                threshold_us
             );
         }
     }

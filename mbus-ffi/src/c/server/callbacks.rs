@@ -34,13 +34,27 @@ use core::ffi::c_void;
 /// Exception code returned by every C server callback.
 ///
 /// Maps 1-to-1 with the Modbus standard exception codes:
-/// - `0x01` IllegalFunction
-/// - `0x02` IllegalDataAddress
-/// - `0x03` IllegalDataValue
-/// - `0x04` ServerDeviceFailure
 ///
-/// The value `Ok = 0` is a non-standard sentinel used by this API to signal
-/// "request handled successfully; no exception".
+/// | Value | Name | When to return |
+/// |-------|------|----------------|
+/// | `0` | `Ok` | Request handled successfully. The server sends a normal response. |
+/// | `1` | `IllegalFunction` | This function code is not supported by your server implementation. |
+/// | `2` | `IllegalDataAddress` | The requested `address` or `quantity` is outside the server's valid range. |
+/// | `3` | `IllegalDataValue` | A value in the request data field is not acceptable (e.g. out-of-range register value). |
+/// | `4` | `ServerDeviceFailure` | An unrecoverable error occurred while processing the request (hardware fault, internal error). |
+///
+/// # Notes
+/// - `Ok = 0` is a **non-standard sentinel** used only by this C API.  It is
+///   never sent on the wire; the server translates it to a normal success response.
+/// - For **write** function codes (FC05, FC06, FC0F, FC10, FC15, FC16, FC17),
+///   `Ok` means the write was accepted and committed.  The server echoes the
+///   request back to the master as specified by the Modbus protocol.
+/// - For **read** function codes (FC01–FC04, FC07, FC0B, FC0C, FC11, FC14, FC17,
+///   FC18, FC2B), `Ok` means the `out_*` fields have been populated with valid
+///   response data.
+/// - If you detect a timing violation in application logic (e.g. a sensor timed
+///   out), return `ServerDeviceFailure`; do **not** return `FramingError` — that
+///   is a transport-level status only returned by the `recv` callback.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbusServerExceptionCode {
@@ -580,22 +594,46 @@ pub type MbusServerReadDeviceIdentificationFn = Option<
 
 /// Master callback table for a C Modbus server application.
 ///
-/// Pass a populated instance of this struct to `mbus_tcp_server_new`,
-/// `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new` (if ASCII support is enabled). Any callback
-/// left as `NULL` will cause the server
-/// to respond with `ExceptionCode::IllegalFunction` for that function code.
+/// Pass a populated instance to `mbus_tcp_server_new`,
+/// `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`.
 ///
-/// The `userdata` pointer is passed as-is to every callback. It is the caller's
-/// responsibility to ensure its lifetime exceeds the server's.
+/// ## NULL slots
+/// Any callback slot left as `NULL` causes the server to respond with
+/// `ExceptionCode::IllegalFunction` (0x01) for that function code.
+/// You do not need to implement callbacks for function codes your device
+/// does not support.
 ///
-/// # Example (C)
+/// ## Return value contract
+/// Every callback returns `MbusServerExceptionCode`.  The server uses this to
+/// decide what to send on the wire:
+///
+/// | Return value | Wire response |
+/// |---|---|
+/// | `Ok` | Normal success response (echo or `out_*` data). |
+/// | `IllegalFunction` | Exception response 0x01. |
+/// | `IllegalDataAddress` | Exception response 0x02. |
+/// | `IllegalDataValue` | Exception response 0x03. |
+/// | `ServerDeviceFailure` | Exception response 0x04. |
+///
+/// ## Timing — serial servers
+/// Callbacks are invoked from within `mbus_serial_server_poll`.  The stack
+/// does **not** call the `recv` callback while a callback is running, so you
+/// cannot observe a t1.5/t3.5 violation from inside a handler.  Timing
+/// violations are detected and reported exclusively through the `recv`
+/// transport callback before dispatch (see the `serial_server` module docs).
+///
+/// ## Lifetime of pointer fields
+/// All `*mut` and `*const` pointer fields in the `*Req` structs are valid only
+/// for the duration of the callback invocation.  Do **not** retain them.
+///
+/// ## Example (C)
 ///
 /// ```c
 /// static MbusServerHandlers g_handlers = {
-///     .userdata         = &my_app_state,
-///     .on_read_coils    = my_read_coils_handler,
-///     .on_write_single_coil = my_write_single_coil_handler,
-///     // leave other fields NULL to return IllegalFunction
+///     .userdata             = &my_app_state,
+///     .on_read_holding_registers = my_read_hr_handler,
+///     .on_write_single_register  = my_write_sr_handler,
+///     // All other slots are NULL → server returns IllegalFunction.
 /// };
 /// ```
 #[repr(C)]
