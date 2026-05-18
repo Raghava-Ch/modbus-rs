@@ -82,6 +82,8 @@ pub struct ServerServices<TRANSPORT, APP, const QUEUE_DEPTH: usize = 8> {
     pub(super) config: ModbusConfig,
     /// Internal buffer for partially-received frames.
     pub(super) rxed_frame: Vec<u8, MAX_ADU_FRAME_LEN>,
+    /// Timestamp of the last received bytes, used for serial turnaround delay.
+    pub(super) last_recv_us: u64,
     /// Resilience configuration (timeouts, priority queue, retry policy).
     pub(super) resilience: ResilienceConfig,
     /// Priority-ordered queue for incoming requests.
@@ -178,6 +180,7 @@ where
             transport,
             config,
             rxed_frame: Vec::new(),
+            last_recv_us: 0,
             resilience,
             request_queue: RequestQueue::new(),
             response_queue: ResponseQueue::new(),
@@ -447,9 +450,35 @@ where
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     ) {
-        let start = self.now_us();
+        let now = self.now_us();
+
+        if self.resilience.turnaround_delay_us > 0 {
+            let elapsed_since_recv = now.saturating_sub(self.last_recv_us);
+            if elapsed_since_recv < self.resilience.turnaround_delay_us {
+                let mut raw_frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                let _ = raw_frame.extend_from_slice(frame);
+                let pending = PendingResponse {
+                    frame: raw_frame,
+                    txn_id,
+                    unit_id_or_slave_addr,
+                    queued_at_us: self.last_recv_us, // Key off last_recv_us for turnaround calculation
+                    retry_count: 0,
+                    is_turnaround_delay: true,
+                };
+                if !self.response_queue.push_back(pending) {
+                    server_log_debug!("dropped response (turnaround delayed, queue full)");
+                    self.dropped_response_count = self.dropped_response_count.saturating_add(1);
+                } else {
+                    server_log_trace!("response delayed for turnaround");
+                    self.peak_response_queue_size =
+                        self.peak_response_queue_size.max(self.response_queue.len());
+                }
+                return;
+            }
+        }
+
         match self.transport.send(frame) {
-            Ok(_) => self.handle_send_success(frame, txn_id, unit_id_or_slave_addr, start),
+            Ok(_) => self.handle_send_success(frame, txn_id, unit_id_or_slave_addr, now),
             Err(err) => self.handle_send_failure(frame, txn_id, unit_id_or_slave_addr, err),
         }
     }
@@ -533,6 +562,7 @@ where
                 unit_id_or_slave_addr,
                 retry_count: 0,
                 queued_at_us: queued_at,
+                is_turnaround_delay: false,
             }) {
                 server_log_debug!("txn_id={}: response queue full; dropping response", txn_id);
                 self.dropped_response_count = self.dropped_response_count.saturating_add(1);
@@ -867,6 +897,7 @@ where
         // Step 2 — receive bytes from the transport.
         match self.transport.recv() {
             Ok(frame) => {
+                self.last_recv_us = self.now_us();
                 self.append_to_rxed_frame(frame);
             }
             Err(err) => {
@@ -969,21 +1000,39 @@ where
         retry_interval_ms: u64,
         has_clock: bool,
     ) -> bool {
-        if retry_interval_ms == 0 || !has_clock {
+        if !has_clock {
             return false;
         }
-        let elapsed_us = self.now_us().saturating_sub(pending.queued_at_us);
-        let interval_us = retry_interval_ms * 1000;
-        elapsed_us < interval_us
+        let now = self.now_us();
+
+        // Turnaround delay
+        if pending.is_turnaround_delay && self.resilience.turnaround_delay_us > 0 {
+            let elapsed_turnaround_us = now.saturating_sub(self.last_recv_us);
+            if elapsed_turnaround_us < self.resilience.turnaround_delay_us {
+                return true;
+            }
+        }
+
+        // Retry interval (only for responses queued due to send failures)
+        if !pending.is_turnaround_delay && retry_interval_ms > 0 {
+            let elapsed_retry_us = now.saturating_sub(pending.queued_at_us);
+            let interval_us = retry_interval_ms * 1000;
+            if elapsed_retry_us < interval_us {
+                return true;
+            }
+        }
+        false
     }
 
-    fn try_send_queued_response(&mut self, pending: PendingResponse) -> bool {
+    fn try_send_queued_response(&mut self, mut pending: PendingResponse) -> bool {
         match self.transport.send(&pending.frame) {
             Ok(_) => {
                 self.on_queued_response_retry_success(&pending);
                 true
             }
             Err(err) => {
+                // If it fails to send, it is no longer waiting for turnaround, it's a retry
+                pending.is_turnaround_delay = false;
                 self.on_queued_response_retry_failure(pending, err);
                 false
             }
