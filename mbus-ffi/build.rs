@@ -628,22 +628,25 @@ fn main() {
             }
             let mut mbus_seen = false;
             let mut mbus_kept = true;
-            
+
             // Check for stray global variable definitions that cbindgen incorrectly generates
             // These look like: "uint16_t record_number;" or "const uint16_t *data;"
             // They should be struct fields but cbindgen puts them at top level
             let trimmed_lower = trimmed.to_lowercase();
-            if (trimmed_lower.starts_with("uint") || trimmed_lower.starts_with("int") || trimmed_lower.starts_with("const")) 
+            if (trimmed_lower.starts_with("uint")
+                || trimmed_lower.starts_with("int")
+                || trimmed_lower.starts_with("const"))
                 && trimmed.ends_with(';')
                 && !trimmed.contains("typedef")
                 && !trimmed.contains('{')
                 && !trimmed.contains('}')
                 && !trimmed.contains("mbus_")
-                && !trimmed.contains("Mbus") {
+                && !trimmed.contains("Mbus")
+            {
                 // This looks like a stray global variable definition
                 return false;
             }
-            
+
             for tok in code.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
                 // Catch both function names (`mbus_...`) and struct/enum names (`Mbus...`)
                 if tok.starts_with("mbus_") || tok.starts_with("Mbus") {
@@ -691,11 +694,14 @@ fn main() {
         let header_content = match std::fs::read_to_string(&output_file) {
             Ok(content) => content,
             Err(e) => {
-                println!("cargo::warning=cannot read {} for vtable fix: {e}", output_file.display());
+                println!(
+                    "cargo::warning=cannot read {} for vtable fix: {e}",
+                    output_file.display()
+                );
                 return;
             }
         };
-        
+
         // Replace the incomplete MbusGoServerVtable definition with a complete one
         let complete_vtable = r#"typedef struct MbusGoServerVtable {
     void *ctx;
@@ -718,31 +724,38 @@ fn main() {
     int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*);
     int32_t (*report_server_id)(void*, uint8_t*, uint16_t*);
 } MbusGoServerVtable;"#;
-        
+
         // Find and replace the MbusGoServerVtable definition
         // We need to find the pattern: "typedef struct MbusGoServerVtable {" ... "} MbusGoServerVtable;"
         // But there might be two definitions (one from after_includes, one generated).
         // We'll replace all occurrences.
         let mut fixed_content = header_content.clone();
         let mut replaced = false;
-        
+
         // Simple pattern matching - find "typedef struct MbusGoServerVtable" and replace until "} MbusGoServerVtable;"
         let start_pattern = "typedef struct MbusGoServerVtable";
         let end_pattern = "} MbusGoServerVtable;";
-        
+
         if let Some(start_idx) = fixed_content.find(start_pattern)
-            && let Some(end_idx) = fixed_content[start_idx..].find(end_pattern) {
-                let end_idx = start_idx + end_idx + end_pattern.len();
-                fixed_content.replace_range(start_idx..end_idx, complete_vtable);
-                replaced = true;
+            && let Some(end_idx) = fixed_content[start_idx..].find(end_pattern)
+        {
+            let end_idx = start_idx + end_idx + end_pattern.len();
+            fixed_content.replace_range(start_idx..end_idx, complete_vtable);
+            replaced = true;
         }
-        
+
         if replaced {
             if let Err(e) = std::fs::write(&output_file, fixed_content) {
-                println!("cargo::warning=failed to write fixed header {}: {e}", output_file.display());
+                println!(
+                    "cargo::warning=failed to write fixed header {}: {e}",
+                    output_file.display()
+                );
             }
         } else {
-            println!("cargo::warning=could not find MbusGoServerVtable definition to fix in {}", output_file.display());
+            println!(
+                "cargo::warning=could not find MbusGoServerVtable definition to fix in {}",
+                output_file.display()
+            );
         }
 
         // Mirror the freshly-generated header into the Go module so
@@ -892,13 +905,13 @@ where
         let mut positions = Vec::new();
         let mut search_pos = 0;
         let pattern = "typedef struct MbusGoServerVtable";
-        
+
         while let Some(pos) = output[search_pos..].find(pattern) {
             let absolute_pos = search_pos + pos;
             positions.push(absolute_pos);
             search_pos = absolute_pos + pattern.len();
         }
-        
+
         // If there are 2 or more occurrences, remove all but the first
         if positions.len() >= 2 {
             // Find the end of the second definition
