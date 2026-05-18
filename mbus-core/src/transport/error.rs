@@ -24,6 +24,9 @@ pub enum TransportError {
     Unexpected,
     /// Invalid configuration.
     InvalidConfiguration,
+    /// The transport detected a protocol-level framing or timing violation
+    /// (e.g., inter-character gap exceeding t1.5 on serial RTU).
+    FramingError,
 }
 
 #[cfg(all(feature = "defmt-format", target_os = "none"))]
@@ -37,6 +40,9 @@ impl defmt::Format for TransportError {
             TransportError::BufferTooSmall => defmt::write!(f, "Buffer too small"),
             TransportError::Unexpected => defmt::write!(f, "An unexpected error occurred"),
             TransportError::InvalidConfiguration => defmt::write!(f, "Invalid configuration"),
+            TransportError::FramingError => {
+                defmt::write!(f, "Framing error: protocol timing violation")
+            }
         }
     }
 }
@@ -52,6 +58,7 @@ impl core::fmt::Display for TransportError {
             TransportError::BufferTooSmall => write!(f, "Buffer too small"),
             TransportError::Unexpected => write!(f, "Unexpected error"),
             TransportError::InvalidConfiguration => write!(f, "Invalid configuration"),
+            TransportError::FramingError => write!(f, "Framing error"),
         }
     }
 }
@@ -69,6 +76,7 @@ impl From<TransportError> for MbusError {
             TransportError::BufferTooSmall => MbusError::BufferTooSmall,
             TransportError::Unexpected => MbusError::Unexpected,
             TransportError::InvalidConfiguration => MbusError::InvalidConfiguration,
+            TransportError::FramingError => MbusError::FramingError,
         }
     }
 }

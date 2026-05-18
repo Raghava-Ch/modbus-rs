@@ -26,16 +26,20 @@ use mbus_core::{
 // ---------------------------------------------------------------------------
 
 /// Application-supplied callback that returns the current elapsed time in
-/// milliseconds (monotonically increasing).
+/// **microseconds** (monotonically increasing).
 ///
 /// No cryptographic properties are required; a simple system tick counter is
-/// sufficient.  The value wraps after ~584 million years at nanosecond
-/// resolution and much later at millisecond resolution, so overflow is safe
-/// to ignore for practical deployments.
+/// sufficient.  The value wraps after ~584 942 years at microsecond
+/// resolution, so overflow is safe to ignore for practical deployments.
 ///
 /// If a clock is not available on the target platform, keep
 /// [`ResilienceConfig::clock_fn`] as `None` — all time-based features are
 /// automatically disabled.
+///
+/// # Migration from v0.9
+///
+/// Prior to v0.11, `ClockFn` returned milliseconds.  Multiply your existing
+/// clock value by 1 000 or use a higher-resolution hardware timer.
 pub type ClockFn = fn() -> u64;
 
 // ---------------------------------------------------------------------------
@@ -82,6 +86,8 @@ pub struct TimeoutConfig {
     ///
     /// This is detected *post-hoc*: the callback always runs to completion.
     /// When exceeded, a `debug`-level log entry is emitted.  `0 = disabled`.
+    ///
+    /// Internally converted to microseconds using the [`ClockFn`] source.
     pub app_callback_ms: u32,
 
     /// Maximum milliseconds allowed for a single `Transport::send()` call.
@@ -261,6 +267,18 @@ pub struct ResilienceConfig {
     /// This is only honored for Serial transports. TCP and other point-to-point
     /// transports continue to silently drop broadcast traffic.
     pub enable_broadcast_writes: bool,
+
+    /// Minimum turnaround delay in **microseconds** before the server sends a
+    /// response on a serial bus.
+    ///
+    /// This ensures the bus has been quiet for the required time between
+    /// receiving the last byte of a request and transmitting the first byte of
+    /// the response.  Only applies to serial transports; ignored for TCP.
+    ///
+    /// `0` disables the turnaround delay (default).  Typical values range
+    /// from 100 µs to 10 000 µs depending on baud rate and RS-485 driver
+    /// characteristics.
+    pub turnaround_delay_us: u64,
 }
 
 impl Default for ResilienceConfig {
@@ -271,6 +289,7 @@ impl Default for ResilienceConfig {
             max_send_retries: 3,
             enable_priority_queue: false,
             enable_broadcast_writes: false,
+            turnaround_delay_us: 0,
         }
     }
 }
@@ -285,9 +304,9 @@ pub(crate) struct PendingRequest {
     pub(crate) frame: Vec<u8, MAX_ADU_FRAME_LEN>,
     /// Priority derived from the function code.
     pub(crate) priority: RequestPriority,
-    /// Clock value (ms) when this request was placed into the queue.
+    /// Clock value (µs) when this request was placed into the queue.
     /// `0` when no clock is available.
-    pub(crate) received_at_ms: u64,
+    pub(crate) received_at_us: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -333,15 +352,15 @@ impl<const N: usize> RequestQueue<N> {
     ///
     /// Returns the number of expired requests.  Calls to this method with
     /// `deadline_ms == 0` are no-ops.
-    pub(crate) fn expire_stale(&mut self, now_ms: u64, deadline_ms: u32) -> usize {
+    pub(crate) fn expire_stale(&mut self, now_us: u64, deadline_ms: u32) -> usize {
         if deadline_ms == 0 {
             return 0;
         }
-        let limit = deadline_ms as u64;
+        let limit = deadline_ms as u64 * 1000;
         let before = self.items.len();
         let mut i = 0;
         while i < self.items.len() {
-            if now_ms.saturating_sub(self.items[i].received_at_ms) > limit {
+            if now_us.saturating_sub(self.items[i].received_at_us) > limit {
                 self.items.swap_remove(i);
                 // swap_remove moves the last item to position `i`; do not advance.
             } else {
@@ -354,16 +373,16 @@ impl<const N: usize> RequestQueue<N> {
     /// Removes and returns all requests whose age exceeds `deadline_ms`.
     ///
     /// Calls with `deadline_ms == 0` return an empty vector.
-    pub(crate) fn take_expired(&mut self, now_ms: u64, deadline_ms: u32) -> Vec<PendingRequest, N> {
+    pub(crate) fn take_expired(&mut self, now_us: u64, deadline_ms: u32) -> Vec<PendingRequest, N> {
         let mut expired: Vec<PendingRequest, N> = Vec::new();
         if deadline_ms == 0 {
             return expired;
         }
 
-        let limit = deadline_ms as u64;
+        let limit = deadline_ms as u64 * 1000;
         let mut i = 0;
         while i < self.items.len() {
-            if now_ms.saturating_sub(self.items[i].received_at_ms) > limit {
+            if now_us.saturating_sub(self.items[i].received_at_us) > limit {
                 let item = self.items.swap_remove(i);
                 let _ = expired.push(item);
                 // swap_remove moves last item into `i`; re-check same index.
@@ -395,8 +414,10 @@ pub(crate) struct PendingResponse {
     pub(crate) unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     /// How many send attempts have already been made.
     pub(crate) retry_count: u8,
-    /// Clock value (ms) when this response was first queued.
-    pub(crate) queued_at_ms: u64,
+    /// Clock value (µs) when this response was first queued.
+    pub(crate) queued_at_us: u64,
+    /// True if delayed for protocol turnaround (not due to a send failure).
+    pub(crate) is_turnaround_delay: bool,
 }
 
 // ---------------------------------------------------------------------------

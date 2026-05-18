@@ -90,6 +90,8 @@ pub enum MbusStatusCode {
     MbusErrInvalidBroadcastAddress,
     /// Broadcast not allowed.
     MbusErrBroadcastNotAllowed,
+    /// Framing error (protocol timing violation).
+    MbusErrFramingError,
     /// Null pointer passed.
     MbusErrNullPointer,
     /// Invalid UTF-8 string.
@@ -147,6 +149,7 @@ impl From<MbusError> for MbusStatusCode {
             MbusError::InvalidMeiType => Self::MbusErrInvalidMeiType,
             MbusError::InvalidBroadcastAddress => Self::MbusErrInvalidBroadcastAddress,
             MbusError::BroadcastNotAllowed => Self::MbusErrBroadcastNotAllowed,
+            MbusError::FramingError => Self::MbusErrFramingError,
         }
     }
 }
@@ -201,6 +204,7 @@ pub extern "C" fn mbus_status_str(code: MbusStatusCode) -> *const c_char {
         MbusStatusCode::MbusErrInvalidMeiType => b"invalid MEI type\0",
         MbusStatusCode::MbusErrInvalidBroadcastAddress => b"invalid broadcast address\0",
         MbusStatusCode::MbusErrBroadcastNotAllowed => b"broadcast not allowed\0",
+        MbusStatusCode::MbusErrFramingError => b"framing error\0",
         MbusStatusCode::MbusErrNullPointer => b"null pointer\0",
         MbusStatusCode::MbusErrInvalidUtf8 => b"invalid UTF-8 in config string\0",
         MbusStatusCode::MbusErrInvalidClientId => b"invalid client ID\0",
@@ -289,6 +293,7 @@ mod tests {
             MbusErrInvalidBroadcastAddress
         );
         check!(MbusError::BroadcastNotAllowed, MbusErrBroadcastNotAllowed);
+        check!(MbusError::FramingError, MbusErrFramingError);
     }
 
     // ── mbus_status_str ───────────────────────────────────────────────────────
@@ -342,6 +347,7 @@ mod tests {
             MbusStatusCode::MbusErrInvalidMeiType,
             MbusStatusCode::MbusErrInvalidBroadcastAddress,
             MbusStatusCode::MbusErrBroadcastNotAllowed,
+            MbusStatusCode::MbusErrFramingError,
             MbusStatusCode::MbusErrNullPointer,
             MbusStatusCode::MbusErrInvalidUtf8,
             MbusStatusCode::MbusErrInvalidClientId,

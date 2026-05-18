@@ -222,6 +222,10 @@ typedef enum MbusStatusCode {
      */
     MbusErrBroadcastNotAllowed,
     /**
+     * Framing error (protocol timing violation).
+     */
+    MbusErrFramingError,
+    /**
      * Null pointer passed.
      */
     MbusErrNullPointer,
@@ -287,13 +291,27 @@ typedef enum MbusBackoffStrategy {
  * Exception code returned by every C server callback.
  *
  * Maps 1-to-1 with the Modbus standard exception codes:
- * - `0x01` IllegalFunction
- * - `0x02` IllegalDataAddress
- * - `0x03` IllegalDataValue
- * - `0x04` ServerDeviceFailure
  *
- * The value `Ok = 0` is a non-standard sentinel used by this API to signal
- * "request handled successfully; no exception".
+ * | Value | Name | When to return |
+ * |-------|------|----------------|
+ * | `0` | `Ok` | Request handled successfully. The server sends a normal response. |
+ * | `1` | `IllegalFunction` | This function code is not supported by your server implementation. |
+ * | `2` | `IllegalDataAddress` | The requested `address` or `quantity` is outside the server's valid range. |
+ * | `3` | `IllegalDataValue` | A value in the request data field is not acceptable (e.g. out-of-range register value). |
+ * | `4` | `ServerDeviceFailure` | An unrecoverable error occurred while processing the request (hardware fault, internal error). |
+ *
+ * # Notes
+ * - `Ok = 0` is a **non-standard sentinel** used only by this C API.  It is
+ *   never sent on the wire; the server translates it to a normal success response.
+ * - For **write** function codes (FC05, FC06, FC0F, FC10, FC15, FC16, FC17),
+ *   `Ok` means the write was accepted and committed.  The server echoes the
+ *   request back to the master as specified by the Modbus protocol.
+ * - For **read** function codes (FC01–FC04, FC07, FC0B, FC0C, FC11, FC14, FC17,
+ *   FC18, FC2B), `Ok` means the `out_*` fields have been populated with valid
+ *   response data.
+ * - If you detect a timing violation in application logic (e.g. a sensor timed
+ *   out), return `ServerDeviceFailure`; do **not** return `FramingError` — that
+ *   is a transport-level status only returned by the `recv` callback.
  */
 typedef enum MbusServerExceptionCode {
     /**
@@ -339,30 +357,200 @@ typedef struct MbusSerialConfig {
 } MbusSerialConfig;
 
 /**
- * C-provided transport callbacks.
+ * C-provided transport callbacks — the only interface between C code and the Rust Modbus stack.
  *
- * All five callbacks must be non-`NULL` for a valid transport.
- * `userdata` is threaded through every callback invocation.
+ * Fill in this struct and pass it to a `mbus_*_new` constructor.  The Rust stack
+ * calls these function pointers whenever it needs to open, close, send data, or
+ * receive data over the underlying physical medium (TCP socket, UART, etc.).
+ *
+ * # Requirements
+ *
+ * - **All five callbacks must be non-`NULL`.**  `validate_transport_callbacks` checks
+ *   this; constructors reject a struct with any `NULL` slot.
+ * - Every callback receives the same `userdata` pointer that is stored in this struct.
+ *   Use it to pass your driver state (file descriptor, hardware register base, etc.).
+ * - Callbacks may be called from any context that calls `mbus_*_poll`, `mbus_*_connect`,
+ *   or `mbus_*_send`.  If you use locking in your driver, acquire and release the lock
+ *   inside the callback — do **not** hold an external lock while polling.
+ * - Callbacks must **never** call back into the Modbus stack (no `mbus_*` functions
+ *   from inside a callback) — doing so causes re-entrant undefined behaviour.
+ *
+ * # Lifetime
+ *
+ * The struct (and everything `userdata` points to) must remain valid until
+ * `mbus_*_free` is called on every server or client that uses it.
+ *
+ * # Minimal example (C, TCP)
+ *
+ * ```c
+ * static MbusStatusCode my_connect(void *ud) {
+ *     MyCtx *ctx = (MyCtx *)ud;
+ *     ctx->fd = socket_open(ctx->host, ctx->port);
+ *     return ctx->fd >= 0 ? MBUS_OK : MBUS_ERR_CONNECTION_FAILED;
+ * }
+ * static MbusStatusCode my_disconnect(void *ud) {
+ *     socket_close(((MyCtx *)ud)->fd);
+ *     return MBUS_OK;
+ * }
+ * static MbusStatusCode my_send(const uint8_t *data, uint16_t len, void *ud) {
+ *     return socket_write(((MyCtx *)ud)->fd, data, len) == len
+ *         ? MBUS_OK : MBUS_ERR_SEND_FAILED;
+ * }
+ * static MbusStatusCode my_recv(uint8_t *buf, uint16_t cap,
+ *                               uint16_t *out_len, void *ud) {
+ *     int n = socket_read_nonblocking(((MyCtx *)ud)->fd, buf, cap);
+ *     if (n > 0) { *out_len = (uint16_t)n; return MBUS_OK; }
+ *     return n == 0 ? MBUS_ERR_TIMEOUT : MBUS_ERR_IO_ERROR;
+ * }
+ * static uint8_t my_is_connected(void *ud) {
+ *     return ((MyCtx *)ud)->fd >= 0 ? 1 : 0;
+ * }
+ *
+ * static MbusTransportCallbacks g_transport = {
+ *     .userdata       = &g_ctx,
+ *     .on_connect     = my_connect,
+ *     .on_disconnect  = my_disconnect,
+ *     .on_send        = my_send,
+ *     .on_recv        = my_recv,
+ *     .on_is_connected = my_is_connected,
+ * };
+ * ```
  */
 typedef struct MbusTransportCallbacks {
     /**
-     * Opaque user context threaded to every callback.
+     * Opaque pointer passed unchanged to every callback invocation.
+     *
+     * Typically points to your driver context struct (file descriptor, register
+     * base address, mutex handle, etc.).  May be `NULL` if your callbacks do not
+     * need per-instance state (e.g. a singleton UART driver).
      */
     void *userdata;
     /**
-     * Called to open/connect the transport.
+     * Open the physical connection.
+     *
+     * Called once by `mbus_*_connect`.  The stack does not call `on_send` or
+     * `on_recv` until this returns `MBUS_OK`.
+     *
+     * # What to do
+     * - Open the socket / serial port / SPI bus.
+     * - Perform any hardware initialisation (baud rate, parity, stop bits).
+     * - For serial servers: configure the UART but do **not** start receiving
+     *   until you return — the stack will call `on_recv` on the first poll.
+     *
+     * # Return values
+     * | Code | Meaning |
+     * |------|---------|
+     * | `MBUS_OK` | Connection established; stack proceeds normally. |
+     * | `MBUS_ERR_CONNECTION_FAILED` | Could not open the port/socket (e.g. ENOENT, EACCES). |
+     * | `MBUS_ERR_IO_ERROR` | Low-level I/O failure during hardware setup. |
+     * | `MBUS_ERR_INVALID_CONFIGURATION` | Supplied config is not supported by this hardware. |
+     *
+     * Any other non-`MBUS_OK` code is mapped to `MbusError::Unexpected` internally.
      */
     enum MbusStatusCode (*on_connect)(void *userdata);
     /**
-     * Called to close/disconnect the transport.
+     * Close the physical connection.
+     *
+     * Called by `mbus_*_disconnect` and during server teardown.  After this
+     * returns, the stack will not call `on_send` or `on_recv` until
+     * `on_connect` is called again.
+     *
+     * # What to do
+     * - Release the socket / serial port file descriptor.
+     * - For RS-485: de-assert the transmit-enable line if your driver holds it.
+     * - This function should be idempotent — calling it on an already-closed
+     *   transport must not crash or return an error.
+     *
+     * # Return values
+     * | Code | Meaning |
+     * |------|---------|
+     * | `MBUS_OK` | Disconnected successfully (or was already disconnected). |
+     * | `MBUS_ERR_IO_ERROR` | An error occurred while flushing or closing the port. |
+     *
+     * The return value is checked but not acted upon by the stack beyond logging.
      */
     enum MbusStatusCode (*on_disconnect)(void *userdata);
     /**
-     * Called to send a frame.
+     * Write a complete Modbus ADU frame to the medium.
+     *
+     * The stack calls this once per outgoing frame with a fully-formed byte
+     * slice (`data[0..len]`).  The function must write **all** `len` bytes
+     * atomically from the stack's perspective — partial writes are not retried
+     * at the byte level.
+     *
+     * # Parameters
+     * - `data`     — Pointer to the frame bytes.  Valid only for the duration
+     *   of this call; do not retain it.
+     * - `len`      — Number of bytes to send (always ≤ `MAX_ADU_FRAME_LEN` = 256).
+     * - `userdata` — The value stored in `MbusTransportCallbacks::userdata`.
+     *
+     * # RS-485 / half-duplex requirement
+     * Assert the TX-enable line **before** writing the first byte and
+     * de-assert it **after** the last byte has been shifted out of the UART
+     * FIFO (not just after the write syscall returns).  Failing to do this
+     * corrupts the frame from the perspective of other nodes on the bus.
+     *
+     * # Return values
+     * | Code | Meaning |
+     * |------|---------|
+     * | `MBUS_OK` | All bytes written successfully. |
+     * | `MBUS_ERR_SEND_FAILED` | Write failed partway through (broken pipe, UART overflow). |
+     * | `MBUS_ERR_IO_ERROR` | Hardware-level I/O error (DMA fault, framing error on TX). |
+     * | `MBUS_ERR_CONNECTION_CLOSED` | The remote end closed the connection (TCP only). |
+     *
+     * On failure the stack queues the frame for retry (up to `max_send_retries`).
      */
     enum MbusStatusCode (*on_send)(const uint8_t *data, uint16_t len, void *userdata);
     /**
-     * Called to receive a frame.
+     * Read the next available Modbus ADU frame from the medium.
+     *
+     * The stack calls this once per `mbus_*_poll` invocation.  The function
+     * must be **non-blocking** (or use a very short read timeout) so that the
+     * poll loop remains responsive.
+     *
+     * # Parameters
+     * - `buffer`     — Rust-allocated scratch buffer; write received bytes here.
+     *   Valid only for the duration of this call.
+     * - `buffer_cap` — Capacity of `buffer` in bytes (always `MAX_ADU_FRAME_LEN` = 256).
+     *   Never write more than `buffer_cap` bytes.
+     * - `out_len`    — Write the number of bytes placed in `buffer` here.
+     *   Must be set to `0` when returning anything other than `MBUS_OK`.
+     * - `userdata`   — The value stored in `MbusTransportCallbacks::userdata`.
+     *
+     * # TCP / stream transports
+     * Read as many bytes as are available right now (non-blocking).  The Rust
+     * layer uses a sliding window to assemble complete frames from partial reads;
+     * you do not need to wait for a full frame.
+     *
+     * # Serial RTU transports — timing requirements
+     * The `on_recv` callback is the correct place to enforce Modbus
+     * inter-character timing (§2.5 of the Modbus Serial Line Specification):
+     *
+     * - **t3.5 (end-of-frame):** Wait until the line has been silent for at
+     *   least 3.5 character times after the last received byte.  Only then
+     *   return the accumulated bytes with `MBUS_OK`.  This ensures each
+     *   `on_recv` call delivers exactly one complete frame.
+     *
+     * - **t1.5 (framing violation):** If silence of ≥ 1.5 character times is
+     *   detected *between* bytes of the same frame, the frame is corrupt.
+     *   Return **`MBUS_ERR_FRAMING_ERROR`** immediately.  The stack will:
+     *     1. Discard all bytes buffered so far.
+     *     2. Keep the transport connected.
+     *     3. Resume waiting for a clean frame on the next poll.
+     *
+     * # Return values
+     * | Code | Meaning |
+     * |------|---------|
+     * | `MBUS_OK` | Frame bytes written into `buffer`; `*out_len > 0`. |
+     * | `MBUS_ERR_TIMEOUT` | No data available this poll (bus idle / no client request yet). The stack skips processing and polls again. |
+     * | `MBUS_ERR_FRAMING_ERROR` | **Serial only.** t1.5 inter-character gap detected mid-frame. Stack discards the partial frame and continues. |
+     * | `MBUS_ERR_IO_ERROR` | Hardware read error (UART overrun, DMA fault). Stack marks the transport as disconnected. |
+     * | `MBUS_ERR_CONNECTION_CLOSED` | Remote closed the connection (TCP) or the port was unexpectedly closed. Stack disconnects and stops polling. |
+     * | `MBUS_ERR_CONNECTION_LOST` | Connection dropped unexpectedly (e.g. TCP RST). Same effect as `CONNECTION_CLOSED`. |
+     * | `MBUS_ERR_BUFFER_TOO_SMALL` | Frame exceeded `buffer_cap`. Stack discards data (should not happen under normal conditions). |
+     *
+     * **Do not** set `*out_len` to a non-zero value when returning an error code —
+     * the stack ignores `buffer` contents on any non-`MBUS_OK` return.
      */
     enum MbusStatusCode (*on_recv)(uint8_t *buffer,
                                    uint16_t buffer_cap,
@@ -700,22 +888,46 @@ typedef enum MbusServerExceptionCode (*MbusServerReadDeviceIdentificationFn)(str
 /**
  * Master callback table for a C Modbus server application.
  *
- * Pass a populated instance of this struct to `mbus_tcp_server_new`,
- * `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new` (if ASCII support is enabled). Any callback
- * left as `NULL` will cause the server
- * to respond with `ExceptionCode::IllegalFunction` for that function code.
+ * Pass a populated instance to `mbus_tcp_server_new`,
+ * `mbus_serial_rtu_server_new`, or `mbus_serial_ascii_server_new`.
  *
- * The `userdata` pointer is passed as-is to every callback. It is the caller's
- * responsibility to ensure its lifetime exceeds the server's.
+ * ## NULL slots
+ * Any callback slot left as `NULL` causes the server to respond with
+ * `ExceptionCode::IllegalFunction` (0x01) for that function code.
+ * You do not need to implement callbacks for function codes your device
+ * does not support.
  *
- * # Example (C)
+ * ## Return value contract
+ * Every callback returns `MbusServerExceptionCode`.  The server uses this to
+ * decide what to send on the wire:
+ *
+ * | Return value | Wire response |
+ * |---|---|
+ * | `Ok` | Normal success response (echo or `out_*` data). |
+ * | `IllegalFunction` | Exception response 0x01. |
+ * | `IllegalDataAddress` | Exception response 0x02. |
+ * | `IllegalDataValue` | Exception response 0x03. |
+ * | `ServerDeviceFailure` | Exception response 0x04. |
+ *
+ * ## Timing — serial servers
+ * Callbacks are invoked from within `mbus_serial_server_poll`.  The stack
+ * does **not** call the `recv` callback while a callback is running, so you
+ * cannot observe a t1.5/t3.5 violation from inside a handler.  Timing
+ * violations are detected and reported exclusively through the `recv`
+ * transport callback before dispatch (see the `serial_server` module docs).
+ *
+ * ## Lifetime of pointer fields
+ * All `*mut` and `*const` pointer fields in the `*Req` structs are valid only
+ * for the duration of the callback invocation.  Do **not** retain them.
+ *
+ * ## Example (C)
  *
  * ```c
  * static MbusServerHandlers g_handlers = {
- *     .userdata         = &my_app_state,
- *     .on_read_coils    = my_read_coils_handler,
- *     .on_write_single_coil = my_write_single_coil_handler,
- *     // leave other fields NULL to return IllegalFunction
+ *     .userdata             = &my_app_state,
+ *     .on_read_holding_registers = my_read_hr_handler,
+ *     .on_write_single_register  = my_write_sr_handler,
+ *     // All other slots are NULL → server returns IllegalFunction.
  * };
  * ```
  */
@@ -1409,14 +1621,26 @@ extern void mbus_pool_unlock(void);
  *
  * # Parameters
  * - `transport` — Transport callbacks providing connect/disconnect/send/recv.
- * - `handlers`  — Application callback table.
+ *   The `recv` callback is responsible for t1.5/t3.5 silence detection (see
+ *   the module-level timing section).
+ * - `handlers`  — Application callback table. `NULL` slots automatically
+ *   respond with `IllegalFunction` for that function code.
  * - `config`    — Server configuration (slave address, timeout).
  *
  * # Returns
  * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
  *
+ * `MBUS_INVALID_SERVER_ID` is returned when:
+ * - Any pointer argument is `NULL`.
+ * - Any required function pointer inside `transport` is `NULL`.
+ * - `config.slave_address` is outside the valid range 1–247.
+ * - The internal serial server pool is exhausted.
+ *
  * # Safety
- * Same requirements as `mbus_tcp_server_new`.
+ * - `transport`, `handlers`, and `config` must remain valid for the entire
+ *   lifetime of the server (until `mbus_serial_server_free` is called).
+ * - All function pointers inside `transport` must be valid C functions.
+ * - `handlers.userdata` must outlive the server.
  */
 MbusServerId mbus_serial_rtu_server_new(const struct MbusTransportCallbacks *transport,
                                         const struct MbusServerHandlers *handlers,
@@ -1425,16 +1649,24 @@ MbusServerId mbus_serial_rtu_server_new(const struct MbusTransportCallbacks *tra
 /**
  * Creates a new Modbus Serial ASCII server and returns an opaque server ID.
  *
+ * ASCII mode uses LRC checksums and `:` / CR-LF delimiters instead of CRC and
+ * silence-based framing, so t1.5/t3.5 inter-character timing is relaxed.
+ * The `recv` callback may still return `MbusErrFramingError` if the ASCII frame
+ * is malformed (e.g. an unexpected character between `:` and CR-LF).
+ *
  * # Parameters
- * - `transport` — Transport callbacks providing connect/disconnect/send/recv.
+ * - `transport` — Transport callbacks for the underlying serial port.
  * - `handlers`  — Application callback table.
  * - `config`    — Server configuration (slave address, timeout).
  *
  * # Returns
  * A valid `MbusServerId` on success, or `MBUS_INVALID_SERVER_ID` on failure.
  *
+ * `MBUS_INVALID_SERVER_ID` is returned under the same conditions as
+ * `mbus_serial_rtu_server_new` (null pointers, invalid slave address, pool full).
+ *
  * # Safety
- * Same requirements as `mbus_tcp_server_new`.
+ * Same requirements as `mbus_serial_rtu_server_new`.
  */
 MbusServerId mbus_serial_ascii_server_new(const struct MbusTransportCallbacks *transport,
                                           const struct MbusServerHandlers *handlers,
