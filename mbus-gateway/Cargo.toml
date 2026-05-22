@@ -12,12 +12,24 @@ categories.workspace = true
 description = "Modbus gateway runtime — bridges upstream TCP/serial masters to downstream slave buses with PDU-level framing translation"
 
 [dependencies]
-mbus-core = { workspace = true, features = ["coils", "registers", "diagnostics", "fifo", "file-record"] }
+mbus-core = { workspace = true, features = [
+    "coils",
+    "registers",
+    "diagnostics",
+    "fifo",
+    "file-record",
+] }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
-mbus-serial  = { workspace = true, optional = true }
-tokio = { version = "1", features = ["net", "sync", "rt", "macros", "time"], optional = true }
+mbus-serial = { workspace = true, optional = true }
+tokio = { version = "1", features = [
+    "net",
+    "sync",
+    "rt",
+    "macros",
+    "time",
+], optional = true }
 tokio-tungstenite = { version = "0.29.0", optional = true }
 
 [[example]]
@@ -40,18 +52,44 @@ required-features = ["ws-server", "serial-rtu"]
 name = "tcp_to_rtu"
 required-features = ["network", "serial-rtu"]
 
+[[example]]
+name = "rtu_upstream_to_tcp"
+required-features = ["serial-rtu-async"]
+
 [dev-dependencies]
 anyhow = "1.0"
 mbus-network = { workspace = true, features = ["async"] }
 mbus-core = { workspace = true }
-tokio = { version = "1", features = ["net", "sync", "rt", "macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = [
+    "net",
+    "sync",
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }
+tokio-test = "0.4"
 
 [features]
 # Default: sync no_std core + async Tokio gateway + logging
-default = ["async", "logging"]
+default = [
+    "async",
+    "logging",
+    "network",
+    "serial-rtu",
+    "ws-server",
+    "serial-rtu-async",
+    "std-required",
+]
 
 # Async Tokio gateway runtime (requires std and mbus-network/async)
-async = ["dep:mbus-network", "mbus-network/async", "mbus-core/async", "dep:tokio", "std-required"]
+async = [
+    "dep:mbus-network",
+    "mbus-network/async",
+    "mbus-core/async",
+    "dep:tokio",
+    "std-required",
+]
 
 # Sync TCP transport types: re-exports StdTcpTransport and StdTcpServerTransport from mbus-network.
 # Use for TCP-upstream → TCP-downstream gateways without the async runtime.
@@ -70,7 +108,38 @@ serial-ascii = ["dep:mbus-serial", "std-required"]
 # WasmModbusClient instances and forwards requests to any AsyncTransport downstream.
 # Features: idle-timeout watchdog, session concurrency cap, origin allowlist,
 # Modbus WebSocket subprotocol negotiation.
-ws-server = ["async", "dep:mbus-network", "mbus-network/ws-server", "mbus-core/async", "dep:tokio", "dep:tokio-tungstenite", "dep:mbus-serial", "mbus-serial/async", "std-required"]
+ws-server = [
+    "async",
+    "dep:mbus-network",
+    "mbus-network/ws-server",
+    "mbus-core/async",
+    "serial-rtu",
+    "dep:tokio",
+    "dep:tokio-tungstenite",
+    "dep:mbus-serial",
+    "mbus-serial/async",
+    "std-required",
+]
+
+# Async RTU serial upstream gateway.
+# Enables AsyncSerialGatewayServer for RTU Modbus masters connected via RS-485/RS-232.
+# Re-exports TokioRtuTransport from mbus-serial.
+serial-rtu-async = [
+    "async",
+    "dep:mbus-serial",
+    "mbus-serial/async",
+    "std-required",
+]
+
+# Async ASCII serial upstream gateway.
+# Enables AsyncSerialGatewayServer for ASCII Modbus masters connected via RS-485/RS-232.
+# Re-exports TokioAsciiTransport from mbus-serial.
+serial-ascii-async = [
+    "async",
+    "dep:mbus-serial",
+    "mbus-serial/async",
+    "std-required",
+]
 
 # log facade integration
 logging = ["dep:log", "std-required"]

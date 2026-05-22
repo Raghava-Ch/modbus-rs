@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
+use mbus_gateway::{AsyncWsGatewayServer, NoopEventHandler, UnitRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
 use tokio::sync::Mutex;
 
@@ -31,7 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── Downstream TCP connection ─────────────────────────────────────────────
-    let downstream = TokioTcpTransport::connect("127.0.0.1:502").await?;
+    let downstream = TokioTcpTransport::connect("127.0.0.1:502")
+        .await
+        .map_err(|e| format!("{:?}", e))?;
     let shared = Arc::new(Mutex::new(downstream));
 
     // ── Gateway configuration ─────────────────────────────────────────────────
@@ -49,7 +51,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("WebSocket gateway listening on ws://0.0.0.0:8502");
     println!("Forwarding to downstream Modbus TCP at 127.0.0.1:502");
 
-    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared]).await?;
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
+    AsyncWsGatewayServer::serve(
+        "0.0.0.0:8502",
+        config,
+        router,
+        vec![shared],
+        handler,
+        Duration::from_secs(1),
+    )
+    .await?;
 
     Ok(())
 }

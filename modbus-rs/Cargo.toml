@@ -19,6 +19,8 @@ mbus-client = { workspace = true, optional = true }
 mbus-async = { workspace = true, optional = true }
 mbus-server = { workspace = true, optional = true }
 mbus-gateway = { workspace = true, optional = true }
+mbus-client-async = { workspace = true, optional = true }
+mbus-server-async = { workspace = true, optional = true }
 
 heapless = { workspace = true }
 
@@ -53,8 +55,14 @@ default = [
 # lib.rs checks only this flag, so adding a new std-requiring feature is a single
 # line change here rather than a lib.rs edit.
 std-required = []
-client = ["mbus-client"]
-server = ["dep:mbus-server", "std-required"]
+async = [
+    "dep:mbus-async",
+    "dep:mbus-client-async",
+    "dep:mbus-server-async",
+    "std-required",
+]
+client = ["dep:mbus-client"]
+server = ["dep:mbus-server"]
 serial-rtu = [
     "mbus-serial",
     "mbus-async?/serial-rtu",
@@ -78,10 +86,22 @@ coils = ["mbus-core/coils", "mbus-async?/coils", "mbus-server?/coils"]
 registers = ["mbus-core/registers", "mbus-async?/registers"]
 holding-registers = ["registers", "mbus-server?/holding-registers"]
 input-registers = ["registers", "mbus-server?/input-registers"]
-discrete-inputs = ["mbus-core/registers", "mbus-async?/discrete-inputs", "mbus-server?/discrete-inputs"]
+discrete-inputs = [
+    "mbus-core/registers",
+    "mbus-async?/discrete-inputs",
+    "mbus-server?/discrete-inputs",
+]
 fifo = ["mbus-core/fifo", "mbus-async?/fifo", "mbus-server?/fifo"]
-file-record = ["mbus-core/file-record", "mbus-async?/file-record", "mbus-server?/file-record"]
-diagnostics = ["mbus-core/diagnostics", "mbus-async?/diagnostics", "mbus-server?/diagnostics"]
+file-record = [
+    "mbus-core/file-record",
+    "mbus-async?/file-record",
+    "mbus-server?/file-record",
+]
+diagnostics = [
+    "mbus-core/diagnostics",
+    "mbus-async?/diagnostics",
+    "mbus-server?/diagnostics",
+]
 diagnostics-stats = [
     "diagnostics",
     "mbus-async?/diagnostics-stats",
@@ -93,8 +113,11 @@ logging = [
     "mbus-client?/logging",
     "std-required",
 ]
-async = ["dep:mbus-async", "std-required"]
-traffic = ["mbus-client?/traffic", "mbus-async?/traffic", "mbus-server?/traffic"]
+traffic = [
+    "mbus-client?/traffic",
+    "mbus-async?/traffic",
+    "mbus-server?/traffic",
+]
 error-trait = ["mbus-core/error-trait"]
 gateway = ["dep:mbus-gateway"]
 

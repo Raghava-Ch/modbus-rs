@@ -15,15 +15,17 @@
 //!
 //! ## Feature Flags
 //!
-//! | Feature        | Default | Description |
-//! |----------------|---------|-------------|
-//! | `async`        | ✓       | Async Tokio gateway runtime (`AsyncTcpGatewayServer`) |
-//! | `ws-server`    | ✗       | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients |
-//! | `logging`      | ✓       | `log` facade integration |
-//! | `network`      | ✗       | Re-exports `StdTcpTransport` + `StdTcpServerTransport` from `mbus-network` for sync TCP use |
-//! | `serial-rtu`   | ✗       | Re-exports `StdRtuTransport` from `mbus-serial` for sync RTU serial use |
-//! | `serial-ascii` | ✗       | Re-exports `StdAsciiTransport` from `mbus-serial` for sync ASCII serial use |
-//! | `traffic`      | ✗       | Raw TX/RX frame callbacks in `GatewayEventHandler` |
+//! | Feature             | Default | Description |
+//! |---------------------|---------|-------------|
+//! | `async`             | ✓       | Async Tokio gateway runtime (`AsyncTcpGatewayServer`) |
+//! | `ws-server`         | ✗       | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients |
+//! | `serial-rtu-async`  | ✗       | Async RTU serial upstream (`AsyncSerialGatewayServer<RTU>`) |
+//! | `serial-ascii-async`| ✗       | Async ASCII serial upstream (`AsyncSerialGatewayServer<ASCII>`) |
+//! | `logging`           | ✓       | `log` facade integration |
+//! | `network`           | ✗       | Re-exports `StdTcpTransport` + `StdTcpServerTransport` from `mbus-network` for sync TCP use |
+//! | `serial-rtu`        | ✗       | Re-exports `StdRtuTransport` from `mbus-serial` for sync RTU serial use |
+//! | `serial-ascii`      | ✗       | Re-exports `StdAsciiTransport` from `mbus-serial` for sync ASCII serial use |
+//! | `traffic`           | ✗       | Raw TX/RX frame callbacks in `GatewayEventHandler` |
 //!
 //! ## Quick Start (sync, TCP → RTU)
 //!
@@ -137,11 +139,29 @@ pub mod router;
 pub mod services;
 pub mod txn_map;
 
+// downstream.rs requires mbus_serial (for RTU/ASCII variants).
+// It is compiled when any feature that enables mbus_serial is active.
+#[cfg(any(
+    feature = "ws-server",
+    feature = "serial-rtu-async",
+    feature = "serial-ascii-async",
+))]
+pub mod downstream;
+
 #[cfg(feature = "async")]
 pub mod async_gateway;
 
+#[cfg(feature = "async")]
+pub mod raw_gateway;
+
+#[cfg(feature = "async")]
+pub mod shutdown;
+
 #[cfg(feature = "ws-server")]
 pub mod ws_gateway;
+
+#[cfg(any(feature = "serial-rtu-async", feature = "serial-ascii-async"))]
+pub mod serial_gateway;
 
 pub(crate) mod log_compat;
 
@@ -150,14 +170,27 @@ pub use event::{GatewayEventHandler, NoopEventHandler};
 pub use router::{
     GatewayRoutingPolicy, PassthroughRouter, RangeRouteTable, UnitIdRewriteRouter, UnitRouteTable,
 };
+
+// DynRouter uses Box<dyn Trait> which requires std's allocator.
+#[cfg(feature = "std-required")]
+pub use router::DynRouter;
 pub use services::GatewayServices;
 pub use txn_map::{SerialTxnMap, TxnMap};
 
 #[cfg(feature = "async")]
 pub use async_gateway::{AsyncGatewayError, AsyncTcpGatewayServer};
 
+#[cfg(feature = "async")]
+pub use raw_gateway::AsyncRawGatewayServer;
+
+#[cfg(feature = "async")]
+pub use shutdown::{GatewayShutdown, GatewayShutdownToken};
+
 #[cfg(feature = "ws-server")]
 pub use ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
+
+#[cfg(any(feature = "serial-rtu-async", feature = "serial-ascii-async"))]
+pub use serial_gateway::AsyncSerialGatewayServer;
 
 // ── Concrete transport re-exports ─────────────────────────────────────────────
 
@@ -181,3 +214,72 @@ pub use mbus_serial::StdRtuTransport;
 /// `serialport`-backed port.  Use it on either the upstream or downstream side.
 #[cfg(feature = "serial-ascii")]
 pub use mbus_serial::StdAsciiTransport;
+
+/// Async RTU serial transport from `mbus-serial` (enabled by the `serial-rtu-async` feature).
+///
+/// [`TokioRtuTransport`] implements Modbus RTU framing over a Tokio-backed serial port.
+/// Use it as the **upstream** transport with [`AsyncSerialGatewayServer`] when a physical
+/// serial Modbus master (e.g. a PLC on RS-485) needs to reach TCP/IP downstream slaves.
+#[cfg(feature = "serial-rtu-async")]
+pub use mbus_serial::TokioRtuTransport;
+
+/// Async ASCII serial transport from `mbus-serial` (enabled by the `serial-ascii-async` feature).
+///
+/// [`TokioAsciiTransport`] implements Modbus ASCII framing over a Tokio-backed serial port.
+/// Use it as the **upstream** transport with [`AsyncSerialGatewayServer`] when a physical
+/// serial ASCII Modbus master needs to reach TCP/IP downstream slaves.
+#[cfg(feature = "serial-ascii-async")]
+pub use mbus_serial::TokioAsciiTransport;
+
+// ── Heterogeneous downstream & config re-exports ─────────────────────────────
+
+/// Heterogeneous async downstream transport (TCP / RTU / ASCII) with built-in framing
+/// translation.  Use [`DownstreamConfig`] to build instances from config-file settings.
+///
+/// Available when any serial feature is enabled (`ws-server`, `serial-rtu-async`,
+/// or `serial-ascii-async`).
+#[cfg(any(
+    feature = "ws-server",
+    feature = "serial-rtu-async",
+    feature = "serial-ascii-async",
+))]
+pub use downstream::{
+    DownstreamConfig, DownstreamConnectError, GatewayTransport, SerialDownstreamConfig,
+};
+
+/// Async TCP transport (re-exported from `mbus-network`).
+///
+/// Available when the `async` feature is enabled.
+#[cfg(feature = "async")]
+pub use mbus_network::TokioTcpTransport;
+
+/// Transport configuration types re-exported for use in config builders.
+///
+/// Includes serial config enums (`BaudRate`, `DataBits`, `Parity`, `SerialMode`) as
+/// well as `UnitIdOrSlaveAddr` — lets callers avoid importing `mbus-core` directly.
+#[cfg(any(
+    feature = "ws-server",
+    feature = "serial-rtu-async",
+    feature = "serial-ascii-async",
+))]
+pub mod transport_types {
+    pub use mbus_core::transport::{
+        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
+        Parity, SerialMode, UnitIdOrSlaveAddr,
+    };
+}
+
+/// `UnitIdOrSlaveAddr` for async-only (TCP-only) setups without serial features.
+///
+/// When serial features are active the richer `transport_types` module is preferred.
+#[cfg(all(
+    feature = "async",
+    not(any(
+        feature = "ws-server",
+        feature = "serial-rtu-async",
+        feature = "serial-ascii-async",
+    ))
+))]
+pub mod transport_types {
+    pub use mbus_core::transport::UnitIdOrSlaveAddr;
+}
