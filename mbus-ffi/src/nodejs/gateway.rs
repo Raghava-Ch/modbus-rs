@@ -103,10 +103,14 @@ impl AsyncTcpGateway {
         // Spawn the gateway task
         let rt = runtime::get();
         let join_handle = rt.spawn(async move {
+            let handler = std::sync::Arc::new(TokioMutex::new(mbus_gateway::NoopEventHandler));
+            let response_timeout = std::time::Duration::from_secs(1);
             let _ = AsyncTcpGatewayServer::serve_with_shutdown(
                 &bind_addr,
                 route_table,
                 downstream_transports,
+                handler,
+                response_timeout,
                 stop_signal_clone.notified(),
             )
             .await;

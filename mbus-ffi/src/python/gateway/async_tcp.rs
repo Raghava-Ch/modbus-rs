@@ -144,10 +144,14 @@ impl AsyncTcpGateway {
                 downstreams.push(Arc::new(TokioMutex::new(t)));
             }
 
+            let handler = Arc::new(TokioMutex::new(mbus_gateway::NoopEventHandler));
+            let response_timeout = std::time::Duration::from_secs(1);
             AsyncTcpGatewayServer::serve_with_shutdown(
                 cfg_snapshot.bind_addr.as_str(),
                 cfg_snapshot.router,
                 downstreams,
+                handler,
+                response_timeout,
                 stop.notified(),
             )
             .await

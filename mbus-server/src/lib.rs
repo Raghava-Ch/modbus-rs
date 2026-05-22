@@ -199,7 +199,7 @@ pub trait InputRegisterMap {
 ///
 /// Each field declared in `fifo(...)` must implement this trait.  The macro routes
 /// FC18 `Read FIFO Queue` requests to the field whose `POINTER_ADDRESS` matches.
-pub trait FifoQueue {
+pub trait FifoQueueMap {
     /// The Modbus pointer address (FC18) this queue responds to.
     const POINTER_ADDRESS: u16;
 
@@ -215,7 +215,7 @@ pub trait FifoQueue {
 ///
 /// Each field declared in `file_record(...)` must implement this trait.  The macro
 /// routes FC14/FC15 sub-requests to the field whose `FILE_NUMBER` matches.
-pub trait FileRecord {
+pub trait FileRecordMap {
     /// The Modbus file number (FC14/FC15) this record responds to.
     const FILE_NUMBER: u16;
 
@@ -244,8 +244,8 @@ pub mod prelude {
     pub use crate::CoilMap;
     #[cfg(feature = "discrete-inputs")]
     pub use crate::DiscreteInputMap;
-    pub use crate::FifoQueue;
-    pub use crate::FileRecord;
+    pub use crate::FifoQueueMap;
+    pub use crate::FileRecordMap;
     #[cfg(feature = "holding-registers")]
     pub use crate::HoldingRegisterMap;
     #[cfg(feature = "input-registers")]

@@ -21,7 +21,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use mbus_gateway::{AsyncWsGatewayServer, RangeRouteTable, WsGatewayConfig};
+use mbus_gateway::{AsyncWsGatewayServer, NoopEventHandler, RangeRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
 use tokio::sync::Mutex;
 
@@ -54,6 +54,15 @@ async fn main() -> Result<()> {
     println!("  units  1–10  → 192.168.1.10:502");
     println!("  units 11–20  → 192.168.1.11:502");
 
-    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, downstreams).await?;
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
+    AsyncWsGatewayServer::serve(
+        "0.0.0.0:8502",
+        config,
+        router,
+        downstreams,
+        handler,
+        std::time::Duration::from_secs(1),
+    )
+    .await?;
     Ok(())
 }

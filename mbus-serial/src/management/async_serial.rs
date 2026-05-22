@@ -113,7 +113,13 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
     fn compute_inter_frame_timeout(baud_rate: u32) -> Duration {
         let baud = baud_rate.max(1) as u64;
         let char_time_us = (11 * 1_000_000) / baud;
-        let silence_us = ((char_time_us * 7) / 2).max(MIN_INTER_FRAME_US);
+        let mut silence_us = ((char_time_us * 7) / 2).max(MIN_INTER_FRAME_US);
+
+        // Non-embedded OSes and USB-to-Serial drivers (like FTDI/CH340) buffer bytes
+        // and introduce polling latencies (typically 1-16ms gaps between chunks).
+        // Enforce a minimum 35ms timeout to prevent artificial frame fragmentation.
+        silence_us = silence_us.max(35_000);
+
         Duration::from_micros(silence_us)
     }
 
