@@ -34,6 +34,8 @@ pub use mbus_server::{
     ResilienceConfig, ServerExceptionHandler, ServerServices, TimeoutConfig,
 };
 
+#[cfg(all(feature = "server", feature = "diagnostics"))]
+pub use mbus_server::ServerDiagnosticsHandler;
 #[cfg(all(feature = "server", feature = "coils"))]
 pub use mbus_server::{CoilMap, CoilsModel, ServerCoilHandler};
 #[cfg(all(feature = "server", feature = "discrete-inputs"))]
@@ -46,8 +48,6 @@ pub use mbus_server::{FileRecordMap, ServerFileRecordHandler};
 pub use mbus_server::{HoldingRegisterMap, HoldingRegistersModel, ServerHoldingRegisterHandler};
 #[cfg(all(feature = "server", feature = "input-registers"))]
 pub use mbus_server::{InputRegisterMap, InputRegistersModel, ServerInputRegisterHandler};
-#[cfg(all(feature = "server", feature = "diagnostics"))]
-pub use mbus_server::ServerDiagnosticsHandler;
 
 #[cfg(feature = "client")]
 pub use mbus_client::app::*;
