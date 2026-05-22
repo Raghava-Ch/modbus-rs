@@ -136,8 +136,8 @@ pub mod app {
     pub trait ServerDiagnosticsHandler {}
 }
 
-/// `FileRecord` map trait (mirrors mbus_server::FileRecord).
-pub trait FileRecord {
+/// `FileRecordMap` map trait (mirrors mbus_server::FileRecordMap).
+pub trait FileRecordMap {
     const FILE_NUMBER: u16;
     fn read_record(
         &mut self,
@@ -156,7 +156,7 @@ pub trait FileRecord {
 use mbus_macros::modbus_app;
 
 struct CalibrationFile;
-impl FileRecord for CalibrationFile {
+impl FileRecordMap for CalibrationFile {
     const FILE_NUMBER: u16 = 1;
     fn read_record(
         &mut self,
@@ -177,7 +177,7 @@ impl FileRecord for CalibrationFile {
 }
 
 struct LogFile;
-impl FileRecord for LogFile {
+impl FileRecordMap for LogFile {
     const FILE_NUMBER: u16 = 2;
     fn read_record(
         &mut self,

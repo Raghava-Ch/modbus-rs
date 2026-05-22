@@ -169,6 +169,11 @@ pub trait AsyncTransport: Send {
     /// of the type.
     const TRANSPORT_TYPE: TransportType;
 
+    /// Dynamic transport type metadata for object-safe traits.
+    fn transport_type(&self) -> TransportType {
+        Self::TRANSPORT_TYPE
+    }
+
     /// Send a complete Modbus ADU frame over the transport.
     ///
     /// Implementations must ensure all bytes are written before returning.

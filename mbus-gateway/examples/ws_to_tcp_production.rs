@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
+use mbus_gateway::{AsyncWsGatewayServer, NoopEventHandler, UnitRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
 use tokio::sync::Mutex;
 
@@ -42,8 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Two Modbus TCP devices are reachable on the local network.
     // Channel 0 → device at 192.168.1.10:502 (units 1–16)
     // Channel 1 → device at 192.168.1.11:502 (units 17–32)
-    let ds0 = TokioTcpTransport::connect("192.168.1.10:502").await?;
-    let ds1 = TokioTcpTransport::connect("192.168.1.11:502").await?;
+    let ds0 = TokioTcpTransport::connect("192.168.1.10:502")
+        .await
+        .map_err(|e| format!("{:?}", e))?;
+    let ds1 = TokioTcpTransport::connect("192.168.1.11:502")
+        .await
+        .map_err(|e| format!("{:?}", e))?;
     let downstreams = vec![Arc::new(Mutex::new(ds0)), Arc::new(Mutex::new(ds1))];
 
     // ── Routing table ─────────────────────────────────────────────────────────
@@ -87,11 +91,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Max sessions:     {}", config.max_sessions);
     println!("Idle timeout:     {:?}", config.idle_timeout);
 
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
     AsyncWsGatewayServer::serve_with_shutdown(
         "0.0.0.0:8502",
         config,
         router,
         downstreams,
+        handler,
+        Duration::from_secs(1),
         shutdown,
     )
     .await?;

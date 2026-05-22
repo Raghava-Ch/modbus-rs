@@ -43,7 +43,7 @@ fn main() {
         BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
         Parity, SerialMode, UnitIdOrSlaveAddr,
     };
-    use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
+    use mbus_gateway::{AsyncWsGatewayServer, NoopEventHandler, UnitRouteTable, WsGatewayConfig};
     // TokioRtuTransport is re-exported from mbus_serial when serial-rtu is active.
     use mbus_serial::TokioRtuTransport;
     use tokio::sync::Mutex;
@@ -98,9 +98,17 @@ fn main() {
             println!("WebSocket gateway on ws://0.0.0.0:8502");
             println!("Downstream RTU bus: {} @ 19200 baud", SERIAL_PORT);
 
-            AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared_rtu])
-                .await
-                .expect("gateway error");
+            let handler = Arc::new(Mutex::new(NoopEventHandler));
+            AsyncWsGatewayServer::serve(
+                "0.0.0.0:8502",
+                config,
+                router,
+                vec![shared_rtu],
+                handler,
+                Duration::from_secs(1),
+            )
+            .await
+            .expect("gateway error");
         });
 }
 

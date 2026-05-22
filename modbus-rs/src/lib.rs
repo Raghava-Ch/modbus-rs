@@ -17,46 +17,13 @@ pub use mbus_core::transport::{
     UnitIdOrSlaveAddr,
 };
 
-#[cfg(feature = "network-tcp")]
-pub use mbus_network::StdTcpServerTransport;
-#[cfg(feature = "network-tcp")]
-pub use mbus_network::StdTcpTransport;
 #[cfg(all(feature = "network-tcp", feature = "async"))]
 pub use mbus_network::TokioTcpTransport;
+#[cfg(feature = "network-tcp")]
+pub use mbus_network::{StdTcpServerTransport, StdTcpTransport};
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use mbus_serial::{StdAsciiTransport, StdRtuTransport, StdSerialTransport};
 
-#[cfg(feature = "client")]
-pub use mbus_client::app::*;
-#[cfg(feature = "client")]
-pub use mbus_client::services::{ClientServices, SerialClientServices};
-
-#[cfg(all(feature = "server", feature = "coils"))]
-pub use mbus_server::CoilMap;
-#[cfg(all(feature = "server", feature = "coils"))]
-pub use mbus_server::CoilsModel;
-#[cfg(all(feature = "server", feature = "holding-registers"))]
-pub use mbus_server::HoldingRegisterMap;
-#[cfg(all(feature = "server", feature = "holding-registers"))]
-pub use mbus_server::HoldingRegistersModel;
-#[cfg(all(feature = "server", feature = "input-registers"))]
-pub use mbus_server::InputRegisterMap;
-#[cfg(all(feature = "server", feature = "input-registers"))]
-pub use mbus_server::InputRegistersModel;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerCoilHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerDiagnosticsHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerDiscreteInputHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerFifoHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerFileRecordHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerHoldingRegisterHandler;
-#[cfg(feature = "server")]
-pub use mbus_server::ServerInputRegisterHandler;
 #[cfg(feature = "server")]
 pub use mbus_server::async_modbus_app;
 #[cfg(feature = "server")]
@@ -67,6 +34,23 @@ pub use mbus_server::{
     ResilienceConfig, ServerExceptionHandler, ServerServices, TimeoutConfig,
 };
 
+#[cfg(all(feature = "server", feature = "diagnostics"))]
+pub use mbus_server::ServerDiagnosticsHandler;
+#[cfg(all(feature = "server", feature = "coils"))]
+pub use mbus_server::{CoilMap, CoilsModel, ServerCoilHandler};
+#[cfg(all(feature = "server", feature = "discrete-inputs"))]
+pub use mbus_server::{DiscreteInputMap, DiscreteInputsModel, ServerDiscreteInputHandler};
+#[cfg(all(feature = "server", feature = "fifo"))]
+pub use mbus_server::{FifoQueueMap, ServerFifoHandler};
+#[cfg(all(feature = "server", feature = "file-record"))]
+pub use mbus_server::{FileRecordMap, ServerFileRecordHandler};
+#[cfg(all(feature = "server", feature = "holding-registers"))]
+pub use mbus_server::{HoldingRegisterMap, HoldingRegistersModel, ServerHoldingRegisterHandler};
+#[cfg(all(feature = "server", feature = "input-registers"))]
+pub use mbus_server::{InputRegisterMap, InputRegistersModel, ServerInputRegisterHandler};
+
+#[cfg(feature = "client")]
+pub use mbus_client::app::*;
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};
 #[cfg(all(feature = "client", feature = "diagnostics"))]
@@ -94,9 +78,13 @@ pub use mbus_client::services::file_record::{
     )
 ))]
 pub use mbus_client::services::register::{MAX_REGISTERS_PER_PDU, Registers};
+#[cfg(feature = "client")]
+pub use mbus_client::services::{ClientServices, SerialClientServices};
 
 #[cfg(feature = "async")]
 pub use mbus_async;
+
+pub use mbus_server_async;
 
 #[cfg(feature = "gateway")]
 pub use mbus_gateway as gateway;
