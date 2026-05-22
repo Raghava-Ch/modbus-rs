@@ -68,7 +68,7 @@ pub use mbus_client::services::discrete_input::{
     feature = "client",
     any(feature = "holding-registers", feature = "input-registers")
 ))]
-pub use mbus_client::services::register::MAX_REGISTERS_PER_PDU;
+pub use mbus_client::services::register::{Registers, MAX_REGISTERS_PER_PDU};
 #[cfg(all(feature = "client", feature = "holding-registers"))]
 pub use mbus_client::services::register::Registers as HoldingRegisters;
 #[cfg(all(feature = "client", feature = "input-registers"))]
