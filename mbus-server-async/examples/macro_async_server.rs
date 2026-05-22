@@ -1,6 +1,6 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};
-use mbus_server_async::AsyncTcpServer;
+use mbus_server::{CoilsModel, HoldingRegistersModel};
+use mbus_server_async::{AsyncTcpServer, async_modbus_app};
 
 #[derive(Debug, Default, Clone, CoilsModel)]
 struct DemoCoils {
@@ -26,7 +26,7 @@ struct DemoApp {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_server_async::AsyncTrafficNotifier for DemoApp {}
+impl mbus_server_async::AsyncServerTrafficNotifier for DemoApp {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

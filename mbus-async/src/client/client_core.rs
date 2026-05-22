@@ -27,7 +27,11 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
-#[cfg(any(feature = "registers", feature = "diagnostics"))]
+#[cfg(any(
+    feature = "holding-registers",
+    feature = "input-registers",
+    feature = "diagnostics"
+))]
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
@@ -43,7 +47,7 @@ use mbus_core::models::discrete_input::DiscreteInputs;
 use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{SubRequest, SubRequestParams};
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 use mbus_core::models::register::Registers;
 
 use crate::client::command::{ClientRequest, TaskCommand};
@@ -51,7 +55,7 @@ use crate::client::response::ClientResponse;
 use crate::client::task::PendingCountReceiver;
 
 #[cfg(feature = "traffic")]
-use crate::client::notifier::{AsyncClientNotifier, NotifierStore};
+use crate::client::notifier::{AsyncClientTrafficNotifier, NotifierStore};
 
 use super::AsyncError;
 #[cfg(feature = "diagnostics")]
@@ -196,7 +200,10 @@ impl AsyncClientCore {
     /// The notifier is invoked from the background task on every transmitted
     /// and received frame.
     #[cfg(feature = "traffic")]
-    pub fn set_traffic_notifier<N: AsyncClientNotifier + Send + 'static>(&self, notifier: N) {
+    pub fn set_traffic_notifier<N: AsyncClientTrafficNotifier + Send + 'static>(
+        &self,
+        notifier: N,
+    ) {
         if let Ok(mut g) = self.notifier.try_lock() {
             *g = Some(Box::new(notifier));
         }
@@ -295,7 +302,7 @@ impl AsyncClientCore {
     /// Reads holding registers (FC 03) from `address` with the given `quantity`.
     ///
     /// Returns the register values as a [`Registers`] object.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub async fn read_holding_registers(
         &self,
         unit_id: u8,
@@ -319,7 +326,7 @@ impl AsyncClientCore {
     /// Reads input registers (FC 04) from `address` with the given `quantity`.
     ///
     /// Returns the register values as a [`Registers`] object.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     pub async fn read_input_registers(
         &self,
         unit_id: u8,
@@ -343,7 +350,7 @@ impl AsyncClientCore {
     /// Writes a single holding register (FC 06) at `address` with `value`.
     ///
     /// Returns `(address, value)` echoed back by the server.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub async fn write_single_register(
         &self,
         unit_id: u8,
@@ -367,7 +374,7 @@ impl AsyncClientCore {
     /// Writes multiple holding registers (FC 16) starting at `address`.
     ///
     /// Returns `(starting_address, quantity)` echoed back by the server.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub async fn write_multiple_registers(
         &self,
         unit_id: u8,
@@ -398,7 +405,7 @@ impl AsyncClientCore {
     /// Reads `read_quantity` registers starting at `read_address` and
     /// simultaneously writes `write_values` starting at `write_address`.
     /// Returns the read registers.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub async fn read_write_multiple_registers(
         &self,
         unit_id: u8,
@@ -431,7 +438,7 @@ impl AsyncClientCore {
     /// Applies an AND/OR bitmask to a holding register (FC 22).
     ///
     /// The resulting register value is `(current & and_mask) | (or_mask & !and_mask)`.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub async fn mask_write_register(
         &self,
         unit_id: u8,

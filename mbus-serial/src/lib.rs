@@ -1,6 +1,9 @@
 mod management;
 
-#[cfg(all(any(feature = "serial-client", feature = "serial-server"), not(target_arch = "wasm32")))]
+#[cfg(all(
+    any(feature = "serial-client", feature = "serial-server"),
+    not(target_arch = "wasm32")
+))]
 pub use management::std_serial::*;
 
 #[cfg(all(feature = "serial-async", not(target_arch = "wasm32")))]

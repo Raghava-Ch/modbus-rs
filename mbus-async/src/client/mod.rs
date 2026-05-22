@@ -30,8 +30,10 @@ mod serial_client;
 pub use client_core::AsyncClientCore;
 pub use network_client::AsyncTcpClient;
 #[cfg(feature = "traffic")]
-pub use notifier::AsyncClientNotifier;
-pub use serial_client::AsyncSerialClient;
+pub use notifier::AsyncClientTrafficNotifier;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+pub use serial_client::AsyncSerialClientKind;
+pub use serial_client::{AsyncAsciiClient, AsyncRtuClient, AsyncSerialClient};
 
 use mbus_core::errors::MbusError;
 #[cfg(feature = "diagnostics")]

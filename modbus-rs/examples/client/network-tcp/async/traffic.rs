@@ -1,11 +1,11 @@
 use anyhow::Result;
-use modbus_rs::mbus_async::{AsyncClientNotifier, AsyncTcpClient};
+use modbus_rs::mbus_async::{AsyncClientTrafficNotifier, AsyncTcpClient};
 use modbus_rs::{MbusError, ModbusTcpConfig, UnitIdOrSlaveAddr};
 use std::time::Duration;
 
 struct FrameLogger;
 
-impl AsyncClientNotifier for FrameLogger {
+impl AsyncClientTrafficNotifier for FrameLogger {
     fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
         println!("[TX] txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
     }

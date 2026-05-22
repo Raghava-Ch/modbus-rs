@@ -22,7 +22,8 @@ use anyhow::Result;
 use mbus_async::server::AsyncTcpServer;
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};
+use mbus_macros::async_modbus_app;
+use mbus_server::{CoilsModel, HoldingRegistersModel};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -84,7 +85,7 @@ impl HvacApp {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_async::server::AsyncTrafficNotifier for HvacApp {}
+impl mbus_async::server::AsyncServerTrafficNotifier for HvacApp {}
 
 fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
     UnitIdOrSlaveAddr::try_from(v).expect("valid unit id")

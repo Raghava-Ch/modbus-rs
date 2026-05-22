@@ -479,7 +479,7 @@ fn fix_up_response(
         }
 
         // ── FC03: Read Holding Registers ──────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         (
             R::Registers(raw),
             Q::ReadHoldingRegisters {
@@ -494,7 +494,7 @@ fn fix_up_response(
         }
 
         // ── FC04: Read Input Registers ────────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         (
             R::Registers(raw),
             Q::ReadInputRegisters {
@@ -509,7 +509,7 @@ fn fix_up_response(
         }
 
         // ── FC17: Read/Write Multiple Registers ───────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         (
             R::Registers(raw),
             Q::ReadWriteMultipleRegisters {

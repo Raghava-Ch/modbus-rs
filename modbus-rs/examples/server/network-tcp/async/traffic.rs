@@ -20,10 +20,12 @@
 //! ```
 
 use anyhow::{Context, Result};
-use mbus_async::server::{AsyncTcpServer, AsyncTrafficDirection, AsyncTrafficNotifier};
+use mbus_async::server::{
+    AsyncServerTrafficNotifier, AsyncTcpServer, AsyncTrafficDirection, async_modbus_app,
+};
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{CoilsModel, HoldingRegistersModel, async_modbus_app};
+use mbus_server::{CoilsModel, HoldingRegistersModel};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -66,7 +68,7 @@ struct TrafficApp {
 /// enabled.  All four methods have default no-ops — override only the ones you
 /// need.
 #[cfg(feature = "traffic")]
-impl AsyncTrafficNotifier for TrafficApp {
+impl AsyncServerTrafficNotifier for TrafficApp {
     /// Fires for every successfully received and parsed ADU *before* dispatch.
     fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
         log_frame(AsyncTrafficDirection::Rx, txn_id, unit, frame, None);
