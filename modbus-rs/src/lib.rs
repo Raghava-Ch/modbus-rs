@@ -7,6 +7,7 @@
 
 pub use heapless;
 
+pub use mbus_core;
 pub use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};
 pub use mbus_core::errors::MbusError;
 pub use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
@@ -21,8 +22,12 @@ pub use mbus_core::transport::{
 pub use mbus_network::TokioTcpTransport;
 #[cfg(feature = "network-tcp")]
 pub use mbus_network::{StdTcpServerTransport, StdTcpTransport};
+#[cfg(feature = "serial-rtu")]
+pub use mbus_serial::StdRtuTransport;
+#[cfg(feature = "serial-ascii")]
+pub use mbus_serial::StdAsciiTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
-pub use mbus_serial::{StdAsciiTransport, StdRtuTransport, StdSerialTransport};
+pub use mbus_serial::StdSerialTransport;
 
 #[cfg(feature = "server")]
 pub use mbus_server::async_modbus_app;
@@ -51,17 +56,23 @@ pub use mbus_server::{InputRegisterMap, InputRegistersModel, ServerInputRegister
 
 #[cfg(feature = "client")]
 pub use mbus_client::app::*;
+#[cfg(feature = "client")]
+pub use mbus_client::services::{ClientServices, SerialClientServices};
 #[cfg(all(feature = "client", feature = "coils"))]
 pub use mbus_client::services::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};
-#[cfg(all(feature = "client", feature = "diagnostics"))]
-pub use mbus_client::services::diagnostic::{
-    BasicObjectId, ConformityLevel, DeviceIdObject, DeviceIdObjectIterator,
-    DeviceIdentificationResponse, ExtendedObjectId, ObjectId, ReadDeviceIdCode, RegularObjectId,
-};
 #[cfg(all(feature = "client", feature = "discrete-inputs"))]
 pub use mbus_client::services::discrete_input::{
     DiscreteInputs, MAX_DISCRETE_INPUT_BYTES, MAX_DISCRETE_INPUTS_PER_PDU,
 };
+#[cfg(all(
+    feature = "client",
+    any(feature = "holding-registers", feature = "input-registers")
+))]
+pub use mbus_client::services::register::MAX_REGISTERS_PER_PDU;
+#[cfg(all(feature = "client", feature = "holding-registers"))]
+pub use mbus_client::services::register::Registers as HoldingRegisters;
+#[cfg(all(feature = "client", feature = "input-registers"))]
+pub use mbus_client::services::register::Registers as InputRegisters;
 #[cfg(all(feature = "client", feature = "fifo"))]
 pub use mbus_client::services::fifo_queue::{FifoQueue, MAX_FIFO_QUEUE_COUNT_PER_PDU};
 #[cfg(all(feature = "client", feature = "file-record"))]
@@ -69,17 +80,11 @@ pub use mbus_client::services::file_record::{
     FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SUB_REQ_PARAM_BYTE_LEN, SubRequest,
     SubRequestParams,
 };
-#[cfg(all(
-    feature = "client",
-    any(
-        feature = "registers",
-        feature = "holding-registers",
-        feature = "input-registers"
-    )
-))]
-pub use mbus_client::services::register::{MAX_REGISTERS_PER_PDU, Registers};
-#[cfg(feature = "client")]
-pub use mbus_client::services::{ClientServices, SerialClientServices};
+#[cfg(all(feature = "client", feature = "diagnostics"))]
+pub use mbus_client::services::diagnostic::{
+    BasicObjectId, ConformityLevel, DeviceIdObject, DeviceIdObjectIterator,
+    DeviceIdentificationResponse, ExtendedObjectId, ObjectId, ReadDeviceIdCode, RegularObjectId,
+};
 
 #[cfg(feature = "async")]
 pub use mbus_async;
@@ -87,4 +92,4 @@ pub use mbus_async;
 pub use mbus_server_async;
 
 #[cfg(feature = "gateway")]
-pub use mbus_gateway as gateway;
+pub use mbus_gateway;
