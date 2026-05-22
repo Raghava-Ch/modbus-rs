@@ -1,8 +1,8 @@
 use modbus_rs::{
     CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
-    DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueueMap,
-    FifoQueueResponse, FileRecordResponse, MAX_DISCRETE_INPUT_BYTES, MbusError, RegisterResponse,
-    Registers, RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
+    DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse,
+    FileRecordResponse, MAX_DISCRETE_INPUT_BYTES, MbusError, RegisterResponse, Registers,
+    RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -209,7 +209,7 @@ impl FifoQueueResponse for MockApp {
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _fifo_queue: &FifoQueueMap,
+        _fifo_queue: &FifoQueue,
     ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
