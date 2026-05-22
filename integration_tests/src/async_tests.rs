@@ -1011,11 +1011,11 @@ async fn test_async_tcp_client_pipeline_concurrent_requests() -> Result<()> {
 
 /// The traffic notifier receives one TX notification and one RX notification
 /// per successful request.
-#[cfg(feature = "async-traffic")]
+#[cfg(feature = "traffic")]
 #[tokio::test]
 async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
     use modbus_rs::UnitIdOrSlaveAddr;
-    use modbus_rs::mbus_async::AsyncClientNotifier;
+    use modbus_rs::mbus_async::AsyncClientTrafficNotifier;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1023,7 +1023,7 @@ async fn test_async_tcp_client_traffic_notifier() -> Result<()> {
         tx: Arc<AtomicUsize>,
         rx: Arc<AtomicUsize>,
     }
-    impl AsyncClientNotifier for CountNotifier {
+    impl AsyncClientTrafficNotifier for CountNotifier {
         fn on_tx_frame(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {
             self.tx.fetch_add(1, Ordering::Relaxed);
         }

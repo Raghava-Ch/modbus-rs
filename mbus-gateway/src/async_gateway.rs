@@ -4,7 +4,9 @@
 //! spawns a per-session tokio task for each one.  Downstream channels are
 //! shared between sessions via `Arc<tokio::sync::Mutex<T>>`.
 
+#[cfg(feature = "upstream-tcp")]
 use std::convert::Infallible;
+#[cfg(feature = "upstream-tcp")]
 use std::future::Future;
 use std::sync::Arc;
 
@@ -12,7 +14,9 @@ use mbus_core::data_unit::common::{Pdu, compile_adu_frame, decompile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 use mbus_core::transport::{AsyncTransport, TransportType, UnitIdOrSlaveAddr};
+#[cfg(feature = "upstream-tcp")]
 use mbus_network::TokioTcpTransport;
+#[cfg(feature = "upstream-tcp")]
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 
@@ -91,8 +95,10 @@ impl From<MbusError> for AsyncGatewayError {
 /// AsyncTcpGatewayServer::serve("0.0.0.0:502", router, vec![shared], handler, Duration::from_secs(1)).await.unwrap();
 /// # }
 /// ```
+#[cfg(feature = "upstream-tcp")]
 pub struct AsyncTcpGatewayServer;
 
+#[cfg(feature = "upstream-tcp")]
 impl AsyncTcpGatewayServer {
     // ── serve ─────────────────────────────────────────────────────────────────
 

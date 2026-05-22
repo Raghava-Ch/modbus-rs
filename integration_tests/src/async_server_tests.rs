@@ -55,7 +55,7 @@ impl AsyncAppHandler for TestApp {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_async::server::AsyncTrafficNotifier for TestApp {}
+impl mbus_async::server::AsyncServerTrafficNotifier for TestApp {}
 
 impl TestApp {
     fn process(&mut self, req: ModbusRequest) -> ModbusResponse {
@@ -1112,7 +1112,7 @@ async fn fc08_loopback_handled_by_session_not_app() -> Result<()> {
         }
     }
     #[cfg(feature = "traffic")]
-    impl mbus_async::server::AsyncTrafficNotifier for PanicOnLoopback {}
+    impl mbus_async::server::AsyncServerTrafficNotifier for PanicOnLoopback {}
 
     let port = start_server_custom(PanicOnLoopback).await?;
 
@@ -1320,7 +1320,7 @@ async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
     }
 
     #[cfg(feature = "traffic")]
-    impl mbus_async::server::AsyncTrafficNotifier for MacroApp {}
+    impl mbus_async::server::AsyncServerTrafficNotifier for MacroApp {}
 
     let port = start_server_custom(MacroApp::default()).await?;
     let client = connect_client(port).await?;
@@ -1338,14 +1338,14 @@ async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
     Ok(())
 }
 
-// ── AsyncTrafficNotifier tests ────────────────────────────────────────────────
+// ── AsyncServerTrafficNotifier tests ────────────────────────────────────────────────
 
-/// Verify that `AsyncTrafficNotifier::on_rx_frame` and `on_tx_frame` are called
+/// Verify that `AsyncServerTrafficNotifier::on_rx_frame` and `on_tx_frame` are called
 /// for each successful request/response cycle.
-#[cfg(all(feature = "async-server", feature = "async-traffic"))]
+#[cfg(all(feature = "async-server", feature = "traffic"))]
 #[tokio::test]
 async fn traffic_notifier_rx_tx_counts() -> Result<()> {
-    use mbus_async::server::AsyncTrafficNotifier;
+    use mbus_async::server::AsyncServerTrafficNotifier;
     use mbus_core::errors::MbusError;
     use std::sync::{
         Arc,
@@ -1374,7 +1374,7 @@ async fn traffic_notifier_rx_tx_counts() -> Result<()> {
             std::future::ready(resp)
         }
     }
-    impl AsyncTrafficNotifier for TrafficApp {
+    impl AsyncServerTrafficNotifier for TrafficApp {
         fn on_rx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {
             self.counters.rx.fetch_add(1, Ordering::SeqCst);
         }

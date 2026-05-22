@@ -22,7 +22,8 @@ log = { workspace = true, optional = true }
 # Users can disable default features to reduce binary size if specific services are not required.
 default = [
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -31,16 +32,14 @@ default = [
 
 coils = ["mbus-core/coils"] # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
 holding-registers = [
-    "mbus-core/registers",
+    "mbus-core/holding-registers",
 ] # Enables Modbus Holding Register (FC 0x03, 0x06, 0x10) services
 input-registers = [
-    "mbus-core/registers",
+    "mbus-core/input-registers",
 ] # Enables Modbus Input Register (FC 0x04) services
-registers = [
-    "holding-registers", "input-registers"
-] # Backward-compat alias
+registers = ["holding-registers", "input-registers"] # Backward-compat alias
 discrete-inputs = [
-    "mbus-core/registers",
+    "mbus-core/discrete-inputs",
 ] # Enables Modbus Discrete Input (FC 0x02) services
 fifo = ["mbus-core/fifo"] # Enables Modbus FIFO Queue (FC 0x18) services
 file-record = [

@@ -1,8 +1,4 @@
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-
-use mbus_client_async::AsyncSerialClient as InnerAsyncSerialClient;
+use mbus_client_async::AsyncSerialClientKind as InnerAsyncSerialClient;
 #[cfg(feature = "diagnostics")]
 use mbus_client_async::{ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "file-record")]
@@ -16,6 +12,9 @@ use mbus_core::transport::{
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_async_runtimes::tokio::future_into_py;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use super::helpers::{
     async_error_to_py, coils_to_py, discrete_inputs_to_py, enter_runtime, fifo_to_py, get_runtime,
@@ -189,8 +188,12 @@ fn make_inner(
         retry_attempts,
     )?;
     let client = match mode {
-        SerialMode::Rtu => InnerAsyncSerialClient::new_rtu(cfg).map_err(async_error_to_py)?,
-        SerialMode::Ascii => InnerAsyncSerialClient::new_ascii(cfg).map_err(async_error_to_py)?,
+        SerialMode::Rtu => InnerAsyncSerialClient::Rtu(
+            mbus_client_async::AsyncRtuClient::new_rtu(cfg).map_err(async_error_to_py)?,
+        ),
+        SerialMode::Ascii => InnerAsyncSerialClient::Ascii(
+            mbus_client_async::AsyncAsciiClient::new_ascii(cfg).map_err(async_error_to_py)?,
+        ),
     };
     if timeout_ms > 0 {
         client.set_request_timeout(Duration::from_millis(timeout_ms));

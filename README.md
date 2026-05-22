@@ -9,13 +9,17 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 - **Multi-language bindings** — native C/C++, .NET (C#), Python, Go, and **Node.js** integration via `mbus-ffi`
 - **Gateway** — Modbus TCP ↔ RTU/ASCII gateway with sync (no_std) and async modes
 
+> [!IMPORTANT]  
+> **Active Development & Breaking Changes**  
+> This project is currently undergoing **active development**. While the core APIs are highly robust, heavily tested, and mostly stable, they are not yet finalized. You may expect occasional breaking changes as we refine internal structures, align feature gates, and polish macro interfaces.
+
 ---
 
 ## Quick Start
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.11.0"
 ```
 
 ```rust

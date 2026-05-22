@@ -225,7 +225,7 @@ impl PythonAppAdapter {
 // requires `AsyncTrafficNotifier` as a super-trait. Provide an empty default
 // impl so the Python adapter remains usable in that build matrix.
 #[cfg(feature = "traffic")]
-impl mbus_server_async::AsyncTrafficNotifier for PythonAppAdapter {}
+impl mbus_server_async::AsyncServerTrafficNotifier for PythonAppAdapter {}
 
 impl AsyncAppHandler for PythonAppAdapter {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
