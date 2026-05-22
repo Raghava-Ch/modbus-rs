@@ -188,7 +188,7 @@ impl Clone for JsHandlerAdapter {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_server_async::AsyncTrafficNotifier for JsHandlerAdapter {}
+impl mbus_server_async::AsyncServerTrafficNotifier for JsHandlerAdapter {}
 
 impl AsyncAppHandler for JsHandlerAdapter {
     async fn handle(&mut self, req: ModbusRequest) -> ModbusResponse {

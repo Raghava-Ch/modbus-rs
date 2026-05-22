@@ -682,7 +682,7 @@ static STEPS: &[Step] = &[
             "mbus-gateway",
             "--no-default-features",
             "--features",
-            "network",
+            "upstream-tcp,downstream-tcp",
         ],
     ),
     Step::check(
@@ -692,7 +692,7 @@ static STEPS: &[Step] = &[
             "mbus-gateway",
             "--no-default-features",
             "--features",
-            "serial-rtu",
+            "upstream-serial-rtu,downstream-serial-rtu",
         ],
     ),
     Step::check(
@@ -702,7 +702,7 @@ static STEPS: &[Step] = &[
             "mbus-gateway",
             "--no-default-features",
             "--features",
-            "network,serial-rtu",
+            "upstream-tcp,downstream-tcp,upstream-serial-rtu,downstream-serial-rtu",
         ],
     ),
     Step::check(
@@ -722,7 +722,7 @@ static STEPS: &[Step] = &[
             "mbus-gateway",
             "--no-default-features",
             "--features",
-            "ws-server",
+            "upstream-ws",
         ],
     ),
     Step::clippy(
@@ -732,7 +732,7 @@ static STEPS: &[Step] = &[
             "mbus-gateway",
             "--no-default-features",
             "--features",
-            "network,serial-rtu",
+            "upstream-tcp,downstream-tcp,upstream-serial-rtu,downstream-serial-rtu",
         ],
     ),
     Step::clippy(

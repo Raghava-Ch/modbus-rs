@@ -1,6 +1,6 @@
 use anyhow::Result;
 use heapless::Vec as HVec;
-use modbus_rs::mbus_async::{AsyncError, AsyncSerialClient};
+use modbus_rs::mbus_async::{AsyncError, AsyncRtuClient, AsyncSerialClient};
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MAX_ADU_FRAME_LEN,
     MbusError, ModbusConfig, ModbusSerialConfig, Parity, SerialMode, TransportType, crc16,
@@ -232,8 +232,7 @@ async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x01, 0x01, 0x05]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client =
-        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    let client = AsyncRtuClient::new_with_transport(transport, config, Duration::from_millis(1))?;
     client.connect().await?;
 
     let coils = client.read_multiple_coils(1, 0x000A, 3).await?;
@@ -265,8 +264,7 @@ async fn test_async_serial_e2e_write_single_register_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x06, 0x00, 0x20, 0x12, 0x34]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client =
-        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    let client = AsyncRtuClient::new_with_transport(transport, config, Duration::from_millis(1))?;
     client.connect().await?;
 
     let (addr, value) = client.write_single_register(1, 0x0020, 0x1234).await?;
@@ -296,8 +294,7 @@ async fn test_async_serial_e2e_serial_diagnostics_paths_rtu() -> Result<()> {
     }
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client =
-        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    let client = AsyncRtuClient::new_with_transport(transport, config, Duration::from_millis(1))?;
     client.connect().await?;
 
     let status = client.read_exception_status(1).await?;
@@ -326,8 +323,7 @@ async fn test_async_serial_e2e_exception_propagation_rtu() -> Result<()> {
         .push_back(append_rtu_crc(&[0x01, 0x81, 0x02]));
 
     let config = ModbusConfig::Serial(rtu_config("/dev/mock"));
-    let client =
-        AsyncSerialClient::new_with_transport(transport, config, Duration::from_millis(1))?;
+    let client = AsyncRtuClient::new_with_transport(transport, config, Duration::from_millis(1))?;
     client.connect().await?;
 
     let result = client.read_multiple_coils(1, 0x0000, 1).await;

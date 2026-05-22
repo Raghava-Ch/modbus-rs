@@ -31,9 +31,9 @@
 //! Note: requires the `serial-rtu` feature in addition to `ws-server` because
 //! the Tokio async serial transport lives in `mbus-serial`.
 
-// ── Implementation (requires ws-server + serial-rtu features) ─────────────────
+// ── Implementation (requires upstream-ws + downstream-serial-rtu features) ─────────────────
 
-#[cfg(all(feature = "ws-server", feature = "serial-rtu"))]
+#[cfg(all(feature = "upstream-ws", feature = "downstream-serial-rtu"))]
 fn main() {
     // Import here so the feature gate is respected at the item level.
     use std::sync::Arc;
@@ -112,11 +112,11 @@ fn main() {
         });
 }
 
-#[cfg(not(all(feature = "ws-server", feature = "serial-rtu")))]
+#[cfg(not(all(feature = "upstream-ws", feature = "downstream-serial-rtu")))]
 fn main() {
     eprintln!(
-        "This example requires both the `ws-server` and `serial-rtu` features.\n\
+        "This example requires both the `upstream-ws` and `downstream-serial-rtu` features.\n\
          Re-run with:\n\
-         \n    cargo run --example ws_to_rtu --features ws-server,serial-rtu -p mbus-gateway"
+         \n    cargo run --example ws_to_rtu --features upstream-ws,downstream-serial-rtu -p mbus-gateway"
     );
 }

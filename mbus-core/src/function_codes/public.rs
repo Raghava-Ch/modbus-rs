@@ -69,14 +69,14 @@ pub enum FunctionCode {
     // ============================================================
     // 16-bit Register Access
     // ============================================================
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// 0x03 — Read Holding Registers
     ///
     /// Reads one or more 16-bit holding registers.
     /// Section 6.3
     ReadHoldingRegisters = 0x03,
 
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     /// 0x04 — Read Input Registers
     ///
     /// Reads one or more 16-bit input registers.
@@ -84,27 +84,27 @@ pub enum FunctionCode {
     ReadInputRegisters = 0x04,
 
     /// 0x06 — Write Single Register
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ///
     /// Writes a single 16-bit holding register.
     /// Section 6.6
     WriteSingleRegister = 0x06,
 
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// 0x10 — Write Multiple Registers
     ///
     /// Writes multiple 16-bit holding registers.
     /// Section 6.12
     WriteMultipleRegisters = 0x10,
 
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// 0x16 — Mask Write Register
     ///
     /// Performs a bitwise mask write on a single register.
     /// Section 6.16
     MaskWriteRegister = 0x16,
 
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// 0x17 — Read/Write Multiple Registers
     ///
     /// Reads and writes multiple registers in a single transaction.
@@ -196,11 +196,11 @@ pub enum FunctionCode {
     ReadDiscreteInputsException = 0x82,
 
     /// 0x83 — Exception Response for Read Holding Registers (0x03 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadHoldingRegistersException = 0x83,
 
     /// 0x84 — Exception Response for Read Input Registers (0x04 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     ReadInputRegistersException = 0x84,
 
     /// 0x85 — Exception Response for Write Single Coil (0x05 | 0x80)
@@ -208,7 +208,7 @@ pub enum FunctionCode {
     WriteSingleCoilException = 0x85,
 
     /// 0x86 — Exception Response for Write Single Register (0x06 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteSingleRegisterException = 0x86,
 
     /// 0x87 — Exception Response for Read Exception Status (0x07 | 0x80)
@@ -232,7 +232,7 @@ pub enum FunctionCode {
     WriteMultipleCoilsException = 0x8F,
 
     /// 0x90 — Exception Response for Write Multiple Registers (0x10 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteMultipleRegistersException = 0x90,
 
     /// 0x91 — Exception Response for Report Server ID (0x11 | 0x80)
@@ -248,11 +248,11 @@ pub enum FunctionCode {
     WriteFileRecordException = 0x95,
 
     /// 0x96 — Exception Response for Mask Write Register (0x16 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     MaskWriteRegisterException = 0x96,
 
     /// 0x97 — Exception Response for Read/Write Multiple Registers (0x17 | 0x80)
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadWriteMultipleRegistersException = 0x97,
 
     /// 0x98 — Exception Response for Read FIFO Queue (0x18 | 0x80)
@@ -276,13 +276,13 @@ impl TryFrom<u8> for FunctionCode {
             0x01 => Ok(ReadCoils),
             #[cfg(feature = "discrete-inputs")]
             0x02 => Ok(ReadDiscreteInputs),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x03 => Ok(ReadHoldingRegisters),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             0x04 => Ok(ReadInputRegisters),
             #[cfg(feature = "coils")]
             0x05 => Ok(WriteSingleCoil),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x06 => Ok(WriteSingleRegister),
             #[cfg(feature = "diagnostics")]
             0x07 => Ok(ReadExceptionStatus),
@@ -294,7 +294,7 @@ impl TryFrom<u8> for FunctionCode {
             0x0C => Ok(GetCommEventLog),
             #[cfg(feature = "coils")]
             0x0F => Ok(WriteMultipleCoils),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x10 => Ok(WriteMultipleRegisters),
             #[cfg(feature = "diagnostics")]
             0x11 => Ok(ReportServerId),
@@ -302,9 +302,9 @@ impl TryFrom<u8> for FunctionCode {
             0x14 => Ok(ReadFileRecord),
             #[cfg(feature = "file-record")]
             0x15 => Ok(WriteFileRecord),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x16 => Ok(MaskWriteRegister),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x17 => Ok(ReadWriteMultipleRegisters),
             #[cfg(feature = "fifo")]
             0x18 => Ok(ReadFifoQueue),
@@ -315,13 +315,13 @@ impl TryFrom<u8> for FunctionCode {
             0x81 => Ok(ReadCoilsException),
             #[cfg(feature = "discrete-inputs")]
             0x82 => Ok(ReadDiscreteInputsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x83 => Ok(ReadHoldingRegistersException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             0x84 => Ok(ReadInputRegistersException),
             #[cfg(feature = "coils")]
             0x85 => Ok(WriteSingleCoilException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x86 => Ok(WriteSingleRegisterException),
             #[cfg(feature = "diagnostics")]
             0x87 => Ok(ReadExceptionStatusException),
@@ -333,7 +333,7 @@ impl TryFrom<u8> for FunctionCode {
             0x8C => Ok(GetCommEventLogException),
             #[cfg(feature = "coils")]
             0x8F => Ok(WriteMultipleCoilsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x90 => Ok(WriteMultipleRegistersException),
             #[cfg(feature = "diagnostics")]
             0x91 => Ok(ReportServerIdException),
@@ -341,9 +341,9 @@ impl TryFrom<u8> for FunctionCode {
             0x94 => Ok(ReadFileRecordException),
             #[cfg(feature = "file-record")]
             0x95 => Ok(WriteFileRecordException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x96 => Ok(MaskWriteRegisterException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             0x97 => Ok(ReadWriteMultipleRegistersException),
             #[cfg(feature = "fifo")]
             0x98 => Ok(ReadFifoQueueException),
@@ -426,13 +426,13 @@ impl FunctionCode {
             FunctionCode::ReadCoils => Some(FunctionCode::ReadCoilsException),
             #[cfg(feature = "discrete-inputs")]
             FunctionCode::ReadDiscreteInputs => Some(FunctionCode::ReadDiscreteInputsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::ReadHoldingRegisters => Some(FunctionCode::ReadHoldingRegistersException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             FunctionCode::ReadInputRegisters => Some(FunctionCode::ReadInputRegistersException),
             #[cfg(feature = "coils")]
             FunctionCode::WriteSingleCoil => Some(FunctionCode::WriteSingleCoilException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::WriteSingleRegister => Some(FunctionCode::WriteSingleRegisterException),
             #[cfg(feature = "diagnostics")]
             FunctionCode::ReadExceptionStatus => Some(FunctionCode::ReadExceptionStatusException),
@@ -444,7 +444,7 @@ impl FunctionCode {
             FunctionCode::GetCommEventLog => Some(FunctionCode::GetCommEventLogException),
             #[cfg(feature = "coils")]
             FunctionCode::WriteMultipleCoils => Some(FunctionCode::WriteMultipleCoilsException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::WriteMultipleRegisters => {
                 Some(FunctionCode::WriteMultipleRegistersException)
             }
@@ -454,9 +454,9 @@ impl FunctionCode {
             FunctionCode::ReadFileRecord => Some(FunctionCode::ReadFileRecordException),
             #[cfg(feature = "file-record")]
             FunctionCode::WriteFileRecord => Some(FunctionCode::WriteFileRecordException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::MaskWriteRegister => Some(FunctionCode::MaskWriteRegisterException),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::ReadWriteMultipleRegisters => {
                 Some(FunctionCode::ReadWriteMultipleRegistersException)
             }

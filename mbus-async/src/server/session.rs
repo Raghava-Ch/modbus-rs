@@ -629,15 +629,17 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
             #[cfg(feature = "discrete-inputs")]
             FunctionCode::ReadDiscreteInputs => parse_discrete_input_request(txn_id, unit, pdu)?,
 
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             FunctionCode::ReadHoldingRegisters
             | FunctionCode::WriteSingleRegister
             | FunctionCode::WriteMultipleRegisters
-            | FunctionCode::ReadInputRegisters
             | FunctionCode::MaskWriteRegister
             | FunctionCode::ReadWriteMultipleRegisters => {
                 parse_register_request(txn_id, unit, fc, pdu)?
             }
+
+            #[cfg(feature = "input-registers")]
+            FunctionCode::ReadInputRegisters => parse_register_request(txn_id, unit, fc, pdu)?,
 
             #[cfg(feature = "diagnostics")]
             FunctionCode::ReadExceptionStatus
@@ -757,7 +759,7 @@ fn parse_discrete_input_request(
     })
 }
 
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 fn parse_register_request(
     txn_id: u16,
     unit: UnitIdOrSlaveAddr,
@@ -765,6 +767,7 @@ fn parse_register_request(
     pdu: &Pdu,
 ) -> Result<ModbusRequest, AsyncServerError> {
     match fc {
+        #[cfg(feature = "holding-registers")]
         FunctionCode::ReadHoldingRegisters => {
             let w = pdu.read_window().map_err(AsyncServerError::FramingError)?;
             Ok(ModbusRequest::ReadHoldingRegisters {
@@ -774,6 +777,7 @@ fn parse_register_request(
                 count: w.quantity,
             })
         }
+        #[cfg(feature = "holding-registers")]
         FunctionCode::WriteSingleRegister => {
             let f = pdu
                 .write_single_u16_fields()
@@ -785,6 +789,7 @@ fn parse_register_request(
                 value: f.value,
             })
         }
+        #[cfg(feature = "holding-registers")]
         FunctionCode::WriteMultipleRegisters => {
             let f = pdu
                 .write_multiple_fields()
@@ -800,6 +805,7 @@ fn parse_register_request(
                 data,
             })
         }
+        #[cfg(feature = "input-registers")]
         FunctionCode::ReadInputRegisters => {
             let w = pdu.read_window().map_err(AsyncServerError::FramingError)?;
             Ok(ModbusRequest::ReadInputRegisters {
@@ -809,6 +815,7 @@ fn parse_register_request(
                 count: w.quantity,
             })
         }
+        #[cfg(feature = "holding-registers")]
         FunctionCode::MaskWriteRegister => {
             let f = pdu
                 .mask_write_register_fields()
@@ -821,6 +828,7 @@ fn parse_register_request(
                 or_mask: f.or_mask,
             })
         }
+        #[cfg(feature = "holding-registers")]
         _ => {
             // ReadWriteMultipleRegisters
             let f = pdu
@@ -839,6 +847,8 @@ fn parse_register_request(
                 data,
             })
         }
+        #[cfg(not(feature = "holding-registers"))]
+        _ => Err(AsyncServerError::FramingError(MbusError::IllegalFunction)),
     }
 }
 

@@ -6,7 +6,7 @@ use std::time::Duration;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use mbus_client_async::AsyncSerialClient;
+use mbus_client_async::{AsyncAsciiClient, AsyncRtuClient, AsyncSerialClientKind};
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
     UnitIdOrSlaveAddr,
@@ -146,7 +146,7 @@ fn build_serial_config(opts: &SerialClientOptions, mode: SerialMode) -> Result<M
 /// Async Modbus Serial client supporting RTU and ASCII transports.
 #[napi]
 pub struct AsyncSerialModbusClient {
-    inner: Mutex<Option<Arc<AsyncSerialClient>>>,
+    inner: Mutex<Option<Arc<AsyncSerialClientKind>>>,
     unit_id: u8,
 }
 
@@ -160,7 +160,7 @@ impl AsyncSerialModbusClient {
 
         let config = build_serial_config(&opts, SerialMode::Rtu)?;
 
-        let client = AsyncSerialClient::new_rtu(config)
+        let client = AsyncRtuClient::new_rtu(config)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         client.connect().await.map_err(from_async_error)?;
@@ -170,7 +170,7 @@ impl AsyncSerialModbusClient {
         }
 
         Ok(AsyncSerialModbusClient {
-            inner: Mutex::new(Some(Arc::new(client))),
+            inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Rtu(client)))),
             unit_id: opts.unit_id,
         })
     }
@@ -183,7 +183,7 @@ impl AsyncSerialModbusClient {
 
         let config = build_serial_config(&opts, SerialMode::Ascii)?;
 
-        let client = AsyncSerialClient::new_ascii(config)
+        let client = AsyncAsciiClient::new_ascii(config)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         client.connect().await.map_err(from_async_error)?;
@@ -193,12 +193,12 @@ impl AsyncSerialModbusClient {
         }
 
         Ok(AsyncSerialModbusClient {
-            inner: Mutex::new(Some(Arc::new(client))),
+            inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Ascii(client)))),
             unit_id: opts.unit_id,
         })
     }
 
-    fn get_client(&self) -> Result<Arc<AsyncSerialClient>> {
+    fn get_client(&self) -> Result<Arc<AsyncSerialClientKind>> {
         let guard = self
             .inner
             .lock()

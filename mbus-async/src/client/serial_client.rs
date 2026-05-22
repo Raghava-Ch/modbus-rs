@@ -32,11 +32,11 @@ use crate::client::task::{ClientTask, ConnectFactory};
 /// Supports both RTU and ASCII framing.  All Modbus request methods
 /// (`read_holding_registers`, `write_single_coil`, etc.) are available directly
 /// on this type via [`Deref`] to [`AsyncClientCore`].
-pub struct AsyncSerialClient {
+pub struct AsyncSerialClient<const ASCII: bool = false> {
     core: AsyncClientCore,
 }
 
-impl Deref for AsyncSerialClient {
+impl<const ASCII: bool> Deref for AsyncSerialClient<ASCII> {
     type Target = AsyncClientCore;
 
     fn deref(&self) -> &Self::Target {
@@ -46,7 +46,7 @@ impl Deref for AsyncSerialClient {
 
 // ── Constructors ──────────────────────────────────────────────────────────────
 
-impl AsyncSerialClient {
+impl AsyncSerialClient<false> {
     /// Deprecated constructor alias.
     ///
     /// Use [`AsyncSerialClient::new_rtu`] and then call `client.connect().await?`.
@@ -64,38 +64,6 @@ impl AsyncSerialClient {
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_rtu(serial_config)
-    }
-
-    /// Deprecated constructor alias.
-    #[cfg(feature = "serial-ascii")]
-    #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
-    pub fn connect_ascii(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
-        Self::new_ascii(serial_config)
-    }
-
-    /// Deprecated constructor alias.
-    #[cfg(feature = "serial-ascii")]
-    #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
-    pub fn connect_ascii_with_poll_interval(
-        serial_config: ModbusSerialConfig,
-        _poll_interval: Duration,
-    ) -> Result<Self, AsyncError> {
-        Self::new_ascii(serial_config)
-    }
-
-    /// Deprecated constructor alias.
-    #[deprecated(
-        note = "use AsyncSerialClient::new_with_transport(...) and then client.connect().await"
-    )]
-    pub fn connect_with_transport<T>(
-        transport: T,
-        config: ModbusConfig,
-        poll_interval: Duration,
-    ) -> Result<Self, AsyncError>
-    where
-        T: AsyncTransport + Send + 'static,
-    {
-        Self::new_with_transport(transport, config, poll_interval)
     }
 
     /// Creates an async Modbus RTU serial client without connecting.
@@ -121,6 +89,25 @@ impl AsyncSerialClient {
     ) -> Result<Self, AsyncError> {
         Self::new_rtu(serial_config)
     }
+}
+
+impl AsyncSerialClient<true> {
+    /// Deprecated constructor alias.
+    #[cfg(feature = "serial-ascii")]
+    #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
+    pub fn connect_ascii(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
+        Self::new_ascii(serial_config)
+    }
+
+    /// Deprecated constructor alias.
+    #[cfg(feature = "serial-ascii")]
+    #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
+    pub fn connect_ascii_with_poll_interval(
+        serial_config: ModbusSerialConfig,
+        _poll_interval: Duration,
+    ) -> Result<Self, AsyncError> {
+        Self::new_ascii(serial_config)
+    }
 
     /// Creates an async Modbus ASCII serial client without connecting.
     ///
@@ -144,6 +131,23 @@ impl AsyncSerialClient {
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_ascii(serial_config)
+    }
+}
+
+impl<const ASCII: bool> AsyncSerialClient<ASCII> {
+    /// Deprecated constructor alias.
+    #[deprecated(
+        note = "use AsyncSerialClient::new_with_transport(...) and then client.connect().await"
+    )]
+    pub fn connect_with_transport<T>(
+        transport: T,
+        config: ModbusConfig,
+        poll_interval: Duration,
+    ) -> Result<Self, AsyncError>
+    where
+        T: AsyncTransport + Send + 'static,
+    {
+        Self::new_with_transport(transport, config, poll_interval)
     }
 
     /// Creates an async serial client from a caller-provided transport without
@@ -183,9 +187,9 @@ impl AsyncSerialClient {
 
 /// Spawns a [`ClientTask`] with the given factory and returns an
 /// [`AsyncSerialClient`] wired to it.
-fn spawn_serial_task<T: AsyncTransport + Send + 'static>(
+fn spawn_serial_task<T: AsyncTransport + Send + 'static, const ASCII: bool>(
     connect_fn: ConnectFactory<T>,
-) -> Result<AsyncSerialClient, AsyncError> {
+) -> Result<AsyncSerialClient<ASCII>, AsyncError> {
     let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
@@ -234,12 +238,45 @@ fn make_ascii_factory(config: Arc<ModbusConfig>) -> ConnectFactory<TokioAsciiTra
 
 /// Creates a full [`AsyncSerialClient`] for RTU mode.
 #[cfg(feature = "serial-rtu")]
-fn make_rtu_client(config: ModbusConfig) -> Result<AsyncSerialClient, AsyncError> {
+fn make_rtu_client(config: ModbusConfig) -> Result<AsyncSerialClient<false>, AsyncError> {
     spawn_serial_task(make_rtu_factory(Arc::new(config)))
 }
 
 /// Creates a full [`AsyncSerialClient`] for ASCII mode.
 #[cfg(feature = "serial-ascii")]
-fn make_ascii_client(config: ModbusConfig) -> Result<AsyncSerialClient, AsyncError> {
+fn make_ascii_client(config: ModbusConfig) -> Result<AsyncSerialClient<true>, AsyncError> {
     spawn_serial_task(make_ascii_factory(Arc::new(config)))
+}
+
+/// Modbus RTU async client.
+pub type AsyncRtuClient = AsyncSerialClient<false>;
+/// Modbus ASCII async client.
+pub type AsyncAsciiClient = AsyncSerialClient<true>;
+
+/// A runtime enum wrapping either an RTU or ASCII async serial client.
+///
+/// Implements [`Deref`] to [`AsyncClientCore`], allowing all Modbus operations
+/// to be called transparently regardless of the underlying framing mode.
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+pub enum AsyncSerialClientKind {
+    /// RTU serial client.
+    #[cfg(feature = "serial-rtu")]
+    Rtu(AsyncRtuClient),
+    /// ASCII serial client.
+    #[cfg(feature = "serial-ascii")]
+    Ascii(AsyncAsciiClient),
+}
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+impl Deref for AsyncSerialClientKind {
+    type Target = AsyncClientCore;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            #[cfg(feature = "serial-rtu")]
+            Self::Rtu(client) => &client.core,
+            #[cfg(feature = "serial-ascii")]
+            Self::Ascii(client) => &client.core,
+        }
+    }
 }

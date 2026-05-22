@@ -175,7 +175,7 @@ impl DotNetServerAdapter {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_server_async::AsyncTrafficNotifier for DotNetServerAdapter {}
+impl mbus_server_async::AsyncServerTrafficNotifier for DotNetServerAdapter {}
 
 impl AsyncAppHandler for DotNetServerAdapter {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
