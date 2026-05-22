@@ -22,17 +22,26 @@ wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-serialport = { version = "4.2.2", default-features = false }
+serialport = { version = "4.2.2", default-features = false, optional = true }
 tokio = { version = "1", features = ["io-util", "time"], optional = true }
 tokio-serial = { version = "5", optional = true, default-features = false }
 
 [features]
-default = []
+default = ["serial-client", "serial-server"]
 logging = ["dep:log"]
-wasm = [
+
+# Symmetrical Serial Transports
+serial-client = ["dep:serialport"]
+serial-server = ["dep:serialport"]
+serial-async = ["dep:tokio", "dep:tokio-serial", "mbus-core/async"]
+
+serial-wasm = [
     "dep:gloo-timers",
     "dep:js-sys",
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
 ]
-async = ["dep:tokio", "dep:tokio-serial", "mbus-core/async"]
+
+# Backward-Compatibility / Legacy Aliases
+async = ["serial-async"]
+wasm = ["serial-wasm"]
