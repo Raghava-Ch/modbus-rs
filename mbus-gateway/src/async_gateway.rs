@@ -71,11 +71,12 @@ impl From<MbusError> for AsyncGatewayError {
 /// # Example
 ///
 /// ```rust,no_run
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// use mbus_gateway::{AsyncTcpGatewayServer, UnitRouteTable};
+/// # async fn example() {
+/// use mbus_gateway::{AsyncTcpGatewayServer, UnitRouteTable, NoopEventHandler};
 /// use mbus_core::transport::UnitIdOrSlaveAddr;
 /// use mbus_network::TokioTcpTransport;
 /// use std::sync::Arc;
+/// use std::time::Duration;
 /// use tokio::sync::Mutex;
 ///
 /// // Route unit 1 to channel 0 and unit 2 to channel 1.
@@ -83,11 +84,11 @@ impl From<MbusError> for AsyncGatewayError {
 /// router.add(UnitIdOrSlaveAddr::new(1).unwrap(), 0).unwrap();
 /// router.add(UnitIdOrSlaveAddr::new(2).unwrap(), 0).unwrap();
 ///
-/// let downstream = TokioTcpTransport::connect("192.168.1.10:502").await?;
+/// let downstream = TokioTcpTransport::connect("192.168.1.10:502").await.unwrap();
 /// let shared = Arc::new(Mutex::new(downstream));
 ///
-/// AsyncTcpGatewayServer::serve("0.0.0.0:502", router, vec![shared]).await?;
-/// # Ok(())
+/// let handler = Arc::new(Mutex::new(NoopEventHandler));
+/// AsyncTcpGatewayServer::serve("0.0.0.0:502", router, vec![shared], handler, Duration::from_secs(1)).await.unwrap();
 /// # }
 /// ```
 pub struct AsyncTcpGatewayServer;
@@ -102,15 +103,18 @@ impl AsyncTcpGatewayServer {
     ///
     /// `downstreams` is a `Vec` where the index corresponds to the channel index
     /// returned by the routing policy.
-    pub async fn serve<A, R, DS>(
+    pub async fn serve<A, R, DS, EVENT>(
         addr: A,
         router: R,
         downstreams: Vec<Arc<Mutex<DS>>>,
+        handler: Arc<Mutex<EVENT>>,
+        response_timeout: std::time::Duration,
     ) -> Result<Infallible, AsyncGatewayError>
     where
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
+        EVENT: crate::event::GatewayEventHandler + Send + 'static,
     {
         let listener = TcpListener::bind(addr)
             .await
@@ -130,10 +134,20 @@ impl AsyncTcpGatewayServer {
             let router_ref = router.clone();
             let downstreams_ref = downstreams.clone();
 
+            let handler_ref = handler.clone();
+
             gateway_log_debug!("accepted upstream connection from {:?}", peer);
 
             tokio::spawn(async move {
-                if let Err(e) = run_async_session(upstream, router_ref, downstreams_ref).await {
+                if let Err(e) = run_async_session(
+                    upstream,
+                    router_ref,
+                    downstreams_ref,
+                    handler_ref,
+                    response_timeout,
+                )
+                .await
+                {
                     gateway_log_debug!("session ended: {:?}", e);
                 }
             });
@@ -146,16 +160,19 @@ impl AsyncTcpGatewayServer {
     ///
     /// In-flight sessions continue to completion; only new connections stop
     /// being accepted after the shutdown signal fires.
-    pub async fn serve_with_shutdown<A, R, DS, F>(
+    pub async fn serve_with_shutdown<A, R, DS, EVENT, F>(
         addr: A,
         router: R,
         downstreams: Vec<Arc<Mutex<DS>>>,
+        handler: Arc<Mutex<EVENT>>,
+        response_timeout: std::time::Duration,
         shutdown: F,
     ) -> Result<(), AsyncGatewayError>
     where
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
+        EVENT: crate::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let listener = TcpListener::bind(addr)
@@ -176,12 +193,12 @@ impl AsyncTcpGatewayServer {
                     let router_ref = router.clone();
                     let downstreams_ref = downstreams.clone();
 
+                    let handler_ref = handler.clone();
+
                     gateway_log_debug!("accepted upstream connection from {:?}", peer);
 
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            run_async_session(upstream, router_ref, downstreams_ref).await
-                        {
+                        if let Err(e) = run_async_session(upstream, router_ref, downstreams_ref, handler_ref, response_timeout).await {
                             gateway_log_debug!("session ended: {:?}", e);
                         }
                     });
@@ -209,15 +226,18 @@ impl AsyncTcpGatewayServer {
 /// the same session logic with a different upstream transport type.
 ///
 /// [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
-pub(crate) async fn run_async_session<UPSTREAM, ROUTER, DS>(
+pub(crate) async fn run_async_session<UPSTREAM, ROUTER, DS, EVENT>(
     mut upstream: UPSTREAM,
     router: Arc<ROUTER>,
     downstreams: Arc<Vec<Arc<Mutex<DS>>>>,
+    handler: Arc<Mutex<EVENT>>,
+    response_timeout: std::time::Duration,
 ) -> Result<(), MbusError>
 where
     UPSTREAM: AsyncTransport,
     ROUTER: GatewayRoutingPolicy + Send + Sync,
     DS: AsyncTransport + Send,
+    EVENT: crate::event::GatewayEventHandler + Send,
 {
     let upstream_type = UPSTREAM::TRANSPORT_TYPE;
     // Per-session monotonic transaction counter used for the downstream.
@@ -236,6 +256,12 @@ where
                 break;
             }
         };
+
+        #[cfg(feature = "traffic")]
+        {
+            let mut h = handler.lock().await;
+            h.on_upstream_rx(0, &frame);
+        }
 
         gateway_log_trace!(
             "upstream rx: {} bytes (type={:?})",
@@ -265,7 +291,11 @@ where
 
         // ── Route by unit ID ───────────────────────────────────────────────
         let channel_idx = match router.route(unit) {
-            Some(idx) => idx,
+            Some(idx) => {
+                let mut h = handler.lock().await;
+                h.on_forward(0, unit, idx);
+                idx
+            }
             None => {
                 gateway_log_debug!("routing miss for unit={}", unit.get());
                 let _ = send_async_exception(
@@ -327,6 +357,12 @@ where
         );
 
         // ── Lock downstream, send, wait for response ───────────────────────
+        #[cfg(feature = "traffic")]
+        {
+            let mut h = handler.lock().await;
+            h.on_downstream_tx(channel_idx, &ds_adu);
+        }
+
         let response_bytes = {
             let mut ds = downstreams[channel_idx].lock().await;
 
@@ -335,14 +371,35 @@ where
                 continue;
             }
 
-            match ds.recv().await {
-                Ok(b) => b,
-                Err(e) => {
+            match tokio::time::timeout(response_timeout, ds.recv()).await {
+                Ok(Ok(b)) => b,
+                Ok(Err(e)) => {
                     gateway_log_debug!("downstream recv error: {:?}", e);
+                    continue;
+                }
+                Err(_) => {
+                    gateway_log_debug!("downstream recv timeout");
+                    let mut h = handler.lock().await;
+                    h.on_downstream_timeout(0, internal_txn);
+                    let _ = send_async_exception(
+                        &mut upstream,
+                        upstream_txn,
+                        unit,
+                        fc,
+                        ExceptionCode::GatewayTargetDeviceFailedToRespond,
+                        upstream_type,
+                    )
+                    .await;
                     continue;
                 }
             }
         };
+
+        #[cfg(feature = "traffic")]
+        {
+            let mut h = handler.lock().await;
+            h.on_downstream_rx(0, channel_idx, &response_bytes);
+        }
 
         // ── Parse downstream response ─────────────────────────────────────
         let response_msg = match decompile_adu_frame(&response_bytes, downstream_type) {
@@ -377,6 +434,26 @@ where
             gateway_log_debug!("upstream send error: {:?}", e);
             break;
         }
+
+        #[cfg(feature = "traffic")]
+        {
+            let mut h = handler.lock().await;
+            h.on_upstream_tx(0, &us_adu);
+        }
+
+        {
+            let mut h = handler.lock().await;
+            h.on_response_returned(0, upstream_txn);
+        }
+
+        // Yield/sleep briefly to prevent a tight CPU loop if frames are coming in too fast,
+        // reducing overall CPU load as requested by the user.
+        tokio::time::sleep(std::time::Duration::from_micros(10)).await;
+    }
+
+    {
+        let mut h = handler.lock().await;
+        h.on_upstream_disconnect(0);
     }
 
     Ok(())

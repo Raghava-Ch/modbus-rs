@@ -167,7 +167,7 @@ impl<T: AsyncTransport + Send> AsyncTransport for IdleTimeoutTransport<T> {
 ///
 /// ```rust,no_run
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// use mbus_gateway::{AsyncWsGatewayServer, WsGatewayConfig, UnitRouteTable};
+/// use mbus_gateway::{AsyncWsGatewayServer, WsGatewayConfig, UnitRouteTable, NoopEventHandler};
 /// use mbus_core::transport::UnitIdOrSlaveAddr;
 /// use mbus_network::TokioTcpTransport;
 /// use std::sync::Arc;
@@ -177,7 +177,7 @@ impl<T: AsyncTransport + Send> AsyncTransport for IdleTimeoutTransport<T> {
 /// let mut router: UnitRouteTable<4> = UnitRouteTable::new();
 /// router.add(UnitIdOrSlaveAddr::new(1).unwrap(), 0).unwrap();
 ///
-/// let downstream = TokioTcpTransport::connect("192.168.1.10:502").await?;
+/// let downstream = TokioTcpTransport::connect("192.168.1.10:502").await.unwrap();
 /// let shared = Arc::new(Mutex::new(downstream));
 ///
 /// let config = WsGatewayConfig {
@@ -187,7 +187,10 @@ impl<T: AsyncTransport + Send> AsyncTransport for IdleTimeoutTransport<T> {
 ///     allowed_origins: vec!["https://example.com".to_string()],
 /// };
 ///
-/// AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared]).await?;
+/// let handler = Arc::new(Mutex::new(NoopEventHandler));
+/// let response_timeout = Duration::from_secs(1);
+///
+/// AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared], handler, response_timeout).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -207,16 +210,19 @@ impl AsyncWsGatewayServer {
     ///
     /// `downstreams` is a `Vec` where the index corresponds to the channel
     /// index returned by the routing policy.
-    pub async fn serve<A, R, DS>(
+    pub async fn serve<A, R, DS, EVENT>(
         addr: A,
         config: WsGatewayConfig,
         router: R,
         downstreams: Vec<Arc<Mutex<DS>>>,
+        handler: Arc<Mutex<EVENT>>,
+        response_timeout: std::time::Duration,
     ) -> Result<Infallible, AsyncGatewayError>
     where
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
+        EVENT: crate::event::GatewayEventHandler + Send + 'static,
     {
         let listener = TcpListener::bind(addr)
             .await
@@ -238,6 +244,7 @@ impl AsyncWsGatewayServer {
             let router_ref = router.clone();
             let downstreams_ref = downstreams.clone();
             let sem_ref = semaphore.clone();
+            let handler_ref = handler.clone();
 
             gateway_log_debug!("incoming WS connection from {:?}", peer);
 
@@ -276,9 +283,25 @@ impl AsyncWsGatewayServer {
                             inner: upstream,
                             timeout,
                         };
-                        run_async_session(timed, router_ref, downstreams_ref).await
+                        run_async_session(
+                            timed,
+                            router_ref,
+                            downstreams_ref,
+                            handler_ref,
+                            response_timeout,
+                        )
+                        .await
                     }
-                    None => run_async_session(upstream, router_ref, downstreams_ref).await,
+                    None => {
+                        run_async_session(
+                            upstream,
+                            router_ref,
+                            downstreams_ref,
+                            handler_ref,
+                            response_timeout,
+                        )
+                        .await
+                    }
                 };
 
                 if let Err(e) = result {
@@ -294,17 +317,20 @@ impl AsyncWsGatewayServer {
     ///
     /// In-flight sessions continue to completion; only new connections stop
     /// being accepted after the shutdown signal fires.
-    pub async fn serve_with_shutdown<A, R, DS, F>(
+    pub async fn serve_with_shutdown<A, R, DS, EVENT, F>(
         addr: A,
         config: WsGatewayConfig,
         router: R,
         downstreams: Vec<Arc<Mutex<DS>>>,
+        handler: Arc<Mutex<EVENT>>,
+        response_timeout: std::time::Duration,
         shutdown: F,
     ) -> Result<(), AsyncGatewayError>
     where
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
+        EVENT: crate::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let listener = TcpListener::bind(addr)
@@ -327,6 +353,7 @@ impl AsyncWsGatewayServer {
                     let router_ref = router.clone();
                     let downstreams_ref = downstreams.clone();
                     let sem_ref = semaphore.clone();
+                    let handler_ref = handler.clone();
 
                     gateway_log_debug!("incoming WS connection from {:?}", peer);
 
@@ -365,10 +392,10 @@ impl AsyncWsGatewayServer {
                                     inner: upstream,
                                     timeout,
                                 };
-                                run_async_session(timed, router_ref, downstreams_ref).await
+                                run_async_session(timed, router_ref, downstreams_ref, handler_ref, response_timeout).await
                             }
                             None => {
-                                run_async_session(upstream, router_ref, downstreams_ref).await
+                                run_async_session(upstream, router_ref, downstreams_ref, handler_ref, response_timeout).await
                             }
                         };
 

@@ -1942,8 +1942,8 @@ fn expand_modbus_app_struct(
             .iter()
             .map(|(field_ident, field_ty)| {
                 quote! {
-                    _ if pointer_address == <#field_ty as ::mbus_server::FifoQueue>::POINTER_ADDRESS => {
-                        <#field_ty as ::mbus_server::FifoQueue>::read_fifo_queue(
+                    _ if pointer_address == <#field_ty as ::mbus_server::FifoQueueMap>::POINTER_ADDRESS => {
+                        <#field_ty as ::mbus_server::FifoQueueMap>::read_fifo_queue(
                             &mut self.#field_ident, out,
                         )
                     }
@@ -1978,8 +1978,8 @@ fn expand_modbus_app_struct(
             .iter()
             .map(|(field_ident, field_ty)| {
                 quote! {
-                    _ if file_number == <#field_ty as ::mbus_server::FileRecord>::FILE_NUMBER => {
-                        <#field_ty as ::mbus_server::FileRecord>::read_record(
+                    _ if file_number == <#field_ty as ::mbus_server::FileRecordMap>::FILE_NUMBER => {
+                        <#field_ty as ::mbus_server::FileRecordMap>::read_record(
                             &mut self.#field_ident, record_number, record_length, out,
                         )
                     }
@@ -1990,8 +1990,8 @@ fn expand_modbus_app_struct(
             .iter()
             .map(|(field_ident, field_ty)| {
                 quote! {
-                    _ if file_number == <#field_ty as ::mbus_server::FileRecord>::FILE_NUMBER => {
-                        <#field_ty as ::mbus_server::FileRecord>::write_record(
+                    _ if file_number == <#field_ty as ::mbus_server::FileRecordMap>::FILE_NUMBER => {
+                        <#field_ty as ::mbus_server::FileRecordMap>::write_record(
                             &mut self.#field_ident, record_number, record_length, record_data,
                         )
                     }

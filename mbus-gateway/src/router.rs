@@ -3,6 +3,28 @@
 //! The gateway determines which downstream channel to use for an incoming
 //! request by consulting a [`GatewayRoutingPolicy`].  Several built-in
 //! implementations are provided; you can also supply your own.
+//!
+//! ## Dynamic / runtime routing
+//!
+//! For applications that need to update routes at runtime (e.g. a UI that lets
+//! operators add or remove slaves without restarting the gateway), wrap your
+//! routing table in an `Arc<std::sync::RwLock<R>>` or `Arc<tokio::sync::RwLock<R>>`:
+//!
+//! ```rust
+//! use std::sync::{Arc, RwLock};
+//! use mbus_gateway::{GatewayRoutingPolicy, UnitRouteTable};
+//! use mbus_core::transport::UnitIdOrSlaveAddr;
+//!
+//! let table: UnitRouteTable<8> = UnitRouteTable::new();
+//! let shared: Arc<RwLock<UnitRouteTable<8>>> = Arc::new(RwLock::new(table));
+//!
+//! // From the gateway task: shared.clone() works as a router.
+//! // From a UI task: shared.write().unwrap().add(...);
+//!
+//! // The Arc<RwLock<...>> itself implements GatewayRoutingPolicy:
+//! let addr = UnitIdOrSlaveAddr::new(1).unwrap();
+//! let result = shared.route(addr);
+//! ```
 
 use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
 
@@ -279,5 +301,100 @@ impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for UnitIdRewriteRouter<R> {
     /// Apply the additive offset to produce the downstream unit ID.
     fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
         UnitIdRewriteRouter::rewrite(self, unit)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dynamic routing: Arc<RwLock<R>> blanket impl (std)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `Arc<std::sync::RwLock<R>>` implements [`GatewayRoutingPolicy`] so the same
+/// shared table can be **read** by the gateway task and **written** by a UI or
+/// operator task simultaneously — with no gateway restart required.
+///
+/// # Example
+///
+/// ```rust
+/// use std::sync::{Arc, RwLock};
+/// use mbus_gateway::{GatewayRoutingPolicy, UnitRouteTable};
+/// use mbus_core::transport::UnitIdOrSlaveAddr;
+///
+/// let table: UnitRouteTable<8> = UnitRouteTable::new();
+/// let shared = Arc::new(RwLock::new(table));
+///
+/// // Gateway task holds a clone of the Arc.
+/// let gw_router = shared.clone();
+///
+/// // UI task can update routes at runtime:
+/// {
+///     let mut w = shared.write().unwrap();
+///     w.add(UnitIdOrSlaveAddr::new(1).unwrap(), 0).unwrap();
+/// }
+///
+/// // The gateway sees the new route on the next request.
+/// assert_eq!(gw_router.route(UnitIdOrSlaveAddr::new(1).unwrap()), Some(0));
+/// ```
+#[cfg(feature = "std-required")]
+impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for std::sync::Arc<std::sync::RwLock<R>> {
+    fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize> {
+        self.read().unwrap_or_else(|e| e.into_inner()).route(unit)
+    }
+
+    fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
+        self.read().unwrap_or_else(|e| e.into_inner()).rewrite(unit)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dynamic routing: Arc<Mutex<R>> blanket impl (std)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `Arc<std::sync::Mutex<R>>` implements [`GatewayRoutingPolicy`] as an
+/// alternative when your router does not implement `Sync`.
+///
+/// Prefer [`Arc<RwLock<R>>`] when possible since it allows concurrent reads.
+#[cfg(feature = "std-required")]
+impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for std::sync::Arc<std::sync::Mutex<R>> {
+    fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize> {
+        self.lock().unwrap_or_else(|e| e.into_inner()).route(unit)
+    }
+
+    fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
+        self.lock().unwrap_or_else(|e| e.into_inner()).rewrite(unit)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DynRouter type alias
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A heap-allocated, dynamically-dispatched routing policy.
+///
+/// Use `DynRouter` when you need to store or pass different routing policy
+/// implementations through the same variable or function parameter without
+/// monomorphisation overhead (e.g. in a UI configuration path).
+///
+/// ```rust
+/// use mbus_gateway::{DynRouter, GatewayRoutingPolicy, PassthroughRouter, UnitRouteTable};
+///
+/// fn make_router(passthrough: bool) -> DynRouter {
+///     if passthrough {
+///         Box::new(PassthroughRouter)
+///     } else {
+///         Box::new(UnitRouteTable::<4>::new())
+///     }
+/// }
+/// ```
+#[cfg(feature = "std-required")]
+pub type DynRouter = Box<dyn GatewayRoutingPolicy + Send + Sync + 'static>;
+
+#[cfg(feature = "std-required")]
+impl GatewayRoutingPolicy for Box<dyn GatewayRoutingPolicy + Send + Sync + 'static> {
+    fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize> {
+        (**self).route(unit)
+    }
+
+    fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
+        (**self).rewrite(unit)
     }
 }

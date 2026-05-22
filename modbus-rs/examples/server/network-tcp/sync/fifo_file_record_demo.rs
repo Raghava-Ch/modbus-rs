@@ -4,12 +4,14 @@
 //! `cargo run -p modbus-rs --example fifo_file_record_demo --features server,network-tcp`
 
 use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
-use mbus_server::{FifoQueue, FileRecord, ServerFifoHandler, ServerFileRecordHandler, modbus_app};
+use mbus_server::{
+    FifoQueueMap, FileRecordMap, ServerFifoHandler, ServerFileRecordHandler, modbus_app,
+};
 
 #[derive(Default)]
 struct TemperatureHistory;
 
-impl FifoQueue for TemperatureHistory {
+impl FifoQueueMap for TemperatureHistory {
     const POINTER_ADDRESS: u16 = 0x0100;
 
     fn read_fifo_queue(&mut self, out: &mut [u8]) -> Result<u8, MbusError> {
@@ -30,7 +32,7 @@ impl FifoQueue for TemperatureHistory {
 #[derive(Default)]
 struct AlarmFile;
 
-impl FileRecord for AlarmFile {
+impl FileRecordMap for AlarmFile {
     const FILE_NUMBER: u16 = 7;
 
     fn read_record(

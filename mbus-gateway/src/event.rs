@@ -47,6 +47,18 @@ pub trait GatewayEventHandler {
     fn on_downstream_tx(&mut self, channel_idx: usize, frame: &[u8]) {
         let _ = (channel_idx, frame);
     }
+
+    /// Raw bytes received from a downstream channel (requires `traffic` feature).
+    #[cfg(feature = "traffic")]
+    fn on_downstream_rx(&mut self, session_id: u8, channel_idx: usize, frame: &[u8]) {
+        let _ = (session_id, channel_idx, frame);
+    }
+
+    /// Raw bytes sent to the upstream client (requires `traffic` feature).
+    #[cfg(feature = "traffic")]
+    fn on_upstream_tx(&mut self, session_id: u8, frame: &[u8]) {
+        let _ = (session_id, frame);
+    }
 }
 
 /// A no-op [`GatewayEventHandler`] that silently discards all events.

@@ -14,13 +14,13 @@
 //!     --features gateway,network-tcp,async
 //! ```
 
-use std::env;
 use std::sync::Arc;
+use std::{env, time::Duration};
 
 use tokio::sync::Mutex;
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_gateway::{AsyncTcpGatewayServer, UnitIdRewriteRouter, UnitRouteTable};
+use mbus_gateway::{AsyncTcpGatewayServer, NoopEventHandler, UnitIdRewriteRouter, UnitRouteTable};
 use mbus_network::TokioTcpTransport;
 
 #[tokio::main]
@@ -45,7 +45,15 @@ async fn main() -> anyhow::Result<()> {
     let router = UnitIdRewriteRouter::new(inner_router, 100);
 
     println!("Starting async gateway on {upstream_addr}");
-    AsyncTcpGatewayServer::serve(upstream_addr, router, vec![shared_downstream]).await?;
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
+    AsyncTcpGatewayServer::serve(
+        upstream_addr,
+        router,
+        vec![shared_downstream],
+        handler,
+        Duration::from_secs(1),
+    )
+    .await?;
 
     Ok(())
 }

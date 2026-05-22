@@ -15,7 +15,7 @@
 use anyhow::{Context, Result};
 use mbus_async::server::AsyncTcpServer;
 use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
-use mbus_server::{FifoQueue, FileRecord, async_modbus_app};
+use mbus_server::{FifoQueueMap, FileRecordMap, async_modbus_app};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
@@ -48,7 +48,7 @@ impl TemperatureHistory {
     }
 }
 
-impl FifoQueue for TemperatureHistory {
+impl FifoQueueMap for TemperatureHistory {
     const POINTER_ADDRESS: u16 = 0x0100;
 
     fn read_fifo_queue(&mut self, out: &mut [u8]) -> Result<u8, MbusError> {
@@ -92,7 +92,7 @@ impl AlarmFile {
     }
 }
 
-impl FileRecord for AlarmFile {
+impl FileRecordMap for AlarmFile {
     const FILE_NUMBER: u16 = 7;
 
     fn read_record(

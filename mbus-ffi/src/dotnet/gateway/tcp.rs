@@ -220,10 +220,14 @@ pub unsafe extern "C" fn mbus_dn_tcp_gateway_start(handle: *mut MbusDnTcpGateway
                     Err(_) => return,
                 }
             }
+            let handler = Arc::new(TokioMutex::new(mbus_gateway::NoopEventHandler));
+            let response_timeout = std::time::Duration::from_secs(1);
             let _ = AsyncTcpGatewayServer::serve_with_shutdown(
                 bind_addr.as_str(),
                 router,
                 ds,
+                handler,
+                response_timeout,
                 stop_signal.notified(),
             )
             .await;

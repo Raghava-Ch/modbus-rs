@@ -28,6 +28,10 @@ pub enum ExceptionCode {
     IllegalDataValue = 0x03,
     /// 0x04: Server Device Failure - Unrecoverable device failure.
     ServerDeviceFailure = 0x04,
+    /// 0x0A: Gateway Path Unavailable - Specialized use in gateways.
+    GatewayPathUnavailable = 0x0A,
+    /// 0x0B: Gateway Target Device Failed to Respond - Specialized use in gateways.
+    GatewayTargetDeviceFailedToRespond = 0x0B,
 }
 
 impl From<ExceptionCode> for u8 {

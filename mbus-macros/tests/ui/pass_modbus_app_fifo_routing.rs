@@ -123,8 +123,8 @@ pub mod app {
     pub trait ServerDiagnosticsHandler {}
 }
 
-/// `FifoQueue` map trait (mirrors mbus_server::FifoQueue).
-pub trait FifoQueue {
+/// `FifoQueueMap` map trait (mirrors mbus_server::FifoQueueMap).
+pub trait FifoQueueMap {
     const POINTER_ADDRESS: u16;
     fn read_fifo_queue(&mut self, out: &mut [u8]) -> Result<u8, errors::MbusError>;
 }
@@ -132,7 +132,7 @@ pub trait FifoQueue {
 use mbus_macros::modbus_app;
 
 struct Temps;
-impl FifoQueue for Temps {
+impl FifoQueueMap for Temps {
     const POINTER_ADDRESS: u16 = 0x0100;
     fn read_fifo_queue(&mut self, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
         Ok(2)
@@ -140,7 +140,7 @@ impl FifoQueue for Temps {
 }
 
 struct Pressures;
-impl FifoQueue for Pressures {
+impl FifoQueueMap for Pressures {
     const POINTER_ADDRESS: u16 = 0x0200;
     fn read_fifo_queue(&mut self, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
         Ok(2)

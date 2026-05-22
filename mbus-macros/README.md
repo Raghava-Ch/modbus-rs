@@ -38,14 +38,14 @@ Supported groups inside `modbus_app(...)`:
 - `input_registers(...)` — FC04; read-only
 - `coils(...)` — FC01/FC05/FC0F; writable, supports `on_write_N` and `on_batch_write` hooks
 - `discrete_inputs(...)` — FC02; read-only
-- `fifo(...)` — FC18 Read FIFO Queue; each listed field must implement `FifoQueue`
-- `file_record(...)` — FC14/FC15 Read/Write File Record; each listed field must implement `FileRecord`
+- `fifo(...)` — FC18 Read FIFO Queue; each listed field must implement `FifoQueueMap`
+- `file_record(...)` — FC14/FC15 Read/Write File Record; each listed field must implement `FileRecordMap`
 
 When `fifo(...)` is provided, the macro generates a `ServerFifoHandler` impl that
-dispatches to the matching field by `FifoQueue::POINTER_ADDRESS`.
+dispatches to the matching field by `FifoQueueMap::POINTER_ADDRESS`.
 
 When `file_record(...)` is provided, the macro generates a `ServerFileRecordHandler`
-impl that dispatches to the matching field by `FileRecord::FILE_NUMBER`.
+impl that dispatches to the matching field by `FileRecordMap::FILE_NUMBER`.
 
 If neither `fifo` nor `file_record` is listed, both handlers are still auto-implemented
 with empty bodies (returning "function not supported").
