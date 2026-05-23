@@ -139,7 +139,7 @@ cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_coils \
 
 ```bash
 cargo run -p modbus-rs --example modbus_rs_client_serial_rtu_registers \
-    --no-default-features --features client,serial-rtu,registers -- /dev/ttyUSB0 1
+    --no-default-features --features client,serial-rtu,registers,error-trait -- /dev/ttyUSB0 1
 ```
 
 **Source:** [modbus-rs/examples/client/serial-rtu/sync/registers.rs](../../modbus-rs/examples/client/serial-rtu/sync/registers.rs)

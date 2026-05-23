@@ -118,7 +118,7 @@ fn main() -> Result<(), MbusError> {
 use modbus_rs::{
     ClientServices, MbusError, ModbusConfig, ModbusSerialConfig,
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, Parity, SerialMode, StdRtuTransport,
-    RegisterResponse, Registers, RequestErrorNotifier, TimeKeeper,
+    HoldingRegisters, InputRegisters, RegisterResponse, RequestErrorNotifier, TimeKeeper,
     UnitIdOrSlaveAddr,
 };
 
@@ -133,11 +133,11 @@ impl RequestErrorNotifier for App {
 // RegisterResponse trait: Handles responses from register read/write operations (FC03, FC04, FC06, FC10)
 // All methods use &mut self to allow state updates in your application
 impl RegisterResponse for App {
-    fn read_multiple_holding_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, regs: &Registers) {
+    fn read_multiple_holding_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, regs: &HoldingRegisters) {
         println!("Holding registers: {:?}", regs.values());
     }
-    fn read_multiple_input_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
-    fn read_write_multiple_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
+    fn read_multiple_input_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &InputRegisters) {}
+    fn read_write_multiple_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &HoldingRegisters) {}
     fn read_single_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn read_single_holding_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn read_single_input_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}

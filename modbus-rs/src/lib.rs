@@ -80,6 +80,7 @@ pub use mbus_core::models::register::HoldingRegisters;
 #[cfg(feature = "input-registers")]
 pub use mbus_core::models::register::InputRegisters;
 #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+#[allow(deprecated)]
 pub use mbus_core::models::register::{MAX_REGISTERS_PER_PDU, Registers};
 
 #[cfg(all(any(feature = "server", feature = "client"), feature = "async"))]
