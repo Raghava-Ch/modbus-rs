@@ -152,10 +152,10 @@ jobs:
           cache-bin: false
 
       - name: Check mbus-core (coils+registers, no_std)
-        run: cargo check -p mbus-core --no-default-features --features coils,registers --target thumbv7em-none-eabihf
+        run: cargo check -p mbus-core --no-default-features --features coils,holding-registers,input-registers --target thumbv7em-none-eabihf
 
       - name: Check mbus-client (coils+registers, no_std)
-        run: cargo check -p mbus-client --no-default-features --features coils,registers --target thumbv7em-none-eabihf
+        run: cargo check -p mbus-client --no-default-features --features coils,holding-registers,input-registers --target thumbv7em-none-eabihf
 
       - name: Check mbus-server (coils+holding-registers, no_std)
         run: cargo check -p mbus-server --no-default-features --features coils,holding-registers --target thumbv7em-none-eabihf

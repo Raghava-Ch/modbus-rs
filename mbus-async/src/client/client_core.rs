@@ -195,7 +195,7 @@ impl AsyncClientCore {
     }
     // ── Traffic notifier ─────────────────────────────────────────────────
 
-    /// Registers (or replaces) an [`AsyncClientNotifier`] for traffic events.
+    /// Registers (or replaces) an [`AsyncClientTrafficNotifier`] for traffic events.
     ///
     /// The notifier is invoked from the background task on every transmitted
     /// and received frame.

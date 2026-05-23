@@ -19,6 +19,10 @@
 //! | Serial RTU/ASCII upstream | [`AsyncSerialGatewayServer`] |
 //! | Any other transport (raw socket, UDP, TLS, …) | **`AsyncRawGatewayServer`** |
 //!
+//! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+//! [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
+//! [`AsyncSerialGatewayServer`]: crate::serial_gateway::AsyncSerialGatewayServer
+//!
 //! ## Example — custom raw TCP framing
 //!
 //! ```rust,no_run
@@ -121,6 +125,9 @@ impl AsyncRawGatewayServer {
     /// - An unrecoverable framing error occurs.
     ///
     /// The caller decides whether to reconnect and call `serve` again.
+    ///
+    /// [`MbusError::ConnectionClosed`]: mbus_core::errors::MbusError::ConnectionClosed
+    /// [`MbusError::ConnectionLost`]: mbus_core::errors::MbusError::ConnectionLost
     ///
     /// # Example
     ///
