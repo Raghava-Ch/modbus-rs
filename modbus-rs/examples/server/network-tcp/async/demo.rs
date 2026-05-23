@@ -14,9 +14,9 @@
 //! Then connect any Modbus TCP client to 127.0.0.1:5502 (unit 1).
 
 use anyhow::{Context, Result};
-use mbus_async::server::AsyncTcpServer;
+use mbus_async::server::{AsyncTcpServer, async_modbus_app};
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_server::{CoilsModel, HoldingRegistersModel, InputRegistersModel, async_modbus_app};
+use mbus_server::{CoilsModel, HoldingRegistersModel, InputRegistersModel};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
@@ -70,7 +70,7 @@ struct HvacServerApp {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_async::server::AsyncTrafficNotifier for HvacServerApp {}
+impl mbus_async::server::AsyncServerTrafficNotifier for HvacServerApp {}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

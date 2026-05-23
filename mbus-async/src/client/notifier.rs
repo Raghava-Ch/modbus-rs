@@ -1,7 +1,7 @@
 //! Async client traffic notification trait.
 //!
 //! Enabled only when the `traffic` feature is active.  Applications opt in by
-//! implementing [`AsyncClientNotifier`] and registering the implementation
+//! implementing [`AsyncClientTrafficNotifier`] and registering the implementation
 //! through [`AsyncClientCore::set_traffic_notifier`].
 //!
 //! All methods carry default no-op implementations so that implementors only
@@ -46,7 +46,7 @@ use tokio::sync::Mutex;
 /// ```
 ///
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
-pub trait AsyncClientNotifier {
+pub trait AsyncClientTrafficNotifier {
     /// Called after a request frame is successfully sent to the device.
     fn on_tx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
 
@@ -82,7 +82,8 @@ pub trait AsyncClientNotifier {
 /// can reach the same instance without an extra channel.
 ///
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
-pub(crate) type NotifierStore = Arc<Mutex<Option<Box<dyn AsyncClientNotifier + Send + 'static>>>>;
+pub(crate) type NotifierStore =
+    Arc<Mutex<Option<Box<dyn AsyncClientTrafficNotifier + Send + 'static>>>>;
 
 /// Creates a new, empty [`NotifierStore`].
 pub(crate) fn new_notifier_store() -> NotifierStore {

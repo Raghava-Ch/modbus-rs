@@ -62,31 +62,31 @@ pub(crate) enum ClientRequest {
     },
 
     // ── Registers (FC 03 / 04 / 06 / 10 / 16 / 17) ────────────────────────
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadHoldingRegisters {
         unit: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
     },
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     ReadInputRegisters {
         unit: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
     },
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteSingleRegister {
         unit: UnitIdOrSlaveAddr,
         address: u16,
         value: u16,
     },
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteMultipleRegisters {
         unit: UnitIdOrSlaveAddr,
         address: u16,
         values: heapless::Vec<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>,
     },
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadWriteMultipleRegisters {
         unit: UnitIdOrSlaveAddr,
         read_address: u16,
@@ -94,7 +94,7 @@ pub(crate) enum ClientRequest {
         write_address: u16,
         write_values: heapless::Vec<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>,
     },
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     MaskWriteRegister {
         unit: UnitIdOrSlaveAddr,
         address: u16,
@@ -168,13 +168,15 @@ impl ClientRequest {
             | Self::WriteSingleCoil { unit, .. }
             | Self::WriteMultipleCoils { unit, .. } => *unit,
 
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             Self::ReadHoldingRegisters { unit, .. }
-            | Self::ReadInputRegisters { unit, .. }
             | Self::WriteSingleRegister { unit, .. }
             | Self::WriteMultipleRegisters { unit, .. }
             | Self::ReadWriteMultipleRegisters { unit, .. }
             | Self::MaskWriteRegister { unit, .. } => *unit,
+
+            #[cfg(feature = "input-registers")]
+            Self::ReadInputRegisters { unit, .. } => *unit,
 
             #[cfg(feature = "discrete-inputs")]
             Self::ReadDiscreteInputs { unit, .. } => *unit,
@@ -193,6 +195,9 @@ impl ClientRequest {
             | Self::GetCommEventCounter { unit, .. }
             | Self::GetCommEventLog { unit, .. }
             | Self::ReportServerId { unit, .. } => *unit,
+
+            #[allow(unreachable_patterns)]
+            _ => unreachable!(),
         }
     }
 }

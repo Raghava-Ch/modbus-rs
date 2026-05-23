@@ -181,7 +181,7 @@ impl AsyncSerialGatewayServer {
     /// Run the gateway session until it ends naturally **or** `shutdown` resolves.
     ///
     /// Pass any `Future<Output = ()>` as `shutdown`.  The easiest way is to use
-    /// [`GatewayShutdown`]:
+    /// [`GatewayShutdown`](crate::shutdown::GatewayShutdown):
     ///
     /// ```rust,no_run
     /// # async fn example() {}

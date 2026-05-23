@@ -21,6 +21,12 @@ use crate::errors::MbusError;
 /// Maximum number of registers that can be read/written in a single Modbus PDU (125 registers).
 pub const MAX_REGISTERS_PER_PDU: usize = 125;
 
+/// A block of Modbus holding registers (FC 0x03, 0x06, 0x10).
+pub type HoldingRegisters<const N: usize = MAX_REGISTERS_PER_PDU> = Registers<N>;
+
+/// A block of Modbus input registers (FC 0x04).
+pub type InputRegisters<const N: usize = MAX_REGISTERS_PER_PDU> = Registers<N>;
+
 /// Represents the state of a block of registers read from a Modbus server.
 ///
 /// This structure maintains the starting address and the quantity of registers,

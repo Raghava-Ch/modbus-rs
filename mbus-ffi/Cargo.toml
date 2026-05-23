@@ -57,17 +57,21 @@ traffic = ["mbus-client?/traffic", "mbus-server-async?/traffic", "mbus-client-as
 ## Enables TCP network transport support (mbus-client-async, mbus-gateway).
 network-tcp = [
     "mbus-client-async?/network-tcp",
-    "mbus-gateway?/network",
+    "mbus-gateway?/upstream-tcp",
+    "mbus-gateway?/upstream-ws",
+    "mbus-gateway?/downstream-tcp",
 ]
 ## Enables Modbus RTU serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
 serial-rtu = [
     "mbus-client-async?/serial-rtu",
-    "mbus-gateway?/serial-rtu",
+    "mbus-gateway?/upstream-serial-rtu",
+    "mbus-gateway?/downstream-serial-rtu",
 ]
 ## Enables Modbus ASCII serial transport support (mbus-client-async, mbus-gateway, mbus-client, mbus-server).
 serial-ascii = [
     "mbus-client-async?/serial-ascii",
-    "mbus-gateway?/serial-ascii",
+    "mbus-gateway?/upstream-serial-ascii",
+    "mbus-gateway?/downstream-serial-ascii",
     "mbus-client?/serial-ascii",
     "mbus-server?/serial-ascii",
 ]
