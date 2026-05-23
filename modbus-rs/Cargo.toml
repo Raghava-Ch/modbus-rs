@@ -9,7 +9,7 @@ homepage = "https://github.com/Raghava-Ch/modbus-rs"
 readme = "README.md"
 keywords = ["modbus", "embedded", "no-std", "device"]
 categories = ["embedded", "no-std"]
-description = "Feature-gated, low-footprint Modbus client and server stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
+description = "Feature-gated, low-footprint Modbus client/server/gateway stack for no_std and std targets (MCU/RTOS/Linux/macOS/Windows) with TCP/RTU/ASCII, sync+async APIs, jittered backoff retries, and optional C/WASM bindings."
 
 [dependencies]
 mbus-core = { workspace = true }
@@ -50,6 +50,7 @@ default = [
     "fifo",
     "file-record",
     "diagnostics",
+    "gateway"
 ]
 # Internal sentinel: set by any feature that requires std. The no_std cfg_attr in
 # lib.rs checks only this flag, so adding a new std-requiring feature is a single
@@ -83,11 +84,19 @@ network-tcp = [
     "std-required",
 ]
 coils = ["mbus-core/coils", "mbus-async?/coils", "mbus-server?/coils"]
-registers = ["mbus-core/registers", "mbus-async?/registers"]
-holding-registers = ["registers", "mbus-server?/holding-registers"]
-input-registers = ["registers", "mbus-server?/input-registers"]
+holding-registers = [
+    "mbus-core/holding-registers",
+    "mbus-async?/holding-registers",
+    "mbus-server?/holding-registers",
+]
+input-registers = [
+    "mbus-core/input-registers",
+    "mbus-async?/input-registers",
+    "mbus-server?/input-registers",
+]
+registers = ["holding-registers", "input-registers", "mbus-async?/registers"]
 discrete-inputs = [
-    "mbus-core/registers",
+    "mbus-core/discrete-inputs",
     "mbus-async?/discrete-inputs",
     "mbus-server?/discrete-inputs",
 ]
@@ -119,7 +128,20 @@ traffic = [
     "mbus-server?/traffic",
 ]
 error-trait = ["mbus-core/error-trait"]
-gateway = ["dep:mbus-gateway"]
+gateway = [
+    "dep:mbus-gateway",
+    "mbus-gateway/async",
+    "mbus-gateway/logging",
+    "mbus-gateway/traffic",
+    "mbus-gateway/upstream-tcp",
+    "mbus-gateway/upstream-ws",
+    "mbus-gateway/upstream-serial-rtu",
+    "mbus-gateway/upstream-serial-ascii",
+    "mbus-gateway/downstream-tcp",
+    "mbus-gateway/downstream-serial-rtu",
+    "mbus-gateway/downstream-serial-ascii",
+    "std-required",
+]
 
 # Convenience feature for no_std / embedded targets.
 # Enables the client state machine and all protocol model features.

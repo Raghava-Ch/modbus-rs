@@ -175,7 +175,7 @@ impl GoServerAdapter {
 }
 
 #[cfg(feature = "traffic")]
-impl mbus_server_async::AsyncTrafficNotifier for GoServerAdapter {}
+impl mbus_server_async::AsyncServerTrafficNotifier for GoServerAdapter {}
 
 impl AsyncAppHandler for GoServerAdapter {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {

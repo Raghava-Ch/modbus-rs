@@ -29,7 +29,7 @@ fifo = []
 file-record = []
 diagnostics = []
 diagnostics-stats = ["diagnostics"]
-traffic = ["modbus-rs/traffic", "mbus-server/traffic"]
+traffic = ["modbus-rs/traffic", "mbus-server/traffic", "async-server", "mbus-async/traffic"]
 async-server = [
     "dep:mbus-async",
     "dep:mbus-macros",
@@ -48,6 +48,5 @@ async-server = [
     "file-record",
     "diagnostics",
 ]
-async-traffic = ["async-server", "traffic", "mbus-async/traffic"]
 
 [dev-dependencies]

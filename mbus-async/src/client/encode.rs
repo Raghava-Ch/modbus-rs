@@ -87,7 +87,7 @@ pub(crate) fn encode_write_multiple_coils(
 
 // ─── Registers (FC 03 / 04 / 06 / 10 / 16 / 17) ─────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 /// Encodes a Read Holding Registers (FC 03) request frame.
 pub(crate) fn encode_read_holding_registers(
     txn_id: u16,
@@ -103,7 +103,7 @@ pub(crate) fn encode_read_holding_registers(
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 /// Encodes a Read Input Registers (FC 04) request frame.
 pub(crate) fn encode_read_input_registers(
     txn_id: u16,
@@ -119,7 +119,7 @@ pub(crate) fn encode_read_input_registers(
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 /// Encodes a Write Single Register (FC 06) request frame.
 pub(crate) fn encode_write_single_register(
     txn_id: u16,
@@ -132,7 +132,7 @@ pub(crate) fn encode_write_single_register(
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 /// Encodes a Write Multiple Registers (FC 10) request frame.
 pub(crate) fn encode_write_multiple_registers(
     txn_id: u16,
@@ -156,7 +156,7 @@ pub(crate) fn encode_write_multiple_registers(
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 /// Encodes a Read/Write Multiple Registers (FC 17) request frame.
 pub(crate) fn encode_read_write_multiple_registers(
     txn_id: u16,
@@ -180,7 +180,7 @@ pub(crate) fn encode_read_write_multiple_registers(
     common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 /// Encodes a Mask Write Register (FC 16) request frame.
 pub(crate) fn encode_mask_write_register(
     txn_id: u16,
@@ -388,35 +388,35 @@ pub(crate) fn encode_request(
             coils,
         } => encode_write_multiple_coils(txn_id, *unit, *address, coils, transport_type),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ClientRequest::ReadHoldingRegisters {
             unit,
             address,
             quantity,
         } => encode_read_holding_registers(txn_id, *unit, *address, *quantity, transport_type),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         ClientRequest::ReadInputRegisters {
             unit,
             address,
             quantity,
         } => encode_read_input_registers(txn_id, *unit, *address, *quantity, transport_type),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ClientRequest::WriteSingleRegister {
             unit,
             address,
             value,
         } => encode_write_single_register(txn_id, *unit, *address, *value, transport_type),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ClientRequest::WriteMultipleRegisters {
             unit,
             address,
             values,
         } => encode_write_multiple_registers(txn_id, *unit, *address, values, transport_type),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ClientRequest::ReadWriteMultipleRegisters {
             unit,
             read_address,
@@ -433,7 +433,7 @@ pub(crate) fn encode_request(
             transport_type,
         ),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ClientRequest::MaskWriteRegister {
             unit,
             address,
@@ -509,5 +509,8 @@ pub(crate) fn encode_request(
 
         #[cfg(feature = "diagnostics")]
         ClientRequest::ReportServerId { unit } => encode_report_server_id(*unit, transport_type),
+
+        #[allow(unreachable_patterns)]
+        _ => unreachable!(),
     }
 }

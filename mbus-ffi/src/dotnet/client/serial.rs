@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use mbus_client_async::AsyncSerialClient;
+use mbus_client_async::{AsyncAsciiClient, AsyncRtuClient, AsyncSerialClientKind};
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::transport::{
@@ -32,7 +32,7 @@ use crate::dotnet::status::{self, MbusDnStatus};
 /// Opaque handle to an asynchronous Modbus serial client (RTU or ASCII).
 #[allow(missing_docs)]
 pub struct MbusDnSerialClient {
-    inner: Arc<AsyncSerialClient>,
+    inner: Arc<AsyncSerialClientKind>,
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ fn make_serial_client(
     stop_bits: u8,
     response_timeout_ms: u32,
     mode: SerialMode,
-) -> Option<AsyncSerialClient> {
+) -> Option<AsyncSerialClientKind> {
     if port.is_null() {
         return None;
     }
@@ -91,8 +91,12 @@ fn make_serial_client(
     let rt = runtime::get();
     let _guard = rt.enter();
     match mode {
-        SerialMode::Rtu => AsyncSerialClient::new_rtu(config).ok(),
-        SerialMode::Ascii => AsyncSerialClient::new_ascii(config).ok(),
+        SerialMode::Rtu => AsyncRtuClient::new_rtu(config)
+            .ok()
+            .map(AsyncSerialClientKind::Rtu),
+        SerialMode::Ascii => AsyncAsciiClient::new_ascii(config)
+            .ok()
+            .map(AsyncSerialClientKind::Ascii),
     }
 }
 

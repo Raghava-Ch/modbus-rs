@@ -37,7 +37,7 @@ pub use app_handler::{
     AsyncAppHandler, AsyncAppRequirements, AsyncServerError, ModbusRequest, ModbusResponse,
 };
 #[cfg(feature = "traffic")]
-pub use app_handler::{AsyncTrafficDirection, AsyncTrafficNotifier};
+pub use app_handler::{AsyncServerTrafficNotifier, AsyncTrafficDirection};
 pub use session::AsyncServerSession;
 #[cfg(feature = "diagnostics-stats")]
 pub use statistics::AsyncServerStatistics;
@@ -47,3 +47,5 @@ pub use tcp_server::AsyncTcpServer;
 
 #[cfg(feature = "server-serial")]
 pub use serial_server::{AsyncAsciiServer, AsyncRtuServer, AsyncSerialServer};
+
+pub use mbus_macros::async_modbus_app;
