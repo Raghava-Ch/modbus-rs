@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use super::helpers::{
     async_error_to_py, coils_to_py, discrete_inputs_to_py, enter_runtime, fifo_to_py, get_runtime,
-    registers_to_py,
+    holding_registers_to_py, input_registers_to_py,
 };
 
 // ── shared constructor helper ────────────────────────────────────────────────
@@ -371,7 +371,7 @@ impl SerialClient {
             rt.block_on(self.inner.read_holding_registers(uid, address, quantity))
                 .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        holding_registers_to_py(py, result)
     }
 
     #[pyo3(signature = (address, quantity))]
@@ -387,7 +387,7 @@ impl SerialClient {
             rt.block_on(self.inner.read_input_registers(uid, address, quantity))
                 .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        input_registers_to_py(py, result)
     }
 
     #[pyo3(signature = (address, value))]
@@ -458,7 +458,7 @@ impl SerialClient {
             ))
             .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        holding_registers_to_py(py, result)
     }
 
     // ── FIFO ─────────────────────────────────────────────────────────────
@@ -798,7 +798,7 @@ impl AsyncSerialClient {
                 .read_holding_registers(uid, address, quantity)
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| holding_registers_to_py(py, regs))
         })
     }
 
@@ -816,7 +816,7 @@ impl AsyncSerialClient {
                 .read_input_registers(uid, address, quantity)
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| input_registers_to_py(py, regs))
         })
     }
 
@@ -894,7 +894,7 @@ impl AsyncSerialClient {
                 )
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| holding_registers_to_py(py, regs))
         })
     }
 

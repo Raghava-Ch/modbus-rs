@@ -1176,56 +1176,6 @@ enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
 const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
 
 /**
- * Returns the starting address of the registers range.
- *
- * # Safety
- * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
- */
-uint16_t mbus_registers_from_address(const MbusRegisters *registers);
-
-/**
- * Returns the number of registers.
- *
- * # Safety
- * `registers` must either be null (returns 0) or point to a valid `MbusRegisters`.
- */
-uint16_t mbus_registers_quantity(const MbusRegisters *registers);
-
-/**
- * Reads a single register value by address into `out_value`.
- *
- * # Safety
- * `registers` and `out_value` must be non-null and point to valid memory, or null
- * (returns `MBUS_ERR_NULL_POINTER` for null).
- */
-enum MbusStatusCode mbus_registers_value(const MbusRegisters *registers,
-                                         uint16_t address,
-                                         uint16_t *out_value);
-
-/**
- * Reads a single register value by 0-based index into `out_value`.
- *
- * `index` must be less than [`mbus_registers_quantity`]; otherwise returns
- * `MBUS_ERR_INVALID_ADDRESS`. Unlike [`mbus_registers_value`], no knowledge of
- * the Modbus starting address is required.
- *
- * # Safety
- * `registers` and `out_value` must be non-null and point to valid memory, or null
- * (returns `MBUS_ERR_NULL_POINTER` for null).
- */
-enum MbusStatusCode mbus_registers_value_at_index(const MbusRegisters *registers,
-                                                  uint16_t index,
-                                                  uint16_t *out_value);
-
-/**
- * Returns a raw pointer to the register values. Valid during callback only.
- *
- * # Safety
- * `registers` must either be null (returns a null pointer) or point to a valid `MbusRegisters`.
- */
-const uint16_t *mbus_registers_values_ptr(const MbusRegisters *registers);
-
-/**
  * Lock the global pool (used only during client creation/destruction).
  */
 extern void mbus_pool_lock(void);

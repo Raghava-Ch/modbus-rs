@@ -20,8 +20,10 @@ use mbus_core::models::discrete_input::DiscreteInputs;
 use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::SubRequestParams;
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-use mbus_core::models::register::Registers;
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
 
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
@@ -53,8 +55,10 @@ pub(crate) enum ClientResponse {
     // ── Registers ────────────────────────────────────────────────────────
     /// Read Holding Registers (FC 03), Read Input Registers (FC 04),
     /// Write Multiple Registers (FC 10), Read/Write Multiple Registers (FC 17).
-    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-    Registers(Registers),
+    #[cfg(feature = "holding-registers")]
+    HoldingRegisters(HoldingRegisters),
+    #[cfg(feature = "input-registers")]
+    InputRegisters(InputRegisters),
     /// Write Single Register (FC 06) echo-back confirmation.
     #[cfg(feature = "holding-registers")]
     SingleRegisterWrite {
