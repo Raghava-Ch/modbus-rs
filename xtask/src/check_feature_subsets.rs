@@ -94,7 +94,7 @@ static STEPS: &[Step] = &[
             "mbus-core",
             "--no-default-features",
             "--features",
-            "registers",
+            "holding-registers,input-registers",
         ],
     ),
     Step::check(
@@ -114,7 +114,7 @@ static STEPS: &[Step] = &[
             "mbus-core",
             "--no-default-features",
             "--features",
-            "coils,registers",
+            "coils,holding-registers,input-registers",
         ],
     ),
     Step::build(
@@ -124,7 +124,7 @@ static STEPS: &[Step] = &[
             "mbus-core",
             "--no-default-features",
             "--features",
-            "coils,registers",
+            "coils,holding-registers,input-registers",
         ],
     ),
     // ── mbus-client ──────────────────────────────────────────────────────────

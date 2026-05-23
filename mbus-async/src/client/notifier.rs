@@ -1,7 +1,7 @@
 //! Async client traffic notification trait.
 //!
 //! Enabled only when the `traffic` feature is active.  Applications opt in by
-//! implementing [`AsyncClientNotifier`] and registering the implementation
+//! implementing [`AsyncClientTrafficNotifier`] and registering the implementation
 //! through [`AsyncClientCore::set_traffic_notifier`].
 //!
 //! All methods carry default no-op implementations so that implementors only

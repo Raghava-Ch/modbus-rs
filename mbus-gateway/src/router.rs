@@ -352,7 +352,7 @@ impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for std::sync::Arc<std::sync:
 /// `Arc<std::sync::Mutex<R>>` implements [`GatewayRoutingPolicy`] as an
 /// alternative when your router does not implement `Sync`.
 ///
-/// Prefer [`Arc<RwLock<R>>`] when possible since it allows concurrent reads.
+/// Prefer [`Arc<RwLock<R>>`](std::sync::Arc) when possible since it allows concurrent reads.
 #[cfg(feature = "std-required")]
 impl<R: GatewayRoutingPolicy> GatewayRoutingPolicy for std::sync::Arc<std::sync::Mutex<R>> {
     fn route(&self, unit: UnitIdOrSlaveAddr) -> Option<usize> {

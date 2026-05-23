@@ -10,7 +10,7 @@
 //! |---|---|
 //! | `command` | `ClientRequest` and `TaskCommand` channel envelopes |
 //! | `response` | `ClientResponse` typed result enum |
-//! | `notifier` | [`AsyncClientNotifier`] traffic hook trait (`traffic` feature) |
+//! | `notifier` | [`AsyncClientTrafficNotifier`] traffic hook trait (`traffic` feature) |
 //! | `client_core` | [`AsyncClientCore`] — public request API |
 //! | `network_client` | [`AsyncTcpClient`] — TCP constructor |
 //! | `serial_client` | [`AsyncSerialClient`] — serial constructor |
