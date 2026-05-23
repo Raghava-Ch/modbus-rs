@@ -35,6 +35,10 @@ pub type InputRegisters<const N: usize = MAX_REGISTERS_PER_PDU> = Registers<N>;
 /// # Type Parameters
 /// * `N` - The internal storage capacity, defaults to [`MAX_REGISTERS_PER_PDU`].
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[deprecated(
+    since = "0.11.0",
+    note = "Do not use `Registers` directly. Please use the typed registers `HoldingRegisters` or `InputRegisters` instead. In the future, this struct will not be exported to the user space."
+)]
 pub struct Registers<const N: usize = MAX_REGISTERS_PER_PDU> {
     /// The starting address of the first register in this block.
     from_address: u16,
