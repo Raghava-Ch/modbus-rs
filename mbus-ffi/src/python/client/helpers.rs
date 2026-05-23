@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use mbus_core::models::coil::Coils;
 use mbus_core::models::discrete_input::DiscreteInputs;
 use mbus_core::models::fifo_queue::FifoQueue;
-use mbus_core::models::register::Registers;
+use mbus_core::models::register::{HoldingRegisters, InputRegisters};
 use pyo3::prelude::*;
 use tokio::runtime::Runtime;
 
@@ -53,15 +53,22 @@ pub fn discrete_inputs_to_py(py: Python<'_>, di: DiscreteInputs) -> PyResult<Py<
     Ok(list.into_pyobject(py)?.into_any().unbind())
 }
 
-/// Convert a `Registers` value into a Python `list[int]`.
-pub fn registers_to_py(py: Python<'_>, regs: Registers) -> PyResult<Py<PyAny>> {
-    let qty = regs.quantity(); // already u16
-    let base = regs.from_address();
-    let list: Vec<u16> = (0..qty)
-        .map(|i| regs.value(base + i).unwrap_or(0))
-        .collect();
-    Ok(list.into_pyobject(py)?.into_any().unbind())
+macro_rules! impl_registers_to_py {
+    ($name:ident, $type:ident) => {
+        #[doc = concat!("Convert a `", stringify!($type), "` value into a Python `list[int]`.")]
+        pub fn $name<const N: usize>(py: Python<'_>, regs: $type<N>) -> PyResult<Py<PyAny>> {
+            let qty = regs.quantity(); // already u16
+            let base = regs.from_address();
+            let list: Vec<u16> = (0..qty)
+                .map(|i| regs.value(base + i).unwrap_or(0))
+                .collect();
+            Ok(list.into_pyobject(py)?.into_any().unbind())
+        }
+    };
 }
+
+impl_registers_to_py!(holding_registers_to_py, HoldingRegisters);
+impl_registers_to_py!(input_registers_to_py, InputRegisters);
 
 /// Convert a `FifoQueue` value into a Python `list[int]`.
 pub fn fifo_to_py(py: Python<'_>, queue: FifoQueue) -> PyResult<Py<PyAny>> {

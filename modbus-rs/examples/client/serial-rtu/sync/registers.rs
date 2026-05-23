@@ -2,9 +2,9 @@ use anyhow::Result;
 #[cfg(feature = "traffic")]
 use modbus_rs::TrafficNotifier;
 use modbus_rs::{
-    BackoffStrategy, BaudRate, ClientServices, DataBits, JitterStrategy, MbusError, ModbusConfig,
-    ModbusSerialConfig, Parity, RegisterResponse, Registers, RequestErrorNotifier, SerialMode,
-    StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, ClientServices, DataBits, HoldingRegisters, InputRegisters,
+    JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity, RegisterResponse,
+    RequestErrorNotifier, SerialMode, StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -19,7 +19,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &InputRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Input Registers (Addr: {}, Qty: {}): {:?}",
@@ -34,7 +34,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Holding Registers (Addr: {}, Qty: {}): {:?}",
@@ -79,7 +79,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read/Write Multiple Registers: {:?}",
@@ -164,9 +164,9 @@ fn main() -> Result<()> {
     };
     let config = ModbusConfig::Serial(serial_config);
 
-    let mut client =
-        ClientServices::<_, _, 1>::new(transport, app, config).map_err(|e| anyhow::anyhow!(e))?;
-    client.connect().map_err(|e| anyhow::anyhow!(e))?;
+    let mut client = ClientServices::<_, _, 1>::new(transport, app, config)
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+    client.connect().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     let target_unit_id = UnitIdOrSlaveAddr::try_from(unit_id_val).unwrap();
 
@@ -175,7 +175,7 @@ fn main() -> Result<()> {
     client
         .registers()
         .write_single_register(1, target_unit_id, 10, 1234)
-        .map_err(|e| anyhow::anyhow!(e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
     while client.has_pending_requests() {
         client.poll();
     }
@@ -185,7 +185,7 @@ fn main() -> Result<()> {
     client
         .registers()
         .read_holding_registers(2, target_unit_id, 10, 5)
-        .map_err(|e| anyhow::anyhow!(e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
     while client.has_pending_requests() {
         client.poll();
     }
@@ -195,7 +195,7 @@ fn main() -> Result<()> {
     client
         .registers()
         .read_input_registers(3, target_unit_id, 0, 5)
-        .map_err(|e| anyhow::anyhow!(e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
     while client.has_pending_requests() {
         client.poll();
     }
