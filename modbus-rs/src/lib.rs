@@ -11,11 +11,12 @@ pub use mbus_core;
 pub use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN};
 pub use mbus_core::errors::MbusError;
 pub use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
-pub use mbus_core::transport::checksum::crc16;
+#[cfg(feature = "client")]
+pub use mbus_core::transport::{BackoffStrategy, JitterStrategy};
+#[cfg(any(feature = "client", feature = "server"))]
 pub use mbus_core::transport::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-    ModbusTcpConfig, Parity, SerialMode, TimeKeeper, Transport, TransportError, TransportType,
-    UnitIdOrSlaveAddr,
+    BaudRate, DataBits, ModbusConfig, ModbusSerialConfig, ModbusTcpConfig, Parity, SerialMode,
+    TimeKeeper, Transport, TransportError, TransportType, UnitIdOrSlaveAddr, checksum::crc16,
 };
 
 #[cfg(all(feature = "network-tcp", feature = "async"))]
