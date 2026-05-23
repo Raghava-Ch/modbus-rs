@@ -23,7 +23,11 @@
 //!     -p mbus-gateway
 //! ```
 
-#[cfg(feature = "serial-rtu-async")]
+#[cfg(all(
+    feature = "upstream-serial-rtu",
+    feature = "downstream-tcp",
+    feature = "async"
+))]
 fn main() {
     use std::sync::Arc;
 
@@ -111,11 +115,15 @@ fn main() {
         });
 }
 
-#[cfg(not(feature = "serial-rtu-async"))]
+#[cfg(not(all(
+    feature = "upstream-serial-rtu",
+    feature = "downstream-tcp",
+    feature = "async"
+)))]
 fn main() {
     eprintln!(
-        "This example requires the `serial-rtu-async` feature.\n\
+        "This example requires the `upstream-serial-rtu`, `downstream-tcp`, and `async` features.\n\
          Re-run with:\n\
-         \n    cargo run --example rtu_upstream_to_tcp --features serial-rtu-async -p mbus-gateway"
+         \n    cargo run --example rtu_upstream_to_tcp --features upstream-serial-rtu,downstream-tcp,async -p mbus-gateway"
     );
 }

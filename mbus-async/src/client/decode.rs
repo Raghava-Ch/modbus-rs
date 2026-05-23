@@ -39,7 +39,7 @@ use mbus_core::models::fifo_queue::FifoQueue;
 use mbus_core::models::file_record::{
     FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SubRequestParams,
 };
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 use mbus_core::models::register::Registers;
 #[cfg(feature = "diagnostics")]
 use mbus_core::{
@@ -98,17 +98,17 @@ fn decode_pdu(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
         #[cfg(feature = "discrete-inputs")]
         FunctionCode::ReadDiscreteInputs => decode_read_discrete_inputs(pdu),
 
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         FunctionCode::ReadHoldingRegisters => decode_read_registers(pdu),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         FunctionCode::ReadInputRegisters => decode_read_registers(pdu),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         FunctionCode::WriteSingleRegister => decode_write_single_register(pdu),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         FunctionCode::WriteMultipleRegisters => decode_write_multiple_registers(pdu),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         FunctionCode::ReadWriteMultipleRegisters => decode_read_registers(pdu),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         FunctionCode::MaskWriteRegister => decode_mask_write_register(pdu),
 
         #[cfg(feature = "fifo")]
@@ -179,7 +179,7 @@ fn decode_read_discrete_inputs(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 
 // ─── Register decoders ────────────────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 fn decode_read_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let bcp = pdu.byte_count_payload()?;
     if bcp.byte_count % 2 != 0 {
@@ -196,7 +196,7 @@ fn decode_read_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     Ok(ClientResponse::Registers(registers))
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 fn decode_write_single_register(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fields = pdu.write_single_u16_fields()?;
     Ok(ClientResponse::SingleRegisterWrite {
@@ -205,14 +205,14 @@ fn decode_write_single_register(pdu: &Pdu) -> Result<ClientResponse, MbusError> 
     })
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 fn decode_write_multiple_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fields = pdu.read_window()?;
     let registers = Registers::new(fields.address, fields.quantity)?;
     Ok(ClientResponse::Registers(registers))
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 fn decode_mask_write_register(_pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     Ok(ClientResponse::MaskWriteRegister)
 }

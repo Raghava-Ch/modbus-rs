@@ -37,8 +37,8 @@ use crate::services::discrete_input::DiscreteInputs;
 use crate::services::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use crate::services::file_record::SubRequestParams;
-#[cfg(feature = "registers")]
-use crate::services::register::Registers;
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+use crate::services::register::{HoldingRegisters, InputRegisters};
 
 /// Trait for receiving notifications about failed Modbus requests.
 ///
@@ -318,7 +318,7 @@ pub trait FileRecordResponse {
 /// ## Data Semantics
 /// - Register values are 16-bit words (`u16`) already decoded from Modbus big-endian byte pairs.
 /// - Address and quantity values are echoed/validated values corresponding to the original request.
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub trait RegisterResponse {
     /// Handles a response for a `Read Input Registers` (FC 0x04) request.
     ///
@@ -329,12 +329,12 @@ pub trait RegisterResponse {
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
-    /// - `registers`: A `Registers` struct containing the values of the read input registers.
+    /// - `registers`: An `InputRegisters` struct containing the values of the read input registers.
     fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &InputRegisters,
     );
 
     /// Handles a response for a `Read Single Input Register` (FC 0x04) request.
@@ -365,12 +365,12 @@ pub trait RegisterResponse {
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
-    /// - `registers`: A `Registers` struct containing the values of the read holding registers.
+    /// - `registers`: A `HoldingRegisters` struct containing the values of the read holding registers.
     fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     );
 
     /// Handles a response for a `Write Single Register` (FC 0x06) request, confirming a successful write.
@@ -420,12 +420,12 @@ pub trait RegisterResponse {
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
-    /// - `registers`: A `Registers` struct containing the values of the registers that were read.
+    /// - `registers`: A `HoldingRegisters` struct containing the values of the registers that were read.
     fn read_write_multiple_registers_response(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     );
 
     /// Handles a response for a single register read request.

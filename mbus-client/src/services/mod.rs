@@ -27,7 +27,7 @@ pub mod fifo_queue;
 #[cfg(feature = "file-record")]
 pub mod file_record;
 mod log_compat;
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;
 
 use crate::app::RequestErrorNotifier;
@@ -211,12 +211,12 @@ where
 }
 
 /// Feature-scoped registers API facade.
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub struct RegistersApi<'a, TRANSPORT, APP, const N: usize> {
     client: &'a mut ClientServices<TRANSPORT, APP, N>,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 impl<TRANSPORT, APP, const N: usize> ClientServices<TRANSPORT, APP, N>
 where
     TRANSPORT: Transport,
@@ -237,7 +237,7 @@ where
     }
 }
 
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 impl<TRANSPORT, APP, const N: usize> RegistersApi<'_, TRANSPORT, APP, N>
 where
     TRANSPORT: Transport,
@@ -589,7 +589,7 @@ pub(crate) struct Multiple {
     quantity: u16,
 }
 /// Internal tracking payload for a Masking operation.
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Mask {
     address: u16,
@@ -611,7 +611,7 @@ pub(crate) enum OperationMeta {
     Other,
     Single(Single),
     Multiple(Multiple),
-    #[cfg(feature = "registers")]
+    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
     Masking(Mask),
     #[cfg(feature = "diagnostics")]
     Diag(Diag),
@@ -622,7 +622,7 @@ impl OperationMeta {
         match self {
             OperationMeta::Single(s) => s.address,
             OperationMeta::Multiple(m) => m.address,
-            #[cfg(feature = "registers")]
+            #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
             OperationMeta::Masking(m) => m.address,
             _ => 0,
         }
@@ -644,7 +644,7 @@ impl OperationMeta {
         }
     }
 
-    #[cfg(feature = "registers")]
+    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
     fn and_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.and_mask,
@@ -652,7 +652,7 @@ impl OperationMeta {
         }
     }
 
-    #[cfg(feature = "registers")]
+    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
     fn or_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.or_mask,
@@ -664,7 +664,7 @@ impl OperationMeta {
         matches!(self, OperationMeta::Single(_))
     }
 
-    #[cfg(feature = "registers")]
+    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
     fn single_value(&self) -> u16 {
         match self {
             OperationMeta::Single(s) => s.value,

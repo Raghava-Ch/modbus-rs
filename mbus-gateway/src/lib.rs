@@ -139,12 +139,15 @@ pub mod router;
 pub mod services;
 pub mod txn_map;
 
-// downstream.rs requires mbus_serial (for RTU/ASCII variants).
-// It is compiled when any feature that enables mbus_serial is active.
-#[cfg(any(
-    feature = "ws-server",
-    feature = "serial-rtu-async",
-    feature = "serial-ascii-async",
+// downstream.rs contains GatewayTransport/DownstreamConfig.
+// It is compiled when async is active and any downstream feature is enabled.
+#[cfg(all(
+    feature = "async",
+    any(
+        feature = "downstream-tcp",
+        feature = "downstream-serial-rtu",
+        feature = "downstream-serial-ascii"
+    )
 ))]
 pub mod downstream;
 
@@ -157,10 +160,13 @@ pub mod raw_gateway;
 #[cfg(feature = "async")]
 pub mod shutdown;
 
-#[cfg(feature = "ws-server")]
+#[cfg(feature = "upstream-ws")]
 pub mod ws_gateway;
 
-#[cfg(any(feature = "serial-rtu-async", feature = "serial-ascii-async"))]
+#[cfg(all(
+    feature = "async",
+    any(feature = "upstream-serial-rtu", feature = "upstream-serial-ascii")
+))]
 pub mod serial_gateway;
 
 pub(crate) mod log_compat;
@@ -178,7 +184,10 @@ pub use services::GatewayServices;
 pub use txn_map::{SerialTxnMap, TxnMap};
 
 #[cfg(feature = "async")]
-pub use async_gateway::{AsyncGatewayError, AsyncTcpGatewayServer};
+pub use async_gateway::AsyncGatewayError;
+
+#[cfg(feature = "upstream-tcp")]
+pub use async_gateway::AsyncTcpGatewayServer;
 
 #[cfg(feature = "async")]
 pub use raw_gateway::AsyncRawGatewayServer;
@@ -186,71 +195,72 @@ pub use raw_gateway::AsyncRawGatewayServer;
 #[cfg(feature = "async")]
 pub use shutdown::{GatewayShutdown, GatewayShutdownToken};
 
-#[cfg(feature = "ws-server")]
+#[cfg(feature = "upstream-ws")]
 pub use ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
 
-#[cfg(any(feature = "serial-rtu-async", feature = "serial-ascii-async"))]
+#[cfg(all(
+    feature = "async",
+    any(feature = "upstream-serial-rtu", feature = "upstream-serial-ascii")
+))]
 pub use serial_gateway::AsyncSerialGatewayServer;
 
 // ── Concrete transport re-exports ─────────────────────────────────────────────
 
-/// Sync TCP transports from `mbus-network` (enabled by the `network` feature).
-///
-/// - [`StdTcpServerTransport`] — wraps an accepted `TcpStream`; use on the upstream side.
-/// - [`StdTcpTransport`] — outbound TCP client; use on the downstream side.
-#[cfg(feature = "network")]
-pub use mbus_network::{StdTcpServerTransport, StdTcpTransport};
+/// Sync TCP server transport from `mbus-network` (enabled by the `upstream-tcp` feature).
+#[cfg(feature = "upstream-tcp")]
+pub use mbus_network::StdTcpServerTransport;
 
-/// Sync RTU serial transport from `mbus-serial` (enabled by the `serial-rtu` feature).
-///
-/// [`StdRtuTransport`] implements Modbus RTU framing (binary + CRC16) over a
-/// `serialport`-backed port.  Use it on either the upstream or downstream side.
-#[cfg(feature = "serial-rtu")]
+/// Sync TCP client transport from `mbus-network` (enabled by the `downstream-tcp` feature).
+#[cfg(feature = "downstream-tcp")]
+pub use mbus_network::StdTcpTransport;
+
+/// Sync RTU serial transport from `mbus-serial` (enabled by `upstream-serial-rtu` or `downstream-serial-rtu`).
+#[cfg(any(feature = "upstream-serial-rtu", feature = "downstream-serial-rtu"))]
 pub use mbus_serial::StdRtuTransport;
 
-/// Sync ASCII serial transport from `mbus-serial` (enabled by the `serial-ascii` feature).
-///
-/// [`StdAsciiTransport`] implements Modbus ASCII framing (`:` delimited + LRC) over a
-/// `serialport`-backed port.  Use it on either the upstream or downstream side.
-#[cfg(feature = "serial-ascii")]
+/// Sync ASCII serial transport from `mbus-serial` (enabled by `upstream-serial-ascii` or `downstream-serial-ascii`).
+#[cfg(any(feature = "upstream-serial-ascii", feature = "downstream-serial-ascii"))]
 pub use mbus_serial::StdAsciiTransport;
 
-/// Async RTU serial transport from `mbus-serial` (enabled by the `serial-rtu-async` feature).
-///
-/// [`TokioRtuTransport`] implements Modbus RTU framing over a Tokio-backed serial port.
-/// Use it as the **upstream** transport with [`AsyncSerialGatewayServer`] when a physical
-/// serial Modbus master (e.g. a PLC on RS-485) needs to reach TCP/IP downstream slaves.
-#[cfg(feature = "serial-rtu-async")]
+/// Async RTU serial transport from `mbus-serial` (enabled by `upstream-serial-rtu` or `downstream-serial-rtu` with `async`).
+#[cfg(all(
+    feature = "async",
+    any(feature = "upstream-serial-rtu", feature = "downstream-serial-rtu")
+))]
 pub use mbus_serial::TokioRtuTransport;
 
-/// Async ASCII serial transport from `mbus-serial` (enabled by the `serial-ascii-async` feature).
-///
-/// [`TokioAsciiTransport`] implements Modbus ASCII framing over a Tokio-backed serial port.
-/// Use it as the **upstream** transport with [`AsyncSerialGatewayServer`] when a physical
-/// serial ASCII Modbus master needs to reach TCP/IP downstream slaves.
-#[cfg(feature = "serial-ascii-async")]
+/// Async ASCII serial transport from `mbus-serial` (enabled by `upstream-serial-ascii` or `downstream-serial-ascii` with `async`).
+#[cfg(all(
+    feature = "async",
+    any(feature = "upstream-serial-ascii", feature = "downstream-serial-ascii")
+))]
 pub use mbus_serial::TokioAsciiTransport;
 
 // ── Heterogeneous downstream & config re-exports ─────────────────────────────
 
 /// Heterogeneous async downstream transport (TCP / RTU / ASCII) with built-in framing
 /// translation.  Use [`DownstreamConfig`] to build instances from config-file settings.
-///
-/// Available when any serial feature is enabled (`ws-server`, `serial-rtu-async`,
-/// or `serial-ascii-async`).
-#[cfg(any(
-    feature = "ws-server",
-    feature = "serial-rtu-async",
-    feature = "serial-ascii-async",
+#[cfg(all(
+    feature = "async",
+    any(
+        feature = "downstream-tcp",
+        feature = "downstream-serial-rtu",
+        feature = "downstream-serial-ascii"
+    )
 ))]
-pub use downstream::{
-    DownstreamConfig, DownstreamConnectError, GatewayTransport, SerialDownstreamConfig,
-};
+pub use downstream::{DownstreamConfig, DownstreamConnectError, GatewayTransport};
+
+#[cfg(all(
+    feature = "async",
+    any(feature = "downstream-serial-rtu", feature = "downstream-serial-ascii")
+))]
+pub use downstream::SerialDownstreamConfig;
 
 /// Async TCP transport (re-exported from `mbus-network`).
-///
-/// Available when the `async` feature is enabled.
-#[cfg(feature = "async")]
+#[cfg(all(
+    feature = "async",
+    any(feature = "upstream-tcp", feature = "downstream-tcp")
+))]
 pub use mbus_network::TokioTcpTransport;
 
 /// Transport configuration types re-exported for use in config builders.
@@ -258,9 +268,10 @@ pub use mbus_network::TokioTcpTransport;
 /// Includes serial config enums (`BaudRate`, `DataBits`, `Parity`, `SerialMode`) as
 /// well as `UnitIdOrSlaveAddr` — lets callers avoid importing `mbus-core` directly.
 #[cfg(any(
-    feature = "ws-server",
-    feature = "serial-rtu-async",
-    feature = "serial-ascii-async",
+    feature = "upstream-serial-rtu",
+    feature = "upstream-serial-ascii",
+    feature = "downstream-serial-rtu",
+    feature = "downstream-serial-ascii"
 ))]
 pub mod transport_types {
     pub use mbus_core::transport::{
@@ -269,17 +280,15 @@ pub mod transport_types {
     };
 }
 
-/// `UnitIdOrSlaveAddr` for async-only (TCP-only) setups without serial features.
+/// `UnitIdOrSlaveAddr` for TCP-only/WebSocket setups without serial features.
 ///
 /// When serial features are active the richer `transport_types` module is preferred.
-#[cfg(all(
-    feature = "async",
-    not(any(
-        feature = "ws-server",
-        feature = "serial-rtu-async",
-        feature = "serial-ascii-async",
-    ))
-))]
+#[cfg(not(any(
+    feature = "upstream-serial-rtu",
+    feature = "upstream-serial-ascii",
+    feature = "downstream-serial-rtu",
+    feature = "downstream-serial-ascii"
+)))]
 pub mod transport_types {
     pub use mbus_core::transport::UnitIdOrSlaveAddr;
 }

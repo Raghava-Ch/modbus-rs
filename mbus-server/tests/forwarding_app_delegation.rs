@@ -1,4 +1,4 @@
-#![cfg(feature = "registers")]
+#![cfg(feature = "holding-registers")]
 
 use core::cell::RefCell;
 use mbus_core::errors::MbusError;

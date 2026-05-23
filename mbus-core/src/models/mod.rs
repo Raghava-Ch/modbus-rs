@@ -24,5 +24,5 @@ pub mod discrete_input;
 pub mod fifo_queue;
 #[cfg(feature = "file-record")]
 pub mod file_record;
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod register;

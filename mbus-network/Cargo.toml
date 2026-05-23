@@ -39,10 +39,19 @@ features = [
 ]
 
 [features]
-default = []
+default = ["tcp-client", "tcp-server"]
 logging = ["dep:log"]
-wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
-async = ["dep:tokio", "mbus-core/async"]
-# WebSocket upstream transport for the gateway: wraps an accepted tokio-tungstenite
-# WebSocketStream as an AsyncTransport so AsyncWsGatewayServer can use run_async_session.
+
+# Symmetrical TCP Transports
+tcp-client = []
+tcp-server = []
+tcp-async = ["dep:tokio", "mbus-core/async"]
+
+# Symmetrical WebSocket Transports
+ws-client = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys"]
 ws-server = ["dep:tokio-tungstenite", "dep:futures-util", "dep:tokio", "dep:bytes", "mbus-core/async"]
+
+# Backward-Compatibility / Legacy Aliases
+async = ["tcp-async"]
+wasm = ["ws-client"]
+

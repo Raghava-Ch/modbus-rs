@@ -18,7 +18,7 @@ use std::future::Future;
 /// Direction of a Modbus traffic event — mirrors `mbus_server::TrafficDirection` for
 /// async server users who do not depend on `mbus-server` directly.
 ///
-/// Exported alongside [`AsyncTrafficNotifier`] for convenience.
+/// Exported alongside [`AsyncServerTrafficNotifier`] for convenience.
 #[cfg(feature = "traffic")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AsyncTrafficDirection {
@@ -146,7 +146,7 @@ pub enum ModbusRequest {
         count: u16,
     },
     /// FC03 — Read Holding Registers.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadHoldingRegisters {
         /// Transaction ID.
         txn_id: u16,
@@ -158,7 +158,7 @@ pub enum ModbusRequest {
         count: u16,
     },
     /// FC06 — Write Single Register.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteSingleRegister {
         /// Transaction ID.
         txn_id: u16,
@@ -170,7 +170,7 @@ pub enum ModbusRequest {
         value: u16,
     },
     /// FC10 — Write Multiple Registers.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     WriteMultipleRegisters {
         /// Transaction ID.
         txn_id: u16,
@@ -184,7 +184,7 @@ pub enum ModbusRequest {
         data: Vec<u8, MAX_ADU_FRAME_LEN>,
     },
     /// FC04 — Read Input Registers.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     ReadInputRegisters {
         /// Transaction ID.
         txn_id: u16,
@@ -196,7 +196,7 @@ pub enum ModbusRequest {
         count: u16,
     },
     /// FC16 — Mask Write Register.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     MaskWriteRegister {
         /// Transaction ID.
         txn_id: u16,
@@ -210,7 +210,7 @@ pub enum ModbusRequest {
         or_mask: u16,
     },
     /// FC17 — Read/Write Multiple Registers.
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     ReadWriteMultipleRegisters {
         /// Transaction ID.
         txn_id: u16,
@@ -338,17 +338,17 @@ impl ModbusRequest {
             ModbusRequest::WriteMultipleCoils { txn_id, .. } => *txn_id,
             #[cfg(feature = "discrete-inputs")]
             ModbusRequest::ReadDiscreteInputs { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadHoldingRegisters { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteSingleRegister { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteMultipleRegisters { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             ModbusRequest::ReadInputRegisters { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::MaskWriteRegister { txn_id, .. } => *txn_id,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadWriteMultipleRegisters { txn_id, .. } => *txn_id,
             #[cfg(feature = "diagnostics")]
             ModbusRequest::ReadExceptionStatus { txn_id, .. } => *txn_id,
@@ -383,17 +383,17 @@ impl ModbusRequest {
             ModbusRequest::WriteMultipleCoils { unit, .. } => *unit,
             #[cfg(feature = "discrete-inputs")]
             ModbusRequest::ReadDiscreteInputs { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadHoldingRegisters { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteSingleRegister { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteMultipleRegisters { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             ModbusRequest::ReadInputRegisters { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::MaskWriteRegister { unit, .. } => *unit,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadWriteMultipleRegisters { unit, .. } => *unit,
             #[cfg(feature = "diagnostics")]
             ModbusRequest::ReadExceptionStatus { unit, .. } => *unit,
@@ -428,19 +428,19 @@ impl ModbusRequest {
             ModbusRequest::WriteMultipleCoils { .. } => FunctionCode::WriteMultipleCoils as u8,
             #[cfg(feature = "discrete-inputs")]
             ModbusRequest::ReadDiscreteInputs { .. } => FunctionCode::ReadDiscreteInputs as u8,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadHoldingRegisters { .. } => FunctionCode::ReadHoldingRegisters as u8,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteSingleRegister { .. } => FunctionCode::WriteSingleRegister as u8,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteMultipleRegisters { .. } => {
                 FunctionCode::WriteMultipleRegisters as u8
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             ModbusRequest::ReadInputRegisters { .. } => FunctionCode::ReadInputRegisters as u8,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::MaskWriteRegister { .. } => FunctionCode::MaskWriteRegister as u8,
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadWriteMultipleRegisters { .. } => {
                 FunctionCode::ReadWriteMultipleRegisters as u8
             }
@@ -840,7 +840,7 @@ impl ModbusResponse {
     }
 }
 
-// ── AsyncTrafficNotifier ─────────────────────────────────────────────────────
+// ── AsyncServerTrafficNotifier ─────────────────────────────────────────────────────
 
 /// Optional traffic notifications emitted by the async server session.
 ///
@@ -852,14 +852,14 @@ impl ModbusResponse {
 /// # Example
 /// ```rust,ignore
 /// #[cfg(feature = "traffic")]
-/// impl AsyncTrafficNotifier for MyApp {
+/// impl AsyncServerTrafficNotifier for MyApp {
 ///     fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
 ///         println!("rx txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
 ///     }
 /// }
 /// ```
 #[cfg(feature = "traffic")]
-pub trait AsyncTrafficNotifier {
+pub trait AsyncServerTrafficNotifier {
     /// Called when an accepted request frame is about to be dispatched to the app.
     ///
     /// Note: `txn_id` is `0` for malformed frames where the header could not be
@@ -893,7 +893,7 @@ pub trait AsyncTrafficNotifier {
 // ── AsyncAppRequirements ──────────────────────────────────────────────────────
 
 /// Internal super-trait that folds `Send + 'static` (and, when `traffic` is
-/// enabled, [`AsyncTrafficNotifier`]) into a single bound used by
+/// enabled, [`AsyncServerTrafficNotifier`]) into a single bound used by
 /// [`AsyncAppHandler`].
 ///
 /// You never need to implement or name this trait directly.
@@ -905,9 +905,9 @@ impl<T: Send + 'static> AsyncAppRequirements for T {}
 
 #[doc(hidden)]
 #[cfg(feature = "traffic")]
-pub trait AsyncAppRequirements: AsyncTrafficNotifier + Send + 'static {}
+pub trait AsyncAppRequirements: AsyncServerTrafficNotifier + Send + 'static {}
 #[cfg(feature = "traffic")]
-impl<T: AsyncTrafficNotifier + Send + 'static> AsyncAppRequirements for T {}
+impl<T: AsyncServerTrafficNotifier + Send + 'static> AsyncAppRequirements for T {}
 
 // ── AsyncAppHandler ──────────────────────────────────────────────────────────
 
@@ -921,9 +921,9 @@ impl<T: AsyncTrafficNotifier + Send + 'static> AsyncAppRequirements for T {}
 /// # Traffic notifications
 ///
 /// When the `traffic` feature is enabled, `AsyncAppHandler` requires that the
-/// implementing type also implements [`AsyncTrafficNotifier`].  All methods on
+/// implementing type also implements [`AsyncServerTrafficNotifier`].  All methods on
 /// that trait have default no-op implementations, so a simple `impl
-/// AsyncTrafficNotifier for MyApp {}` is enough to satisfy the bound.
+/// AsyncServerTrafficNotifier for MyApp {}` is enough to satisfy the bound.
 ///
 /// # Send bound
 ///
@@ -982,14 +982,14 @@ where
 }
 
 /// When the `traffic` feature is enabled, `Arc<Mutex<APP>>` satisfies
-/// [`AsyncTrafficNotifier`] with default no-op hooks.
+/// [`AsyncServerTrafficNotifier`] with default no-op hooks.
 ///
 /// Traffic hooks for shared-state apps can be implemented on the inner `APP`
 /// type directly or via a custom outer wrapper.  The no-op impl here simply
 /// allows `Arc<Mutex<APP>>` to satisfy the `AsyncAppHandler` bound when `traffic`
 /// is active without requiring the user to add an extra impl block.
 #[cfg(feature = "traffic")]
-impl<APP: AsyncAppHandler> AsyncTrafficNotifier for std::sync::Arc<tokio::sync::Mutex<APP>> {}
+impl<APP: AsyncAppHandler> AsyncServerTrafficNotifier for std::sync::Arc<tokio::sync::Mutex<APP>> {}
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 

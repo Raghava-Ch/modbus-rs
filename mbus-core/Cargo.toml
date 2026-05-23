@@ -21,15 +21,17 @@ defmt = { workspace = true, optional = true }
 default = [
     "serial-ascii",
     "coils",
-    "registers",
     "discrete-inputs",
+    "holding-registers",
+    "input-registers",
     "fifo",
     "file-record",
     "diagnostics",
 ]
 serial-ascii = []
 coils = []
-registers = []
+holding-registers = []
+input-registers = []
 discrete-inputs = []
 fifo = []
 file-record = []

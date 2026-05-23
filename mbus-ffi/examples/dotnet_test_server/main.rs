@@ -27,7 +27,7 @@ impl Default for TestApp {
     }
 }
 
-impl mbus_async::server::AsyncTrafficNotifier for TestApp {}
+impl mbus_async::server::AsyncServerTrafficNotifier for TestApp {}
 
 impl AsyncAppHandler for TestApp {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
