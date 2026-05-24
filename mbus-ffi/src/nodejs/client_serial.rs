@@ -28,6 +28,11 @@ use crate::nodejs::client_tcp::{
 };
 use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err};
 
+unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
+    unsafe { std::mem::transmute(p) }
+}
+
+
 // ── Option structs ───────────────────────────────────────────────────────────
 
 /// Connection options for the serial client.
@@ -257,176 +262,368 @@ impl AsyncSerialModbusClient {
     // ── Register methods ─────────────────────────────────────────────────────
 
     /// Reads holding registers (FC03).
-    #[napi]
+    #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "registers")]
-    pub async fn read_holding_registers(&self, opts: ReadRegistersOptions) -> Result<Vec<u16>> {
+    pub fn read_holding_registers(
+        &self,
+        env: Env,
+        opts: ReadRegistersOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<u16>>> {
         let client = self.get_client()?;
-        let regs = client
-            .read_holding_registers(self.unit_id, opts.address, opts.quantity)
-            .await
-            .map_err(from_async_error)?;
-        Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let quantity = opts.quantity;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.read_holding_registers(unit_id, address, quantity);
+            let regs = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Reads input registers (FC04).
-    #[napi]
+    #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "registers")]
-    pub async fn read_input_registers(&self, opts: ReadRegistersOptions) -> Result<Vec<u16>> {
+    pub fn read_input_registers(
+        &self,
+        env: Env,
+        opts: ReadRegistersOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<u16>>> {
         let client = self.get_client()?;
-        let regs = client
-            .read_input_registers(self.unit_id, opts.address, opts.quantity)
-            .await
-            .map_err(from_async_error)?;
-        Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let quantity = opts.quantity;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.read_input_registers(unit_id, address, quantity);
+            let regs = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Writes a single register (FC06).
-    #[napi]
+    #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "registers")]
-    pub async fn write_single_register(&self, opts: WriteSingleRegisterOptions) -> Result<()> {
+    pub fn write_single_register(
+        &self,
+        env: Env,
+        opts: WriteSingleRegisterOptions<'_>,
+    ) -> Result<PromiseRaw<'static, ()>> {
         let client = self.get_client()?;
-        client
-            .write_single_register(self.unit_id, opts.address, opts.value)
-            .await
-            .map_err(from_async_error)?;
-        Ok(())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let value = opts.value;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.write_single_register(unit_id, address, value);
+            if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Writes multiple registers (FC16).
-    #[napi]
+    #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "registers")]
-    pub async fn write_multiple_registers(
+    pub fn write_multiple_registers(
         &self,
-        opts: WriteMultipleRegistersOptions,
-    ) -> Result<()> {
+        env: Env,
+        opts: WriteMultipleRegistersOptions<'_>,
+    ) -> Result<PromiseRaw<'static, ()>> {
         let client = self.get_client()?;
-        client
-            .write_multiple_registers(self.unit_id, opts.address, &opts.values)
-            .await
-            .map_err(from_async_error)?;
-        Ok(())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let values = opts.values;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.write_multiple_registers(unit_id, address, &values);
+            if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Reads and writes multiple registers atomically (FC23).
-    #[napi]
+    #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "registers")]
-    pub async fn read_write_multiple_registers(
+    pub fn read_write_multiple_registers(
         &self,
-        opts: ReadWriteMultipleRegistersOptions,
-    ) -> Result<Vec<u16>> {
+        env: Env,
+        opts: ReadWriteMultipleRegistersOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<u16>>> {
         let client = self.get_client()?;
-        let regs = client
-            .read_write_multiple_registers(
-                self.unit_id,
-                opts.read_address,
-                opts.read_quantity,
-                opts.write_address,
-                &opts.write_values,
-            )
-            .await
-            .map_err(from_async_error)?;
-        Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let read_address = opts.read_address;
+        let read_quantity = opts.read_quantity;
+        let write_address = opts.write_address;
+        let write_values = opts.write_values;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.read_write_multiple_registers(
+                unit_id,
+                read_address,
+                read_quantity,
+                write_address,
+                &write_values,
+            );
+            let regs = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(regs.values()[..regs.quantity() as usize].to_vec())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     // ── Coil methods ─────────────────────────────────────────────────────────
 
     /// Reads coils (FC01).
-    #[napi]
+    #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "coils")]
-    pub async fn read_coils(&self, opts: ReadBitsOptions) -> Result<Vec<bool>> {
+    pub fn read_coils(
+        &self,
+        env: Env,
+        opts: ReadBitsOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<bool>>> {
         let client = self.get_client()?;
-        let coils = client
-            .read_multiple_coils(self.unit_id, opts.address, opts.quantity)
-            .await
-            .map_err(from_async_error)?;
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let quantity = opts.quantity;
 
-        let mut result = Vec::with_capacity(opts.quantity as usize);
-        for i in 0..opts.quantity {
-            result.push(coils.value(opts.address + i).unwrap_or(false));
-        }
-        Ok(result)
+        let promise = env.spawn_future(async move {
+            let fut = client.read_multiple_coils(unit_id, address, quantity);
+            let coils = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+
+            let mut result = Vec::with_capacity(quantity as usize);
+            for i in 0..quantity {
+                result.push(coils.value(address + i).unwrap_or(false));
+            }
+            Ok(result)
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Writes a single coil (FC05).
-    #[napi]
+    #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
-    pub async fn write_single_coil(&self, opts: WriteSingleCoilOptions) -> Result<()> {
+    pub fn write_single_coil(
+        &self,
+        env: Env,
+        opts: WriteSingleCoilOptions<'_>,
+    ) -> Result<PromiseRaw<'static, ()>> {
         let client = self.get_client()?;
-        client
-            .write_single_coil(self.unit_id, opts.address, opts.value)
-            .await
-            .map_err(from_async_error)?;
-        Ok(())
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let value = opts.value;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.write_single_coil(unit_id, address, value);
+            if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Writes multiple coils (FC15).
-    #[napi]
+    #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
-    pub async fn write_multiple_coils(&self, opts: WriteMultipleCoilsOptions) -> Result<()> {
+    pub fn write_multiple_coils(
+        &self,
+        env: Env,
+        opts: WriteMultipleCoilsOptions<'_>,
+    ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::models::coil::Coils;
 
         let client = self.get_client()?;
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let values = opts.values;
 
-        let qty = opts.values.len() as u16;
-        let mut coils = Coils::new(opts.address, qty)
+        // Build Coils from bool array synchronously
+        let qty = values.len() as u16;
+        let mut coils = Coils::new(address, qty)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
-        for (i, &value) in opts.values.iter().enumerate() {
+        for (i, &value) in values.iter().enumerate() {
             coils
-                .set_value(opts.address + i as u16, value)
+                .set_value(address + i as u16, value)
                 .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         }
 
-        client
-            .write_multiple_coils(self.unit_id, opts.address, &coils)
-            .await
-            .map_err(from_async_error)?;
-        Ok(())
+        let promise = env.spawn_future(async move {
+            let fut = client.write_multiple_coils(unit_id, address, &coils);
+            if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     // ── Discrete inputs ──────────────────────────────────────────────────────
 
     /// Reads discrete inputs (FC02).
-    #[napi]
+    #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "discrete-inputs")]
-    pub async fn read_discrete_inputs(&self, opts: ReadBitsOptions) -> Result<Vec<bool>> {
+    pub fn read_discrete_inputs(
+        &self,
+        env: Env,
+        opts: ReadBitsOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<bool>>> {
         let client = self.get_client()?;
-        let inputs = client
-            .read_discrete_inputs(self.unit_id, opts.address, opts.quantity)
-            .await
-            .map_err(from_async_error)?;
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+        let quantity = opts.quantity;
 
-        let mut result = Vec::with_capacity(opts.quantity as usize);
-        for i in 0..opts.quantity {
-            result.push(inputs.value(opts.address + i).unwrap_or(false));
-        }
-        Ok(result)
+        let promise = env.spawn_future(async move {
+            let fut = client.read_discrete_inputs(unit_id, address, quantity);
+            let inputs = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+
+            let mut result = Vec::with_capacity(quantity as usize);
+            for i in 0..quantity {
+                result.push(inputs.value(address + i).unwrap_or(false));
+            }
+            Ok(result)
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     // ── FIFO ─────────────────────────────────────────────────────────────────
 
     /// Reads FIFO queue (FC24).
-    #[napi]
+    #[napi(ts_return_type = "Promise<FifoQueueResponse>")]
     #[cfg(feature = "fifo")]
-    pub async fn read_fifo_queue(&self, opts: ReadFifoQueueOptions) -> Result<FifoQueueResponse> {
+    pub fn read_fifo_queue(
+        &self,
+        env: Env,
+        opts: ReadFifoQueueOptions<'_>,
+    ) -> Result<PromiseRaw<'static, FifoQueueResponse>> {
         let client = self.get_client()?;
-        let fifo = client
-            .read_fifo_queue(self.unit_id, opts.address)
-            .await
-            .map_err(from_async_error)?;
-        let values = fifo.queue().to_vec();
-        let count = values.len() as u16;
-        Ok(FifoQueueResponse { count, values })
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        let address = opts.address;
+
+        let promise = env.spawn_future(async move {
+            let fut = client.read_fifo_queue(unit_id, address);
+            let fifo = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            let values = fifo.queue().to_vec();
+            let count = values.len() as u16;
+            Ok(FifoQueueResponse { count, values })
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     // ── File record ──────────────────────────────────────────────────────────
 
     /// Reads file records (FC20).
-    #[napi]
+    #[napi(ts_return_type = "Promise<number[][]>")]
     #[cfg(feature = "file-record")]
-    pub async fn read_file_record(&self, opts: ReadFileRecordOptions) -> Result<Vec<Vec<u16>>> {
+    pub fn read_file_record(
+        &self,
+        env: Env,
+        opts: ReadFileRecordOptions<'_>,
+    ) -> Result<PromiseRaw<'static, Vec<Vec<u16>>>> {
         let client = self.get_client()?;
-
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        
+        // Build SubRequest from options
         let mut sub_request = SubRequest::new();
         for req in &opts.requests {
             sub_request
@@ -436,30 +633,48 @@ impl AsyncSerialModbusClient {
                 })?;
         }
 
-        let result = client
-            .read_file_record(self.unit_id, &sub_request)
-            .await
-            .map_err(from_async_error)?;
+        let promise = env.spawn_future(async move {
+            let fut = client.read_file_record(unit_id, &sub_request);
+            let result = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
 
-        let mut output: Vec<Vec<u16>> = Vec::new();
-        for params in result {
-            let words: Vec<u16> = params
-                .record_data
-                .map(|v| v.into_iter().collect())
-                .unwrap_or_default();
-            output.push(words);
-        }
-        Ok(output)
+            // Convert each sub-response to Vec<u16>
+            let mut output: Vec<Vec<u16>> = Vec::new();
+            for params in result {
+                let words: Vec<u16> = params
+                    .record_data
+                    .map(|v| v.into_iter().collect())
+                    .unwrap_or_default();
+                output.push(words);
+            }
+            Ok(output)
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Writes file records (FC21).
-    #[napi]
+    #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "file-record")]
-    pub async fn write_file_record(&self, opts: WriteFileRecordOptions) -> Result<()> {
+    pub fn write_file_record(
+        &self,
+        env: Env,
+        opts: WriteFileRecordOptions<'_>,
+    ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 
         let client = self.get_client()?;
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
 
+        // Build SubRequest with data
         let mut sub_request = SubRequest::new();
         for req in &opts.requests {
             let record_data: heapless::Vec<u16, MAX_PDU_DATA_LEN> =
@@ -478,11 +693,21 @@ impl AsyncSerialModbusClient {
                 })?;
         }
 
-        client
-            .write_file_record(self.unit_id, &sub_request)
-            .await
-            .map_err(from_async_error)?;
-        Ok(())
+        let promise = env.spawn_future(async move {
+            let fut = client.write_file_record(unit_id, &sub_request);
+            if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
+            Ok(())
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
@@ -499,11 +724,17 @@ impl AsyncSerialModbusClient {
     }
 
     /// Sends a diagnostics request (FC08).
-    #[napi]
+    #[napi(ts_return_type = "Promise<DiagnosticsResponse>")]
     #[cfg(feature = "diagnostics")]
-    pub async fn diagnostics(&self, opts: DiagnosticsOptions) -> Result<DiagnosticsResponse> {
+    pub fn diagnostics(
+        &self,
+        env: Env,
+        opts: DiagnosticsOptions<'_>,
+    ) -> Result<PromiseRaw<'static, DiagnosticsResponse>> {
         let client = self.get_client()?;
-
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
+        
         let sub_function = DiagnosticSubFunction::try_from(opts.sub_function).map_err(|_| {
             napi::Error::new(
                 Status::InvalidArg,
@@ -513,28 +744,42 @@ impl AsyncSerialModbusClient {
                 ),
             )
         })?;
+        let data = opts.data;
 
-        let result = client
-            .diagnostics(self.unit_id, sub_function, &opts.data)
-            .await
-            .map_err(from_async_error)?;
+        let promise = env.spawn_future(async move {
+            let fut = client.diagnostics(unit_id, sub_function, &data);
+            let result = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
 
-        Ok(DiagnosticsResponse {
-            sub_function: u16::from(result.sub_function),
-            data: result.data,
-        })
+            Ok(DiagnosticsResponse {
+                sub_function: u16::from(result.sub_function),
+                data: result.data,
+            })
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 
     /// Reads device identification (FC43/MEI14).
-    #[napi]
+    #[napi(ts_return_type = "Promise<DeviceIdentificationResponse>")]
     #[cfg(feature = "diagnostics")]
-    pub async fn read_device_identification(
+    pub fn read_device_identification(
         &self,
-        opts: ReadDeviceIdentificationOptions,
-    ) -> Result<DeviceIdentificationResponse> {
+        env: Env,
+        opts: ReadDeviceIdentificationOptions<'_>,
+    ) -> Result<PromiseRaw<'static, DeviceIdentificationResponse>> {
         use mbus_core::models::diagnostic::ConformityLevel;
 
         let client = self.get_client()?;
+        let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
+        let unit_id = self.unit_id;
 
         let read_device_id_code =
             ReadDeviceIdCode::try_from(opts.read_device_id_code).map_err(|_| {
@@ -543,37 +788,46 @@ impl AsyncSerialModbusClient {
                     format!("Invalid read device ID code: {}", opts.read_device_id_code),
                 )
             })?;
-
         let object_id = ObjectId::from(opts.object_id);
 
-        let result = client
-            .read_device_identification(self.unit_id, read_device_id_code, object_id)
-            .await
-            .map_err(from_async_error)?;
+        let promise = env.spawn_future(async move {
+            let fut = client.read_device_identification(unit_id, read_device_id_code, object_id);
+            let result = if let Some(mut rx) = abort_rx {
+                tokio::select! {
+                    res = fut => { res.map_err(from_async_error)? }
+                    _ = &mut rx => {
+                        return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+                    }
+                }
+            } else {
+                fut.await.map_err(from_async_error)?
+            };
 
-        let objects: Vec<DeviceIdentificationObject> = result
-            .objects()
-            .filter_map(|obj_result| obj_result.ok())
-            .map(|obj| DeviceIdentificationObject {
-                id: u8::from(obj.object_id),
-                value: String::from_utf8_lossy(&obj.value).to_string(),
+            let objects: Vec<DeviceIdentificationObject> = result
+                .objects()
+                .filter_map(|obj_result| obj_result.ok())
+                .map(|obj| DeviceIdentificationObject {
+                    id: u8::from(obj.object_id),
+                    value: String::from_utf8_lossy(&obj.value).to_string(),
+                })
+                .collect();
+
+            let conformity_level: u8 = match result.conformity_level {
+                ConformityLevel::BasicStreamOnly => 0x01,
+                ConformityLevel::RegularStreamOnly => 0x02,
+                ConformityLevel::ExtendedStreamOnly => 0x03,
+                ConformityLevel::BasicStreamAndIndividual => 0x81,
+                ConformityLevel::RegularStreamAndIndividual => 0x82,
+                ConformityLevel::ExtendedStreamAndIndividual => 0x83,
+            };
+
+            Ok(DeviceIdentificationResponse {
+                conformity_level,
+                more_follows: result.more_follows,
+                next_object_id: u8::from(result.next_object_id),
+                objects,
             })
-            .collect();
-
-        let conformity_level: u8 = match result.conformity_level {
-            ConformityLevel::BasicStreamOnly => 0x01,
-            ConformityLevel::RegularStreamOnly => 0x02,
-            ConformityLevel::ExtendedStreamOnly => 0x03,
-            ConformityLevel::BasicStreamAndIndividual => 0x81,
-            ConformityLevel::RegularStreamAndIndividual => 0x82,
-            ConformityLevel::ExtendedStreamAndIndividual => 0x83,
-        };
-
-        Ok(DeviceIdentificationResponse {
-            conformity_level,
-            more_follows: result.more_follows,
-            next_object_id: u8::from(result.next_object_id),
-            objects,
-        })
+        })?;
+        Ok(unsafe { extend_lifetime(promise) })
     }
 }

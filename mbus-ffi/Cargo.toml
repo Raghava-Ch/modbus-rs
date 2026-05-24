@@ -1,6 +1,6 @@
 [package]
 name = "mbus-ffi"
-version = "0.11.0"
+version = "0.12.0"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"
@@ -213,6 +213,7 @@ go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 nodejs = [
     "dep:napi",
     "dep:napi-derive",
+    "dep:serde_json",
     "dep:tokio",
     "dep:mbus-client-async",
     "dep:mbus-server-async",
@@ -226,6 +227,7 @@ nodejs = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "mbus-server-async/server-serial",
     "mbus-gateway/async",
     "mbus-network/async",
     "internal-lock-stubs",
@@ -305,6 +307,7 @@ mbus-server = { workspace = true, optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
@@ -314,8 +317,9 @@ mbus-client-async = { workspace = true, features = ["coils", "registers", "discr
 mbus-server-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
 
 ## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
-napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async"], optional = true }
+napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async", "compat-mode", "serde-json"], optional = true }
 napi-derive = { version = "3", optional = true }
+serde_json = { version = "1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ## mbus-client provides the sync client state machine (used by WASM bindings)
@@ -348,7 +352,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ## In-process AsyncTcpServer used by the .NET binding integration test.
-mbus-async = { version = "0.11.0", path = "../mbus-async", features = ["server-tcp", "registers"] }
+mbus-async = { version = "0.12.0", path = "../mbus-async", features = ["server-tcp", "registers"] }
 anyhow = "1"
 
 [[example]]

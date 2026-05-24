@@ -38,7 +38,7 @@ bindings.
 | 07 | [`07-tcp-server-with-traffic-events.mjs`](./07-tcp-server-with-traffic-events.mjs) | TCP server — traffic counters (build with `nodejs-traffic` for full event stream) |
 | 08 | [`08-tcp-gateway.mjs`](./08-tcp-gateway.mjs) | TCP gateway — route by unit ID across multiple downstream servers |
 | 09 | [`09-serial-rtu-client.mjs`](./09-serial-rtu-client.mjs) | Serial client — RTU mode (requires a serial port — see header) |
-| 10 | [`10-serial-rtu-server.mjs`](./10-serial-rtu-server.mjs) | Serial server — placeholder; not yet exposed in Node bindings (v0.8) |
+| 10 | [`10-serial-rtu-server.mjs`](./10-serial-rtu-server.mjs) | Serial server — RTU mode with simple database & async handlers |
 | 11 | [`11-serial-ascii-client.mjs`](./11-serial-ascii-client.mjs) | Serial client — ASCII mode |
 | 12 | [`12-typescript-client.ts`](./12-typescript-client.ts) | TypeScript example — strongly-typed API |
 

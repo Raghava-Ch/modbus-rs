@@ -45,7 +45,7 @@ This includes client and server support.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",
@@ -57,7 +57,7 @@ modbus-rs = { version = "0.11.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
     "server",
     "serial-rtu",
     "coils",
@@ -71,7 +71,7 @@ modbus-rs = { version = "0.11.0", default-features = false, features = [
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",
