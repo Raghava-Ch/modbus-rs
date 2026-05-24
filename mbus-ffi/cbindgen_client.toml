@@ -11,6 +11,8 @@ typedef struct MbusCoils MbusCoils;
 typedef struct MbusDiscreteInputs MbusDiscreteInputs;
 typedef struct MbusFifoQueue MbusFifoQueue;
 typedef struct MbusRegisters MbusRegisters;
+typedef struct MbusHoldingRegisters MbusHoldingRegisters;
+typedef struct MbusInputRegisters MbusInputRegisters;
 """
 
 [parse]
@@ -21,6 +23,7 @@ item_types = ["functions", "globals", "typedefs", "opaque", "structs", "enums", 
 exclude = [
     # Opaque client model types (declared in after_includes as forward-decls)
     "MbusCoils", "MbusDiscreteInputs", "MbusFifoQueue", "MbusRegisters",
+    "MbusHoldingRegisters", "MbusInputRegisters",
     # Server-only: IDs and constants
     "MbusServerId", "MBUS_INVALID_SERVER_ID",
     # Server-only: core types
