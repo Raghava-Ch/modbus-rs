@@ -47,8 +47,10 @@ use mbus_core::models::discrete_input::DiscreteInputs;
 use mbus_core::models::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{SubRequest, SubRequestParams};
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-use mbus_core::models::register::Registers;
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
 
 use crate::client::command::{ClientRequest, TaskCommand};
 use crate::client::response::ClientResponse;
@@ -301,14 +303,14 @@ impl AsyncClientCore {
 
     /// Reads holding registers (FC 03) from `address` with the given `quantity`.
     ///
-    /// Returns the register values as a [`Registers`] object.
+    /// Returns the register values as a [`HoldingRegisters`] object.
     #[cfg(feature = "holding-registers")]
     pub async fn read_holding_registers(
         &self,
         unit_id: u8,
         address: u16,
         quantity: u16,
-    ) -> Result<Registers, AsyncError> {
+    ) -> Result<HoldingRegisters, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
             .send_request(ClientRequest::ReadHoldingRegisters {
@@ -318,21 +320,21 @@ impl AsyncClientCore {
             })
             .await?
         {
-            ClientResponse::Registers(regs) => Ok(regs),
+            ClientResponse::HoldingRegisters(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
 
     /// Reads input registers (FC 04) from `address` with the given `quantity`.
     ///
-    /// Returns the register values as a [`Registers`] object.
+    /// Returns the register values as an [`InputRegisters`] object.
     #[cfg(feature = "input-registers")]
     pub async fn read_input_registers(
         &self,
         unit_id: u8,
         address: u16,
         quantity: u16,
-    ) -> Result<Registers, AsyncError> {
+    ) -> Result<InputRegisters, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         match self
             .send_request(ClientRequest::ReadInputRegisters {
@@ -342,7 +344,7 @@ impl AsyncClientCore {
             })
             .await?
         {
-            ClientResponse::Registers(regs) => Ok(regs),
+            ClientResponse::InputRegisters(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -395,7 +397,7 @@ impl AsyncClientCore {
             })
             .await?
         {
-            ClientResponse::Registers(regs) => Ok((regs.from_address(), regs.quantity())),
+            ClientResponse::HoldingRegisters(regs) => Ok((regs.from_address(), regs.quantity())),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }
@@ -413,7 +415,7 @@ impl AsyncClientCore {
         read_quantity: u16,
         write_address: u16,
         write_values: &[u16],
-    ) -> Result<Registers, AsyncError> {
+    ) -> Result<HoldingRegisters, AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         let hv =
             heapless::Vec::<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::from_slice(
@@ -430,7 +432,7 @@ impl AsyncClientCore {
             })
             .await?
         {
-            ClientResponse::Registers(regs) => Ok(regs),
+            ClientResponse::HoldingRegisters(regs) => Ok(regs),
             _ => Err(AsyncError::UnexpectedResponseType),
         }
     }

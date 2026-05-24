@@ -15,7 +15,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 
 use super::helpers::{
     async_error_to_py, coils_to_py, discrete_inputs_to_py, enter_runtime, fifo_to_py, get_runtime,
-    registers_to_py,
+    holding_registers_to_py, input_registers_to_py,
 };
 
 // ── shared constructor helper ────────────────────────────────────────────────
@@ -251,7 +251,7 @@ impl TcpClient {
             rt.block_on(self.inner.read_holding_registers(uid, address, quantity))
                 .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        holding_registers_to_py(py, result)
     }
 
     /// Read input registers (FC 04). Returns ``list[int]``.
@@ -268,7 +268,7 @@ impl TcpClient {
             rt.block_on(self.inner.read_input_registers(uid, address, quantity))
                 .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        input_registers_to_py(py, result)
     }
 
     /// Write a single holding register (FC 06). Returns ``(address, value)`` echo.
@@ -343,7 +343,7 @@ impl TcpClient {
             ))
             .map_err(async_error_to_py)
         })?;
-        registers_to_py(py, result)
+        holding_registers_to_py(py, result)
     }
 
     // ── FIFO ─────────────────────────────────────────────────────────────
@@ -663,7 +663,7 @@ impl AsyncTcpClient {
                 .read_holding_registers(uid, address, quantity)
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| holding_registers_to_py(py, regs))
         })
     }
 
@@ -681,7 +681,7 @@ impl AsyncTcpClient {
                 .read_input_registers(uid, address, quantity)
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| input_registers_to_py(py, regs))
         })
     }
 
@@ -759,7 +759,7 @@ impl AsyncTcpClient {
                 )
                 .await
                 .map_err(async_error_to_py)?;
-            Python::attach(|py| registers_to_py(py, regs))
+            Python::attach(|py| holding_registers_to_py(py, regs))
         })
     }
 

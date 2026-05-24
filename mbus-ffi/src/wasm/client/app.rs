@@ -32,7 +32,7 @@ use mbus_client::services::discrete_input::DiscreteInputs;
 use mbus_client::services::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequestParams;
-use mbus_client::services::register::Registers;
+use mbus_client::services::register::{HoldingRegisters, InputRegisters};
 use mbus_core::errors::MbusError;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
@@ -174,7 +174,7 @@ impl RegisterResponse for WasmAppRouter {
         &mut self,
         txn_id: u16,
         _unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         let arr = Uint16Array::from(&registers.values()[..registers.quantity() as usize]);
         self.resolve(txn_id, arr.into());
@@ -194,7 +194,7 @@ impl RegisterResponse for WasmAppRouter {
         &mut self,
         txn_id: u16,
         _unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &InputRegisters,
     ) {
         let arr = Uint16Array::from(&registers.values()[..registers.quantity() as usize]);
         self.resolve(txn_id, arr.into());
@@ -256,7 +256,7 @@ impl RegisterResponse for WasmAppRouter {
         &mut self,
         txn_id: u16,
         _unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         let arr = Uint16Array::from(&registers.values()[..registers.quantity() as usize]);
         self.resolve(txn_id, arr.into());

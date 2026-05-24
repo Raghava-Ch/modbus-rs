@@ -20,11 +20,11 @@ mbus-client-async = "0.9.0"
 ```rust
 use mbus_client_async::AsyncTcpClient;
 
-# async fn demo() -> anyhow::Result<()> {
-let client = AsyncTcpClient::new("127.0.0.1", 502)?;
-client.connect().await?;
-# Ok(())
-# }
+async fn demo() -> anyhow::Result<()> {
+    let client = AsyncTcpClient::new("127.0.0.1", 502)?;
+    client.connect().await?;
+    Ok(())
+}
 ```
 
 Run the included quick-start example:

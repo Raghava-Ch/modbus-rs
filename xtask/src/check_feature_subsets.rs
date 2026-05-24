@@ -139,13 +139,23 @@ static STEPS: &[Step] = &[
         ],
     ),
     Step::check(
-        "client / registers",
+        "client / input-registers",
         &[
             "-p",
             "mbus-client",
             "--no-default-features",
             "--features",
-            "registers",
+            "input-registers",
+        ],
+    ),
+    Step::check(
+        "client / holding-registers",
+        &[
+            "-p",
+            "mbus-client",
+            "--no-default-features",
+            "--features",
+            "holding-registers",
         ],
     ),
     Step::check(

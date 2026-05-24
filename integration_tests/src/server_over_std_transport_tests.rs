@@ -7,7 +7,7 @@ use mbus_server::{
     CoilsModel, HoldingRegistersModel, InputRegistersModel, ServerServices, modbus_app,
 };
 use modbus_rs::{
-    ClientServices, CoilResponse, Coils, MbusError, RegisterResponse, Registers,
+    ClientServices, CoilResponse, Coils, MbusError, RegisterResponse, HoldingRegisters, InputRegisters,
     RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
@@ -173,8 +173,8 @@ impl Transport for AcceptedTcpTransport {
 
 #[derive(Default)]
 struct TestClientApp {
-    holding_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Registers)>>,
-    input_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Registers)>>,
+    holding_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, HoldingRegisters)>>,
+    input_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, InputRegisters)>>,
     coil_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>,
     write_single_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     write_multiple_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
@@ -208,7 +208,7 @@ impl RegisterResponse for TestClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         self.holding_reads
             .borrow_mut()
@@ -219,7 +219,7 @@ impl RegisterResponse for TestClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &InputRegisters,
     ) {
         self.input_reads
             .borrow_mut()
@@ -272,7 +272,7 @@ impl RegisterResponse for TestClientApp {
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _registers: &Registers,
+        _registers: &HoldingRegisters,
     ) {
     }
 

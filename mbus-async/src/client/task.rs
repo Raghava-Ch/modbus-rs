@@ -481,50 +481,50 @@ fn fix_up_response(
         // ── FC03: Read Holding Registers ──────────────────────────────────
         #[cfg(feature = "holding-registers")]
         (
-            R::Registers(raw),
+            R::HoldingRegisters(raw),
             Q::ReadHoldingRegisters {
                 address, quantity, ..
             },
         ) => {
-            use mbus_core::models::register::Registers;
-            Registers::new(*address, *quantity)
+            use mbus_core::models::register::HoldingRegisters;
+            HoldingRegisters::new(*address, *quantity)
                 .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
-                .map(R::Registers)
-                .unwrap_or_else(|_| R::Registers(raw))
+                .map(R::HoldingRegisters)
+                .unwrap_or_else(|_| R::HoldingRegisters(raw))
         }
 
         // ── FC04: Read Input Registers ────────────────────────────────────
         #[cfg(feature = "input-registers")]
         (
-            R::Registers(raw),
+            R::InputRegisters(raw),
             Q::ReadInputRegisters {
                 address, quantity, ..
             },
         ) => {
-            use mbus_core::models::register::Registers;
-            Registers::new(*address, *quantity)
+            use mbus_core::models::register::InputRegisters;
+            InputRegisters::new(*address, *quantity)
                 .and_then(|r| r.with_values(&raw.values()[..*quantity as usize], *quantity))
-                .map(R::Registers)
-                .unwrap_or_else(|_| R::Registers(raw))
+                .map(R::InputRegisters)
+                .unwrap_or_else(|_| R::InputRegisters(raw))
         }
 
         // ── FC17: Read/Write Multiple Registers ───────────────────────────
         #[cfg(feature = "holding-registers")]
         (
-            R::Registers(raw),
+            R::HoldingRegisters(raw),
             Q::ReadWriteMultipleRegisters {
                 read_address,
                 read_quantity,
                 ..
             },
         ) => {
-            use mbus_core::models::register::Registers;
-            Registers::new(*read_address, *read_quantity)
+            use mbus_core::models::register::HoldingRegisters;
+            HoldingRegisters::new(*read_address, *read_quantity)
                 .and_then(|r| {
                     r.with_values(&raw.values()[..*read_quantity as usize], *read_quantity)
                 })
-                .map(R::Registers)
-                .unwrap_or_else(|_| R::Registers(raw))
+                .map(R::HoldingRegisters)
+                .unwrap_or_else(|_| R::HoldingRegisters(raw))
         }
 
         // ── FC18: Read FIFO Queue ─────────────────────────────────────────
