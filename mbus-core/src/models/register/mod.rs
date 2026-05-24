@@ -27,7 +27,7 @@ mod tests {
     fn test_registers_new_success() {
         let from_addr = 100;
         let quantity = 10;
-        let regs = Registers::<20>::new(from_addr, quantity).unwrap();
+        let regs = HoldingRegisters::<20>::new(from_addr, quantity).unwrap();
 
         assert_eq!(regs.from_address(), from_addr);
         assert_eq!(regs.quantity(), quantity);
@@ -38,13 +38,13 @@ mod tests {
     #[test]
     fn test_registers_new_invalid_quantity() {
         // Attempt to create registers with quantity exceeding static capacity N
-        let res = Registers::<5>::new(100, 6);
+        let res = HoldingRegisters::<5>::new(100, 6);
         assert!(matches!(res, Err(MbusError::InvalidQuantity)));
     }
 
     #[test]
     fn test_registers_with_values_success() {
-        let regs = Registers::<10>::new(100, 5).unwrap();
+        let regs = HoldingRegisters::<10>::new(100, 5).unwrap();
         let data = [1, 2, 3, 4, 5];
 
         let regs = regs.with_values(&data, 5).unwrap();
@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_registers_with_values_bounds_error() {
-        let regs = Registers::<10>::new(100, 5).unwrap();
+        let regs = HoldingRegisters::<10>::new(100, 5).unwrap();
         let data = [1, 2, 3, 4, 5, 6];
 
         // Error: length (6) > quantity (5)
@@ -66,7 +66,7 @@ mod tests {
 
     #[test]
     fn test_set_and_get_value_success() {
-        let mut regs = Registers::<10>::new(100, 5).unwrap();
+        let mut regs = HoldingRegisters::<10>::new(100, 5).unwrap();
 
         // Set value at address 102 (index 2)
         regs.set_value(102, 0xABCD).unwrap();
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_set_value_out_of_range() {
-        let mut regs = Registers::<10>::new(100, 5).unwrap();
+        let mut regs = HoldingRegisters::<10>::new(100, 5).unwrap();
 
         // Lower bound check
         assert!(matches!(
@@ -93,14 +93,14 @@ mod tests {
 
     #[test]
     fn test_get_value_out_of_range() {
-        let regs = Registers::<10>::new(100, 5).unwrap();
+        let regs = HoldingRegisters::<10>::new(100, 5).unwrap();
         assert!(matches!(regs.value(105), Err(MbusError::InvalidAddress)));
     }
 
     #[test]
     fn test_default_capacity() {
         // Verify that the default generic N is MAX_REGISTERS_PER_PDU (125)
-        let regs: Registers = Registers::new(0, 125).unwrap();
+        let regs: HoldingRegisters = HoldingRegisters::new(0, 125).unwrap();
         assert_eq!(regs.values().len(), 125);
     }
 }

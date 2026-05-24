@@ -1,6 +1,7 @@
 use heapless::Vec;
 
-use crate::services::register::{Registers, request::ReqPduCompiler, response::ResponseParser};
+use crate::services::register::{request::ReqPduCompiler, response::ResponseParser};
+use mbus_core::models::register::{HoldingRegisters, InputRegisters};
 use mbus_core::{
     data_unit::common::MAX_ADU_FRAME_LEN,
     data_unit::common::{self, Pdu},
@@ -116,12 +117,12 @@ impl ServiceDecompiler {
         pdu: &Pdu,
         expected_quantity: u16,
         from_address: u16,
-    ) -> Result<Registers, MbusError> {
+    ) -> Result<HoldingRegisters, MbusError> {
         if pdu.function_code() != FunctionCode::ReadHoldingRegisters {
             return Err(MbusError::InvalidFunctionCode);
         }
         let values = ResponseParser::parse_read_holding_registers_response(pdu, expected_quantity)?;
-        let registers = Registers::new(from_address, expected_quantity)?
+        let registers = HoldingRegisters::new(from_address, expected_quantity)?
             .with_values(values.as_slice(), values.len() as u16)?;
         Ok(registers)
     }
@@ -131,12 +132,12 @@ impl ServiceDecompiler {
         pdu: &Pdu,
         expected_quantity: u16,
         from_address: u16,
-    ) -> Result<Registers, MbusError> {
+    ) -> Result<InputRegisters, MbusError> {
         if pdu.function_code() != FunctionCode::ReadInputRegisters {
             return Err(MbusError::InvalidFunctionCode);
         }
         let values = ResponseParser::parse_read_input_registers_response(pdu, expected_quantity)?;
-        let registers = Registers::new(from_address, expected_quantity)?
+        let registers = InputRegisters::new(from_address, expected_quantity)?
             .with_values(values.as_slice(), values.len() as u16)?;
         Ok(registers)
     }
@@ -162,13 +163,13 @@ impl ServiceDecompiler {
         pdu: &Pdu,
         expected_quantity: u16,
         from_address: u16,
-    ) -> Result<Registers, MbusError> {
+    ) -> Result<HoldingRegisters, MbusError> {
         if pdu.function_code() != FunctionCode::ReadWriteMultipleRegisters {
             return Err(MbusError::InvalidFunctionCode);
         }
         let values =
             ResponseParser::parse_read_write_multiple_registers_response(pdu, expected_quantity)?;
-        let registers = Registers::new(from_address, expected_quantity)?
+        let registers = HoldingRegisters::new(from_address, expected_quantity)?
             .with_values(values.as_slice(), values.len() as u16)?;
         Ok(registers)
     }

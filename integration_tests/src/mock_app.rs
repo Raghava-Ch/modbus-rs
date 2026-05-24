@@ -1,8 +1,8 @@
 use modbus_rs::{
     CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
     DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse,
-    FileRecordResponse, MAX_DISCRETE_INPUT_BYTES, MbusError, RegisterResponse, Registers,
-    RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
+    FileRecordResponse, HoldingRegisters, InputRegisters, MAX_DISCRETE_INPUT_BYTES, MbusError,
+    RegisterResponse, RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -128,7 +128,7 @@ impl RegisterResponse for MockApp {
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _registers: &Registers,
+        _registers: &HoldingRegisters,
     ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
@@ -137,7 +137,7 @@ impl RegisterResponse for MockApp {
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _registers: &Registers,
+        _registers: &InputRegisters,
     ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
@@ -184,7 +184,7 @@ impl RegisterResponse for MockApp {
         &mut self,
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
-        _registers: &Registers,
+        _registers: &HoldingRegisters,
     ) {
         // For simplicity, we won't implement this in the mock since it's not used in the current tests.
     }
