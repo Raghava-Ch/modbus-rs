@@ -5,6 +5,9 @@
 use mbus_client_async::AsyncError;
 use mbus_core::errors::{ExceptionCode, MbusError};
 use napi::Status;
+use napi::Env;
+use napi::bindgen_prelude::Object;
+use std::sync::Arc;
 
 /// Error code strings for JS-side error handling.
 pub const ERR_MODBUS_EXCEPTION: &str = "MODBUS_EXCEPTION";
@@ -72,4 +75,32 @@ pub fn to_napi_err<E: core::fmt::Debug>(prefix: &str, e: E) -> napi::Error {
 #[allow(dead_code)]
 fn exception_code_to_u8(code: ExceptionCode) -> u8 {
     u8::from(code)
+}
+
+/// Prepares the abort signal listener on the main thread and returns the oneshot receiver.
+pub fn setup_abort_listener(
+    env: &Env,
+    signal: Option<Object>,
+) -> napi::Result<Option<tokio::sync::oneshot::Receiver<()>>> {
+    if let Some(mut signal_obj) = signal {
+        if signal_obj.get::<bool>("aborted")?.unwrap_or(false) {
+            return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+        }
+
+        let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();
+        let abort_tx_mutex = Arc::new(std::sync::Mutex::new(Some(abort_tx)));
+        let abort_tx_clone = abort_tx_mutex.clone();
+
+        let abort_cb = env.create_function_from_closure::<(), (), _>("onabort", move |_ctx| {
+            if let Some(tx) = abort_tx_clone.lock().unwrap().take() {
+                let _ = tx.send(());
+            }
+            Ok(())
+        })?;
+
+        signal_obj.set("onabort", abort_cb)?;
+        Ok(Some(abort_rx))
+    } else {
+        Ok(None)
+    }
 }
