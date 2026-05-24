@@ -1738,7 +1738,7 @@ mod tests {
     use crate::services::file_record::MAX_SUB_REQUESTS_PER_PDU;
     use crate::services::file_record::SubRequest;
     use crate::services::file_record::SubRequestParams;
-    use crate::services::register::Registers;
+    use crate::services::register::{HoldingRegisters, InputRegisters};
     use core::cell::RefCell; // `core::cell::RefCell` is `no_std` compatible
     use core::str::FromStr;
     use heapless::Deque;
@@ -1925,15 +1925,15 @@ mod tests {
         pub received_discrete_input_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16), 10>>,
         pub received_holding_register_responses:
-            RefCell<Vec<(u16, UnitIdOrSlaveAddr, Registers, u16), 10>>,
+            RefCell<Vec<(u16, UnitIdOrSlaveAddr, HoldingRegisters, u16), 10>>,
         pub received_input_register_responses:
-            RefCell<Vec<(u16, UnitIdOrSlaveAddr, Registers, u16), 10>>,
+            RefCell<Vec<(u16, UnitIdOrSlaveAddr, InputRegisters, u16), 10>>,
         pub received_write_single_register_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
         pub received_write_multiple_register_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
         pub received_read_write_multiple_registers_responses:
-            RefCell<Vec<(u16, UnitIdOrSlaveAddr, Registers), 10>>,
+            RefCell<Vec<(u16, UnitIdOrSlaveAddr, HoldingRegisters), 10>>,
         pub received_mask_write_register_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr), 10>>,
         pub received_read_fifo_queue_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, FifoQueue), 10>>,
@@ -2130,7 +2130,7 @@ mod tests {
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
-            registers: &Registers,
+            registers: &HoldingRegisters,
         ) {
             let quantity = registers.quantity();
             self.received_holding_register_responses
@@ -2148,7 +2148,7 @@ mod tests {
         ) {
             // Create a temporary slice to load the single register value
             let values = [value];
-            let registers = Registers::new(address, 1)
+            let registers = InputRegisters::new(address, 1)
                 .unwrap()
                 .with_values(&values, 1)
                 .unwrap();
@@ -2168,7 +2168,7 @@ mod tests {
             // Create a temporary slice to load the single register value
             let data = [value];
             // Initialize Registers with default capacity (MAX_REGISTERS_PER_PDU)
-            let registers = Registers::new(address, 1)
+            let registers = HoldingRegisters::new(address, 1)
                 .unwrap()
                 .with_values(&data, 1)
                 .unwrap();
@@ -2183,7 +2183,7 @@ mod tests {
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
-            registers: &Registers,
+            registers: &InputRegisters,
         ) {
             let quantity = registers.quantity();
             self.received_input_register_responses
@@ -2222,7 +2222,7 @@ mod tests {
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
-            registers: &Registers,
+            registers: &HoldingRegisters,
         ) {
             self.received_read_write_multiple_registers_responses
                 .borrow_mut()
@@ -2251,7 +2251,7 @@ mod tests {
             // Create a temporary slice to load the single register value
             let data = [value];
             // Initialize Registers with default capacity (MAX_REGISTERS_PER_PDU)
-            let registers = Registers::new(address, 1)
+            let registers = HoldingRegisters::new(address, 1)
                 .unwrap()
                 .with_values(&data, 1)
                 .unwrap();
