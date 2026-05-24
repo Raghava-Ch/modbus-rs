@@ -29,13 +29,13 @@ A Modbus client application consists of:
 use modbus_rs::{
     ClientServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport,
     CoilResponse, RegisterResponse, RequestErrorNotifier, TimeKeeper,
-    Coils, Registers, MbusError, UnitIdOrSlaveAddr,
+    Coils, HoldingRegisters, InputRegisters, MbusError, UnitIdOrSlaveAddr,
 };
 
 // Your application state
 struct App {
     latest_coils: Option<Coils>,
-    latest_registers: Option<Registers>,
+    latest_registers: Option<HoldingRegisters>,
 }
 
 // Implement required traits...
@@ -185,12 +185,12 @@ impl CoilResponse for App {
 
 // Registers (FC03, FC04, FC06, FC10)
 impl RegisterResponse for App {
-    fn read_multiple_holding_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, regs: &Registers) {
+    fn read_multiple_holding_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, regs: &HoldingRegisters) {
         for addr in regs.from_address()..regs.from_address() + regs.quantity() {
             println!("Register {}: {}", addr, regs.value(addr).unwrap());
         }
     }
-    fn read_multiple_input_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Registers) {}
+    fn read_multiple_input_registers_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &InputRegisters) {}
     fn read_single_holding_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn read_single_input_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
     fn write_single_register_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
@@ -254,7 +254,7 @@ All response methods (`read_coils_response`, `write_single_register_response`, e
 ```rust
 pub struct App {
     latest_coils: Option<Coils>,
-    latest_registers: Option<Registers>,
+    latest_registers: Option<HoldingRegisters>,
     error_count: u32,
 }
 
@@ -266,7 +266,7 @@ impl CoilResponse for App {
 }
 
 impl RegisterResponse for App {
-    fn read_multiple_holding_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, regs: &Registers) {
+    fn read_multiple_holding_registers_response(&mut self, txn_id: u16, unit_id: UnitIdOrSlaveAddr, regs: &HoldingRegisters) {
         self.latest_registers = Some(regs.clone());
     }
 }

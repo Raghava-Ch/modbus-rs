@@ -2,8 +2,8 @@ use anyhow::Result;
 #[cfg(feature = "traffic")]
 use modbus_rs::TrafficNotifier;
 use modbus_rs::{
-    ClientServices, MbusError, ModbusConfig, ModbusTcpConfig, RegisterResponse, Registers,
-    RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    ClientServices, HoldingRegisters, InputRegisters, MbusError, ModbusConfig, ModbusTcpConfig,
+    RegisterResponse, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 
@@ -17,7 +17,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &InputRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Input Registers (Addr: {}, Qty: {}): {:?}",
@@ -49,7 +49,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read Holding Registers (Addr: {}, Qty: {}): {:?}",
@@ -113,7 +113,7 @@ impl RegisterResponse for ClientApp {
         &mut self,
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
-        registers: &Registers,
+        registers: &HoldingRegisters,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Read/Write Multiple Registers (Read Addr: {}, Qty: {}): {:?}",

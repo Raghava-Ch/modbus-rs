@@ -28,8 +28,10 @@ use super::models::coils::MbusCoils;
 use super::models::discrete_inputs::MbusDiscreteInputs;
 #[cfg(feature = "fifo")]
 use super::models::fifo::MbusFifoQueue;
-#[cfg(feature = "registers")]
-use super::models::registers::MbusRegisters;
+#[cfg(feature = "holding-registers")]
+use super::models::registers::MbusHoldingRegisters;
+#[cfg(feature = "input-registers")]
+use super::models::registers::MbusInputRegisters;
 use crate::c::error::MbusStatusCode;
 
 // ── CApp ──────────────────────────────────────────────────────────────────────
@@ -182,14 +184,14 @@ impl mbus_client::app::RegisterResponse for CApp {
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &mbus_client::services::register::Registers,
+        registers: &mbus_client::services::register::HoldingRegisters,
     ) {
         if let Some(cb) = self.callbacks.on_read_holding_registers {
-            let opaque_registers = MbusRegisters(registers.clone());
+            let opaque_registers = MbusHoldingRegisters(registers.clone());
             let ctx = MbusReadHoldingRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusHoldingRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -206,12 +208,13 @@ impl mbus_client::app::RegisterResponse for CApp {
         _value: u16,
     ) {
         if let Some(cb) = self.callbacks.on_read_holding_registers {
-            let registers = mbus_client::services::register::Registers::new(address, 1).unwrap();
-            let opaque_registers = MbusRegisters(registers);
+            let registers =
+                mbus_client::services::register::HoldingRegisters::new(address, 1).unwrap();
+            let opaque_registers = MbusHoldingRegisters(registers);
             let ctx = MbusReadHoldingRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusHoldingRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -224,14 +227,14 @@ impl mbus_client::app::RegisterResponse for CApp {
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &mbus_client::services::register::Registers,
+        registers: &mbus_client::services::register::InputRegisters,
     ) {
         if let Some(cb) = self.callbacks.on_read_input_registers {
-            let opaque_registers = MbusRegisters(registers.clone());
+            let opaque_registers = MbusInputRegisters(registers.clone());
             let ctx = MbusReadInputRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusInputRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -248,12 +251,13 @@ impl mbus_client::app::RegisterResponse for CApp {
         _value: u16,
     ) {
         if let Some(cb) = self.callbacks.on_read_input_registers {
-            let registers = mbus_client::services::register::Registers::new(address, 1).unwrap();
-            let opaque_registers = MbusRegisters(registers);
+            let registers =
+                mbus_client::services::register::InputRegisters::new(address, 1).unwrap();
+            let opaque_registers = MbusInputRegisters(registers);
             let ctx = MbusReadInputRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusInputRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -308,14 +312,14 @@ impl mbus_client::app::RegisterResponse for CApp {
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
-        registers: &mbus_client::services::register::Registers,
+        registers: &mbus_client::services::register::HoldingRegisters,
     ) {
         if let Some(cb) = self.callbacks.on_read_write_multiple_registers {
-            let opaque_registers = MbusRegisters(registers.clone());
+            let opaque_registers = MbusHoldingRegisters(registers.clone());
             let ctx = MbusReadWriteMultipleRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusHoldingRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -333,12 +337,13 @@ impl mbus_client::app::RegisterResponse for CApp {
     ) {
         // Route single-read responses through the generic holding register callback
         if let Some(cb) = self.callbacks.on_read_holding_registers {
-            let registers = mbus_client::services::register::Registers::new(address, 1).unwrap();
-            let opaque_registers = MbusRegisters(registers);
+            let registers =
+                mbus_client::services::register::HoldingRegisters::new(address, 1).unwrap();
+            let opaque_registers = MbusHoldingRegisters(registers);
             let ctx = MbusReadHoldingRegistersCtx {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
-                registers: &opaque_registers as *const MbusRegisters,
+                registers: &opaque_registers as *const MbusHoldingRegisters,
                 userdata: self.callbacks.userdata,
             };
             unsafe {

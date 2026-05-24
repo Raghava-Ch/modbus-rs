@@ -10,8 +10,10 @@ use super::models::coils::MbusCoils;
 use super::models::discrete_inputs::MbusDiscreteInputs;
 #[cfg(feature = "fifo")]
 use super::models::fifo::MbusFifoQueue;
-#[cfg(feature = "registers")]
-use super::models::registers::MbusRegisters;
+#[cfg(feature = "holding-registers")]
+use super::models::registers::MbusHoldingRegisters;
+#[cfg(feature = "input-registers")]
+use super::models::registers::MbusInputRegisters;
 
 // ── File-record response view type ───────────────────────────────────────────
 
@@ -91,7 +93,7 @@ pub struct MbusReadHoldingRegistersCtx {
     /// Unit / slave ID.
     pub unit_id: u8,
     /// Opaque pointer to registers data.
-    pub registers: *const MbusRegisters,
+    pub registers: *const MbusHoldingRegisters,
     /// User-provided opaque pointer.
     pub userdata: *mut c_void,
 }
@@ -105,7 +107,7 @@ pub struct MbusReadInputRegistersCtx {
     /// Unit / slave ID.
     pub unit_id: u8,
     /// Opaque pointer to registers data.
-    pub registers: *const MbusRegisters,
+    pub registers: *const MbusInputRegisters,
     /// User-provided opaque pointer.
     pub userdata: *mut c_void,
 }
@@ -119,7 +121,7 @@ pub struct MbusReadWriteMultipleRegistersCtx {
     /// Unit / slave ID.
     pub unit_id: u8,
     /// Opaque pointer to registers data.
-    pub registers: *const MbusRegisters,
+    pub registers: *const MbusHoldingRegisters,
     /// User-provided opaque pointer.
     pub userdata: *mut c_void,
 }

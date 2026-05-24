@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Server app code-generation utilities shared by mbus-ffi build.rs and xtask"
+description = "Server app code-generation utilities shared by mbus-ffi build.rs and xtask belongs to modbus-rs project"
 readme = "README.md"
 
 [dependencies]

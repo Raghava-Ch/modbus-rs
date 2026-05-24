@@ -39,8 +39,12 @@ use mbus_core::models::fifo_queue::FifoQueue;
 use mbus_core::models::file_record::{
     FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SubRequestParams,
 };
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-use mbus_core::models::register::Registers;
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
+#[cfg(any(feature = "input-registers", feature = "holding-registers"))]
+use mbus_core::models::register::MAX_REGISTERS_PER_PDU;
 #[cfg(feature = "diagnostics")]
 use mbus_core::{
     data_unit::common::MAX_PDU_DATA_LEN,
@@ -99,15 +103,15 @@ fn decode_pdu(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
         FunctionCode::ReadDiscreteInputs => decode_read_discrete_inputs(pdu),
 
         #[cfg(feature = "holding-registers")]
-        FunctionCode::ReadHoldingRegisters => decode_read_registers(pdu),
+        FunctionCode::ReadHoldingRegisters => decode_read_holding_registers(pdu),
         #[cfg(feature = "input-registers")]
-        FunctionCode::ReadInputRegisters => decode_read_registers(pdu),
+        FunctionCode::ReadInputRegisters => decode_read_input_registers(pdu),
         #[cfg(feature = "holding-registers")]
         FunctionCode::WriteSingleRegister => decode_write_single_register(pdu),
         #[cfg(feature = "holding-registers")]
         FunctionCode::WriteMultipleRegisters => decode_write_multiple_registers(pdu),
         #[cfg(feature = "holding-registers")]
-        FunctionCode::ReadWriteMultipleRegisters => decode_read_registers(pdu),
+        FunctionCode::ReadWriteMultipleRegisters => decode_read_holding_registers(pdu),
         #[cfg(feature = "holding-registers")]
         FunctionCode::MaskWriteRegister => decode_mask_write_register(pdu),
 
@@ -179,21 +183,39 @@ fn decode_read_discrete_inputs(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 
 // ─── Register decoders ────────────────────────────────────────────────────────
 
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-fn decode_read_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
+#[cfg(feature = "holding-registers")]
+fn decode_read_holding_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let bcp = pdu.byte_count_payload()?;
     if bcp.byte_count % 2 != 0 {
         return Err(MbusError::InvalidByteCount);
     }
     let quantity = bcp.byte_count as u16 / 2;
-    let mut registers = Registers::new(0, quantity)?;
+    let mut registers = HoldingRegisters::new(0, quantity)?;
     for (i, chunk) in bcp.payload.chunks(2).enumerate() {
         if chunk.len() == 2 {
             let val = u16::from_be_bytes([chunk[0], chunk[1]]);
             registers.set_value(i as u16, val)?;
         }
     }
-    Ok(ClientResponse::Registers(registers))
+    Ok(ClientResponse::HoldingRegisters(registers))
+}
+
+#[cfg(feature = "input-registers")]
+fn decode_read_input_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
+    let bcp = pdu.byte_count_payload()?;
+    if bcp.byte_count % 2 != 0 {
+        return Err(MbusError::InvalidByteCount);
+    }
+    let quantity = bcp.byte_count as u16 / 2;
+    let mut values = [0u16; MAX_REGISTERS_PER_PDU];
+    for (i, chunk) in bcp.payload.chunks(2).enumerate() {
+        if chunk.len() == 2 && i < values.len() {
+            values[i] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        }
+    }
+    let registers =
+        InputRegisters::new(0, quantity)?.with_values(&values[..quantity as usize], quantity)?;
+    Ok(ClientResponse::InputRegisters(registers))
 }
 
 #[cfg(feature = "holding-registers")]
@@ -208,8 +230,8 @@ fn decode_write_single_register(pdu: &Pdu) -> Result<ClientResponse, MbusError> 
 #[cfg(feature = "holding-registers")]
 fn decode_write_multiple_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fields = pdu.read_window()?;
-    let registers = Registers::new(fields.address, fields.quantity)?;
-    Ok(ClientResponse::Registers(registers))
+    let registers = HoldingRegisters::new(fields.address, fields.quantity)?;
+    Ok(ClientResponse::HoldingRegisters(registers))
 }
 
 #[cfg(feature = "holding-registers")]
