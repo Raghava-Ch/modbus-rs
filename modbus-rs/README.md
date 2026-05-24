@@ -155,7 +155,7 @@ For **embedded / no_std** targets, disable defaults and use the `no-std` conveni
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = ["no-std"] }
+modbus-rs = { version = "0.12.0", default-features = false, features = ["no-std"] }
 ```
 
 This enables the `mbus-client` state machine and all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`) without pulling in any transport. Provide your own `Transport` implementation for your hardware.
@@ -199,7 +199,7 @@ Example: only enable sync client + TCP + coil support:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
   "client",
 	"network-tcp",
   "coils"
@@ -218,10 +218,10 @@ Enable the server runtime with the `server` feature. Sync servers also need a tr
 ```toml
 [dependencies]
 # Sync TCP server
-modbus-rs = { version = "0.11.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.12.0", features = ["server", "network-tcp", "coils", "holding-registers"] }
 
 # Async TCP server
-modbus-rs = { version = "0.11.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
+modbus-rs = { version = "0.12.0", features = ["server", "async", "network-tcp", "coils", "holding-registers"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -300,10 +300,10 @@ Enable the gateway with the `gateway` feature. Choose transport features to matc
 ```toml
 [dependencies]
 # Sync gateway: TCP upstream → RTU downstream
-modbus-rs = { version = "0.11.0", features = ["gateway", "network-tcp", "serial-rtu"] }
+modbus-rs = { version = "0.12.0", features = ["gateway", "network-tcp", "serial-rtu"] }
 
 # Async gateway: TCP upstream → TCP downstream
-modbus-rs = { version = "0.11.0", features = ["gateway", "async", "network-tcp"] }
+modbus-rs = { version = "0.12.0", features = ["gateway", "async", "network-tcp"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -339,7 +339,7 @@ Enable async APIs with the `async` feature and add Tokio:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
 	"async",
 	"network-tcp",
 	"coils"
@@ -368,7 +368,7 @@ Enable traffic observability for raw ADU TX/RX frame callbacks:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
 	"client",
 	"network-tcp",
 	"coils",
@@ -388,7 +388,7 @@ To see output, initialize a logger backend in your application (for example `env
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = ["network-tcp", "logging"] }
+modbus-rs = { version = "0.12.0", default-features = false, features = ["network-tcp", "logging"] }
 env_logger = "0.11"
 ```
 
@@ -405,7 +405,7 @@ modbus-rs = "0.9.0"
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
   "client",
   "network-tcp",
   "registers"
@@ -418,7 +418,7 @@ Use `mbus-ffi` directly for browser/WASM. `modbus-rs` does not re-export the WAS
 
 ```toml
 [dependencies]
-mbus-ffi = { version = "0.11.0", default-features = false, features = ["wasm", "full"] }
+mbus-ffi = { version = "0.12.0", default-features = false, features = ["wasm", "full"] }
 ```
 
 Then use `mbus-ffi` for browser/WASM bindings:

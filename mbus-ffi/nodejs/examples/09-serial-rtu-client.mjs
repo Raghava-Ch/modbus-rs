@@ -38,33 +38,31 @@
 
 import { AsyncSerialModbusClient } from 'modbus-rs';
 
-const PORT = process.env.PORT ?? '/dev/ttyUSB0';
+const PORT = process.env.PORT ?? '/dev/cu.usbserial-A1010CA6';
 
 async function main() {
   const client = await AsyncSerialModbusClient.connectRtu({
     portPath: PORT,
     unitId: 1,
-    baudRate: 19200,
+    baudRate: 115200,
     dataBits: 8,
     stopBits: 1,
-    parity: 'even',
+    parity: 'none',
     requestTimeoutMs: 1000,
-    retryAttempts: 3,
-    backoffStrategy: 'exponential',
-    backoffDelayMs: 100,
   });
 
+  console.log("Connection success");
   try {
     const registers = await client.readHoldingRegisters({
       address: 0,
-      quantity: 10,
+      quantity: 1,
     });
     console.log('Holding registers:', registers);
 
-    const coils = await client.readCoils({ address: 0, quantity: 8 });
+    const coils = await client.readCoils({ address: 0, quantity: 3 });
     console.log('Coils:', coils);
 
-    await client.writeSingleRegister({ address: 0, value: 12345 });
+    await client.writeSingleRegister({ address: 0, value: 1234 });
     console.log('Wrote register');
   } finally {
     await client.close();

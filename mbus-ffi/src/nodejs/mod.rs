@@ -33,9 +33,11 @@ pub mod client_tcp;
 pub mod errors;
 pub mod gateway;
 pub mod runtime;
+pub mod server_serial;
 pub mod server_tcp;
 
 pub use client_serial::*;
 pub use client_tcp::*;
 pub use gateway::*;
+pub use server_serial::*;
 pub use server_tcp::*;
