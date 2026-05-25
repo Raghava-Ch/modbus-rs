@@ -83,7 +83,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmModbusClient } from "../../pkg/mbus_ffi.js";
+    import init, { WasmModbusClient } from "../../wasm/dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {
