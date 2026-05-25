@@ -12,6 +12,15 @@ industrial I/O device with:
   * FIFO queue           (event log — read-only)
   * Exception status     (bit-packed alarm flags)
 
+# Run:
+    # 1. Ensure you are using the virtual environment
+    source .venv/bin/activate
+
+    # 2. Build the python extension natively (without the `full` feature)
+    cd mbus-ffi 
+    maturin develop --features python,python-gateway
+
+    # 3. Run the demo script
 Run with TCP (default):
     python python_server.py
     python python_server.py --host 0.0.0.0 --port 5020 --unit-id 1
@@ -155,13 +164,11 @@ class DeviceState:
             self.coils[address] = value
             log.info("coil[%d] ← %s", address, value)
 
-    def write_coils(self, address: int, count: int, data: bytes):
+    def write_coils(self, address: int, values: list[bool]):
         with self._lock:
-            for i in range(count):
-                byte_idx, bit_idx = divmod(i, 8)
-                if byte_idx < len(data):
-                    self.coils[address + i] = bool((data[byte_idx] >> bit_idx) & 1)
-            log.info("coils[%d..%d] written", address, address + count - 1)
+            for i, val in enumerate(values):
+                self.coils[address + i] = val
+            log.info("coils[%d..%d] written", address, address + len(values) - 1)
 
     def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
         with self._lock:
@@ -176,13 +183,11 @@ class DeviceState:
             self.holding[address] = value
             log.info("holding[%d] ← %d (0x%04X)", address, value, value)
 
-    def write_registers(self, address: int, count: int, data: bytes):
+    def write_registers(self, address: int, values: list[int]):
         with self._lock:
-            for i in range(count):
-                hi = data[i * 2] if i * 2 < len(data) else 0
-                lo = data[i * 2 + 1] if i * 2 + 1 < len(data) else 0
-                self.holding[address + i] = (hi << 8) | lo
-            log.info("holding[%d..%d] written", address, address + count - 1)
+            for i, val in enumerate(values):
+                self.holding[address + i] = val
+            log.info("holding[%d..%d] written", address, address + len(values) - 1)
 
     def read_input_regs(self, address: int, count: int) -> list[int]:
         with self._lock:
@@ -210,8 +215,8 @@ def make_app(state: DeviceState) -> modbus_rs.ModbusApp:
         def handle_write_coil(self, address, value):
             state.write_coil(address, value)
 
-        def handle_write_coils(self, address, count, data):
-            state.write_coils(address, count, bytes(data))
+        def handle_write_coils(self, address, values):
+            state.write_coils(address, values)
 
         def handle_read_discrete_inputs(self, address, count):
             return state.read_discrete_inputs(address, count)
@@ -222,8 +227,8 @@ def make_app(state: DeviceState) -> modbus_rs.ModbusApp:
         def handle_write_register(self, address, value):
             state.write_register(address, value)
 
-        def handle_write_registers(self, address, count, data):
-            state.write_registers(address, count, bytes(data))
+        def handle_write_registers(self, address, values):
+            state.write_registers(address, values)
 
         def handle_read_input_registers(self, address, count):
             return state.read_input_regs(address, count)

@@ -180,9 +180,7 @@ async def main():
 asyncio.run(main())
 ```
 
-> Note: the optional `event_handler=` constructor argument is reserved for
-> future telemetry callbacks. It is currently a forward-compatibility hook and
-> does not yet receive frame events.
+> Note: The optional `event_handler=` constructor argument accepts a `GatewayEventHandler` subclass to receive telemetry callbacks for routing, forwarding, and errors. See [event_handler_demo.py](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/examples/python_gateway/event_handler_demo.py) for a complete example of logging telemetry events.
 
 ## More Docs
 

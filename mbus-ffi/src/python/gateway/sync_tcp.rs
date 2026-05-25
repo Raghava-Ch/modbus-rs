@@ -17,6 +17,7 @@ struct GatewayConfig {
     bind_addr: String,
     downstreams: Vec<(String, u16)>,
     router: PyRouter,
+    event_handler: Option<Arc<Py<GatewayEventHandler>>>,
 }
 
 /// Blocking Modbus TCP→TCP gateway.
@@ -29,8 +30,6 @@ struct GatewayConfig {
 pub struct TcpGateway {
     config: Arc<StdMutex<GatewayConfig>>,
     stop_signal: Arc<Notify>,
-    #[allow(dead_code)]
-    event_handler: Option<Py<GatewayEventHandler>>,
 }
 
 #[pymethods]
@@ -43,9 +42,9 @@ impl TcpGateway {
                 bind_addr: bind_addr.to_owned(),
                 downstreams: Vec::new(),
                 router: PyRouter::new(),
+                event_handler: event_handler.map(Arc::new),
             })),
             stop_signal: Arc::new(Notify::new()),
-            event_handler,
         }
     }
 
@@ -115,12 +114,14 @@ impl TcpGateway {
                         .await
                         .map_err(|e| {
                             PyConnectionError::new_err(format!(
-                                "downstream connect to {host}:{port} failed: {e}"
+                                "downstream connect to {host}:{port} failed: {e:?}"
                             ))
                         })?;
                     downstreams.push(Arc::new(TokioMutex::new(t)));
                 }
-                let handler = Arc::new(TokioMutex::new(mbus_gateway::NoopEventHandler));
+                let handler = Arc::new(TokioMutex::new(super::event_adapter::PyEventAdapter::new(
+                    cfg_snapshot.event_handler.clone(),
+                )));
                 let response_timeout = std::time::Duration::from_secs(1);
                 AsyncTcpGatewayServer::serve_with_shutdown(
                     cfg_snapshot.bind_addr.as_str(),

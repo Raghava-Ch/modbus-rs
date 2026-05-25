@@ -122,8 +122,8 @@ async def write_demo(client: modbus_rs.AsyncTcpClient):
     await client.write_coil(1, not coils[0])
 
     # Mask-write holding[2]: set bit 0, clear bits 4-7
-    addr, a, o = await client.mask_write_register(2, and_mask=0xFF0F, or_mask=0x0001)
-    log.info("mask_write holding[%d]: AND=0xFF0F OR=0x0001", addr)
+    await client.mask_write_register(2, and_mask=0xFF0F, or_mask=0x0001)
+    log.info("mask_write holding[2]: AND=0xFF0F OR=0x0001")
 
 
 # ─── concurrent multi-server demo ────────────────────────────────────────────

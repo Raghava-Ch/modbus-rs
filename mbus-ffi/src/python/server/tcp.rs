@@ -71,7 +71,9 @@ impl AsyncTcpServer {
         let addr = self.bind_addr.clone();
         let unit = UnitIdOrSlaveAddr::new(self.unit_id)
             .map_err(crate::python::errors::mbus_error_to_py)?;
-        let adapter = PythonAppAdapter::new(self.app.clone_ref(py));
+        let asyncio = py.import("asyncio")?;
+        let loop_obj = asyncio.call_method0("get_running_loop")?;
+        let adapter = PythonAppAdapter::new(self.app.clone_ref(py), Some(loop_obj.unbind()));
         let stop_signal = self.stop_signal.clone();
         future_into_py(py, async move {
             InnerAsyncTcpServer::serve_with_shutdown(
@@ -173,7 +175,7 @@ impl TcpServer {
         let addr = self.bind_addr.clone();
         let unit = UnitIdOrSlaveAddr::new(self.unit_id)
             .map_err(crate::python::errors::mbus_error_to_py)?;
-        let adapter = PythonAppAdapter::new(self.app.clone_ref(py));
+        let adapter = PythonAppAdapter::new(self.app.clone_ref(py), None);
         let stop_signal = self.stop_signal.clone();
         py.detach(|| {
             rt.block_on(InnerAsyncTcpServer::serve_with_shutdown(
