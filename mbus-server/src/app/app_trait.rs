@@ -66,40 +66,34 @@ pub enum TrafficDirection {
 /// care about.
 pub trait TrafficNotifier {
     /// Called when a request frame has been received and is about to be dispatched.
-    fn on_tx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
+    #[allow(unused_variables)]
+    fn on_tx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {
     }
 
     /// Called when an incoming request frame is accepted for dispatch.
-    fn on_rx_frame(
-        &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _frame: &[u8],
-    ) {
+    #[allow(unused_variables)]
+    fn on_rx_frame(&mut self, txn_id: u16, unit_id_or_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {
     }
 
     /// Called when sending a response frame failed.
+    #[allow(unused_variables)]
     fn on_tx_error(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 
     /// Called when processing an incoming request frame failed.
+    #[allow(unused_variables)]
     fn on_rx_error(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 }
@@ -114,13 +108,14 @@ pub trait TrafficNotifier {
 /// The default implementation is a no-op.
 pub trait ServerExceptionHandler {
     /// Called whenever the server sends a Modbus exception response to the master.
+    #[allow(unused_variables)]
     fn on_exception(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _function_code: FunctionCode,
-        _exception_code: ExceptionCode,
-        _error: MbusError,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        function_code: FunctionCode,
+        exception_code: ExceptionCode,
+        error: MbusError,
     ) {
     }
 }
@@ -128,6 +123,7 @@ pub trait ServerExceptionHandler {
 /// Handles coil-related requests (FC01, FC05, FC0F).
 pub trait ServerCoilHandler {
     /// Handles a `Read Coils` (FC 0x01) request.
+    #[allow(unused_variables)]
     fn read_coils_request(
         &mut self,
         txn_id: u16,
@@ -136,11 +132,11 @@ pub trait ServerCoilHandler {
         quantity: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Write Single Coil` (FC 0x05) request.
+    #[allow(unused_variables)]
     fn write_single_coil_request(
         &mut self,
         txn_id: u16,
@@ -148,11 +144,11 @@ pub trait ServerCoilHandler {
         address: u16,
         value: bool,
     ) -> Result<(), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, value);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Write Multiple Coils` (FC 0x0F) request.
+    #[allow(unused_variables)]
     fn write_multiple_coils_request(
         &mut self,
         txn_id: u16,
@@ -161,13 +157,6 @@ pub trait ServerCoilHandler {
         quantity: u16,
         values: &[u8],
     ) -> Result<(), MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            starting_address,
-            quantity,
-            values,
-        );
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -175,6 +164,7 @@ pub trait ServerCoilHandler {
 /// Handles discrete input requests (FC02).
 pub trait ServerDiscreteInputHandler {
     /// Handles a `Read Discrete Inputs` (FC 0x02) request.
+    #[allow(unused_variables)]
     fn read_discrete_inputs_request(
         &mut self,
         txn_id: u16,
@@ -183,7 +173,6 @@ pub trait ServerDiscreteInputHandler {
         quantity: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -191,6 +180,7 @@ pub trait ServerDiscreteInputHandler {
 /// Handles holding register requests (FC03, FC06, FC10, FC16, FC17).
 pub trait ServerHoldingRegisterHandler {
     /// Handles a `Read Holding Registers` (FC 0x03) request.
+    #[allow(unused_variables)]
     fn read_multiple_holding_registers_request(
         &mut self,
         txn_id: u16,
@@ -199,11 +189,11 @@ pub trait ServerHoldingRegisterHandler {
         quantity: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Write Single Register` (FC 0x06) request.
+    #[allow(unused_variables)]
     fn write_single_register_request(
         &mut self,
         txn_id: u16,
@@ -211,11 +201,11 @@ pub trait ServerHoldingRegisterHandler {
         address: u16,
         value: u16,
     ) -> Result<(), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, value);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Write Multiple Registers` (FC 0x10) request.
+    #[allow(unused_variables)]
     fn write_multiple_registers_request(
         &mut self,
         txn_id: u16,
@@ -223,11 +213,11 @@ pub trait ServerHoldingRegisterHandler {
         starting_address: u16,
         values: &[u16],
     ) -> Result<(), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, starting_address, values);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Mask Write Register` (FC 0x16) request.
+    #[allow(unused_variables)]
     fn mask_write_register_request(
         &mut self,
         txn_id: u16,
@@ -236,12 +226,11 @@ pub trait ServerHoldingRegisterHandler {
         and_mask: u16,
         or_mask: u16,
     ) -> Result<(), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, and_mask, or_mask);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Read/Write Multiple Registers` (FC 0x17) request.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, unused_variables)]
     fn read_write_multiple_registers_request(
         &mut self,
         txn_id: u16,
@@ -252,15 +241,6 @@ pub trait ServerHoldingRegisterHandler {
         write_values: &[u16],
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            read_address,
-            read_quantity,
-            write_address,
-            write_values,
-            out,
-        );
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -268,6 +248,7 @@ pub trait ServerHoldingRegisterHandler {
 /// Handles input register requests (FC04).
 pub trait ServerInputRegisterHandler {
     /// Handles a `Read Input Registers` (FC 0x04) request.
+    #[allow(unused_variables)]
     fn read_multiple_input_registers_request(
         &mut self,
         txn_id: u16,
@@ -276,7 +257,6 @@ pub trait ServerInputRegisterHandler {
         quantity: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, address, quantity, out);
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -284,6 +264,7 @@ pub trait ServerInputRegisterHandler {
 /// Handles FIFO queue requests (FC18).
 pub trait ServerFifoHandler {
     /// Handles a `Read FIFO Queue` (FC 0x18) request.
+    #[allow(unused_variables)]
     fn read_fifo_queue_request(
         &mut self,
         txn_id: u16,
@@ -291,7 +272,6 @@ pub trait ServerFifoHandler {
         pointer_address: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, pointer_address, out);
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -299,6 +279,7 @@ pub trait ServerFifoHandler {
 /// Handles file record requests (FC14, FC15).
 pub trait ServerFileRecordHandler {
     /// Handles a `Read File Record` (FC 0x14) sub-request.
+    #[allow(unused_variables)]
     fn read_file_record_request(
         &mut self,
         txn_id: u16,
@@ -308,18 +289,11 @@ pub trait ServerFileRecordHandler {
         record_length: u16,
         out: &mut [u8],
     ) -> Result<u8, MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            file_number,
-            record_number,
-            record_length,
-            out,
-        );
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Write File Record` (FC 0x15) sub-request.
+    #[allow(unused_variables)]
     fn write_file_record_request(
         &mut self,
         txn_id: u16,
@@ -329,14 +303,6 @@ pub trait ServerFileRecordHandler {
         record_length: u16,
         record_data: &[u16],
     ) -> Result<(), MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            file_number,
-            record_number,
-            record_length,
-            record_data,
-        );
         Err(MbusError::InvalidFunctionCode)
     }
 }
@@ -344,16 +310,17 @@ pub trait ServerFileRecordHandler {
 /// Handles diagnostics-related requests (FC07, FC08, FC0B, FC0C, FC11, FC2B).
 pub trait ServerDiagnosticsHandler {
     /// Handles a `Read Exception Status` (FC 0x07) request.
+    #[allow(unused_variables)]
     fn read_exception_status_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<u8, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Diagnostics` (FC 0x08) request.
+    #[allow(unused_variables)]
     fn diagnostics_request(
         &mut self,
         txn_id: u16,
@@ -361,43 +328,43 @@ pub trait ServerDiagnosticsHandler {
         sub_function: mbus_core::function_codes::public::DiagnosticSubFunction,
         data: u16,
     ) -> Result<u16, MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, sub_function, data);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Get Comm Event Counter` (FC 0x0B) request.
+    #[allow(unused_variables)]
     fn get_comm_event_counter_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
     ) -> Result<(u16, u16), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Get Comm Event Log` (FC 0x0C) request.
+    #[allow(unused_variables)]
     fn get_comm_event_log_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         out_events: &mut [u8],
     ) -> Result<(u16, u16, u16, u8), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, out_events);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Report Server ID` (FC 0x11) request.
+    #[allow(unused_variables)]
     fn report_server_id_request(
         &mut self,
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         out_server_id: &mut [u8],
     ) -> Result<(u8, u8), MbusError> {
-        let _ = (txn_id, unit_id_or_slave_addr, out_server_id);
         Err(MbusError::InvalidFunctionCode)
     }
 
     /// Handles a `Read Device Identification` (FC 0x2B / MEI 0x0E) request.
+    #[allow(unused_variables)]
     fn read_device_identification_request(
         &mut self,
         txn_id: u16,
@@ -406,13 +373,6 @@ pub trait ServerDiagnosticsHandler {
         start_object_id: u8,
         out: &mut [u8],
     ) -> Result<(u8, u8, bool, u8), MbusError> {
-        let _ = (
-            txn_id,
-            unit_id_or_slave_addr,
-            read_device_id_code,
-            start_object_id,
-            out,
-        );
         Err(MbusError::InvalidFunctionCode)
     }
 }

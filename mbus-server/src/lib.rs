@@ -82,8 +82,8 @@ pub trait CoilMap {
     /// Returns `true` when a single-write FC05 request for `addr` should be
     /// forwarded to the map-level `on_batch_write` hook (qty = 1) if no
     /// individual field hook is registered for that address.
+    #[allow(unused_variables)]
     fn is_batch_notified(addr: u16) -> bool {
-        let _ = addr;
         false
     }
 }
@@ -166,8 +166,8 @@ pub trait HoldingRegisterMap {
     /// Returns `true` when a single-write FC06 request for `addr` should be
     /// forwarded to the map-level `on_batch_write` hook (qty = 1) if no
     /// individual field hook is registered for that address.
+    #[allow(unused_variables)]
     fn is_batch_notified(addr: u16) -> bool {
-        let _ = addr;
         false
     }
 }

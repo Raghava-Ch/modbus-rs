@@ -12,53 +12,44 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 /// the gateway.  All methods default to no-ops; override only what you need.
 pub trait GatewayEventHandler {
     /// A request from `session_id` has been routed to `channel_idx` for `unit`.
-    fn on_forward(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr, channel_idx: usize) {
-        let _ = (session_id, unit, channel_idx);
-    }
+    #[allow(unused_variables)]
+    fn on_forward(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr, channel_idx: usize) {}
 
     /// A response has been returned to the upstream client for `upstream_txn`.
-    fn on_response_returned(&mut self, session_id: u8, upstream_txn: u16) {
-        let _ = (session_id, upstream_txn);
-    }
+    #[allow(unused_variables)]
+    fn on_response_returned(&mut self, session_id: u8, upstream_txn: u16) {}
 
     /// No downstream channel was found for `unit`.
-    fn on_routing_miss(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr) {
-        let _ = (session_id, unit);
-    }
+    #[allow(unused_variables)]
+    fn on_routing_miss(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr) {}
 
     /// The downstream device did not respond within the configured timeout.
-    fn on_downstream_timeout(&mut self, session_id: u8, internal_txn: u16) {
-        let _ = (session_id, internal_txn);
-    }
+    #[allow(unused_variables)]
+    fn on_downstream_timeout(&mut self, session_id: u8, internal_txn: u16) {}
 
     /// The upstream session identified by `session_id` has disconnected.
-    fn on_upstream_disconnect(&mut self, session_id: u8) {
-        let _ = session_id;
-    }
+    #[allow(unused_variables)]
+    fn on_upstream_disconnect(&mut self, session_id: u8) {}
 
     /// Raw bytes received from upstream (requires `traffic` feature).
     #[cfg(feature = "traffic")]
-    fn on_upstream_rx(&mut self, session_id: u8, frame: &[u8]) {
-        let _ = (session_id, frame);
-    }
+    #[allow(unused_variables)]
+    fn on_upstream_rx(&mut self, session_id: u8, frame: &[u8]) {}
 
     /// Raw bytes sent to a downstream channel (requires `traffic` feature).
     #[cfg(feature = "traffic")]
-    fn on_downstream_tx(&mut self, channel_idx: usize, frame: &[u8]) {
-        let _ = (channel_idx, frame);
-    }
+    #[allow(unused_variables)]
+    fn on_downstream_tx(&mut self, channel_idx: usize, frame: &[u8]) {}
 
     /// Raw bytes received from a downstream channel (requires `traffic` feature).
     #[cfg(feature = "traffic")]
-    fn on_downstream_rx(&mut self, session_id: u8, channel_idx: usize, frame: &[u8]) {
-        let _ = (session_id, channel_idx, frame);
-    }
+    #[allow(unused_variables)]
+    fn on_downstream_rx(&mut self, session_id: u8, channel_idx: usize, frame: &[u8]) {}
 
     /// Raw bytes sent to the upstream client (requires `traffic` feature).
     #[cfg(feature = "traffic")]
-    fn on_upstream_tx(&mut self, session_id: u8, frame: &[u8]) {
-        let _ = (session_id, frame);
-    }
+    #[allow(unused_variables)]
+    fn on_upstream_tx(&mut self, session_id: u8, frame: &[u8]) {}
 }
 
 /// A no-op [`GatewayEventHandler`] that silently discards all events.
