@@ -17,27 +17,27 @@ export declare class AsyncSerialModbusClient {
   /** Reconnects the client after a disconnect. */
   reconnect(): Promise<void>
   /** Reads holding registers (FC03). */
-  readHoldingRegisters(opts: ReadRegistersOptions): Promise<Array<number>>
+  readHoldingRegisters(opts: ReadRegistersOptions): Promise<number[]>
   /** Reads input registers (FC04). */
-  readInputRegisters(opts: ReadRegistersOptions): Promise<Array<number>>
+  readInputRegisters(opts: ReadRegistersOptions): Promise<number[]>
   /** Writes a single register (FC06). */
   writeSingleRegister(opts: WriteSingleRegisterOptions): Promise<void>
   /** Writes multiple registers (FC16). */
   writeMultipleRegisters(opts: WriteMultipleRegistersOptions): Promise<void>
   /** Reads and writes multiple registers atomically (FC23). */
-  readWriteMultipleRegisters(opts: ReadWriteMultipleRegistersOptions): Promise<Array<number>>
+  readWriteMultipleRegisters(opts: ReadWriteMultipleRegistersOptions): Promise<number[]>
   /** Reads coils (FC01). */
-  readCoils(opts: ReadBitsOptions): Promise<Array<boolean>>
+  readCoils(opts: ReadBitsOptions): Promise<boolean[]>
   /** Writes a single coil (FC05). */
   writeSingleCoil(opts: WriteSingleCoilOptions): Promise<void>
   /** Writes multiple coils (FC15). */
   writeMultipleCoils(opts: WriteMultipleCoilsOptions): Promise<void>
   /** Reads discrete inputs (FC02). */
-  readDiscreteInputs(opts: ReadBitsOptions): Promise<Array<boolean>>
+  readDiscreteInputs(opts: ReadBitsOptions): Promise<boolean[]>
   /** Reads FIFO queue (FC24). */
   readFifoQueue(opts: ReadFifoQueueOptions): Promise<FifoQueueResponse>
   /** Reads file records (FC20). */
-  readFileRecord(opts: ReadFileRecordOptions): Promise<Array<Array<number>>>
+  readFileRecord(opts: ReadFileRecordOptions): Promise<number[][]>
   /** Writes file records (FC21). */
   writeFileRecord(opts: WriteFileRecordOptions): Promise<void>
   /** Reads exception status (FC07). */
@@ -46,6 +46,16 @@ export declare class AsyncSerialModbusClient {
   diagnostics(opts: DiagnosticsOptions): Promise<DiagnosticsResponse>
   /** Reads device identification (FC43/MEI14). */
   readDeviceIdentification(opts: ReadDeviceIdentificationOptions): Promise<DeviceIdentificationResponse>
+}
+
+/** Async Modbus Serial server supporting RTU and ASCII transports. */
+export declare class AsyncSerialModbusServer {
+  /** Binds and starts a new Serial RTU server. */
+  static bindRtu(opts: SerialServerOptions, handlers: object): AsyncSerialModbusServer
+  /** Binds and starts a new Serial ASCII server. */
+  static bindAscii(opts: SerialServerOptions, handlers: object): AsyncSerialModbusServer
+  /** Stops the server. */
+  shutdown(): Promise<void>
 }
 
 /**
@@ -91,27 +101,27 @@ export declare class AsyncTcpModbusClient {
   /** Reconnects the client after a disconnect. */
   reconnect(): Promise<void>
   /** Reads holding registers (FC03). */
-  readHoldingRegisters(opts: ReadRegistersOptions): Promise<Array<number>>
+  readHoldingRegisters(opts: ReadRegistersOptions): Promise<number[]>
   /** Reads input registers (FC04). */
-  readInputRegisters(opts: ReadRegistersOptions): Promise<Array<number>>
+  readInputRegisters(opts: ReadRegistersOptions): Promise<number[]>
   /** Writes a single register (FC06). */
   writeSingleRegister(opts: WriteSingleRegisterOptions): Promise<void>
   /** Writes multiple registers (FC16). */
   writeMultipleRegisters(opts: WriteMultipleRegistersOptions): Promise<void>
   /** Reads and writes multiple registers atomically (FC23). */
-  readWriteMultipleRegisters(opts: ReadWriteMultipleRegistersOptions): Promise<Array<number>>
+  readWriteMultipleRegisters(opts: ReadWriteMultipleRegistersOptions): Promise<number[]>
   /** Reads coils (FC01). */
-  readCoils(opts: ReadBitsOptions): Promise<Array<boolean>>
+  readCoils(opts: ReadBitsOptions): Promise<boolean[]>
   /** Writes a single coil (FC05). */
   writeSingleCoil(opts: WriteSingleCoilOptions): Promise<void>
   /** Writes multiple coils (FC15). */
   writeMultipleCoils(opts: WriteMultipleCoilsOptions): Promise<void>
   /** Reads discrete inputs (FC02). */
-  readDiscreteInputs(opts: ReadBitsOptions): Promise<Array<boolean>>
+  readDiscreteInputs(opts: ReadBitsOptions): Promise<boolean[]>
   /** Reads FIFO queue (FC24). */
   readFifoQueue(opts: ReadFifoQueueOptions): Promise<FifoQueueResponse>
   /** Reads file records (FC20). */
-  readFileRecord(opts: ReadFileRecordOptions): Promise<Array<Array<number>>>
+  readFileRecord(opts: ReadFileRecordOptions): Promise<number[][]>
   /** Writes file records (FC21). */
   writeFileRecord(opts: WriteFileRecordOptions): Promise<void>
   /** Reads exception status (FC07). */
@@ -166,6 +176,8 @@ export interface DiagnosticsOptions {
   subFunction: number
   /** Data words for the request. */
   data: Array<number>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for diagnostics. */
@@ -241,6 +253,8 @@ export interface ReadBitsOptions {
   address: number
   /** Number of bits to read. */
   quantity: number
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for reading coils. */
@@ -256,6 +270,8 @@ export interface ReadDeviceIdentificationOptions {
   readDeviceIdCode: number
   /** Starting object ID. */
   objectId: number
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for reading discrete inputs. */
@@ -269,6 +285,8 @@ export interface ReadDiscreteInputsRequest {
 export interface ReadFifoQueueOptions {
   /** FIFO pointer address. */
   address: number
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for reading FIFO queue. */
@@ -281,6 +299,8 @@ export interface ReadFifoQueueRequest {
 export interface ReadFileRecordOptions {
   /** Array of sub-requests. */
   requests: Array<FileRecordReadRequest>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for reading holding registers. */
@@ -303,6 +323,8 @@ export interface ReadRegistersOptions {
   address: number
   /** Number of registers to read. */
   quantity: number
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Options for read/write multiple registers (FC23). */
@@ -315,6 +337,8 @@ export interface ReadWriteMultipleRegistersOptions {
   writeAddress: number
   /** Values to write. */
   writeValues: Array<number>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Route entry mapping unit ID to a downstream channel. */
@@ -343,6 +367,30 @@ export interface SerialClientOptions {
   responseTimeoutMs?: number
   /** Per-request timeout in milliseconds. */
   requestTimeoutMs?: number
+}
+
+/** Server bind options for serial port. */
+export interface SerialServerOptions {
+  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). */
+  portPath: string
+  /** Baud rate (e.g., 9600, 19200, 38400, 57600, 115200). */
+  baudRate: number
+  /** Data bits (5, 6, 7, or 8). */
+  dataBits?: number
+  /** Parity ("none", "even", "odd"). */
+  parity?: string
+  /** Stop bits (1 or 2). */
+  stopBits?: number
+  /** Modbus unit ID (1-247). */
+  unitId: number
+  /** Response timeout in milliseconds. */
+  responseTimeoutMs?: number
+}
+
+/** Handler response for diagnostics. */
+export interface ServerDiagnosticsResponse {
+  subFunction: number
+  data: Array<number>
 }
 
 /** Response that may include an exception code. */
@@ -377,6 +425,8 @@ export interface TcpServerOptions {
 export interface WriteFileRecordOptions {
   /** Array of sub-requests. */
   requests: Array<FileRecordWriteRequest>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Options for writing multiple coils. */
@@ -385,6 +435,8 @@ export interface WriteMultipleCoilsOptions {
   address: number
   /** Values to write. */
   values: Array<boolean>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for writing multiple coils. */
@@ -400,6 +452,8 @@ export interface WriteMultipleRegistersOptions {
   address: number
   /** Values to write. */
   values: Array<number>
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for writing multiple registers. */
@@ -415,6 +469,8 @@ export interface WriteSingleCoilOptions {
   address: number
   /** Value to write. */
   value: boolean
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for writing a single coil. */
@@ -430,6 +486,8 @@ export interface WriteSingleRegisterOptions {
   address: number
   /** Value to write. */
   value: number
+  /** Optional abort signal to cancel the request. */
+  signal?: object
 }
 
 /** Handler request for writing a single register. */

@@ -36,7 +36,7 @@ handled by the generic `run_async_session` loop shared with
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.11.0", features = ["ws-server"] }
+mbus-gateway = { version = "0.12.0", features = ["ws-server"] }
 ```
 
 `ws-server` pulls in `tokio-tungstenite` (opt-in; not included in the default
@@ -141,7 +141,7 @@ The downstream can be any `AsyncTransport` — including Tokio async serial.
 Pair `ws-server` with the `serial-rtu` feature:
 
 ```toml
-mbus-gateway = { version = "0.11.0", features = ["ws-server", "serial-rtu"] }
+mbus-gateway = { version = "0.12.0", features = ["ws-server", "serial-rtu"] }
 ```
 
 <!-- validate: skip -->

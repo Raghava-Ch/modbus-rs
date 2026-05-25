@@ -19,7 +19,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-mbus-async = { version = "0.11.0", features = ["network-tcp", "coils", "registers"] }
+mbus-async = { version = "0.12.0", features = ["network-tcp", "coils", "registers"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
     "async", "serial-rtu", "coils", "registers"
 ] }
 tokio = { version = "1", features = ["full"] }
@@ -291,7 +291,7 @@ Enable `traffic` when you need raw frame observability in async apps:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", default-features = false, features = [
+modbus-rs = { version = "0.12.0", default-features = false, features = [
     "async", "traffic", "network-tcp", "coils"
 ] }
 tokio = { version = "1", features = ["full"] }

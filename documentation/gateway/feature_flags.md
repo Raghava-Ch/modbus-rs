@@ -28,7 +28,7 @@ When only `traffic` is enabled (no `async`, no `ws-server`, no `logging`), the c
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.11.0", default-features = false }
+mbus-gateway = { version = "0.12.0", default-features = false }
 ```
 
 This compiles only the sync gateway core:
@@ -40,7 +40,7 @@ This compiles only the sync gateway core:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.11.0", default-features = false, features = ["traffic"] }
+mbus-gateway = { version = "0.12.0", default-features = false, features = ["traffic"] }
 ```
 
 This adds `on_upstream_rx` and `on_downstream_tx` to `GatewayEventHandler` so
@@ -50,7 +50,7 @@ you can capture the raw bytes for debugging or protocol analysis.
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.11.0", features = ["ws-server"] }
+mbus-gateway = { version = "0.12.0", features = ["ws-server"] }
 ```
 
 This adds `AsyncWsGatewayServer` and `WsGatewayConfig` to the public API and
@@ -60,7 +60,7 @@ unchanged — any `AsyncTransport` (TCP, RTU, ASCII) can still be used.
 To bridge WebSocket clients to an async RTU bus, combine both features:
 
 ```toml
-mbus-gateway = { version = "0.11.0", features = ["ws-server", "serial-rtu"] }
+mbus-gateway = { version = "0.12.0", features = ["ws-server", "serial-rtu"] }
 ```
 
 ## `modbus-rs` top-level crate
@@ -69,7 +69,7 @@ The `gateway` feature pulls in `mbus-gateway` with its defaults:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.11.0", features = ["gateway"] }
+modbus-rs = { version = "0.12.0", features = ["gateway"] }
 ```
 
 The re-export is at `modbus_rs::gateway` (i.e. `modbus_rs::gateway::GatewayServices`, etc.).
