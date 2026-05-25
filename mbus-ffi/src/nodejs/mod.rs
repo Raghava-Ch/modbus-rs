@@ -3,10 +3,10 @@
 //! This module provides async, Promise-based bindings to the modbus-rs Rust
 //! libraries for Node.js ≥ 20. It exposes:
 //!
-//! - **TCP client** — [`AsyncTcpModbusClient`] with all standard function codes
-//! - **Serial client** — [`AsyncSerialModbusClient`] for RTU and ASCII transports
-//! - **TCP server** — [`AsyncTcpModbusServer`] with JS callback handlers
-//! - **TCP gateway** — [`AsyncTcpGateway`] with declarative unit-ID routing
+//! - **TCP client** — [`crate::nodejs::client_tcp::AsyncTcpModbusClient`] with all standard function codes
+//! - **Serial client** — [`crate::nodejs::client_serial::AsyncSerialModbusClient`] for RTU and ASCII transports
+//! - **TCP server** — [`crate::nodejs::server_tcp::AsyncTcpModbusServer`] with JS callback handlers
+//! - **TCP gateway** — [`crate::nodejs::gateway::AsyncTcpGateway`] with declarative unit-ID routing
 //!
 //! All operations are async and return JS Promises.
 //!
@@ -33,9 +33,11 @@ pub mod client_tcp;
 pub mod errors;
 pub mod gateway;
 pub mod runtime;
+pub mod server_serial;
 pub mod server_tcp;
 
 pub use client_serial::*;
 pub use client_tcp::*;
 pub use gateway::*;
+pub use server_serial::*;
 pub use server_tcp::*;

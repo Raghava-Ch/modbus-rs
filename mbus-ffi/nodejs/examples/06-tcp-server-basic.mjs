@@ -24,6 +24,7 @@ async function main() {
     {
       host: '0.0.0.0',
       port: 5502,
+      unitId: 1,
     },
     {
       // Read Coils (FC01)

@@ -38,7 +38,6 @@ temp
 **.aiexclude
 .vscode
 .wasm-pack-cache
-mbus-ffi/pkg
 mbus-ffi/include
 .cargo/*
 !.cargo/config.toml

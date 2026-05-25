@@ -1,0 +1,52 @@
+{
+  "name": "modbus-rs-wasm",
+  "version": "0.12.0",
+  "description": "Modbus TCP/RTU/ASCII client & server for the browser, powered by Rust + WebAssembly",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/bundler/modbus-rs.js",
+      "require": "./dist/bundler/modbus-rs.js",
+      "browser": "./dist/web/modbus-rs.js",
+      "types": "./dist/bundler/modbus-rs.d.ts"
+    }
+  },
+  "main": "dist/bundler/modbus-rs.js",
+  "module": "dist/bundler/modbus-rs.js",
+  "types": "dist/bundler/modbus-rs.d.ts",
+  "files": [
+    "dist/web/modbus-rs.js",
+    "dist/web/modbus-rs.d.ts",
+    "dist/web/modbus-rs_bg.wasm",
+    "dist/bundler/modbus-rs.js",
+    "dist/bundler/modbus-rs.d.ts",
+    "dist/bundler/modbus-rs_bg.wasm",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:web": "wasm-pack build ../. --target web --out-name modbus-rs --out-dir wasm/dist/web --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics",
+    "build:bundler": "wasm-pack build ../. --target bundler --out-name modbus-rs --out-dir wasm/dist/bundler --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics",
+    "build": "npm run build:web && npm run build:bundler && rm -f dist/web/.gitignore dist/bundler/.gitignore dist/web/package.json dist/bundler/package.json dist/web/README.md dist/bundler/README.md",
+    "test": "wasm-pack test --headless --chrome ../. --test wasm_e2e --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics"
+  },
+  "keywords": [
+    "modbus",
+    "wasm",
+    "webassembly",
+    "websocket",
+    "web-serial",
+    "modbus-tcp",
+    "modbus-rtu",
+    "scada",
+    "plc",
+    "industrial",
+    "browser"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raghava-Ch/modbus-rs.git"
+  },
+  "author": "Raghava-Ch",
+  "license": "GPL-3.0-only"
+}

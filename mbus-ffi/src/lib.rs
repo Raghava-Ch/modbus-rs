@@ -85,4 +85,5 @@ pub mod go;
 
 #[cfg(all(feature = "nodejs", not(target_arch = "wasm32")))]
 #[allow(missing_docs)]
+/// cbindgen:ignore
 pub mod nodejs;
