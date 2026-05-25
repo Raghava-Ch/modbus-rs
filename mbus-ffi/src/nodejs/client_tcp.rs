@@ -22,7 +22,6 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
     unsafe { std::mem::transmute(p) }
 }
 
-
 // ── Option structs ───────────────────────────────────────────────────────────
 
 /// Connection options for the TCP client.
@@ -584,8 +583,8 @@ impl AsyncTcpModbusClient {
 
         // Build Coils from bool array synchronously
         let qty = values.len() as u16;
-        let mut coils = Coils::new(address, qty)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        let mut coils =
+            Coils::new(address, qty).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         for (i, &value) in values.iter().enumerate() {
             coils
@@ -695,7 +694,7 @@ impl AsyncTcpModbusClient {
         let client = self.get_client()?;
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
-        
+
         // Build SubRequest from options
         let mut sub_request = SubRequest::new();
         for req in &opts.requests {
@@ -807,7 +806,7 @@ impl AsyncTcpModbusClient {
         let client = self.get_client()?;
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
-        
+
         let sub_function = DiagnosticSubFunction::try_from(opts.sub_function).map_err(|_| {
             napi::Error::new(
                 Status::InvalidArg,

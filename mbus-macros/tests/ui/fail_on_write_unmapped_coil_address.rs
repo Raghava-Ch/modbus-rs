@@ -20,10 +20,14 @@ pub trait HoldingRegisterMap {
     const WORD_COUNT: usize;
     const HAS_BATCH_NOTIFIED_FIELDS: bool = false;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError>;
-    fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError>;
-    fn write_many(&mut self, _address: u16, _values: &[u16]) -> Result<(), errors::MbusError>;
-    fn is_batch_notified(_addr: u16) -> bool {
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError>;
+    #[allow(unused_variables)]
+    fn write_single(&mut self, address: u16, value: u16) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
+    fn write_many(&mut self, address: u16, values: &[u16]) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
+    fn is_batch_notified(addr: u16) -> bool {
         false
     }
 }
@@ -33,7 +37,8 @@ pub trait InputRegisterMap {
     const ADDR_MAX: u16;
     const WORD_COUNT: usize;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError>;
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError>;
 }
 
 pub trait CoilMap {
@@ -42,16 +47,20 @@ pub trait CoilMap {
     const BIT_COUNT: usize;
     const HAS_BATCH_NOTIFIED_FIELDS: bool = false;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError>;
-    fn write_single(&mut self, _address: u16, _value: bool) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError>;
+    #[allow(unused_variables)]
+    fn write_single(&mut self, address: u16, value: bool) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
     fn write_many_from_packed(
         &mut self,
-        _address: u16,
-        _quantity: u16,
-        _values: &[u8],
-        _packed_bit_offset: usize,
+        address: u16,
+        quantity: u16,
+        values: &[u8],
+        packed_bit_offset: usize,
     ) -> Result<(), errors::MbusError>;
-    fn is_batch_notified(_addr: u16) -> bool {
+    #[allow(unused_variables)]
+    fn is_batch_notified(addr: u16) -> bool {
         false
     }
 }
@@ -92,7 +101,8 @@ struct App {
 }
 
 impl App {
-    fn on_run_enable(&mut self, _address: u16, _old: bool, _new: bool) -> Result<(), errors::MbusError> {
+    #[allow(unused_variables)]
+    fn on_run_enable(&mut self, address: u16, old: bool, new: bool) -> Result<(), errors::MbusError> {
         Ok(())
     }
 }

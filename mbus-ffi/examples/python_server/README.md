@@ -37,6 +37,8 @@ maturin develop --features python,full
 > **Note:** Use `python3` (not `python`; on macOS, `python` often defaults to Python 2.7).
 > Scripts have built-in venv auto-discovery, so no activation needed.
 
+### Synchronous Server (Thread-backed Simulation)
+
 **TCP server (default — port 5020):**
 ```bash
 python3 python_server.py
@@ -55,6 +57,25 @@ python3 python_server.py --mode serial --port /dev/ttyUSB0 --baud 9600
 **ASCII serial server:**
 ```bash
 python3 python_server.py --mode serial --port /dev/ttyUSB0 --baud 9600 --serial-mode ascii
+```
+
+### Asynchronous Server (async/await handlers & Native asyncio simulation)
+
+The `python_async_server.py` implements modern non-blocking `async def handle_*` methods in the ModbusApp class. This is perfect for calling async databases, calling external APIs, or executing non-blocking I/O.
+
+**TCP server (default — port 5020):**
+```bash
+python3 python_async_server.py
+```
+
+**TCP server on a custom host/port:**
+```bash
+python3 python_async_server.py --host 0.0.0.0 --port 502 --unit-id 1
+```
+
+**RTU serial server:**
+```bash
+python3 python_async_server.py --mode serial --port /dev/ttyUSB0 --baud 9600
 ```
 
 Stop with **Ctrl-C**.

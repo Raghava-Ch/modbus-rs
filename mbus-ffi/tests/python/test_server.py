@@ -36,12 +36,9 @@ class EchoApp(modbus_rs.ModbusApp):
     def handle_write_coil(self, address, value):
         self._coils[address] = value
 
-    def handle_write_coils(self, address, count, data):
-        for i in range(count):
-            byte_idx = i // 8
-            bit_idx = i % 8
-            if byte_idx < len(data):
-                self._coils[address + i] = bool((data[byte_idx] >> bit_idx) & 1)
+    def handle_write_coils(self, address, values):
+        for i, val in enumerate(values):
+            self._coils[address + i] = val
 
     def handle_read_discrete_inputs(self, address, count):
         return self._coils[address : address + count]
@@ -52,11 +49,9 @@ class EchoApp(modbus_rs.ModbusApp):
     def handle_write_register(self, address, value):
         self._holding[address] = value
 
-    def handle_write_registers(self, address, count, data):
-        for i in range(count):
-            hi = data[i * 2] if i * 2 < len(data) else 0
-            lo = data[i * 2 + 1] if i * 2 + 1 < len(data) else 0
-            self._holding[address + i] = (hi << 8) | lo
+    def handle_write_registers(self, address, values):
+        for i, val in enumerate(values):
+            self._holding[address + i] = val
 
     def handle_read_input_registers(self, address, count):
         return self._input[address : address + count]
@@ -345,6 +340,80 @@ class TestDispatcherExceptionMapping:
         # IllegalDataAddress = 0x02
         assert len(exc.value.args) >= 2
         assert exc.value.args[1] == 0x02
+
+
+class AsyncEchoApp(modbus_rs.ModbusApp):
+    """Async Modbus application that implements async def handlers."""
+
+    def __init__(self):
+        super().__init__()
+        self._coils = [False] * 256
+        self._holding = [0] * 256
+
+    async def handle_read_coils(self, address, count):
+        await asyncio.sleep(0.01)
+        return self._coils[address : address + count]
+
+    async def handle_write_coil(self, address, value):
+        await asyncio.sleep(0.01)
+        self._coils[address] = value
+
+    async def handle_read_holding_registers(self, address, count):
+        await asyncio.sleep(0.01)
+        return self._holding[address : address + count]
+
+    async def handle_write_register(self, address, value):
+        await asyncio.sleep(0.01)
+        self._holding[address] = value
+
+
+@pytest.fixture()
+def async_server_port():
+    """Start an AsyncTcpServer using AsyncEchoApp in a background thread; yield its port."""
+    port = _free_port()
+    app = AsyncEchoApp()
+    loop = asyncio.new_event_loop()
+    ready = threading.Event()
+
+    async def _run():
+        server = modbus_rs.AsyncTcpServer("127.0.0.1", app, port=port, unit_id=1)
+        ready.set()
+        try:
+            await server.serve_forever()
+        except Exception:
+            pass
+
+    def _thread():
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_run())
+
+    t = threading.Thread(target=_thread, daemon=True)
+    t.start()
+    ready.wait(timeout=3.0)
+    time.sleep(0.1)
+    yield port
+
+
+class TestAsyncHandlersIntegration:
+    def test_async_read_holding_registers(self, async_server_port):
+        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
+            client.connect()
+            regs = client.read_holding_registers(0, 5)
+        assert regs == [0, 0, 0, 0, 0]
+
+    def test_async_write_then_read_register(self, async_server_port):
+        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
+            client.connect()
+            client.write_register(10, 0xABCD)
+            regs = client.read_holding_registers(10, 1)
+        assert regs == [0xABCD]
+
+    def test_async_write_coil_and_read_back(self, async_server_port):
+        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
+            client.connect()
+            client.write_coil(5, True)
+            coils = client.read_coils(5, 1)
+        assert coils == [True]
 
 
 # ---------------------------------------------------------------------------
