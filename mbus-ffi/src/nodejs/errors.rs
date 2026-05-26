@@ -4,8 +4,8 @@
 
 use mbus_client_async::AsyncError;
 use mbus_core::errors::{ExceptionCode, MbusError};
-use napi::Status;
 use napi::Env;
+use napi::Status;
 use napi::bindgen_prelude::Object;
 use std::sync::Arc;
 
@@ -84,7 +84,10 @@ pub fn setup_abort_listener(
 ) -> napi::Result<Option<tokio::sync::oneshot::Receiver<()>>> {
     if let Some(mut signal_obj) = signal {
         if signal_obj.get::<bool>("aborted")?.unwrap_or(false) {
-            return Err(napi::Error::new(Status::Cancelled, "The operation was aborted."));
+            return Err(napi::Error::new(
+                Status::Cancelled,
+                "The operation was aborted.",
+            ));
         }
 
         let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();

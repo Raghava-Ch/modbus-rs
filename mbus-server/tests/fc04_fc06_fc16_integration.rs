@@ -60,10 +60,11 @@ impl ServerFileRecordHandler for RegisterApp {}
 impl ServerDiagnosticsHandler for RegisterApp {}
 
 impl ServerInputRegisterHandler for RegisterApp {
+    #[allow(unused_variables)]
     fn read_multiple_input_registers_request(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         out: &mut [u8],
@@ -85,21 +86,22 @@ impl ServerInputRegisterHandler for RegisterApp {
 }
 
 impl ServerHoldingRegisterHandler for RegisterApp {
+    #[allow(unused_variables)]
     fn read_multiple_holding_registers_request(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-        _address: u16,
-        _quantity: u16,
-        _out: &mut [u8],
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        address: u16,
+        quantity: u16,
+        out: &mut [u8],
     ) -> Result<u8, MbusError> {
         Err(MbusError::InvalidFunctionCode)
     }
-
+    #[allow(unused_variables)]
     fn write_single_register_request(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
         value: u16,
     ) -> Result<(), MbusError> {
@@ -112,10 +114,11 @@ impl ServerHoldingRegisterHandler for RegisterApp {
         }
     }
 
+    #[allow(unused_variables)]
     fn write_multiple_registers_request(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         starting_address: u16,
         values: &[u16],
     ) -> Result<(), MbusError> {
@@ -129,10 +132,11 @@ impl ServerHoldingRegisterHandler for RegisterApp {
         }
     }
 
+    #[allow(unused_variables)]
     fn mask_write_register_request(
         &mut self,
-        _txn_id: u16,
-        _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+        txn_id: u16,
+        unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
         and_mask: u16,
         or_mask: u16,

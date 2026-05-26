@@ -2074,11 +2074,12 @@ mod tests {
 
     #[cfg(feature = "traffic")]
     impl crate::app::TrafficNotifier for MockApp {
+        #[allow(unused_variables)]
         fn on_tx_frame(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
-            _frame_bytes: &[u8],
+            frame_bytes: &[u8],
         ) {
             self.traffic_events
                 .borrow_mut()
@@ -2086,11 +2087,12 @@ mod tests {
                 .unwrap();
         }
 
+        #[allow(unused_variables)]
         fn on_rx_frame(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
-            _frame_bytes: &[u8],
+            frame_bytes: &[u8],
         ) {
             self.traffic_events
                 .borrow_mut()
@@ -2098,12 +2100,13 @@ mod tests {
                 .unwrap();
         }
 
+        #[allow(unused_variables)]
         fn on_tx_error(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             error: MbusError,
-            _frame_bytes: &[u8],
+            frame_bytes: &[u8],
         ) {
             self.traffic_error_events
                 .borrow_mut()
@@ -2111,12 +2114,13 @@ mod tests {
                 .unwrap();
         }
 
+        #[allow(unused_variables)]
         fn on_rx_error(
             &mut self,
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             error: MbusError,
-            _frame_bytes: &[u8],
+            frame_bytes: &[u8],
         ) {
             self.traffic_error_events
                 .borrow_mut()
@@ -2316,47 +2320,65 @@ mod tests {
                 .unwrap();
         }
 
+        #[allow(unused_variables)]
         fn encapsulated_interface_transport_response(
             &mut self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: EncapsulatedInterfaceType,
-            _: &[u8],
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            mei_type: EncapsulatedInterfaceType,
+            data: &[u8],
         ) {
         }
 
+        #[allow(unused_variables)]
         fn diagnostics_response(
             &mut self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: DiagnosticSubFunction,
-            _: &[u16],
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            sub_function: DiagnosticSubFunction,
+            data: &[u16],
         ) {
         }
 
+        #[allow(unused_variables)]
         fn get_comm_event_counter_response(
             &mut self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: u16,
-            _: u16,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            status: u16,
+            event_count: u16,
         ) {
         }
 
+        #[allow(unused_variables)]
         fn get_comm_event_log_response(
             &mut self,
-            _: u16,
-            _: UnitIdOrSlaveAddr,
-            _: u16,
-            _: u16,
-            _: u16,
-            _: &[u8],
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            status: u16,
+            event_count: u16,
+            message_count: u16,
+            events: &[u8],
         ) {
         }
 
-        fn read_exception_status_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u8) {}
+        #[allow(unused_variables)]
+        fn read_exception_status_response(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            status: u8,
+        ) {
+        }
 
-        fn report_server_id_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &[u8]) {}
+        #[allow(unused_variables)]
+        fn report_server_id_response(
+            &mut self,
+            txn_id: u16,
+            unit_id_slave_addr: UnitIdOrSlaveAddr,
+            data: &[u8],
+        ) {
+        }
     }
 
     impl TimeKeeper for MockApp {

@@ -299,7 +299,9 @@ unsafe impl Sync for JsHandlerAdapter {}
 #[cfg(feature = "traffic")]
 impl mbus_server_async::AsyncServerTrafficNotifier for JsHandlerAdapter {}
 
-fn pack_bits(bits: &[bool]) -> heapless::Vec<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }> {
+fn pack_bits(
+    bits: &[bool],
+) -> heapless::Vec<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }> {
     let mut packed = heapless::Vec::new();
     for chunk in bits.chunks(8) {
         let mut byte: u8 = 0;
@@ -317,7 +319,12 @@ impl AsyncAppHandler for JsHandlerAdapter {
     async fn handle(&mut self, req: ModbusRequest) -> ModbusResponse {
         match req {
             #[cfg(feature = "coils")]
-            ModbusRequest::ReadCoils { address, count, unit, .. } => {
+            ModbusRequest::ReadCoils {
+                address,
+                count,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_read_coils {
                     let js_req = ReadCoilsRequest {
                         unit_id: u8::from(unit),
@@ -327,26 +334,51 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_bool_vec_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::ReadCoils, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::ReadCoils, e)
+                                }
                                 HandlerReturn::Data(bits) => {
                                     if bits.len() == count as usize {
-                                        ModbusResponse::packed_bits(FunctionCode::ReadCoils, &pack_bits(&bits))
+                                        ModbusResponse::packed_bits(
+                                            FunctionCode::ReadCoils,
+                                            &pack_bits(&bits),
+                                        )
                                     } else {
-                                        ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::IllegalDataAddress)
+                                        ModbusResponse::exception(
+                                            FunctionCode::ReadCoils,
+                                            ExceptionCode::IllegalDataAddress,
+                                        )
                                     }
                                 }
-                                HandlerReturn::Void => ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::ServerDeviceFailure),
+                                HandlerReturn::Void => ModbusResponse::exception(
+                                    FunctionCode::ReadCoils,
+                                    ExceptionCode::ServerDeviceFailure,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::ReadCoils,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::ReadCoils,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::IllegalFunction)
+                    ModbusResponse::exception(
+                        FunctionCode::ReadCoils,
+                        ExceptionCode::IllegalFunction,
+                    )
                 }
             }
             #[cfg(feature = "coils")]
-            ModbusRequest::WriteSingleCoil { address, value, unit, .. } => {
+            ModbusRequest::WriteSingleCoil {
+                address,
+                value,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_write_single_coil {
                     let js_req = WriteSingleCoilRequest {
                         unit_id: u8::from(unit),
@@ -356,19 +388,33 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_write_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::WriteSingleCoil, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::WriteSingleCoil, e)
+                                }
                                 _ => ModbusResponse::echo_coil(address, value),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::WriteSingleCoil, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::WriteSingleCoil,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::WriteSingleCoil, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::WriteSingleCoil,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
                     ModbusResponse::echo_coil(address, value)
                 }
             }
             #[cfg(feature = "coils")]
-            ModbusRequest::WriteMultipleCoils { address, count, data, unit, .. } => {
+            ModbusRequest::WriteMultipleCoils {
+                address,
+                count,
+                data,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_write_multiple_coils {
                     let mut values = Vec::with_capacity(count as usize);
                     for i in 0..count {
@@ -388,19 +434,40 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_write_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::WriteMultipleCoils, e),
-                                _ => ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleCoils, address, count),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::WriteMultipleCoils, e)
+                                }
+                                _ => ModbusResponse::echo_multi_write(
+                                    FunctionCode::WriteMultipleCoils,
+                                    address,
+                                    count,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::WriteMultipleCoils, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::WriteMultipleCoils,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::WriteMultipleCoils, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::WriteMultipleCoils,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleCoils, address, count)
+                    ModbusResponse::echo_multi_write(
+                        FunctionCode::WriteMultipleCoils,
+                        address,
+                        count,
+                    )
                 }
             }
             #[cfg(feature = "discrete-inputs")]
-            ModbusRequest::ReadDiscreteInputs { address, count, unit, .. } => {
+            ModbusRequest::ReadDiscreteInputs {
+                address,
+                count,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_read_discrete_inputs {
                     let js_req = ReadDiscreteInputsRequest {
                         unit_id: u8::from(unit),
@@ -410,26 +477,51 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_bool_vec_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, e)
+                                }
                                 HandlerReturn::Data(bits) => {
                                     if bits.len() == count as usize {
-                                        ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &pack_bits(&bits))
+                                        ModbusResponse::packed_bits(
+                                            FunctionCode::ReadDiscreteInputs,
+                                            &pack_bits(&bits),
+                                        )
                                     } else {
-                                        ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::IllegalDataAddress)
+                                        ModbusResponse::exception(
+                                            FunctionCode::ReadDiscreteInputs,
+                                            ExceptionCode::IllegalDataAddress,
+                                        )
                                     }
                                 }
-                                HandlerReturn::Void => ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::ServerDeviceFailure),
+                                HandlerReturn::Void => ModbusResponse::exception(
+                                    FunctionCode::ReadDiscreteInputs,
+                                    ExceptionCode::ServerDeviceFailure,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::ReadDiscreteInputs,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::ReadDiscreteInputs,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::exception(FunctionCode::ReadDiscreteInputs, ExceptionCode::IllegalFunction)
+                    ModbusResponse::exception(
+                        FunctionCode::ReadDiscreteInputs,
+                        ExceptionCode::IllegalFunction,
+                    )
                 }
             }
             #[cfg(feature = "registers")]
-            ModbusRequest::ReadHoldingRegisters { address, count, unit, .. } => {
+            ModbusRequest::ReadHoldingRegisters {
+                address,
+                count,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_read_holding_registers {
                     let js_req = ReadHoldingRegistersRequest {
                         unit_id: u8::from(unit),
@@ -439,26 +531,51 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_u16_vec_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, e)
+                                }
                                 HandlerReturn::Data(regs) => {
                                     if regs.len() == count as usize {
-                                        ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &regs)
+                                        ModbusResponse::registers(
+                                            FunctionCode::ReadHoldingRegisters,
+                                            &regs,
+                                        )
                                     } else {
-                                        ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::IllegalDataAddress)
+                                        ModbusResponse::exception(
+                                            FunctionCode::ReadHoldingRegisters,
+                                            ExceptionCode::IllegalDataAddress,
+                                        )
                                     }
                                 }
-                                HandlerReturn::Void => ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::ServerDeviceFailure),
+                                HandlerReturn::Void => ModbusResponse::exception(
+                                    FunctionCode::ReadHoldingRegisters,
+                                    ExceptionCode::ServerDeviceFailure,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::ReadHoldingRegisters,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::ReadHoldingRegisters,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::exception(FunctionCode::ReadHoldingRegisters, ExceptionCode::IllegalFunction)
+                    ModbusResponse::exception(
+                        FunctionCode::ReadHoldingRegisters,
+                        ExceptionCode::IllegalFunction,
+                    )
                 }
             }
             #[cfg(feature = "registers")]
-            ModbusRequest::ReadInputRegisters { address, count, unit, .. } => {
+            ModbusRequest::ReadInputRegisters {
+                address,
+                count,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_read_input_registers {
                     let js_req = ReadInputRegistersRequest {
                         unit_id: u8::from(unit),
@@ -468,26 +585,51 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_u16_vec_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::ReadInputRegisters, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::ReadInputRegisters, e)
+                                }
                                 HandlerReturn::Data(regs) => {
                                     if regs.len() == count as usize {
-                                        ModbusResponse::registers(FunctionCode::ReadInputRegisters, &regs)
+                                        ModbusResponse::registers(
+                                            FunctionCode::ReadInputRegisters,
+                                            &regs,
+                                        )
                                     } else {
-                                        ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::IllegalDataAddress)
+                                        ModbusResponse::exception(
+                                            FunctionCode::ReadInputRegisters,
+                                            ExceptionCode::IllegalDataAddress,
+                                        )
                                     }
                                 }
-                                HandlerReturn::Void => ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::ServerDeviceFailure),
+                                HandlerReturn::Void => ModbusResponse::exception(
+                                    FunctionCode::ReadInputRegisters,
+                                    ExceptionCode::ServerDeviceFailure,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::ReadInputRegisters,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::ReadInputRegisters,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::exception(FunctionCode::ReadInputRegisters, ExceptionCode::IllegalFunction)
+                    ModbusResponse::exception(
+                        FunctionCode::ReadInputRegisters,
+                        ExceptionCode::IllegalFunction,
+                    )
                 }
             }
             #[cfg(feature = "registers")]
-            ModbusRequest::WriteSingleRegister { address, value, unit, .. } => {
+            ModbusRequest::WriteSingleRegister {
+                address,
+                value,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_write_single_register {
                     let js_req = WriteSingleRegisterRequest {
                         unit_id: u8::from(unit),
@@ -497,19 +639,33 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_write_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::WriteSingleRegister, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::WriteSingleRegister, e)
+                                }
                                 _ => ModbusResponse::echo_register(address, value),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::WriteSingleRegister, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::WriteSingleRegister,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::WriteSingleRegister, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::WriteSingleRegister,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
                     ModbusResponse::echo_register(address, value)
                 }
             }
             #[cfg(feature = "registers")]
-            ModbusRequest::WriteMultipleRegisters { address, count, data, unit, .. } => {
+            ModbusRequest::WriteMultipleRegisters {
+                address,
+                count,
+                data,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_write_multiple_registers {
                     let mut values = Vec::with_capacity(count as usize);
                     for i in 0..count {
@@ -526,15 +682,32 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_write_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::WriteMultipleRegisters, e),
-                                _ => ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count),
+                                HandlerReturn::Exception(e) => ModbusResponse::exception(
+                                    FunctionCode::WriteMultipleRegisters,
+                                    e,
+                                ),
+                                _ => ModbusResponse::echo_multi_write(
+                                    FunctionCode::WriteMultipleRegisters,
+                                    address,
+                                    count,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::WriteMultipleRegisters, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::WriteMultipleRegisters,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::WriteMultipleRegisters, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::WriteMultipleRegisters,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count)
+                    ModbusResponse::echo_multi_write(
+                        FunctionCode::WriteMultipleRegisters,
+                        address,
+                        count,
+                    )
                 }
             }
             #[cfg(feature = "registers")]
@@ -548,7 +721,11 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 ExceptionCode::IllegalFunction,
             ),
             #[cfg(feature = "fifo")]
-            ModbusRequest::ReadFifoQueue { pointer_address, unit, .. } => {
+            ModbusRequest::ReadFifoQueue {
+                pointer_address,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_read_fifo_queue {
                     let js_req = ReadFifoQueueRequest {
                         unit_id: u8::from(unit),
@@ -557,34 +734,61 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_u16_vec_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::ReadFifoQueue, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::ReadFifoQueue, e)
+                                }
                                 HandlerReturn::Data(values) => {
                                     if values.len() <= 31 {
                                         let fifo_count = values.len() as u16;
-                                        let mut payload = heapless::Vec::<u8, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }>::new();
-                                        let _ = payload.extend_from_slice(&fifo_count.to_be_bytes());
+                                        let mut payload = heapless::Vec::<
+                                            u8,
+                                            { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                                        >::new(
+                                        );
+                                        let _ =
+                                            payload.extend_from_slice(&fifo_count.to_be_bytes());
                                         for v in &values {
                                             let _ = payload.extend_from_slice(&v.to_be_bytes());
                                         }
                                         ModbusResponse::fifo_response(&payload)
                                     } else {
-                                        ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::IllegalDataAddress)
+                                        ModbusResponse::exception(
+                                            FunctionCode::ReadFifoQueue,
+                                            ExceptionCode::IllegalDataAddress,
+                                        )
                                     }
                                 }
-                                HandlerReturn::Void => ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::ServerDeviceFailure),
+                                HandlerReturn::Void => ModbusResponse::exception(
+                                    FunctionCode::ReadFifoQueue,
+                                    ExceptionCode::ServerDeviceFailure,
+                                ),
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::ReadFifoQueue,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::ReadFifoQueue,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
-                    ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::IllegalFunction)
+                    ModbusResponse::exception(
+                        FunctionCode::ReadFifoQueue,
+                        ExceptionCode::IllegalFunction,
+                    )
                 }
             }
             #[cfg(feature = "diagnostics")]
             ModbusRequest::ReadExceptionStatus { .. } => ModbusResponse::read_exception_status(0),
             #[cfg(feature = "diagnostics")]
-            ModbusRequest::Diagnostics { sub_function, data, unit, .. } => {
+            ModbusRequest::Diagnostics {
+                sub_function,
+                data,
+                unit,
+                ..
+            } => {
                 if let Some(handler) = &self.on_diagnostics {
                     let js_req = DiagnosticsRequest {
                         unit_id: u8::from(unit),
@@ -594,16 +798,26 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     match handler.call_async(js_req).await {
                         Ok(promise) => match promise.await {
                             Ok(val) => match parse_diagnostics_return(val) {
-                                HandlerReturn::Exception(e) => ModbusResponse::exception(FunctionCode::Diagnostics, e),
+                                HandlerReturn::Exception(e) => {
+                                    ModbusResponse::exception(FunctionCode::Diagnostics, e)
+                                }
                                 HandlerReturn::Data(res) => {
                                     let resp_data = res.data.first().copied().unwrap_or(0);
                                     ModbusResponse::diagnostics_echo(res.sub_function, resp_data)
                                 }
-                                HandlerReturn::Void => ModbusResponse::diagnostics_echo(sub_function, data),
+                                HandlerReturn::Void => {
+                                    ModbusResponse::diagnostics_echo(sub_function, data)
+                                }
                             },
-                            Err(_) => ModbusResponse::exception(FunctionCode::Diagnostics, ExceptionCode::ServerDeviceFailure),
+                            Err(_) => ModbusResponse::exception(
+                                FunctionCode::Diagnostics,
+                                ExceptionCode::ServerDeviceFailure,
+                            ),
                         },
-                        Err(_) => ModbusResponse::exception(FunctionCode::Diagnostics, ExceptionCode::ServerDeviceFailure),
+                        Err(_) => ModbusResponse::exception(
+                            FunctionCode::Diagnostics,
+                            ExceptionCode::ServerDeviceFailure,
+                        ),
                     }
                 } else {
                     ModbusResponse::diagnostics_echo(sub_function, data)
@@ -650,8 +864,7 @@ pub fn build_adapter(env: &Env, handlers: &Object) -> Result<JsHandlerAdapter> {
 
     macro_rules! get_handler {
         ($name:expr, $req_type:ty) => {
-            wrapped.get::<JsHandler<$req_type>>($name)?
-                .map(Arc::new)
+            wrapped.get::<JsHandler<$req_type>>($name)?.map(Arc::new)
         };
     }
 
@@ -665,13 +878,19 @@ pub fn build_adapter(env: &Env, handlers: &Object) -> Result<JsHandlerAdapter> {
         #[cfg(feature = "discrete-inputs")]
         on_read_discrete_inputs: get_handler!("onReadDiscreteInputs", ReadDiscreteInputsRequest),
         #[cfg(feature = "registers")]
-        on_read_holding_registers: get_handler!("onReadHoldingRegisters", ReadHoldingRegistersRequest),
+        on_read_holding_registers: get_handler!(
+            "onReadHoldingRegisters",
+            ReadHoldingRegistersRequest
+        ),
         #[cfg(feature = "registers")]
         on_read_input_registers: get_handler!("onReadInputRegisters", ReadInputRegistersRequest),
         #[cfg(feature = "registers")]
         on_write_single_register: get_handler!("onWriteSingleRegister", WriteSingleRegisterRequest),
         #[cfg(feature = "registers")]
-        on_write_multiple_registers: get_handler!("onWriteMultipleRegisters", WriteMultipleRegistersRequest),
+        on_write_multiple_registers: get_handler!(
+            "onWriteMultipleRegisters",
+            WriteMultipleRegistersRequest
+        ),
         #[cfg(feature = "fifo")]
         on_read_fifo_queue: get_handler!("onReadFifoQueue", ReadFifoQueueRequest),
         #[cfg(feature = "diagnostics")]
@@ -730,7 +949,11 @@ impl AsyncTcpModbusServer {
     /// @param handlers - Object containing handler functions for each Modbus operation.
     /// @returns A running server instance.
     #[napi(factory)]
-    pub fn bind(env: Env, opts: TcpServerOptions, handlers: Object) -> Result<AsyncTcpModbusServer> {
+    pub fn bind(
+        env: Env,
+        opts: TcpServerOptions,
+        handlers: Object,
+    ) -> Result<AsyncTcpModbusServer> {
         let unit = UnitIdOrSlaveAddr::new(opts.unit_id)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 

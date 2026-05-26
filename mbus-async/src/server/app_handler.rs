@@ -864,28 +864,32 @@ pub trait AsyncServerTrafficNotifier {
     ///
     /// Note: `txn_id` is `0` for malformed frames where the header could not be
     /// parsed.  In the normal dispatch path it reflects the actual MBAP transaction ID.
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
+    #[allow(unused_variables)]
+    fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called after a response frame is successfully transmitted.
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
+    #[allow(unused_variables)]
+    fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called when transmitting a response frame fails.
+    #[allow(unused_variables)]
     fn on_tx_error(
         &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 
     /// Called when an incoming frame cannot be parsed (framing / CRC error).
+    #[allow(unused_variables)]
     fn on_rx_error(
         &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 }
@@ -945,12 +949,13 @@ pub trait AsyncAppHandler: AsyncAppRequirements {
     /// (e.g. unknown function code → `IllegalFunction`).
     ///
     /// Default implementation is a no-op.
+    #[allow(unused_variables)]
     fn on_exception(
         &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _function_code: FunctionCode,
-        _exception_code: ExceptionCode,
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        function_code: FunctionCode,
+        exception_code: ExceptionCode,
     ) {
     }
 }
