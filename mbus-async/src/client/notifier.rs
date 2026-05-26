@@ -48,28 +48,32 @@ use tokio::sync::Mutex;
 /// [`AsyncClientCore`]: crate::client::client_core::AsyncClientCore
 pub trait AsyncClientTrafficNotifier {
     /// Called after a request frame is successfully sent to the device.
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
+    #[allow(unused_variables)]
+    fn on_tx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called after a complete response frame is received from the device.
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit: UnitIdOrSlaveAddr, _frame: &[u8]) {}
+    #[allow(unused_variables)]
+    fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called when transmitting a request frame fails.
+    #[allow(unused_variables)]
     fn on_tx_error(
         &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 
     /// Called when receiving or parsing a response frame fails.
+    #[allow(unused_variables)]
     fn on_rx_error(
         &mut self,
-        _txn_id: u16,
-        _unit: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 }

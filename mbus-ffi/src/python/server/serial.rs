@@ -175,7 +175,9 @@ impl AsyncSerialServer {
         )?;
         let unit = UnitIdOrSlaveAddr::new(self.unit_id)
             .map_err(crate::python::errors::mbus_error_to_py)?;
-        let adapter = PythonAppAdapter::new(self.app.clone_ref(py));
+        let asyncio = py.import("asyncio")?;
+        let loop_obj = asyncio.call_method0("get_running_loop")?;
+        let adapter = PythonAppAdapter::new(self.app.clone_ref(py), Some(loop_obj.unbind()));
         let mode = self.mode;
         let stop_signal = self.stop_signal.clone();
         future_into_py(py, async move {
@@ -303,7 +305,7 @@ impl SerialServer {
         )?;
         let unit = UnitIdOrSlaveAddr::new(self.unit_id)
             .map_err(crate::python::errors::mbus_error_to_py)?;
-        let adapter = PythonAppAdapter::new(self.app.clone_ref(py));
+        let adapter = PythonAppAdapter::new(self.app.clone_ref(py), None);
         let mode = self.mode;
         py.detach(|| {
             rt.block_on(async move {

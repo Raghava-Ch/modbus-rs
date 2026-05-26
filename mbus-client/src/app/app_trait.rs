@@ -106,30 +106,32 @@ pub enum TrafficDirection {
 /// are never forced to implement it.
 pub trait TrafficNotifier {
     /// Called when a request frame is sent.
-    fn on_tx_frame(&mut self, _txn_id: u16, _unit_id_slave_addr: UnitIdOrSlaveAddr, _frame: &[u8]) {
-    }
+    #[allow(unused_variables)]
+    fn on_tx_frame(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called when a response frame is received.
-    fn on_rx_frame(&mut self, _txn_id: u16, _unit_id_slave_addr: UnitIdOrSlaveAddr, _frame: &[u8]) {
-    }
+    #[allow(unused_variables)]
+    fn on_rx_frame(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr, frame: &[u8]) {}
 
     /// Called when sending a request frame failed.
+    #[allow(unused_variables)]
     fn on_tx_error(
         &mut self,
-        _txn_id: u16,
-        _unit_id_slave_addr: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 
     /// Called when processing/receiving a response frame failed.
+    #[allow(unused_variables)]
     fn on_rx_error(
         &mut self,
-        _txn_id: u16,
-        _unit_id_slave_addr: UnitIdOrSlaveAddr,
-        _error: MbusError,
-        _frame: &[u8],
+        txn_id: u16,
+        unit_id_slave_addr: UnitIdOrSlaveAddr,
+        error: MbusError,
+        frame: &[u8],
     ) {
     }
 }

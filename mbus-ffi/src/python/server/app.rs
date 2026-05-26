@@ -55,12 +55,12 @@ impl ModbusApp {
         )))
     }
 
-    /// Handle FC0F Write Multiple Coils. ``data`` is the packed coil bytes.
-    #[pyo3(signature = (address, count, data))]
-    fn handle_write_coils(&self, address: u16, count: u16, data: &[u8]) -> PyResult<()> {
+    /// Handle FC0F Write Multiple Coils. ``values`` is a list of booleans.
+    #[pyo3(signature = (address, values))]
+    fn handle_write_coils(&self, address: u16, values: Vec<bool>) -> PyResult<()> {
         Err(PyNotImplementedError::new_err(format!(
-            "handle_write_coils(address={address}, count={count}, data=<{} bytes>) not implemented",
-            data.len()
+            "handle_write_coils(address={address}, values=<{} items>) not implemented",
+            values.len()
         )))
     }
 
@@ -100,12 +100,12 @@ impl ModbusApp {
         )))
     }
 
-    /// Handle FC10 Write Multiple Registers. ``data`` is big-endian 2-bytes/reg.
-    #[pyo3(signature = (address, count, data))]
-    fn handle_write_registers(&self, address: u16, count: u16, data: &[u8]) -> PyResult<()> {
+    /// Handle FC10 Write Multiple Registers. ``values`` is a list of holding registers.
+    #[pyo3(signature = (address, values))]
+    fn handle_write_registers(&self, address: u16, values: Vec<u16>) -> PyResult<()> {
         Err(PyNotImplementedError::new_err(format!(
-            "handle_write_registers(address={address}, count={count}, data=<{} bytes>) not implemented",
-            data.len()
+            "handle_write_registers(address={address}, values=<{} items>) not implemented",
+            values.len()
         )))
     }
 
@@ -123,17 +123,16 @@ impl ModbusApp {
     }
 
     /// Handle FC17 Read/Write Multiple Registers.
-    /// ``data`` is the write data (big-endian, 2 bytes/reg). Returns ``list[int]``.
-    #[pyo3(signature = (read_address, read_count, write_address, write_count, data))]
+    /// ``write_values`` is a list of holding registers to write. Returns ``list[int]``.
+    #[pyo3(signature = (read_address, read_count, write_address, write_values))]
     fn handle_read_write_registers(
         &self,
         read_address: u16,
         read_count: u16,
         write_address: u16,
-        write_count: u16,
-        data: &[u8],
+        write_values: Vec<u16>,
     ) -> PyResult<Vec<u16>> {
-        let _ = (read_address, read_count, write_address, write_count, data);
+        let _ = (read_address, read_count, write_address, write_values);
         Err(PyNotImplementedError::new_err(
             "handle_read_write_registers not implemented",
         ))
@@ -207,16 +206,17 @@ impl ModbusApp {
 // ── Rust adapter implementing AsyncAppHandler ────────────────────────────────
 
 /// Wraps a Python `ModbusApp` subclass and implements `AsyncAppHandler`.
-/// All calls are synchronous Python dispatch; the returned future is `ready`.
 #[derive(Clone)]
 pub struct PythonAppAdapter {
     pub app: Arc<Py<ModbusApp>>,
+    pub event_loop: Option<Arc<Py<PyAny>>>,
 }
 
 impl PythonAppAdapter {
-    pub fn new(py_app: Py<ModbusApp>) -> Self {
+    pub fn new(py_app: Py<ModbusApp>, event_loop: Option<Py<PyAny>>) -> Self {
         Self {
             app: Arc::new(py_app),
+            event_loop: event_loop.map(Arc::new),
         }
     }
 }
@@ -230,7 +230,8 @@ impl mbus_server_async::AsyncServerTrafficNotifier for PythonAppAdapter {}
 impl AsyncAppHandler for PythonAppAdapter {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
         let app = self.app.clone();
-        async move { Python::attach(|py| dispatch_request(py, app.as_ref(), req)) }
+        let event_loop = self.event_loop.clone();
+        async move { dispatch_request(app, event_loop, req).await }
     }
 
     fn on_exception(
@@ -278,45 +279,96 @@ fn invalid_function_for_fc_byte(fc_byte: u8) -> ModbusResponse {
     ModbusResponse::exception_raw(fc_byte, ExceptionCode::IllegalFunction)
 }
 
-fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> ModbusResponse {
+async fn eval_python_call_global<F>(
+    event_loop: Option<Arc<Py<PyAny>>>,
+    call: F,
+) -> PyResult<Py<PyAny>>
+where
+    F: for<'py> FnOnce(Python<'py>) -> PyResult<Bound<'py, PyAny>>,
+{
+    let (is_awaitable, obj) = Python::attach(|py| {
+        let val = call(py)?;
+        let is_await = val.hasattr("__await__").unwrap_or(false);
+        Ok::<_, PyErr>((is_await, val.unbind()))
+    })?;
+
+    if is_awaitable {
+        let loop_obj = event_loop.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "Async handlers are only supported when running within an active asyncio event loop."
+            )
+        })?;
+        let fut = Python::attach(|py| {
+            let loop_bound = loop_obj.bind(py);
+            let locals = pyo3_async_runtimes::TaskLocals::new(loop_bound.clone());
+            pyo3_async_runtimes::into_future_with_locals(&locals, obj.bind(py).clone())
+        })?;
+        let res = fut.await?;
+        Ok(res)
+    } else {
+        Ok(obj)
+    }
+}
+
+async fn dispatch_request(
+    app: Arc<Py<ModbusApp>>,
+    event_loop: Option<Arc<Py<PyAny>>>,
+    req: ModbusRequest,
+) -> ModbusResponse {
+    macro_rules! eval_python_call {
+        ($call:expr) => {
+            eval_python_call_global(event_loop.clone(), $call)
+        };
+    }
+
     match req {
         // FC01 — Read Coils
         #[cfg(feature = "coils")]
         ModbusRequest::ReadCoils { address, count, .. } => {
-            let result = app.call_method1(py, "handle_read_coils", (address, count));
-            match result.and_then(|v| v.extract::<Vec<bool>>(py)) {
-                Ok(bits) if bits.len() == count as usize => {
-                    let mut packed = heapless::Vec::<
-                        u8,
-                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
-                    >::new();
-                    for chunk in bits.chunks(8) {
-                        let mut byte: u8 = 0;
-                        for (i, &b) in chunk.iter().enumerate() {
-                            if b {
-                                byte |= 1 << i;
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_read_coils", (address, count))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<bool>>()) {
+                    Ok(bits) if bits.len() == count as usize => {
+                        let mut packed = heapless::Vec::<
+                            u8,
+                            { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                        >::new();
+                        for chunk in bits.chunks(8) {
+                            let mut byte: u8 = 0;
+                            for (i, &b) in chunk.iter().enumerate() {
+                                if b {
+                                    byte |= 1 << i;
+                                }
                             }
+                            let _ = packed.push(byte);
                         }
-                        let _ = packed.push(byte);
+                        ModbusResponse::packed_bits(FunctionCode::ReadCoils, &packed)
                     }
-                    ModbusResponse::packed_bits(FunctionCode::ReadCoils, &packed)
-                }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadCoils,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadCoils, e),
-            }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadCoils,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadCoils, e),
+                },
+            )
         }
 
         // FC05 — Write Single Coil
         #[cfg(feature = "coils")]
         ModbusRequest::WriteSingleCoil { address, value, .. } => {
-            let result = app.call_method1(py, "handle_write_coil", (address, value));
-            match result {
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_write_coil", (address, value))
+            })
+            .await;
+            Python::attach(|py| match result {
                 Ok(_) => ModbusResponse::echo_coil(address, value),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteSingleCoil, e),
-            }
+            })
         }
 
         // FC0F — Write Multiple Coils
@@ -327,87 +379,123 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             data,
             ..
         } => {
-            let result =
-                app.call_method1(py, "handle_write_coils", (address, count, data.as_slice()));
-            match result {
+            let mut values = Vec::with_capacity(count as usize);
+            for i in 0..count {
+                let byte_idx = (i / 8) as usize;
+                let bit_idx = i % 8;
+                let val = if byte_idx < data.len() {
+                    (data[byte_idx] & (1 << bit_idx)) != 0
+                } else {
+                    false
+                };
+                values.push(val);
+            }
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_write_coils", (address, values))
+            })
+            .await;
+            Python::attach(|py| match result {
                 Ok(_) => ModbusResponse::echo_multi_write(
                     FunctionCode::WriteMultipleCoils,
                     address,
                     count,
                 ),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteMultipleCoils, e),
-            }
+            })
         }
 
         // FC02 — Read Discrete Inputs
         #[cfg(feature = "discrete-inputs")]
         ModbusRequest::ReadDiscreteInputs { address, count, .. } => {
-            let result = app.call_method1(py, "handle_read_discrete_inputs", (address, count));
-            match result.and_then(|v| v.extract::<Vec<bool>>(py)) {
-                Ok(bits) if bits.len() == count as usize => {
-                    let mut packed = heapless::Vec::<
-                        u8,
-                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
-                    >::new();
-                    for chunk in bits.chunks(8) {
-                        let mut byte: u8 = 0;
-                        for (i, &b) in chunk.iter().enumerate() {
-                            if b {
-                                byte |= 1 << i;
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_read_discrete_inputs", (address, count))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<bool>>()) {
+                    Ok(bits) if bits.len() == count as usize => {
+                        let mut packed = heapless::Vec::<
+                            u8,
+                            { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                        >::new();
+                        for chunk in bits.chunks(8) {
+                            let mut byte: u8 = 0;
+                            for (i, &b) in chunk.iter().enumerate() {
+                                if b {
+                                    byte |= 1 << i;
+                                }
                             }
+                            let _ = packed.push(byte);
                         }
-                        let _ = packed.push(byte);
+                        ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &packed)
                     }
-                    ModbusResponse::packed_bits(FunctionCode::ReadDiscreteInputs, &packed)
-                }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadDiscreteInputs,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadDiscreteInputs, e),
-            }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadDiscreteInputs,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadDiscreteInputs, e),
+                },
+            )
         }
 
         // FC03 — Read Holding Registers
         #[cfg(feature = "registers")]
         ModbusRequest::ReadHoldingRegisters { address, count, .. } => {
-            let result = app.call_method1(py, "handle_read_holding_registers", (address, count));
-            match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
-                Ok(regs) if regs.len() == count as usize => {
-                    ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &regs)
-                }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadHoldingRegisters,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadHoldingRegisters, e),
-            }
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_read_holding_registers", (address, count))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u16>>()) {
+                    Ok(regs) if regs.len() == count as usize => {
+                        ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &regs)
+                    }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadHoldingRegisters,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadHoldingRegisters, e),
+                },
+            )
         }
 
         // FC04 — Read Input Registers
         #[cfg(feature = "registers")]
         ModbusRequest::ReadInputRegisters { address, count, .. } => {
-            let result = app.call_method1(py, "handle_read_input_registers", (address, count));
-            match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
-                Ok(regs) if regs.len() == count as usize => {
-                    ModbusResponse::registers(FunctionCode::ReadInputRegisters, &regs)
-                }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadInputRegisters,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadInputRegisters, e),
-            }
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_read_input_registers", (address, count))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u16>>()) {
+                    Ok(regs) if regs.len() == count as usize => {
+                        ModbusResponse::registers(FunctionCode::ReadInputRegisters, &regs)
+                    }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadInputRegisters,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadInputRegisters, e),
+                },
+            )
         }
 
         // FC06 — Write Single Register
         #[cfg(feature = "registers")]
         ModbusRequest::WriteSingleRegister { address, value, .. } => {
-            let result = app.call_method1(py, "handle_write_register", (address, value));
-            match result {
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_write_register", (address, value))
+            })
+            .await;
+            Python::attach(|py| match result {
                 Ok(_) => ModbusResponse::echo_register(address, value),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteSingleRegister, e),
-            }
+            })
         }
 
         // FC10 — Write Multiple Registers
@@ -418,19 +506,25 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             data,
             ..
         } => {
-            let result = app.call_method1(
-                py,
-                "handle_write_registers",
-                (address, count, data.as_slice()),
-            );
-            match result {
+            let mut values = Vec::with_capacity(count as usize);
+            for chunk in data.chunks(2) {
+                if chunk.len() == 2 {
+                    values.push(u16::from_be_bytes([chunk[0], chunk[1]]));
+                }
+            }
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_write_registers", (address, values))
+            })
+            .await;
+            Python::attach(|py| match result {
                 Ok(_) => ModbusResponse::echo_multi_write(
                     FunctionCode::WriteMultipleRegisters,
                     address,
                     count,
                 ),
                 Err(e) => py_error_to_response(py, FunctionCode::WriteMultipleRegisters, e),
-            }
+            })
         }
 
         // FC16 — Mask Write Register
@@ -441,15 +535,15 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             or_mask,
             ..
         } => {
-            let result = app.call_method1(
-                py,
-                "handle_mask_write_register",
-                (address, and_mask, or_mask),
-            );
-            match result {
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_mask_write_register", (address, and_mask, or_mask))
+            })
+            .await;
+            Python::attach(|py| match result {
                 Ok(_) => ModbusResponse::echo_mask_write(address, and_mask, or_mask),
                 Err(e) => py_error_to_response(py, FunctionCode::MaskWriteRegister, e),
-            }
+            })
         }
 
         // FC17 — Read/Write Multiple Registers
@@ -458,31 +552,35 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
             read_address,
             read_count,
             write_address,
-            write_count,
+            write_count: _write_count,
             data,
             ..
         } => {
-            let result = app.call_method1(
-                py,
-                "handle_read_write_registers",
-                (
-                    read_address,
-                    read_count,
-                    write_address,
-                    write_count,
-                    data.as_slice(),
-                ),
-            );
-            match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
-                Ok(regs) if regs.len() == read_count as usize => {
-                    ModbusResponse::registers(FunctionCode::ReadWriteMultipleRegisters, &regs)
+            let mut write_values = Vec::with_capacity(data.len() / 2);
+            for chunk in data.chunks(2) {
+                if chunk.len() == 2 {
+                    write_values.push(u16::from_be_bytes([chunk[0], chunk[1]]));
                 }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadWriteMultipleRegisters,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadWriteMultipleRegisters, e),
             }
+            let result = eval_python_call!(|py| {
+                app.bind(py).call_method1(
+                    "handle_read_write_registers",
+                    (read_address, read_count, write_address, write_values),
+                )
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u16>>()) {
+                    Ok(regs) if regs.len() == read_count as usize => {
+                        ModbusResponse::registers(FunctionCode::ReadWriteMultipleRegisters, &regs)
+                    }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadWriteMultipleRegisters,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadWriteMultipleRegisters, e),
+                },
+            )
         }
 
         // FC18 — Read FIFO Queue
@@ -490,39 +588,46 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
         ModbusRequest::ReadFifoQueue {
             pointer_address, ..
         } => {
-            let result = app.call_method1(py, "handle_read_fifo_queue", (pointer_address,));
-            match result.and_then(|v| v.extract::<Vec<u16>>(py)) {
-                Ok(values) if values.len() <= 31 => {
-                    // Payload: fifo_count (2 BE) + values (2 BE each)
-                    let fifo_count = values.len() as u16;
-                    let mut payload = heapless::Vec::<
-                        u8,
-                        { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
-                    >::new();
-                    let _ = payload.extend_from_slice(&fifo_count.to_be_bytes());
-                    for v in &values {
-                        let _ = payload.extend_from_slice(&v.to_be_bytes());
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_read_fifo_queue", (pointer_address,))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u16>>()) {
+                    Ok(values) if values.len() <= 31 => {
+                        // Payload: fifo_count (2 BE) + values (2 BE each)
+                        let fifo_count = values.len() as u16;
+                        let mut payload = heapless::Vec::<
+                            u8,
+                            { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
+                        >::new();
+                        let _ = payload.extend_from_slice(&fifo_count.to_be_bytes());
+                        for v in &values {
+                            let _ = payload.extend_from_slice(&v.to_be_bytes());
+                        }
+                        ModbusResponse::fifo_response(&payload)
                     }
-                    ModbusResponse::fifo_response(&payload)
-                }
-                Ok(_) => ModbusResponse::exception(
-                    FunctionCode::ReadFifoQueue,
-                    ExceptionCode::IllegalDataAddress,
-                ),
-                Err(e) => py_error_to_response(py, FunctionCode::ReadFifoQueue, e),
-            }
+                    Ok(_) => ModbusResponse::exception(
+                        FunctionCode::ReadFifoQueue,
+                        ExceptionCode::IllegalDataAddress,
+                    ),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReadFifoQueue, e),
+                },
+            )
         }
 
         // FC07 — Read Exception Status
         #[cfg(feature = "diagnostics")]
         ModbusRequest::ReadExceptionStatus { .. } => {
-            match app
-                .call_method0(py, "handle_read_exception_status")
-                .and_then(|v| v.extract::<u8>(py))
-            {
+            let result = eval_python_call!(|py| {
+                app.bind(py).call_method0("handle_read_exception_status")
+            })
+            .await;
+            Python::attach(|py| match result.and_then(|v| v.bind(py).extract::<u8>()) {
                 Ok(status) => ModbusResponse::read_exception_status(status),
                 Err(e) => py_error_to_response(py, FunctionCode::ReadExceptionStatus, e),
-            }
+            })
         }
 
         // FC08 — Diagnostics
@@ -530,52 +635,65 @@ fn dispatch_request(py: Python<'_>, app: &Py<ModbusApp>, req: ModbusRequest) -> 
         ModbusRequest::Diagnostics {
             sub_function, data, ..
         } => {
-            let result = app.call_method1(py, "handle_diagnostics", (sub_function, data));
-            match result.and_then(|v| v.extract::<(u16, u16)>(py)) {
-                Ok((response_sub_fn, response_data)) => {
-                    ModbusResponse::diagnostics_echo(response_sub_fn, response_data)
-                }
-                Err(e) if e.is_instance_of::<PyNotImplementedError>(py) => {
-                    ModbusResponse::diagnostics_echo(sub_function, data)
-                }
-                Err(e) => py_error_to_response(py, FunctionCode::Diagnostics, e),
-            }
+            let result = eval_python_call!(|py| {
+                app.bind(py)
+                    .call_method1("handle_diagnostics", (sub_function, data))
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<(u16, u16)>()) {
+                    Ok((response_sub_fn, response_data)) => {
+                        ModbusResponse::diagnostics_echo(response_sub_fn, response_data)
+                    }
+                    Err(e) if e.is_instance_of::<PyNotImplementedError>(py) => {
+                        ModbusResponse::diagnostics_echo(sub_function, data)
+                    }
+                    Err(e) => py_error_to_response(py, FunctionCode::Diagnostics, e),
+                },
+            )
         }
 
         // FC0B — Get Comm Event Counter
         #[cfg(feature = "diagnostics")]
         ModbusRequest::GetCommEventCounter { .. } => {
-            match app
-                .call_method0(py, "handle_get_comm_event_counter")
-                .and_then(|v| v.extract::<(u16, u16)>(py))
-            {
-                Ok((status, count)) => ModbusResponse::comm_event_counter(status, count),
-                Err(e) => py_error_to_response(py, FunctionCode::GetCommEventCounter, e),
-            }
+            let result = eval_python_call!(|py| {
+                app.bind(py).call_method0("handle_get_comm_event_counter")
+            })
+            .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<(u16, u16)>()) {
+                    Ok((status, count)) => ModbusResponse::comm_event_counter(status, count),
+                    Err(e) => py_error_to_response(py, FunctionCode::GetCommEventCounter, e),
+                },
+            )
         }
 
         // FC0C — Get Comm Event Log
         #[cfg(feature = "diagnostics")]
         ModbusRequest::GetCommEventLog { .. } => {
-            match app
-                .call_method0(py, "handle_get_comm_event_log")
-                .and_then(|v| v.extract::<Vec<u8>>(py))
-            {
-                Ok(payload) => ModbusResponse::comm_event_log(&payload),
-                Err(e) => py_error_to_response(py, FunctionCode::GetCommEventLog, e),
-            }
+            let result =
+                eval_python_call!(|py| { app.bind(py).call_method0("handle_get_comm_event_log") })
+                    .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u8>>()) {
+                    Ok(payload) => ModbusResponse::comm_event_log(&payload),
+                    Err(e) => py_error_to_response(py, FunctionCode::GetCommEventLog, e),
+                },
+            )
         }
 
         // FC11 — Report Server ID
         #[cfg(feature = "diagnostics")]
         ModbusRequest::ReportServerId { .. } => {
-            match app
-                .call_method0(py, "handle_report_server_id")
-                .and_then(|v| v.extract::<Vec<u8>>(py))
-            {
-                Ok(payload) => ModbusResponse::report_server_id(&payload),
-                Err(e) => py_error_to_response(py, FunctionCode::ReportServerId, e),
-            }
+            let result =
+                eval_python_call!(|py| { app.bind(py).call_method0("handle_report_server_id") })
+                    .await;
+            Python::attach(
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<u8>>()) {
+                    Ok(payload) => ModbusResponse::report_server_id(&payload),
+                    Err(e) => py_error_to_response(py, FunctionCode::ReportServerId, e),
+                },
+            )
         }
 
         // All other variants → IllegalFunction

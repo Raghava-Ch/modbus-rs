@@ -28,46 +28,50 @@ pub mod app {
     pub trait ServerDiscreteInputHandler {}
 
     pub trait ServerHoldingRegisterHandler {
+        #[allow(unused_variables)]
         fn read_multiple_holding_registers_request(
             &mut self,
-            _txn_id: u16,
-            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-            _address: u16,
-            _quantity: u16,
-            _out: &mut [u8],
+            txn_id: u16,
+            unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+            address: u16,
+            quantity: u16,
+            out: &mut [u8],
         ) -> Result<u8, MbusError> {
             Err(MbusError::InvalidAddress)
         }
 
+        #[allow(unused_variables)]
         fn write_single_register_request(
             &mut self,
-            _txn_id: u16,
-            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-            _address: u16,
-            _value: u16,
+            txn_id: u16,
+            unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+            address: u16,
+            value: u16,
         ) -> Result<(), MbusError> {
             Err(MbusError::InvalidAddress)
         }
 
+        #[allow(unused_variables)]
         fn write_multiple_registers_request(
             &mut self,
-            _txn_id: u16,
-            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-            _starting_address: u16,
-            _values: &[u16],
+            txn_id: u16,
+            unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+            starting_address: u16,
+            values: &[u16],
         ) -> Result<(), MbusError> {
             Err(MbusError::InvalidAddress)
         }
     }
 
     pub trait ServerInputRegisterHandler {
+        #[allow(unused_variables)]
         fn read_multiple_input_registers_request(
             &mut self,
-            _txn_id: u16,
-            _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
-            _address: u16,
-            _quantity: u16,
-            _out: &mut [u8],
+            txn_id: u16,
+            unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+            address: u16,
+            quantity: u16,
+            out: &mut [u8],
         ) -> Result<u8, MbusError> {
             Err(MbusError::InvalidAddress)
         }
@@ -84,10 +88,14 @@ pub trait HoldingRegisterMap {
     const WORD_COUNT: usize;
     const HAS_BATCH_NOTIFIED_FIELDS: bool = false;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError>;
-    fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError>;
-    fn write_many(&mut self, _address: u16, _values: &[u16]) -> Result<(), errors::MbusError>;
-    fn is_batch_notified(_addr: u16) -> bool {
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError>;
+    #[allow(unused_variables)]
+    fn write_single(&mut self, address: u16, value: u16) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
+    fn write_many(&mut self, address: u16, values: &[u16]) -> Result<(), errors::MbusError>;
+    #[allow(unused_variables)]
+    fn is_batch_notified(addr: u16) -> bool {
         false
     }
 }
@@ -100,13 +108,18 @@ impl HoldingRegisterMap for HighRange {
     const ADDR_MAX: u16 = 15;
     const WORD_COUNT: usize = 6;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError> {
         Ok(0)
     }
-    fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError> {
+
+    #[allow(unused_variables)]
+    fn write_single(&mut self, address: u16, value: u16) -> Result<(), errors::MbusError> {
         Ok(())
     }
-    fn write_many(&mut self, _address: u16, _values: &[u16]) -> Result<(), errors::MbusError> {
+
+    #[allow(unused_variables)]
+    fn write_many(&mut self, address: u16, values: &[u16]) -> Result<(), errors::MbusError> {
         Ok(())
     }
 }
@@ -117,13 +130,18 @@ impl HoldingRegisterMap for LowRange {
     const ADDR_MAX: u16 = 5;
     const WORD_COUNT: usize = 6;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
+    #[allow(unused_variables)]
+    fn encode(&self, address: u16, quantity: u16, out: &mut [u8]) -> Result<u8, errors::MbusError> {
         Ok(0)
     }
-    fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError> {
+
+    #[allow(unused_variables)]
+    fn write_single(&mut self, address: u16, value: u16) -> Result<(), errors::MbusError> {
         Ok(())
     }
-    fn write_many(&mut self, _address: u16, _values: &[u16]) -> Result<(), errors::MbusError> {
+
+    #[allow(unused_variables)]
+    fn write_many(&mut self, address: u16, values: &[u16]) -> Result<(), errors::MbusError> {
         Ok(())
     }
 }

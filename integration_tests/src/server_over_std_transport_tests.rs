@@ -7,8 +7,8 @@ use mbus_server::{
     CoilsModel, HoldingRegistersModel, InputRegistersModel, ServerServices, modbus_app,
 };
 use modbus_rs::{
-    ClientServices, CoilResponse, Coils, MbusError, RegisterResponse, HoldingRegisters, InputRegisters,
-    RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    ClientServices, CoilResponse, Coils, HoldingRegisters, InputRegisters, MbusError,
+    RegisterResponse, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
 use std::io::{ErrorKind, Read, Write};

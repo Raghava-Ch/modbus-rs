@@ -9,8 +9,12 @@ server.
 Build and install the extension with the gateway feature enabled:
 
 ```bash
-cd mbus-ffi
-maturin develop --features python,python-gateway,full
+# 1. Ensure you are using the virtual environment
+source .venv/bin/activate
+
+# 2. Build the python extension natively (without the `full` feature)
+cd mbus-ffi 
+maturin develop --features python,python-gateway 
 ```
 
 ## Files
@@ -23,8 +27,17 @@ maturin develop --features python,python-gateway,full
 ## Run
 
 ```bash
-python mbus-ffi/examples/python_gateway/sync_demo.py
-python mbus-ffi/examples/python_gateway/async_demo.py
+Run::
+    # 1. Ensure you are using the virtual environment
+    source .venv/bin/activate
+
+    # 2. Build the python extension natively (without the `full` feature)
+    cd mbus-ffi 
+    maturin develop --features python,python-gateway
+
+    # 3. Run the demo script
+    python examples/python_gateway/sync_demo.py
+    python examples/python_gateway/async_demo.py
 ```
 
 Both demos start an in-process downstream Modbus server (`AsyncTcpServer` with
