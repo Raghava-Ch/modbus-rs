@@ -14,6 +14,15 @@ Connects to a Modbus server and demonstrates:
 By default this example targets the companion python_server.py running on
 localhost:5020.
 
+# Run:
+    # 1. Ensure you are using the virtual environment
+    source .venv/bin/activate
+
+    # 2. Build the python extension natively (without the `full` feature)
+    cd mbus-ffi 
+    maturin develop --features python,python-gateway
+
+    # 3. Run the demo script
 Run against the bundled server:
     # Terminal 1
     python python_server.py
@@ -142,8 +151,8 @@ def run_demo_sync(client: modbus_rs.TcpClient | modbus_rs.SerialClient, iteratio
     # ── Mask-write demo (only every 5 iterations) ─────────────────────────────
     if iteration % 5 == 0:
         # Set bit 8 of holding[2], clear bits 0-3
-        addr, _and, _or = client.mask_write_register(2, and_mask=0xFFF0, or_mask=0x0100)
-        log.info("mask_write holding[%d]  AND=0xFFF0  OR=0x0100", addr)
+        client.mask_write_register(2, and_mask=0xFFF0, or_mask=0x0100)
+        log.info("mask_write holding[2]  AND=0xFFF0  OR=0x0100")
 
 
 # ─── connection factory ───────────────────────────────────────────────────────

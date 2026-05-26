@@ -245,8 +245,10 @@ impl<const N: usize> GatewayRoutingPolicy for RangeRouteTable<N> {
 pub struct PassthroughRouter;
 
 impl GatewayRoutingPolicy for PassthroughRouter {
+
     #[inline]
-    fn route(&self, _unit: UnitIdOrSlaveAddr) -> Option<usize> {
+    #[allow(unused_variables)]
+    fn route(&self, unit_id: UnitIdOrSlaveAddr) -> Option<usize> {
         Some(0)
     }
 }

@@ -6,7 +6,7 @@ awaitables that can be ``await``-ed with any asyncio-compatible event loop.
 """
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any, Optional, Awaitable
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -312,41 +312,41 @@ class ModbusApp:
                 return [0] * count
     """
 
-    def handle_read_coils(self, address: int, count: int) -> list[bool]:
+    def handle_read_coils(self, address: int, count: int) -> list[bool] | Awaitable[list[bool]]:
         """Return a list of ``count`` coil values starting at ``address``."""
         ...
 
-    def handle_write_coil(self, address: int, value: bool) -> None:
+    def handle_write_coil(self, address: int, value: bool) -> None | Awaitable[None]:
         """Set the coil at ``address`` to ``value``."""
         ...
 
-    def handle_write_coils(self, address: int, count: int, data: bytes) -> None:
-        """Write packed coil bytes (FC15)."""
+    def handle_write_coils(self, address: int, values: list[bool]) -> None | Awaitable[None]:
+        """Write multiple coils (FC15)."""
         ...
 
-    def handle_read_discrete_inputs(self, address: int, count: int) -> list[bool]:
+    def handle_read_discrete_inputs(self, address: int, count: int) -> list[bool] | Awaitable[list[bool]]:
         """Return a list of ``count`` discrete input values starting at ``address``."""
         ...
 
-    def handle_read_holding_registers(self, address: int, count: int) -> list[int]:
+    def handle_read_holding_registers(self, address: int, count: int) -> list[int] | Awaitable[list[int]]:
         """Return a list of ``count`` holding register values."""
         ...
 
-    def handle_read_input_registers(self, address: int, count: int) -> list[int]:
+    def handle_read_input_registers(self, address: int, count: int) -> list[int] | Awaitable[list[int]]:
         """Return a list of ``count`` input register values."""
         ...
 
-    def handle_write_register(self, address: int, value: int) -> None:
+    def handle_write_register(self, address: int, value: int) -> None | Awaitable[None]:
         """Write a single holding register."""
         ...
 
-    def handle_write_registers(self, address: int, count: int, data: bytes) -> None:
+    def handle_write_registers(self, address: int, values: list[int]) -> None | Awaitable[None]:
         """Write multiple holding registers (FC16)."""
         ...
 
     def handle_mask_write_register(
         self, address: int, and_mask: int, or_mask: int
-    ) -> None:
+    ) -> None | Awaitable[None]:
         """Apply bit masks to a holding register (FC22)."""
         ...
 
@@ -355,21 +355,20 @@ class ModbusApp:
         read_address: int,
         read_count: int,
         write_address: int,
-        write_count: int,
-        data: bytes,
-    ) -> list[int]:
+        write_values: list[int],
+    ) -> list[int] | Awaitable[list[int]]:
         """Read/write holding registers in one transaction (FC23)."""
         ...
 
-    def handle_read_fifo_queue(self, pointer_address: int) -> list[int]:
+    def handle_read_fifo_queue(self, pointer_address: int) -> list[int] | Awaitable[list[int]]:
         """Return FIFO queue contents starting at ``pointer_address`` (FC24)."""
         ...
 
-    def handle_read_exception_status(self) -> int:
+    def handle_read_exception_status(self) -> int | Awaitable[int]:
         """Return the 8-bit exception status byte (FC07)."""
         ...
 
-    def handle_get_comm_event_counter(self) -> tuple[int, int]:
+    def handle_get_comm_event_counter(self) -> tuple[int, int] | Awaitable[tuple[int, int]]:
         """Return ``(status, event_count)`` tuple (FC11)."""
         ...
 
@@ -503,12 +502,6 @@ class GatewayEventHandler:
     Forward-compatible base class for gateway lifecycle events.
 
     All methods are no-ops by default. Override only what you need.
-
-    .. note::
-        The current async gateway server does not yet invoke event hooks;
-        instances are accepted by :class:`AsyncTcpGateway` / :class:`TcpGateway`
-        constructors but never called. The class exists so that user code is
-        forward-compatible with future versions.
     """
 
     def __init__(self) -> None: ...

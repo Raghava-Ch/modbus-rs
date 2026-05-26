@@ -82,17 +82,17 @@ pub fn mbus_error_to_py(err: MbusError) -> PyErr {
         MbusError::ConnectionLost
         | MbusError::ConnectionFailed
         | MbusError::ConnectionClosed
-        | MbusError::IoError => ModbusConnectionError::new_err(format!("{err}")),
+        | MbusError::IoError => ModbusConnectionError::new_err(format!("{err:?}")),
         MbusError::ParseError
         | MbusError::BasicParseError
         | MbusError::InvalidPduLength
         | MbusError::InvalidAduLength
         | MbusError::ChecksumError
-        | MbusError::UnexpectedResponse => ModbusProtocolError::new_err(format!("{err}")),
+        | MbusError::UnexpectedResponse => ModbusProtocolError::new_err(format!("{err:?}")),
         // Setup/construction errors — bad configuration supplied at build time.
         MbusError::InvalidConfiguration
         | MbusError::InvalidSlaveAddress
-        | MbusError::InvalidBroadcastAddress => ModbusConfigError::new_err(format!("{err}")),
+        | MbusError::InvalidBroadcastAddress => ModbusConfigError::new_err(format!("{err:?}")),
         // Per-call argument errors — bad value supplied to a request method.
         MbusError::InvalidAddress
         | MbusError::InvalidQuantity
@@ -101,8 +101,8 @@ pub fn mbus_error_to_py(err: MbusError) -> PyErr {
         | MbusError::InvalidOrMask
         | MbusError::InvalidByteCount
         | MbusError::InvalidDataLen
-        | MbusError::InvalidOffset => ModbusInvalidArgument::new_err(format!("{err}")),
-        _ => ModbusError::new_err(format!("{err}")),
+        | MbusError::InvalidOffset => ModbusInvalidArgument::new_err(format!("{err:?}")),
+        _ => ModbusError::new_err(format!("{err:?}")),
     }
 }
 
@@ -114,10 +114,10 @@ pub fn async_server_error_to_py(err: AsyncServerError) -> PyErr {
         }
         AsyncServerError::Transport(e) => mbus_error_to_py(e),
         AsyncServerError::FramingError(e) => {
-            ModbusProtocolError::new_err(format!("Framing error: {e}"))
+            ModbusProtocolError::new_err(format!("Framing error: {e:?}"))
         }
         AsyncServerError::BindFailed(e) => {
-            ModbusConfigError::new_err(format!("Server bind failed: {e}"))
+            ModbusConfigError::new_err(format!("Server bind failed: {e:?}"))
         }
     }
 }

@@ -1,10 +1,8 @@
 //! Forward-compatible Python `GatewayEventHandler` base class.
 //!
-//! `mbus_gateway::AsyncTcpGatewayServer::serve_with_shutdown` does not yet
-//! accept an event handler, so instances of this class are stored but never
-//! invoked from the binding. The class is exported so that user code written
-//! today continues to work unchanged when the async gateway server gains
-//! event-hook support.
+//! `GatewayEventHandler` allows Python applications to receive telemetry events
+//! such as connection routing, forwarding, and errors from the underlying Rust
+//! gateway server.
 
 use pyo3::prelude::*;
 

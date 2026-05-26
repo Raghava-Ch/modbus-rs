@@ -5,8 +5,15 @@ Pipeline:
     raw socket client ──▶ TcpGateway (127.0.0.1:5020) ──▶ AsyncTcpServer (127.0.0.1:<free>)
 
 Run::
+    # 1. Ensure you are using the virtual environment
+    source .venv/bin/activate
 
-    python mbus-ffi/examples/python_gateway/sync_demo.py
+    # 2. Build the python extension natively (without the `full` feature)
+    cd mbus-ffi 
+    maturin develop --features python,python-gateway
+
+    # 3. Run the demo script
+    python examples/python_gateway/sync_demo.py
 """
 
 from __future__ import annotations
