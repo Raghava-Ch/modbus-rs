@@ -6,7 +6,7 @@
 //! channels.
 //!
 //! This is the async counterpart to the sync serial-upstream path in
-//! [`GatewayServices`](crate::services::GatewayServices).  Use it when:
+//! [`GatewayServices`](crate::GatewayServices).  Use it when:
 //!
 //! - Your **upstream** is a serial Modbus master (physical RS-485/RS-232 line),
 //!   **and** your **downstreams** are async (e.g. TCP/IP Modbus slaves over
@@ -125,8 +125,8 @@ use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 /// The session automatically restarts when the serial port reports a connection
 /// error (e.g., device unplugged) if `serve` is called in a loop by the caller.
 ///
-/// [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
-/// [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
+/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
+/// [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
 pub struct AsyncSerialGatewayServer;
 
 impl AsyncSerialGatewayServer {
@@ -181,7 +181,7 @@ impl AsyncSerialGatewayServer {
     /// Run the gateway session until it ends naturally **or** `shutdown` resolves.
     ///
     /// Pass any `Future<Output = ()>` as `shutdown`.  The easiest way is to use
-    /// [`GatewayShutdown`](crate::shutdown::GatewayShutdown):
+    /// [`GatewayShutdown`](crate::GatewayShutdown):
     ///
     /// ```rust,no_run
     /// # async fn example() {}

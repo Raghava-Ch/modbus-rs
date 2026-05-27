@@ -32,7 +32,7 @@
 //! [`max_sessions`]: WsGatewayConfig::max_sessions
 //! [`require_modbus_subprotocol`]: WsGatewayConfig::require_modbus_subprotocol
 //! [`allowed_origins`]: WsGatewayConfig::allowed_origins
-//! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+//! [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
 //! [`WasmModbusClient`]: https://docs.rs/mbus-ffi
 
 use std::convert::Infallible;
@@ -195,7 +195,7 @@ impl<T: AsyncTransport + Send> AsyncTransport for IdleTimeoutTransport<T> {
 /// # }
 /// ```
 ///
-/// [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
 /// [`WasmModbusClient`]: https://docs.rs/mbus-ffi
 pub struct AsyncWsGatewayServer;
 

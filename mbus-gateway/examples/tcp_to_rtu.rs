@@ -83,12 +83,9 @@ fn main() {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        match gw.poll(now_ms) {
-            PollOutcome::AllUpstreamsDisconnected => {
-                eprintln!("[gateway] all upstreams disconnected");
-                break;
-            }
-            _ => {}
+        if matches!(gw.poll(now_ms), PollOutcome::AllUpstreamsDisconnected) {
+            eprintln!("[gateway] all upstreams disconnected");
+            break;
         }
         // Yield briefly to avoid hogging 100% CPU in this example loop
         std::thread::sleep(std::time::Duration::from_millis(1));

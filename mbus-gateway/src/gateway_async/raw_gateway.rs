@@ -19,9 +19,9 @@
 //! | Serial RTU/ASCII upstream | [`AsyncSerialGatewayServer`] |
 //! | Any other transport (raw socket, UDP, TLS, …) | **`AsyncRawGatewayServer`** |
 //!
-//! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
-//! [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
-//! [`AsyncSerialGatewayServer`]: crate::serial_gateway::AsyncSerialGatewayServer
+//! [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
+//! [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
+//! [`AsyncSerialGatewayServer`]: crate::AsyncSerialGatewayServer
 //!
 //! ## Example — custom raw TCP framing
 //!
@@ -111,7 +111,7 @@ use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 /// This makes it trivial to use any custom framing or transport layer (raw
 /// sockets, UDP, TLS, Unix sockets, …) as the upstream Modbus source.
 ///
-/// [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
 pub struct AsyncRawGatewayServer;
 
 impl AsyncRawGatewayServer {
@@ -202,7 +202,7 @@ impl AsyncRawGatewayServer {
     /// # }
     /// ```
     ///
-    /// [`GatewayShutdown`]: crate::shutdown::GatewayShutdown
+    /// [`GatewayShutdown`]: crate::GatewayShutdown
     pub async fn serve_with_shutdown<US, R, DS, EVENT, F>(
         upstream: US,
         router: R,
