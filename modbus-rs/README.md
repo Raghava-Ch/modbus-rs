@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
 ## Basic Async Server Usage Example
 
-<!-- validate: no_run -->
+<!-- validate: exports -->
 ```rust
 use anyhow::Result;
 use modbus_rs::mbus_async::server::AsyncTcpServer;
@@ -262,7 +262,7 @@ struct App {
 
 Using `#[async_modbus_app]` (async TCP server with shared state):
 
-<!-- validate: no_run -->
+<!-- validate: exports -->
 ```rust
 use modbus_rs::mbus_async::server::AsyncTcpServer;
 use modbus_rs::{async_modbus_app, CoilsModel, HoldingRegistersModel};
