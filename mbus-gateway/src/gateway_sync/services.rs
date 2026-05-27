@@ -234,12 +234,10 @@ where
 
                     if connection_error.is_none() {
                         let ds_type = DownstreamT::TRANSPORT_TYPE;
-                        if let Some(expected_len) =
-                            derive_length_from_bytes(&self.downstreams[ds_idx].rxbuf, ds_type)
+                        if derive_length_from_bytes(&self.downstreams[ds_idx].rxbuf, ds_type)
+                            .is_some_and(|expected_len| self.downstreams[ds_idx].rxbuf.len() >= expected_len)
                         {
-                            if self.downstreams[ds_idx].rxbuf.len() >= expected_len {
-                                completed = true;
-                            }
+                            completed = true;
                         }
                     }
                 }
@@ -272,37 +270,33 @@ where
                         .rxbuf
                         .truncate(buf_len - expected_len);
 
-                    if let Ok(response_msg) = response_msg_result {
-                        if let Some(entry) = self.txn_map.remove(internal_txn) {
-                            if let Ok(upstream_response_adu) = compile_adu_frame(
-                                entry.upstream_txn,
-                                unit.get(),
-                                response_msg.pdu.clone(),
-                                upstream_type,
-                            ) {
-                                if let Some(up_channel) = self
-                                    .upstreams
-                                    .iter_mut()
-                                    .find(|up| up.session_id as usize == session_idx)
-                                {
-                                    if let Err(e) =
-                                        up_channel.transport.send(&upstream_response_adu)
-                                    {
-                                        let err: MbusError = e.into();
-                                        gateway_log_debug!("upstream send error: {:?}", err);
-                                    } else {
-                                        gateway_log_trace!(
-                                            "upstream response sent: txn_id={}, unit={}",
-                                            entry.upstream_txn,
-                                            unit.get()
-                                        );
-                                        self.event_handler.on_response_returned(
-                                            entry.session_id,
-                                            entry.upstream_txn,
-                                        );
-                                        outcome = PollOutcome::Active;
-                                    }
-                                }
+                    if let (Ok(response_msg), Some(entry)) = (response_msg_result, self.txn_map.remove(internal_txn)) {
+                        let adu_result = compile_adu_frame(
+                            entry.upstream_txn,
+                            unit.get(),
+                            response_msg.pdu.clone(),
+                            upstream_type,
+                        );
+                        if let (Ok(upstream_response_adu), Some(up_channel)) = (
+                            adu_result,
+                            self.upstreams
+                                .iter_mut()
+                                .find(|up| up.session_id as usize == session_idx),
+                        ) {
+                            if let Err(e) = up_channel.transport.send(&upstream_response_adu) {
+                                let err: MbusError = e.into();
+                                gateway_log_debug!("upstream send error: {:?}", err);
+                            } else {
+                                gateway_log_trace!(
+                                    "upstream response sent: txn_id={}, unit={}",
+                                    entry.upstream_txn,
+                                    unit.get()
+                                );
+                                self.event_handler.on_response_returned(
+                                    entry.session_id,
+                                    entry.upstream_txn,
+                                );
+                                outcome = PollOutcome::Active;
                             }
                         }
                     }

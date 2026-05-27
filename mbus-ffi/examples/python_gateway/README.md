@@ -6,13 +6,22 @@ server.
 
 ## Prerequisites
 
-Build and install the extension with the gateway feature enabled:
+Virtual environments are not portable and are excluded from git. If you have just cloned the repository, you must create your own virtual environment first:
 
 ```bash
-# 1. Ensure you are using the virtual environment
-source .venv/bin/activate
+# 1. Create a virtual environment (from the repository root)
+python3 -m venv .venv
 
-# 2. Build the python extension natively (without the `full` feature)
+# 2. Activate the virtual environment
+# On macOS/Linux:
+source .venv/bin/activate
+# On Windows:
+source .venv/Scripts/activate
+
+# 3. Install the build and test dependencies
+pip install maturin pytest pytest-asyncio
+
+# 4. Build and install the python extension natively
 cd mbus-ffi 
 maturin develop --features python,python-gateway 
 ```

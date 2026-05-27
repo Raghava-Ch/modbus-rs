@@ -88,12 +88,9 @@ fn main() -> anyhow::Result<()> {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        match gateway.poll(now_ms) {
-            PollOutcome::AllUpstreamsDisconnected => {
-                println!("All upstreams disconnected; shutting down");
-                shutdown = true;
-            }
-            _ => {}
+        if matches!(gateway.poll(now_ms), PollOutcome::AllUpstreamsDisconnected) {
+            println!("All upstreams disconnected; shutting down");
+            shutdown = true;
         }
         if shutdown {
             break;

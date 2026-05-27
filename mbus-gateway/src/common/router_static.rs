@@ -45,7 +45,7 @@ pub trait GatewayRoutingPolicy {
     /// Override this when the downstream device uses a different unit-ID
     /// numbering scheme than the upstream client.
     ///
-    /// [`GatewayServices::poll`](crate::services::GatewayServices::poll) calls
+    /// [`GatewayServices::poll`](crate::GatewayServices::poll) calls
     /// this automatically after a successful route lookup and uses the returned
     /// unit ID when encoding the downstream frame.
     fn rewrite(&self, unit: UnitIdOrSlaveAddr) -> UnitIdOrSlaveAddr {
@@ -262,8 +262,8 @@ impl GatewayRoutingPolicy for PassthroughRouter {
 ///
 /// The routing decision itself is delegated to the inner policy using the
 /// *original* unit ID.  The rewritten unit ID is used when building the
-/// downstream frame — [`GatewayServices::poll`](crate::services::GatewayServices::poll)
-/// and [`AsyncTcpGatewayServer`](crate::async_gateway::AsyncTcpGatewayServer) call
+/// downstream frame — [`GatewayServices::poll`](crate::GatewayServices::poll)
+/// and [`AsyncTcpGatewayServer`](crate::AsyncTcpGatewayServer) call
 /// `GatewayRoutingPolicy::rewrite()` automatically after a successful route lookup.
 ///
 /// Rewritten values are clamped to the valid unit-ID range `[1, 247]`.

@@ -62,7 +62,11 @@ pub unsafe extern "C" fn mbus_gateway_new(
     let upstream_transport = CTcpTransport::new(upstream_cb);
     let router = CGatewayRouter::new();
     let event_adapter = CGatewayEventAdapter::new(event_cb);
-    let services: GatewayInner = GatewayServices::new(upstream_transport, router, event_adapter);
+    let mut services: GatewayInner = GatewayServices::new(router, event_adapter, 1000);
+    if services.add_upstream(upstream_transport).is_err() {
+        return MbusStatusCode::MbusErrInvalidConfiguration;
+    }
+    let services: GatewayInner = services;
 
     match pool_allocate(services) {
         Ok(id) => {
@@ -180,9 +184,13 @@ pub extern "C" fn mbus_gateway_add_range_route(
 /// semantics.
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_gateway_poll(id: MbusGatewayId) -> MbusStatusCode {
-    let result = with_gateway(id, |gw| match gw.poll() {
-        Ok(()) => MbusStatusCode::MbusOk,
-        Err(e) => MbusStatusCode::from(e),
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    let result = with_gateway(id, |gw| {
+        gw.poll(now_ms);
+        MbusStatusCode::MbusOk
     });
     result.unwrap_or_else(|s| s)
 }

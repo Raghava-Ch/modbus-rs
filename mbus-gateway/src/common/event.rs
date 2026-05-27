@@ -6,7 +6,7 @@
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-/// Observer interface for [`GatewayServices`](crate::services::GatewayServices) events.
+/// Observer interface for [`GatewayServices`](crate::GatewayServices) events.
 ///
 /// Implement this trait to receive lifecycle and diagnostic notifications from
 /// the gateway.  All methods default to no-ops; override only what you need.
