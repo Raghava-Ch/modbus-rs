@@ -233,6 +233,8 @@ can require your application type to implement additional notifier traits in cod
 that compile successfully without it.
 
 ```rust
+use modbus_rs::{TrafficNotifier, UnitIdOrSlaveAddr};
+
 impl TrafficNotifier for App {
     fn on_tx_frame(&self, txn_id: u16, uid: UnitIdOrSlaveAddr, frame: &[u8]) { }
     fn on_rx_frame(&self, txn_id: u16, uid: UnitIdOrSlaveAddr, frame: &[u8]) { }

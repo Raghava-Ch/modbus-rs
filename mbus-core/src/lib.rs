@@ -31,3 +31,6 @@ pub mod errors;
 pub mod function_codes;
 pub mod models;
 pub mod transport;
+
+pub use errors::MbusError;
+pub use transport::UnitIdOrSlaveAddr;

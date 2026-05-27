@@ -40,6 +40,7 @@ through the associated const.
 
 Before:
 
+<!-- validate: skip -->
 ```rust
 fn uses_transport<T: Transport>(transport: &T) {
     let kind = transport.transport_type();

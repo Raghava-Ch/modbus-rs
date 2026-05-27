@@ -50,6 +50,15 @@ pub trait Transport {
     /// while runtime transport metadata is authoritative for framing decisions.
     const TRANSPORT_TYPE: TransportType;
 
+    /// Runtime transport type accessor.
+    ///
+    /// Override this in heterogeneous wrapper types (e.g. `GatewayUpstream`)
+    /// to return the actual variant's type. The default delegates to the
+    /// compile-time constant, which is correct for all non-wrapper types.
+    fn transport_type_rt(&self) -> TransportType {
+        Self::TRANSPORT_TYPE
+    }
+
     /// Establishes the physical or logical connection to the Modbus server/slave.
     ///
     /// # Arguments
