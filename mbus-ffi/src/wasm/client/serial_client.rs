@@ -238,8 +238,10 @@ impl WasmSerialModbusClient {
             retry_random_fn: None,
         });
 
-        let inner_client = ClientServices::new(transport, app, config)
+        let mut inner_client = ClientServices::new(transport, app, config)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        let _ = inner_client.connect();
 
         let inner = Rc::new(RefCell::new(inner_client));
         let weak = Rc::downgrade(&inner);
