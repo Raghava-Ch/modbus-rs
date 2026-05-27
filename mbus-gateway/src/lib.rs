@@ -68,11 +68,13 @@
 //! });
 //! downstream.connect(&serial_cfg).unwrap();
 //!
-//! let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _, 1> =
-//!     GatewayServices::new(upstream, router, NoopEventHandler);
+//! let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _> =
+//!     GatewayServices::new(router, NoopEventHandler, 1000);
+//! gw.add_upstream(upstream).unwrap();
 //! gw.add_downstream(DownstreamChannel::new(downstream)).unwrap();
 //! loop {
-//!     let _ = gw.poll();
+//!     let now_ms = 0; // pass absolute millis from a hardware/system clock
+//!     let _ = gw.poll(now_ms);
 //! }
 //! # }
 //! ```
@@ -128,81 +130,68 @@
 //! // Plug the custom transport into GatewayServices just like any built-in transport.
 //! let upstream = MyTransport::new();
 //! let downstream = MyTransport::new();
-//! let mut gw: GatewayServices<MyTransport, MyTransport, _, _, 1> =
-//!     GatewayServices::new(upstream, PassthroughRouter, NoopEventHandler);
+//! let mut gw: GatewayServices<MyTransport, MyTransport, _, _> =
+//!     GatewayServices::new(PassthroughRouter, NoopEventHandler, 1000);
+//! gw.add_upstream(upstream).unwrap();
 //! gw.add_downstream(DownstreamChannel::new(downstream)).unwrap();
 //! ```
 
-pub mod dispatcher;
-pub mod event;
-pub mod router;
-pub mod services;
-pub mod txn_map;
+pub mod common;
 
-// downstream.rs contains GatewayTransport/DownstreamConfig.
-// It is compiled when async is active and any downstream feature is enabled.
-#[cfg(all(
-    feature = "async",
-    any(
-        feature = "downstream-tcp",
-        feature = "downstream-serial-rtu",
-        feature = "downstream-serial-ascii"
-    )
-))]
-pub mod downstream;
+#[path = "gateway_sync/mod.rs"]
+pub mod gateway_sync;
 
 #[cfg(feature = "async")]
-pub mod async_gateway;
+#[path = "gateway_async/mod.rs"]
+pub mod gateway_async;
 
-#[cfg(feature = "async")]
-pub mod raw_gateway;
-
-#[cfg(feature = "async")]
-pub mod shutdown;
-
-#[cfg(feature = "upstream-ws")]
-pub mod ws_gateway;
-
-#[cfg(all(
-    feature = "async",
-    any(feature = "upstream-serial-rtu", feature = "upstream-serial-ascii")
-))]
-pub mod serial_gateway;
-
-pub(crate) mod log_compat;
-
-pub use dispatcher::DownstreamChannel;
-pub use event::{GatewayEventHandler, NoopEventHandler};
-pub use router::{
+pub use common::downstream_channel::DownstreamChannel;
+pub use common::event::{GatewayEventHandler, NoopEventHandler};
+pub use common::router::{
     GatewayRoutingPolicy, PassthroughRouter, RangeRouteTable, UnitIdRewriteRouter, UnitRouteTable,
 };
 
 // DynRouter uses Box<dyn Trait> which requires std's allocator.
 #[cfg(feature = "std-required")]
-pub use router::DynRouter;
-pub use services::GatewayServices;
-pub use txn_map::{SerialTxnMap, TxnMap};
+pub use common::router::DynRouter;
+
+#[cfg(feature = "std-required")]
+pub use common::router_dynamic::{DynamicRangeRouteTable, DynamicUnitRouteTable};
+
+pub use common::txn_map::{SerialTxnMap, TxnMap};
+
+#[cfg(feature = "std-required")]
+pub use common::txn_map_dynamic::DynamicTxnMap;
+
+pub use gateway_sync::services::{GatewayServices, PollOutcome};
+#[cfg(any(
+    feature = "upstream-tcp",
+    feature = "upstream-serial-rtu",
+    feature = "upstream-serial-ascii"
+))]
+pub use gateway_sync::upstream::GatewayUpstream;
+pub use gateway_sync::upstream_channel::UpstreamChannel;
 
 #[cfg(feature = "async")]
-pub use async_gateway::AsyncGatewayError;
+pub use gateway_async::gateway::AsyncGatewayError;
 
 #[cfg(feature = "upstream-tcp")]
-pub use async_gateway::AsyncTcpGatewayServer;
+pub use gateway_async::gateway::AsyncTcpGatewayServer;
 
 #[cfg(feature = "async")]
-pub use raw_gateway::AsyncRawGatewayServer;
+pub use gateway_async::raw_gateway::AsyncRawGatewayServer;
 
 #[cfg(feature = "async")]
-pub use shutdown::{GatewayShutdown, GatewayShutdownToken};
+pub use gateway_async::shutdown::{GatewayShutdown, GatewayShutdownToken};
 
 #[cfg(feature = "upstream-ws")]
-pub use ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
+pub use gateway_async::ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
 
 #[cfg(all(
     feature = "async",
     any(feature = "upstream-serial-rtu", feature = "upstream-serial-ascii")
 ))]
-pub use serial_gateway::AsyncSerialGatewayServer;
+pub use gateway_async::serial_gateway::AsyncSerialGatewayServer;
 
 // ── Concrete transport re-exports ─────────────────────────────────────────────
 
@@ -248,13 +237,13 @@ pub use mbus_serial::TokioAsciiTransport;
         feature = "downstream-serial-ascii"
     )
 ))]
-pub use downstream::{DownstreamConfig, DownstreamConnectError, GatewayTransport};
+pub use gateway_async::downstream::{DownstreamConfig, DownstreamConnectError, GatewayTransport};
 
 #[cfg(all(
     feature = "async",
     any(feature = "downstream-serial-rtu", feature = "downstream-serial-ascii")
 ))]
-pub use downstream::SerialDownstreamConfig;
+pub use gateway_async::downstream::SerialDownstreamConfig;
 
 /// Async TCP transport (re-exported from `mbus-network`).
 #[cfg(all(

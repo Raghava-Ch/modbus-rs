@@ -94,9 +94,9 @@ use std::sync::Arc;
 use mbus_core::transport::AsyncTransport;
 use tokio::sync::Mutex;
 
-use crate::async_gateway::{AsyncGatewayError, run_async_session};
-use crate::log_compat::gateway_log_debug;
-use crate::router::GatewayRoutingPolicy;
+use crate::common::log_compat::gateway_log_debug;
+use crate::common::router::GatewayRoutingPolicy;
+use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AsyncRawGatewayServer
@@ -160,7 +160,7 @@ impl AsyncRawGatewayServer {
         US: AsyncTransport + Send + 'static,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
     {
         let router = Arc::new(router);
         let downstreams = Arc::new(downstreams);
@@ -215,7 +215,7 @@ impl AsyncRawGatewayServer {
         US: AsyncTransport + Send + 'static,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let router = Arc::new(router);
