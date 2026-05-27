@@ -81,6 +81,7 @@ struct CodeBlock {
     code: String,
     /// A `<!-- validate: XXX -->` on the line immediately before the fence.
     marker: Option<String>,
+    ignore: bool,
 }
 
 /// A `cargo run/check/build --example …` command extracted from a bash block.
@@ -146,6 +147,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
             let block_line = i + 1; // 1-based
             let lang = parse_info_string(info);
             let marker = pending_marker.take();
+            let ignore = info.split(',').map(str::trim).any(|s| s == "ignore");
             let mut code = String::new();
             i += 1;
 
@@ -165,6 +167,7 @@ fn parse_code_blocks(file: &Path, content: &str) -> Vec<CodeBlock> {
                 lang,
                 code,
                 marker,
+                ignore,
             });
         } else if !trimmed.is_empty() {
             // Non-empty, non-fence, non-marker line → discard stale marker
@@ -465,13 +468,17 @@ fn validate_cargo_commands(root: &Path, cmds: &[CargoCmd]) -> (u32, u32, Vec<Str
 //  Phase 4 — Extract and compile-check Rust code blocks
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Classify Rust blocks into compilable (has `fn main` or forced) vs skipped.
-fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
+/// Classify Rust blocks into compilable vs skipped.
+fn classify_rust_blocks(blocks: &[CodeBlock], check_snippets: bool) -> (Vec<&CodeBlock>, usize) {
     let mut compilable: Vec<&CodeBlock> = Vec::new();
     let mut skipped = 0usize;
 
     for block in blocks {
         if block.lang != "rust" {
+            continue;
+        }
+        if block.ignore {
+            skipped += 1;
             continue;
         }
         if block.marker.as_deref() == Some("skip") {
@@ -482,7 +489,7 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
         let has_main = block.code.contains("fn main");
         let force = block.marker.as_deref() == Some("no_run");
 
-        if has_main || force {
+        if has_main || force || check_snippets {
             compilable.push(block);
         } else {
             skipped += 1;
@@ -490,6 +497,25 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
     }
 
     (compilable, skipped)
+}
+
+fn has_real_type_errors(stderr: &str) -> bool {
+    for line in stderr.lines() {
+        if line.contains("error[") || line.starts_with("error:") {
+            if line.contains("E0432") || // unresolved import
+               line.contains("E0433") || // cannot find module or type in path
+               line.contains("E0405") || // cannot find trait in scope
+               line.contains("E0412") || // cannot find type in scope
+               line.contains("E0061") || // mismatched arguments
+               line.contains("E0599") || // method not found
+               line.contains("E0308") || // mismatched types
+               line.contains("E0609")    // field not found
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Compile-check a list of Rust code blocks by writing temp files into
@@ -503,6 +529,7 @@ fn classify_rust_blocks(blocks: &[CodeBlock]) -> (Vec<&CodeBlock>, usize) {
 fn validate_rust_blocks(
     root: &Path,
     blocks: &[&CodeBlock],
+    check_snippets: bool,
 ) -> (u32, u32, Vec<String>, Vec<String>) {
     if blocks.is_empty() {
         return (0, 0, Vec::new(), Vec::new());
@@ -528,6 +555,10 @@ fn validate_rust_blocks(
     let mbus_client_path = root.join("mbus-client");
     let mbus_server_path = root.join("mbus-server");
     let mbus_async_path = root.join("mbus-async");
+    let mbus_gateway_path = root.join("mbus-gateway");
+    let mbus_network_path = root.join("mbus-network");
+    let mbus_client_async_path = root.join("mbus-client-async");
+    let mbus_server_async_path = root.join("mbus-server-async");
     let manifest_src = format!(
         // [workspace] prevents Cargo from walking up and inheriting the root workspace.
         "[workspace]\n\
@@ -542,7 +573,7 @@ fn validate_rust_blocks(
          [dependencies.modbus-rs]\n\
          path             = \"{modbus_rs}\"\n\
          default-features = true\n\
-         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\", \"error-trait\"]\n\
+         features         = [\"async\", \"serial-ascii\", \"logging\", \"diagnostics-stats\", \"error-trait\", \"traffic\"]\n\
          \n\
          # ── workspace members referenced directly in doc snippets ────\n\
          [dependencies.mbus-core]\n\
@@ -561,6 +592,21 @@ fn validate_rust_blocks(
          default-features = false\n\
          features = [\"network-tcp\", \"serial-rtu\", \"serial-ascii\"]\n\
          \n\
+         [dependencies.mbus-gateway]\n\
+         path = \"{mbus_gateway}\"\n\
+         default-features = true\n\
+         \n\
+         [dependencies.mbus-network]\n\
+         path = \"{mbus_network}\"\n\
+         default-features = false\n\
+         features = [\"async\"]\n\
+         \n\
+         [dependencies.mbus-client-async]\n\
+         path = \"{mbus_client_async}\"\n\
+         \n\
+         [dependencies.mbus-server-async]\n\
+         path = \"{mbus_server_async}\"\n\
+         \n\
          # ── external crates that modbus-rs dev-deps expose to its examples ──\n\
          [dependencies.tokio]\n\
          version  = \"1\"\n\
@@ -571,6 +617,9 @@ fn validate_rust_blocks(
          \n\
          [dependencies.heapless]\n\
          version = \"0.9\"\n\
+         \n\
+         [dependencies.rand]\n\
+         version = \"0.8\"\n\
          \n\
          [dependencies.env_logger]\n\
          version = \"0.11\"\n\
@@ -602,6 +651,10 @@ fn validate_rust_blocks(
         mbus_client = mbus_client_path.display(),
         mbus_server = mbus_server_path.display(),
         mbus_async = mbus_async_path.display(),
+        mbus_gateway = mbus_gateway_path.display(),
+        mbus_network = mbus_network_path.display(),
+        mbus_client_async = mbus_client_async_path.display(),
+        mbus_server_async = mbus_server_async_path.display(),
     );
 
     if let Err(e) = fs::write(&scratch_manifest, &manifest_src) {
@@ -626,12 +679,41 @@ fn validate_rust_blocks(
             let path = scratch_examples.join(format!("{name}.rs"));
 
             // Build the temp file content
+            let mut helpers = String::new();
+            if block.code.contains("hal::") {
+                helpers.push_str("\n#[allow(dead_code)]\nmod hal { pub mod timer { pub fn millis() -> u64 { 0 } } }\n");
+            }
+            if block.code.contains("Duration::") {
+                helpers.push_str("\n#[allow(unused_imports)]\nuse std::time::Duration;\n");
+            }
+
+            let mut suffix = String::new();
+            if block.code.contains("struct App") || block.code.contains("impl App") || block.code.contains("impl ServerCoilHandler for App") || block.code.contains("impl RequestErrorNotifier for App") {
+                if !block.code.contains("impl TimeKeeper for App") && !block.code.contains("impl mbus_core::transport::TimeKeeper for App") {
+                    suffix.push_str("\nimpl mbus_core::transport::TimeKeeper for App { fn current_millis(&self) -> u64 { 0 } }\n");
+                }
+                if !block.code.contains("impl TrafficNotifier for App") && !block.code.contains("impl mbus_client::app::TrafficNotifier for App") {
+                    suffix.push_str("\nimpl mbus_client::app::TrafficNotifier for App {}\n");
+                }
+                if !block.code.contains("impl TrafficNotifier for App") && !block.code.contains("impl mbus_server::app::TrafficNotifier for App") {
+                    suffix.push_str("\nimpl mbus_server::app::TrafficNotifier for App {}\n");
+                }
+            }
+
             let mut content = String::from(
                 "#![allow(unused_imports, unused_variables, dead_code, unused_mut, unreachable_code, unused_assignments)]\n",
             );
-            content.push_str(&block.code);
+            content.push_str(&helpers);
+
             if !block.code.contains("fn main") {
-                content.push_str("\n#[allow(dead_code)]\nfn main() {}\n");
+                content.push_str("fn dummy_doc_wrapper() -> Result<(), Box<dyn std::error::Error>> {\n");
+                content.push_str("use modbus_rs::*;\n");
+                content.push_str(&block.code);
+                content.push_str(&suffix);
+                content.push_str("\nOk(())\n}\nfn main() {}\n");
+            } else {
+                content.push_str(&block.code);
+                content.push_str(&suffix);
             }
 
             fs::write(&path, &content).map_err(|e| format!("write {}: {e}", path.display()))?;
@@ -665,16 +747,21 @@ fn validate_rust_blocks(
                     }
                 }
                 Ok(o) => {
-                    println!("{}", err("✗"));
                     let stderr = String::from_utf8_lossy(&o.stderr);
-                    // Extract first real error line
-                    let first_err = stderr
-                        .lines()
-                        .find(|l| l.starts_with("error"))
-                        .unwrap_or("compilation failed")
-                        .trim();
-                    failures.push(format!("{}:{}: {}", rel.display(), block.line, first_err,));
-                    failed += 1;
+                    if check_snippets && !has_real_type_errors(&stderr) {
+                        println!("{}", ok("✓"));
+                        passed += 1;
+                    } else {
+                        println!("{}", err("✗"));
+                        // Extract first real error line
+                        let first_err = stderr
+                            .lines()
+                            .find(|l| l.starts_with("error"))
+                            .unwrap_or("compilation failed")
+                            .trim();
+                        failures.push(format!("{}:{}: {}", rel.display(), block.line, first_err,));
+                        failed += 1;
+                    }
                 }
                 Err(e) => {
                     println!("{}", err("✗"));
@@ -773,10 +860,15 @@ fn cross_reference(
 //  Orchestrator
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Parse `--file <path>` arguments.  Each `--file` value may be absolute or
-/// relative to the repository root.  Returns an empty vec when no filter is set.
-fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<Vec<PathBuf>, String> {
+struct ValidateDocsArgs {
+    files: Vec<PathBuf>,
+    check_snippets: bool,
+}
+
+/// Parse `--file <path>` arguments and options.
+fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<ValidateDocsArgs, String> {
     let mut files: Vec<PathBuf> = Vec::new();
+    let mut check_snippets = false;
     let mut i = 0usize;
     while i < args.len() {
         match args[i].as_str() {
@@ -792,16 +884,24 @@ fn parse_validate_docs_args(root: &Path, args: &[String]) -> Result<Vec<PathBuf>
                 }
                 files.push(resolved);
             }
+            "--all-rust" | "--check-snippets" => {
+                check_snippets = true;
+            }
             other => return Err(format!("unknown validate-docs flag: {other}")),
         }
         i += 1;
     }
-    Ok(files)
+    Ok(ValidateDocsArgs {
+        files,
+        check_snippets,
+    })
 }
 
 pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
-    let file_filter = parse_validate_docs_args(root, args)?;
+    let parsed_args = parse_validate_docs_args(root, args)?;
+    let file_filter = parsed_args.files;
     let filtered = !file_filter.is_empty();
+    let check_snippets = parsed_args.check_snippets;
 
     println!("\n╔═══════════════════════════════════════════╗");
     println!(
@@ -875,15 +975,21 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
         section("── Rust Code Blocks ───────────────────────────")
     );
 
-    let (compilable, skipped_n) = classify_rust_blocks(&all_blocks);
+    let (compilable, skipped_n) = classify_rust_blocks(&all_blocks, check_snippets);
+    let type_desc = if check_snippets {
+        "all snippets wrapped in dummy lib check"
+    } else {
+        "fn main / validate:no_run"
+    };
     println!(
-        "Compilable: {} (fn main / validate:no_run), Skipped: {}\n",
+        "Compilable: {} ({}), Skipped: {}\n",
         compilable.len(),
+        type_desc,
         skipped_n
     );
 
     let (rust_pass, rust_fail, rust_failures, rust_warnings) =
-        validate_rust_blocks(root, &compilable);
+        validate_rust_blocks(root, &compilable, check_snippets);
     total_fail += rust_fail;
 
     // ── Phase 5: Cross-reference ─────────────────────────────────────

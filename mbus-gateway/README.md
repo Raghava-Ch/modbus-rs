@@ -242,13 +242,14 @@ mbus-gateway = { version = "0.12.0", features = ["upstream-ws"] }
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig};
+use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig, NoopEventHandler};
 use mbus_network::TokioTcpTransport;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let downstream = TokioTcpTransport::connect("192.168.1.10:502").await?;
     let shared = Arc::new(Mutex::new(downstream));
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
 
     let config = WsGatewayConfig {
         idle_timeout: Some(Duration::from_secs(30)),
@@ -258,7 +259,15 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Browser WasmModbusClient connects to ws://localhost:8502
-    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, PassthroughRouter, vec![shared]).await?;
+    AsyncWsGatewayServer::serve(
+        "0.0.0.0:8502",
+        config,
+        PassthroughRouter,
+        vec![shared],
+        handler,
+        Duration::from_secs(1),
+    )
+    .await?;
     Ok(())
 }
 ```
