@@ -6,7 +6,7 @@
 //! channels.
 //!
 //! This is the async counterpart to the sync serial-upstream path in
-//! [`GatewayServices`](crate::services::GatewayServices).  Use it when:
+//! [`GatewayServices`](crate::GatewayServices).  Use it when:
 //!
 //! - Your **upstream** is a serial Modbus master (physical RS-485/RS-232 line),
 //!   **and** your **downstreams** are async (e.g. TCP/IP Modbus slaves over
@@ -103,9 +103,9 @@ use std::sync::Arc;
 use mbus_core::transport::AsyncTransport;
 use tokio::sync::Mutex;
 
-use crate::async_gateway::{AsyncGatewayError, run_async_session};
-use crate::log_compat::gateway_log_debug;
-use crate::router::GatewayRoutingPolicy;
+use crate::common::log_compat::gateway_log_debug;
+use crate::common::router::GatewayRoutingPolicy;
+use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AsyncSerialGatewayServer
@@ -125,8 +125,8 @@ use crate::router::GatewayRoutingPolicy;
 /// The session automatically restarts when the serial port reports a connection
 /// error (e.g., device unplugged) if `serve` is called in a loop by the caller.
 ///
-/// [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
-/// [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
+/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
+/// [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
 pub struct AsyncSerialGatewayServer;
 
 impl AsyncSerialGatewayServer {
@@ -161,7 +161,7 @@ impl AsyncSerialGatewayServer {
         US: AsyncTransport + Send + 'static,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
     {
         let router = Arc::new(router);
         let downstreams = Arc::new(downstreams);
@@ -181,7 +181,7 @@ impl AsyncSerialGatewayServer {
     /// Run the gateway session until it ends naturally **or** `shutdown` resolves.
     ///
     /// Pass any `Future<Output = ()>` as `shutdown`.  The easiest way is to use
-    /// [`GatewayShutdown`](crate::shutdown::GatewayShutdown):
+    /// [`GatewayShutdown`](crate::GatewayShutdown):
     ///
     /// ```rust,no_run
     /// # async fn example() {}
@@ -201,7 +201,7 @@ impl AsyncSerialGatewayServer {
         US: AsyncTransport + Send + 'static,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let router = Arc::new(router);

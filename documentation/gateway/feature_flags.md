@@ -2,16 +2,24 @@
 
 ## `mbus-gateway` crate features
 
+The `mbus-gateway` crate features are modularly separated into core engine features, upstream server capabilities, and downstream client connections.
+
 | Feature | Default | Requires std | Description |
 |---------|---------|-------------|-------------|
-| `async` | ✓ | Yes | Async Tokio gateway (`AsyncTcpGatewayServer`), pulls in `mbus-network/async` and `tokio` |
-| `ws-server` | ✗ | Yes | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients; adds `tokio-tungstenite` |
-| `logging` | ✓ | Yes | `log` crate integration — gateway activity logged at `debug`/`trace` level |
-| `network` | ✗ | Yes | Re-exports `StdTcpTransport` + `StdTcpServerTransport` from `mbus-network` for sync TCP use |
-| `serial-rtu` | ✗ | Yes | Re-exports `StdRtuTransport` from `mbus-serial` for sync RTU serial use |
-| `serial-ascii` | ✗ | Yes | Re-exports `StdAsciiTransport` from `mbus-serial` for sync ASCII serial use |
-| `traffic` | ✗ | No | Enables `on_upstream_rx` and `on_downstream_tx` in `GatewayEventHandler` |
-| `std-required` | (internal) | — | Internal sentinel; implied by `async`, `logging`, `ws-server`, and all transport features |
+| **Core Features** | | | |
+| `async` | ✓ | Yes | Async Tokio gateway runtime support, including async servers (`AsyncTcpGatewayServer`, `AsyncSerialGatewayServer`, etc.) |
+| `logging` | ✓ | Yes | `log` crate integration — gateway activity logged at `debug`/`trace`/`warn` levels |
+| `traffic` | ✗ | No | Enables detailed `on_upstream_rx`, `on_upstream_tx`, `on_downstream_rx`, and `on_downstream_tx` callbacks in `GatewayEventHandler` |
+| `std-required` | (internal) | — | Internal sentinel; automatically implied by any feature that requires std (e.g., all network or async options) |
+| **Upstream Features** | | | |
+| `upstream-tcp` | ✓ | Yes | Upstream TCP server transport support (`AsyncTcpGatewayServer`) |
+| `upstream-ws` | ✓ | Yes | Upstream WebSocket gateway (`AsyncWsGatewayServer`) for WASM/browser clients; adds `tokio-tungstenite` |
+| `upstream-serial-rtu` | ✓ | Yes | Upstream Modbus RTU serial server support (`AsyncSerialGatewayServer`) |
+| `upstream-serial-ascii` | ✓ | Yes | Upstream Modbus ASCII serial server support (`AsyncSerialGatewayServer`) |
+| **Downstream Features** | | | |
+| `downstream-tcp` | ✓ | Yes | Downstream TCP client support (`StdTcpTransport` and `TokioTcpTransport`) |
+| `downstream-serial-rtu` | ✓ | Yes | Downstream RTU serial client support (`StdRtuTransport` and `TokioRtuTransport`) |
+| `downstream-serial-ascii`| ✓ | Yes | Downstream ASCII serial client support (`StdAsciiTransport` and `TokioAsciiTransport`) |
 
 ## How features affect `no_std` support
 
@@ -21,55 +29,49 @@ The `lib.rs` of `mbus-gateway` gates on `std-required`:
 #![cfg_attr(not(any(doc, feature = "std-required")), no_std)]
 ```
 
-When only `traffic` is enabled (no `async`, no `ws-server`, no `logging`), the crate is fully
-`no_std` and can be used on bare-metal targets without an allocator.
+When all std-requiring features are disabled (i.e. only `traffic` is enabled, or no features are selected), the crate is fully `no_std` compatible and can run on bare-metal MCU platforms without an allocator.
 
 ## Disabling defaults (embedded/no_std)
+
+To use the gateway in a bare-metal `no_std` environment, specify `default-features = false`:
 
 ```toml
 [dependencies]
 mbus-gateway = { version = "0.12.0", default-features = false }
 ```
 
-This compiles only the sync gateway core:
-- `GatewayServices`, `UnitRouteTable`, `RangeRouteTable`, `PassthroughRouter`,
-  `UnitIdRewriteRouter`, `TxnMap`, `GatewayEventHandler`, `NoopEventHandler`.
-- No Tokio, no `log`, no `std`.
+This compiles only the synchronous, poll-driven gateway core:
+- `GatewayServices`, `UnitRouteTable`, `RangeRouteTable`, `PassthroughRouter`, `UnitIdRewriteRouter`, `TxnMap`, `GatewayEventHandler`, `NoopEventHandler`.
+- Zero dependency on Tokio, no `log`, and no `std`.
 
-## Enabling `traffic` callbacks
+## Enabling `traffic` callbacks in no_std
+
+If you want traffic inspection callbacks but still want to stay `no_std`:
 
 ```toml
 [dependencies]
 mbus-gateway = { version = "0.12.0", default-features = false, features = ["traffic"] }
 ```
 
-This adds `on_upstream_rx` and `on_downstream_tx` to `GatewayEventHandler` so
-you can capture the raw bytes for debugging or protocol analysis.
+This activates `on_upstream_rx`/`on_downstream_tx` callbacks in your custom `GatewayEventHandler` to let you capture raw frames.
 
-## Enabling the WebSocket gateway
+## Customizing Async/Std features
+
+If you are running in a `std` environment (like Linux/macOS/Windows) and want to only enable specific transports (e.g. WebSocket upstream bridging to a TCP downstream device) to keep your compile times or binary size small, configure the features explicitly:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", features = ["ws-server"] }
-```
-
-This adds `AsyncWsGatewayServer` and `WsGatewayConfig` to the public API and
-pulls in `tokio-tungstenite` as a dependency.  The downstream side is
-unchanged — any `AsyncTransport` (TCP, RTU, ASCII) can still be used.
-
-To bridge WebSocket clients to an async RTU bus, combine both features:
-
-```toml
-mbus-gateway = { version = "0.12.0", features = ["ws-server", "serial-rtu"] }
+mbus-gateway = { version = "0.12.0", default-features = false, features = ["upstream-ws", "downstream-tcp"] }
 ```
 
 ## `modbus-rs` top-level crate
 
-The `gateway` feature pulls in `mbus-gateway` with its defaults:
+When using the umbrella `modbus-rs` crate, the `gateway` feature pulls in `mbus-gateway` with all its standard defaults:
 
 ```toml
 [dependencies]
 modbus-rs = { version = "0.12.0", features = ["gateway"] }
 ```
 
-The re-export is at `modbus_rs::gateway` (i.e. `modbus_rs::gateway::GatewayServices`, etc.).
+The gateway types are fully re-exported at the top-level path `modbus_rs::gateway` (e.g., `modbus_rs::gateway::GatewayServices`, `modbus_rs::gateway::AsyncTcpGatewayServer`, etc.).
+

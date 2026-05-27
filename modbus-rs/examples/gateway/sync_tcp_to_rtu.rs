@@ -13,11 +13,14 @@
 //!     --features gateway,serial-rtu,network-tcp
 //! ```
 
-use std::env;
 use std::net::TcpListener;
+use std::time::Duration;
+use std::{env, thread::sleep};
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
+use mbus_gateway::{
+    DownstreamChannel, GatewayServices, NoopEventHandler, PollOutcome, UnitRouteTable,
+};
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
     SerialMode, StdRtuTransport, StdTcpServerTransport, Transport,
@@ -27,7 +30,8 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let bind_addr = env::var("MBUS_GATEWAY_BIND").unwrap_or_else(|_| "127.0.0.1:5502".into());
-    let serial_port = env::var("MBUS_GATEWAY_SERIAL").unwrap_or_else(|_| "/dev/ttyUSB0".into());
+    let serial_port =
+        env::var("MBUS_GATEWAY_SERIAL").unwrap_or_else(|_| "/dev/cu.usbserial-A1010CA6".into());
 
     // ── Upstream: listen for TCP connections ──────────────────────────────────
     println!("Binding upstream TCP on {bind_addr}");
@@ -45,7 +49,7 @@ fn main() -> anyhow::Result<()> {
             .try_into()
             .map_err(|_| anyhow::anyhow!("serial port path too long"))?,
         mode: SerialMode::Rtu,
-        baud_rate: BaudRate::Baud9600,
+        baud_rate: BaudRate::Custom(115200),
         data_bits: DataBits::Eight,
         stop_bits: 1,
         parity: Parity::None,
@@ -70,24 +74,29 @@ fn main() -> anyhow::Result<()> {
     }
 
     // ── Gateway ───────────────────────────────────────────────────────────────
-    let mut gateway: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _, 1> =
-        GatewayServices::new(upstream, router, NoopEventHandler);
+    let mut gateway: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _> =
+        GatewayServices::new(router, NoopEventHandler, 500);
 
+    gateway.add_upstream(upstream)?;
     gateway.add_downstream(DownstreamChannel::new(downstream_transport))?;
-    // For RTU serial transports, one recv call blocks up to the read timeout.
-    gateway.set_max_downstream_recv_attempts(1);
 
     println!("Gateway running — forwarding TCP → RTU");
 
+    let mut shutdown = false;
     loop {
-        match gateway.poll() {
-            Ok(()) => {}
-            Err(mbus_core::errors::MbusError::Timeout) => {
-                // Normal: no data available or downstream timed out.
-            }
-            Err(e) => {
-                eprintln!("Gateway error: {e:?}");
-            }
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        if matches!(gateway.poll(now_ms), PollOutcome::AllUpstreamsDisconnected) {
+            println!("All upstreams disconnected; shutting down");
+            shutdown = true;
         }
+        if shutdown {
+            break;
+        }
+        // Yield briefly to avoid hogging CPU in example loop
+        sleep(Duration::from_millis(1));
     }
+    Ok(())
 }

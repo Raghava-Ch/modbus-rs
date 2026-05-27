@@ -85,6 +85,24 @@ pub struct ModbusSerialConfig<const PORT_PATH_LEN: usize = 64> {
     pub retry_random_fn: Option<RetryRandomFn>,
 }
 
+impl<const PORT_PATH_LEN: usize> Default for ModbusSerialConfig<PORT_PATH_LEN> {
+    fn default() -> Self {
+        Self {
+            port_path: heapless::String::new(),
+            mode: SerialMode::Rtu,
+            baud_rate: BaudRate::Baud19200,
+            data_bits: DataBits::Eight,
+            stop_bits: 1,
+            parity: Parity::Even,
+            response_timeout_ms: 1000,
+            retry_attempts: 3,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        }
+    }
+}
+
 /// Configuration parameters for establishing a Modbus TCP connection.
 #[derive(Debug, Clone)]
 pub struct ModbusTcpConfig {

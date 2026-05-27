@@ -32,7 +32,7 @@
 //! [`max_sessions`]: WsGatewayConfig::max_sessions
 //! [`require_modbus_subprotocol`]: WsGatewayConfig::require_modbus_subprotocol
 //! [`allowed_origins`]: WsGatewayConfig::allowed_origins
-//! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+//! [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
 //! [`WasmModbusClient`]: https://docs.rs/mbus-ffi
 
 use std::convert::Infallible;
@@ -46,9 +46,9 @@ use mbus_network::WsUpstreamTransport;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::{Mutex, Semaphore};
 
-use crate::async_gateway::{AsyncGatewayError, run_async_session};
-use crate::log_compat::{gateway_log_debug, gateway_log_warn};
-use crate::router::GatewayRoutingPolicy;
+use crate::common::log_compat::{gateway_log_debug, gateway_log_warn};
+use crate::common::router::GatewayRoutingPolicy;
+use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WsGatewayConfig
@@ -195,7 +195,7 @@ impl<T: AsyncTransport + Send> AsyncTransport for IdleTimeoutTransport<T> {
 /// # }
 /// ```
 ///
-/// [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
+/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
 /// [`WasmModbusClient`]: https://docs.rs/mbus-ffi
 pub struct AsyncWsGatewayServer;
 
@@ -222,7 +222,7 @@ impl AsyncWsGatewayServer {
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
     {
         let listener = TcpListener::bind(addr)
             .await
@@ -330,7 +330,7 @@ impl AsyncWsGatewayServer {
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let listener = TcpListener::bind(addr)

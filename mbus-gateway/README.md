@@ -4,14 +4,31 @@ A Modbus gateway runtime that bridges two Modbus networks.
 
 The gateway acts as a **server** to upstream clients (e.g., SCADA over TCP) and as a **client** to downstream devices (e.g., RTU slaves on a serial bus). It accepts upstream requests, routes them by unit ID to the correct downstream channel, translates ADU framing (TCP MBAP ↔ RTU CRC ↔ ASCII LRC), forwards the PDU, and returns the response.
 
+### Core Architecture & Design Highlights
+- **Fully Non-Blocking Sync Core**: Built on a deterministic, event-driven per-channel state machine. Driving the gateway via `poll(now_ms)` executes exactly one non-blocking call per transport per cycle—eliminating CPU starvation and spin-wait busy loops.
+- **Pure `no_std` / Bare-Metal Compliance**: Operates completely without `alloc` or standard library dependencies. Zero dynamic heap allocation and zero `dyn` trait objects. All components (receive buffers, routing tables, transaction maps, and queues) are bounded at compile time via const generics and backed by `heapless`.
+- **Multi-Session & Heterogeneous Transports**: Supports up to `N_UPSTREAM` concurrent sessions and `N_DOWNSTREAM` concurrent channels. The zero-cost `GatewayUpstream` enum wraps any combination of TCP and serial upstreams without dynamic dispatch overhead.
+- **Transient FIFO Request Queueing**: A configurable `N_PENDING` queue buffers incoming requests when downstream channels are busy, preventing head-of-line blocking and eliminating dropped frames during short transient bursts.
+
 ## Feature Flags
+
+The gateway is highly modular. Disable default features for a minimal, `no_std` bare-metal footprint, or enable specific transports as needed:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `async` | ✓ | Async Tokio gateway (`AsyncTcpGatewayServer`) |
-| `ws-server` | ✗ | WebSocket gateway (`AsyncWsGatewayServer`) for WASM clients |
-| `logging` | ✓ | `log` facade integration |
-| `traffic` | ✗ | Raw TX/RX frame callbacks in `GatewayEventHandler` |
+| **Core Features** | | |
+| `async` | ✓ | Enables the asynchronous Tokio-backed gateway runtime. |
+| `logging` | ✓ | Integrates the standard `log` facade for diagnostic messages. |
+| `traffic` | ✗ | Enables raw TX/RX frame callbacks in `GatewayEventHandler` for traffic sniffing. |
+| **Upstream Transports** | | |
+| `upstream-tcp` | ✓ | Modbus TCP server-side listener (implies `async`). |
+| `upstream-ws` | ✓ | WebSocket gateway (`AsyncWsGatewayServer`) for WASM browser-side clients (implies `async`). |
+| `upstream-serial-rtu` | ✓ | Modbus RTU serial upstream interface. |
+| `upstream-serial-ascii`| ✓ | Modbus ASCII serial upstream interface. |
+| **Downstream Transports** | | |
+| `downstream-tcp` | ✓ | Sync and async Modbus TCP client downstream. |
+| `downstream-serial-rtu` | ✓ | Sync and async Modbus RTU serial client downstream. |
+| `downstream-serial-ascii`| ✓ | Sync and async Modbus ASCII serial client downstream. |
 
 ## FFI Bindings
 
@@ -30,30 +47,41 @@ C and Python bindings for the gateway live in the `mbus-ffi` crate:
 
 ```rust
 use mbus_gateway::{
-    DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable,
+    DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable, PollOutcome,
 };
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-// Build a routing table: unit 1 → channel 0, unit 2 → channel 1
+// 1. Build a routing table: unit 1 → channel 0, unit 2 → channel 1
 let mut router: UnitRouteTable<8> = UnitRouteTable::new();
 router.add(UnitIdOrSlaveAddr::new(1).unwrap(), 0).unwrap();
 router.add(UnitIdOrSlaveAddr::new(2).unwrap(), 1).unwrap();
 
-// Create the gateway (upstream + routing policy + event handler)
-// let mut gw: GatewayServices<MyUpstreamTransport, MyDownstreamTransport, _, _, 2> =
-//     GatewayServices::new(upstream_transport, router, NoopEventHandler);
+// 2. Create the gateway (router, event handler, downstream timeout in ms)
+// By default, holds 1 upstream, 1 downstream, 4 max in-flight txns, 0 pending queue items
+let mut gw: GatewayServices<MyUpstream, MyDownstream, _, _> =
+    GatewayServices::new(router, NoopEventHandler, 500 /* 500ms timeout */);
 
-// Register downstream channels (index matches routing policy return values)
-// gw.add_downstream(DownstreamChannel::new(downstream_0)).unwrap();
-// gw.add_downstream(DownstreamChannel::new(downstream_1)).unwrap();
+// 3. Register the upstream and downstream channels
+gw.add_upstream(upstream_transport).unwrap();
+gw.add_downstream(DownstreamChannel::new(downstream_0)).unwrap();
+gw.add_downstream(DownstreamChannel::new(downstream_1)).unwrap();
 
-// Poll-driven loop
-// loop {
-//     match gw.poll() {
-//         Ok(()) => {}
-//         Err(e) => eprintln!("gateway error: {:?}", e),
-//     }
-// }
+// 4. Tight non-blocking poll-driven loop (pass absolute system clock milliseconds)
+loop {
+    let now_ms = get_monotonic_time_ms();
+    match gw.poll(now_ms) {
+        PollOutcome::Active => {
+            // At least one packet was forwarded or completed this cycle
+        }
+        PollOutcome::Idle => {
+            // No events to process
+        }
+        PollOutcome::AllUpstreamsDisconnected => {
+            // Teardown the session
+            break;
+        }
+    }
+}
 ```
 
 ## Quick Start — Async Gateway (Tokio)
@@ -180,47 +208,48 @@ All routing, transaction-ID mapping, and session management use `heapless::Vec`/
 ## Architecture
 
 ```
-Upstream (TCP/Serial)
-        │
-        ▼
-  ┌─────────────────────────────────┐
-  │        GatewayServices          │
-  │   ┌──────────┐  ┌──────────┐    │
-  │   │ TxnMap   │  │  Router  │    │
-  │   └──────────┘  └──────────┘    │
-  └───────────────┬─────────────────┘
-                  │  (by channel index)
-        ┌─────────┴──────────┐
-        ▼                    ▼
-  Channel 0              Channel 1
-  (RTU Bus A)           (RTU Bus B)
+ Upstream 0 (TCP)       Upstream 1 (Serial)
+         │                       │
+         ▼                       ▼
+  ┌───────────────────────────────────────────┐
+  │              GatewayServices              │
+  │  ┌──────────┐ ┌──────────┐ ┌───────────┐  │
+  │  │  TxnMap  │ │  Router  │ │  FIFO Q   │  │
+  │  └──────────┘ └──────────┘ └───────────┘  │
+  └───────────────────┬───────────────────────┘
+                      │ (by channel index)
+            ┌─────────┴──────────┐
+            ▼                    ▼
+      Channel 0              Channel 1
+     (RTU Bus A)            (RTU Bus B)
 ```
 
 See `documentation/gateway/` for detailed architecture and usage documentation.
 
 ## WebSocket Gateway (WASM client → raw TCP/serial)
 
-Enable the `ws-server` feature to add `AsyncWsGatewayServer`, which accepts
+Enable the `upstream-ws` feature to add `AsyncWsGatewayServer`, which accepts
 WebSocket connections from browser-side WASM clients and forwards each Modbus
 request to any `AsyncTransport` downstream (TCP, RTU, ASCII):
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", features = ["ws-server"] }
+mbus-gateway = { version = "0.12.0", features = ["upstream-ws"] }
 ```
 
-<!-- validate: skip -->
+<!-- validate: verify -->
 ```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig};
+use mbus_gateway::{AsyncWsGatewayServer, PassthroughRouter, WsGatewayConfig, NoopEventHandler};
 use mbus_network::TokioTcpTransport;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let downstream = TokioTcpTransport::connect("192.168.1.10:502").await?;
     let shared = Arc::new(Mutex::new(downstream));
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
 
     let config = WsGatewayConfig {
         idle_timeout: Some(Duration::from_secs(30)),
@@ -230,7 +259,15 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Browser WasmModbusClient connects to ws://localhost:8502
-    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, PassthroughRouter, vec![shared]).await?;
+    AsyncWsGatewayServer::serve(
+        "0.0.0.0:8502",
+        config,
+        PassthroughRouter,
+        vec![shared],
+        handler,
+        Duration::from_secs(1),
+    )
+    .await?;
     Ok(())
 }
 ```
@@ -259,7 +296,7 @@ For production deployments, audit the following:
 1. **Network exposure** — bind to a private interface (or behind a reverse
    proxy) instead of `0.0.0.0` whenever possible. Use a host firewall to
    restrict which clients may reach the gateway port.
-2. **TLS termination** — for `ws-server`, terminate TLS in front of the
+2. **TLS termination** — for `upstream-ws`, terminate TLS in front of the
    gateway (e.g. nginx, Caddy, Envoy). The gateway speaks plain WebSocket
    so the proxy can offload `wss://` and certificate management.
 3. **Origin allowlist** — set `WsGatewayConfig::allowed_origins` to the

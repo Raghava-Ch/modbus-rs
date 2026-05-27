@@ -22,6 +22,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 modbus-rs = "0.12.0"
 ```
 
+<!-- validate: exports -->
 ```rust
 use modbus_rs::{ClientServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport};
 
@@ -127,6 +128,7 @@ See [Feature Flags Reference](documentation/client/feature_flags.md) for complet
 
 ### TCP Client (sync)
 
+<!-- validate: exports -->
 ```rust
 use modbus_rs::{ClientServices, ModbusConfig, ModbusTcpConfig, StdTcpTransport};
 

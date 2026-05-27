@@ -3,7 +3,7 @@
 ## Overview
 
 The `mbus-gateway` core is `no_std` compatible when all std-requiring features
-(`async`, `logging`) are disabled.  All routing tables, the transaction-ID map,
+(`async`, `logging`) are disabled. All routing tables, the transaction-ID map,
 and the downstream channel rx buffer use `heapless` types with const-generic
 capacity parameters.
 
@@ -19,10 +19,8 @@ mbus-gateway = { version = "0.12.0", default-features = false }
 You need to supply your own `Transport` implementation for your target hardware:
 
 ```rust
-use mbus_core::transport::{Transport, TransportType, ModbusConfig};
 use heapless::Vec;
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-use mbus_core::errors::MbusError;
+use modbus_rs::{MbusError, MAX_ADU_FRAME_LEN, Transport, TransportType, ModbusConfig, UnitIdOrSlaveAddr};
 
 // Example UART-based transport skeleton
 pub struct UartTransport {
@@ -55,22 +53,27 @@ impl Transport for UartTransport {
 ## Building the Gateway
 
 ```rust,no_run
-use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
-use mbus_core::transport::UnitIdOrSlaveAddr;
+use modbus_rs::gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
+use modbus_rs::UnitIdOrSlaveAddr;
 
 // Routing table
 let mut router: UnitRouteTable<4> = UnitRouteTable::new();
 router.add(UnitIdOrSlaveAddr::new(1).unwrap(), 0).unwrap();
 
-// Gateway (N_DOWNSTREAM=1, TXN_SIZE=1)
+// Gateway (N_UPSTREAM=1, N_DOWNSTREAM=1, TXN_SIZE=4, N_PENDING=0)
+// Initialize GatewayServices with router, event handler, and response timeout in milliseconds.
 let mut gw: GatewayServices<UartTransport, UartTransport, _, _, 1, 1> =
-    GatewayServices::new(upstream_uart, router, NoopEventHandler);
+    GatewayServices::new(router, NoopEventHandler, 1000);
+
+// Register upstream and downstream transport channels
+gw.add_upstream(upstream_uart).unwrap();
 gw.add_downstream(DownstreamChannel::new(downstream_uart)).unwrap();
 
 // Main loop
+let mut now_ms = 0; // In your hardware environment, read from a timer
 loop {
-    let _ = gw.poll();
-    // Yield / sleep according to your RTOS task scheduler
+    let _ = gw.poll(now_ms);
+    // Yield / sleep / increment now_ms according to your RTOS task scheduler or hardware timer
 }
 ```
 
@@ -88,3 +91,4 @@ routing table on `thumbv7m-none-eabi` (approximate):
 
 The two `MAX_ADU_FRAME_LEN`-sized rx buffers dominate; everything else is
 negligible.
+

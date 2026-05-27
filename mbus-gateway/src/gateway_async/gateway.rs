@@ -20,8 +20,8 @@ use mbus_network::TokioTcpTransport;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 
-use crate::log_compat::{gateway_log_debug, gateway_log_trace, gateway_log_warn};
-use crate::router::GatewayRoutingPolicy;
+use crate::common::log_compat::{gateway_log_debug, gateway_log_trace, gateway_log_warn};
+use crate::common::router::GatewayRoutingPolicy;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Error type
@@ -120,7 +120,7 @@ impl AsyncTcpGatewayServer {
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
     {
         let listener = TcpListener::bind(addr)
             .await
@@ -178,7 +178,7 @@ impl AsyncTcpGatewayServer {
         A: ToSocketAddrs,
         R: GatewayRoutingPolicy + Send + Sync + 'static,
         DS: AsyncTransport + Send + 'static,
-        EVENT: crate::event::GatewayEventHandler + Send + 'static,
+        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
         F: Future<Output = ()>,
     {
         let listener = TcpListener::bind(addr)
@@ -243,7 +243,7 @@ where
     UPSTREAM: AsyncTransport,
     ROUTER: GatewayRoutingPolicy + Send + Sync,
     DS: AsyncTransport + Send,
-    EVENT: crate::event::GatewayEventHandler + Send,
+    EVENT: crate::common::event::GatewayEventHandler + Send,
 {
     let upstream_type = UPSTREAM::TRANSPORT_TYPE;
     // Per-session monotonic transaction counter used for the downstream.

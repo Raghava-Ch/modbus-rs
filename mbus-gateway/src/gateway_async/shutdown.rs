@@ -92,10 +92,10 @@
 //! # }
 //! ```
 //!
-//! [`AsyncTcpGatewayServer`]: crate::async_gateway::AsyncTcpGatewayServer
-//! [`AsyncWsGatewayServer`]: crate::ws_gateway::AsyncWsGatewayServer
-//! [`AsyncSerialGatewayServer`]: crate::serial_gateway::AsyncSerialGatewayServer
-//! [`AsyncRawGatewayServer`]: crate::raw_gateway::AsyncRawGatewayServer
+//! [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
+//! [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
+//! [`AsyncSerialGatewayServer`]: crate::AsyncSerialGatewayServer
+//! [`AsyncRawGatewayServer`]: crate::AsyncRawGatewayServer
 
 use tokio::sync::oneshot;
 

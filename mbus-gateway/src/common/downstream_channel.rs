@@ -4,6 +4,7 @@
 //! receive-accumulation buffer, keeping them together so the gateway can
 //! incrementally accumulate response bytes across multiple `recv()` calls.
 
+use crate::gateway_sync::channel_state::ChannelState;
 use heapless::Vec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::transport::Transport;
@@ -15,6 +16,7 @@ use mbus_core::transport::Transport;
 pub struct DownstreamChannel<T: Transport> {
     pub(crate) transport: T,
     pub(crate) rxbuf: Vec<u8, MAX_ADU_FRAME_LEN>,
+    pub(crate) state: ChannelState,
 }
 
 impl<T: Transport> DownstreamChannel<T> {
@@ -23,6 +25,7 @@ impl<T: Transport> DownstreamChannel<T> {
         Self {
             transport,
             rxbuf: Vec::new(),
+            state: ChannelState::Idle,
         }
     }
 

@@ -22,6 +22,8 @@ The client supports configurable resilience policies:
 Time in milliseconds to wait for a response from the server/device.
 
 ```rust
+use modbus_rs::{ModbusTcpConfig, ModbusSerialConfig};
+
 // TCP
 let mut config = ModbusTcpConfig::new("192.168.1.10", 502)?;
 config.response_timeout_ms = 1500;  // 1.5 seconds

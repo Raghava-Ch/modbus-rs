@@ -6,7 +6,7 @@
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-/// Observer interface for [`GatewayServices`](crate::services::GatewayServices) events.
+/// Observer interface for [`GatewayServices`](crate::GatewayServices) events.
 ///
 /// Implement this trait to receive lifecycle and diagnostic notifications from
 /// the gateway.  All methods default to no-ops; override only what you need.
@@ -30,6 +30,13 @@ pub trait GatewayEventHandler {
     /// The upstream session identified by `session_id` has disconnected.
     #[allow(unused_variables)]
     fn on_upstream_disconnect(&mut self, session_id: u8) {}
+
+    /// All downstream channels are busy; the request for `unit` from `session_id`
+    /// could not be forwarded this poll cycle.
+    ///
+    /// If `N_PENDING > 0`, the request was queued. If `N_PENDING = 0`, it was dropped.
+    #[allow(unused_variables)]
+    fn on_downstream_busy(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr, queued: bool) {}
 
     /// Raw bytes received from upstream (requires `traffic` feature).
     #[cfg(feature = "traffic")]
