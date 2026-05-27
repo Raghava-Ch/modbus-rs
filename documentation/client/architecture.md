@@ -114,7 +114,11 @@ stateDiagram-v2
 
 ## Transport Trait
 
+<!-- validate: exports -->
 ```rust
+use modbus_rs::{MbusError, TransportType, ModbusConfig, MAX_ADU_FRAME_LEN};
+use heapless::Vec;
+
 pub trait Transport {
     type Error: Into<MbusError>;
     
@@ -144,7 +148,10 @@ pub trait Transport {
 
 `ClientServices<TRANSPORT, APP, const QUEUE_DEPTH: usize>` uses const generics for queue capacity.
 
+<!-- validate: exports -->
 ```rust
+use modbus_rs::ClientServices;
+
 // Support 4 concurrent outstanding requests
 let client = ClientServices::<_, _, 4>::new(transport, app, config)?;
 

@@ -60,6 +60,8 @@ async = [
     "dep:mbus-async",
     "dep:mbus-client-async",
     "dep:mbus-server-async",
+    "mbus-serial?/async",
+    "mbus-network?/async",
     "std-required",
 ]
 client = ["dep:mbus-client"]
