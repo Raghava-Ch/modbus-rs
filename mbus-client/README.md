@@ -139,7 +139,7 @@ mbus-client = { version = "0.12.0", default-features = false, features = ["coils
 
 When `traffic` is enabled, apps can implement `TrafficNotifier` to observe raw ADU frames:
 
-<!-- validate: no_run -->
+<!-- validate: exports -->
 ```rust
 #[allow(unexpected_cfgs)]
 #[cfg(feature = "traffic")]

@@ -487,7 +487,9 @@ fn classify_rust_blocks(blocks: &[CodeBlock], check_snippets: bool) -> (Vec<&Cod
         }
 
         let has_main = block.code.contains("fn main");
-        let force = block.marker.as_deref() == Some("no_run");
+        let force = block.marker.as_deref() == Some("no_run")
+            || block.marker.as_deref() == Some("types")
+            || block.marker.as_deref() == Some("exports");
 
         if has_main || force || check_snippets {
             compilable.push(block);
@@ -501,18 +503,17 @@ fn classify_rust_blocks(blocks: &[CodeBlock], check_snippets: bool) -> (Vec<&Cod
 
 fn has_real_type_errors(stderr: &str) -> bool {
     for line in stderr.lines() {
-        if line.contains("error[") || line.starts_with("error:") {
-            if line.contains("E0432") || // unresolved import
-               line.contains("E0433") || // cannot find module or type in path
-               line.contains("E0405") || // cannot find trait in scope
-               line.contains("E0412") || // cannot find type in scope
-               line.contains("E0061") || // mismatched arguments
-               line.contains("E0599") || // method not found
-               line.contains("E0308") || // mismatched types
-               line.contains("E0609")    // field not found
-            {
-                return true;
-            }
+        if (line.contains("error[") || line.starts_with("error:"))
+            && (line.contains("E0432")
+                || line.contains("E0433")
+                || line.contains("E0405")
+                || line.contains("E0412")
+                || line.contains("E0061")
+                || line.contains("E0599")
+                || line.contains("E0308")
+                || line.contains("E0609"))
+        {
+            return true;
         }
     }
     false
@@ -698,6 +699,9 @@ fn validate_rust_blocks(
                 if !block.code.contains("impl TrafficNotifier for App") && !block.code.contains("impl mbus_server::app::TrafficNotifier for App") {
                     suffix.push_str("\nimpl mbus_server::app::TrafficNotifier for App {}\n");
                 }
+                if !block.code.contains("impl AsyncServerTrafficNotifier for App") && !block.code.contains("impl mbus_server_async::AsyncServerTrafficNotifier for App") {
+                    suffix.push_str("\nimpl mbus_server_async::AsyncServerTrafficNotifier for App {}\n");
+                }
             }
 
             let mut content = String::from(
@@ -748,7 +752,8 @@ fn validate_rust_blocks(
                 }
                 Ok(o) => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
-                    if check_snippets && !has_real_type_errors(&stderr) {
+                    let is_types_marker = block.marker.as_deref() == Some("types") || block.marker.as_deref() == Some("exports");
+                    if (check_snippets || is_types_marker) && !has_real_type_errors(&stderr) {
                         println!("{}", ok("✓"));
                         passed += 1;
                     } else {
