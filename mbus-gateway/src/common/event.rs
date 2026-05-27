@@ -31,6 +31,13 @@ pub trait GatewayEventHandler {
     #[allow(unused_variables)]
     fn on_upstream_disconnect(&mut self, session_id: u8) {}
 
+    /// All downstream channels are busy; the request for `unit` from `session_id`
+    /// could not be forwarded this poll cycle.
+    ///
+    /// If `N_PENDING > 0`, the request was queued. If `N_PENDING = 0`, it was dropped.
+    #[allow(unused_variables)]
+    fn on_downstream_busy(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr, queued: bool) {}
+
     /// Raw bytes received from upstream (requires `traffic` feature).
     #[cfg(feature = "traffic")]
     #[allow(unused_variables)]

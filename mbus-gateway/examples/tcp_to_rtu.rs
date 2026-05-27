@@ -24,8 +24,8 @@ fn main() {
         Parity, SerialMode, Transport,
     };
     use mbus_gateway::{
-        DownstreamChannel, GatewayServices, NoopEventHandler, RangeRouteTable, StdRtuTransport,
-        StdTcpServerTransport,
+        DownstreamChannel, GatewayServices, NoopEventHandler, PollOutcome, RangeRouteTable,
+        StdRtuTransport, StdTcpServerTransport,
     };
 
     // ── Configuration ─────────────────────────────────────────────────────────
@@ -70,21 +70,27 @@ fn main() {
     eprintln!("[gateway] downstream RTU port {SERIAL_PORT} opened");
 
     // ── Gateway ───────────────────────────────────────────────────────────────
-    let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _, 1> =
-        GatewayServices::new(upstream, router, NoopEventHandler);
-    // Serial is blocking with its own timeout; one recv attempt is enough.
-    gw.set_max_downstream_recv_attempts(1);
+    let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _> =
+        GatewayServices::new(router, NoopEventHandler, 1000);
+    gw.add_upstream(upstream)
+        .expect("upstream channel registered");
     gw.add_downstream(DownstreamChannel::new(downstream))
         .expect("channel slot available");
 
     eprintln!("[gateway] running — press Ctrl-C to stop");
     loop {
-        match gw.poll() {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("[gateway] poll error: {e:?}");
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        match gw.poll(now_ms) {
+            PollOutcome::AllUpstreamsDisconnected => {
+                eprintln!("[gateway] all upstreams disconnected");
                 break;
             }
+            _ => {}
         }
+        // Yield briefly to avoid hogging 100% CPU in this example loop
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }

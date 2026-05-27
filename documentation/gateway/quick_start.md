@@ -7,128 +7,190 @@ This page walks you through the three ways to run a Modbus gateway:
 
 ```toml
 [dependencies]
-mbus-gateway = "0.9.0"
 modbus-rs = { version = "0.12.0", features = ["gateway", "network-tcp", "serial-rtu"] }
 ```
 
 ## Sync: TCP upstream → RTU downstream
-
+<!-- validate: no_run -->
 ```rust,ignore
-use modbus_rs::{ModbusTcpConfig, ModbusSerialConfig, StdTcpServerTransport, StdRtuTransport,
-                BaudRate, DataBits, Parity, SerialMode};
-use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, UnitRouteTable};
-use mbus_core::transport::UnitIdOrSlaveAddr;
+use std::net::TcpListener;
+use std::time::Duration;
+use std::{env, thread::sleep};
 
-// 1. Upstream TCP transport (accepts incoming connections)
-let tcp_config = ModbusTcpConfig {
-    host: "0.0.0.0".into(),
-    port: 502,
-    response_timeout_ms: 1000,
-    connection_timeout_ms: 5000,
+use modbus_rs::gateway::{
+    DownstreamChannel, GatewayServices, NoopEventHandler, PollOutcome, UnitRouteTable,
 };
-let mut upstream = StdTcpServerTransport::new();
-upstream.connect(&modbus_rs::ModbusConfig::Tcp(tcp_config)).unwrap();
-
-// 2. Downstream RTU transport
-let serial_config = ModbusSerialConfig {
-    port: "/dev/ttyUSB0".into(),
-    baud_rate: BaudRate::Baud9600,
-    data_bits: DataBits::Eight,
-    parity: Parity::None,
-    stop_bits: modbus_rs::transport::StopBits::One,
-    response_timeout_ms: 500,
-    mode: SerialMode::Rtu,
+use modbus_rs::{
+    UnitIdOrSlaveAddr, BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, StdRtuTransport, StdTcpServerTransport, Transport,
 };
-let mut downstream = StdRtuTransport::new();
-downstream.connect(&modbus_rs::ModbusConfig::Serial(serial_config)).unwrap();
 
-// 3. Routing: units 1–10 → channel 0
-let mut router: UnitRouteTable<10> = UnitRouteTable::new();
-for id in 1u8..=10 {
-    router.add(UnitIdOrSlaveAddr::new(id).unwrap(), 0).unwrap();
-}
+fn main() -> anyhow::Result<()> {
+    env_logger::init();
 
-// 4. Create and run gateway
-let mut gw: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _, 1> =
-    GatewayServices::new(upstream, router, NoopEventHandler);
-gw.add_downstream(DownstreamChannel::new(downstream)).unwrap();
-gw.set_max_downstream_recv_attempts(1); // blocking serial recv
+    let bind_addr = env::var("MBUS_GATEWAY_BIND").unwrap_or_else(|_| "127.0.0.1:5502".into());
+    let serial_port =
+        env::var("MBUS_GATEWAY_SERIAL").unwrap_or_else(|_| "/dev/cu.usbserial-A1010CA6".into());
 
-loop {
-    let _ = gw.poll();
-}
-```
+    // ── Upstream: listen for TCP connections ──────────────────────────────────
+    println!("Binding upstream TCP on {bind_addr}");
+    let listener = TcpListener::bind(&bind_addr)?;
+    println!("Waiting for upstream TCP connection on {bind_addr}");
+    let (stream, peer) = listener.accept()?;
+    println!("Accepted upstream TCP connection from {peer}");
+    let upstream = StdTcpServerTransport::new(stream);
 
-## Async: TCP upstream → TCP downstream
+    // ── Downstream: connect to RTU slave ─────────────────────────────────────
+    println!("Opening serial downstream on {serial_port}");
+    let serial_config = ModbusSerialConfig {
+        port_path: serial_port
+            .as_str()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("serial port path too long"))?,
+        mode: SerialMode::Rtu,
+        baud_rate: BaudRate::Custom(115200),
+        data_bits: DataBits::Eight,
+        stop_bits: 1,
+        parity: Parity::None,
+        response_timeout_ms: 500,
+        retry_attempts: 0,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
+    };
 
-<!-- validate: skip -->
-```rust,ignore
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use mbus_gateway::{AsyncTcpGatewayServer, UnitRouteTable};
-use mbus_core::transport::UnitIdOrSlaveAddr;
-use mbus_network::TokioTcpTransport;
+    let mut downstream_transport = StdRtuTransport::new();
+    downstream_transport.connect(&ModbusConfig::Serial(serial_config))?;
+    println!("Serial downstream ready");
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Connect to downstream server
-    let ds = TokioTcpTransport::connect("192.168.1.10:502").await?;
-    let shared = Arc::new(Mutex::new(ds));
-
-    // Build route table
-    let mut router: UnitRouteTable<10> = UnitRouteTable::new();
-    for id in 1u8..=10 {
-        router.add(UnitIdOrSlaveAddr::new(id).unwrap(), 0).unwrap();
+    // ── Routing table ─────────────────────────────────────────────────────────
+    // Route all units 1–32 to channel 0 (the single RTU bus).
+    let mut router: UnitRouteTable<32> = UnitRouteTable::new();
+    for unit_id in 1u8..=32 {
+        if let Ok(uid) = UnitIdOrSlaveAddr::new(unit_id) {
+            router.add(uid, 0).ok();
+        }
     }
 
-    // Run the gateway (infinite loop, returns Infallible or I/O error)
-    AsyncTcpGatewayServer::serve("0.0.0.0:502", router, vec![shared]).await?;
+    // ── Gateway ───────────────────────────────────────────────────────────────
+    let mut gateway: GatewayServices<StdTcpServerTransport, StdRtuTransport, _, _> =
+        GatewayServices::new(router, NoopEventHandler, 500);
+
+    gateway.add_upstream(upstream)?;
+    gateway.add_downstream(DownstreamChannel::new(downstream_transport))?;
+
+    println!("Gateway running — forwarding TCP → RTU");
+
+    let mut shutdown = false;
+    loop {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        match gateway.poll(now_ms) {
+            PollOutcome::AllUpstreamsDisconnected => {
+                println!("All upstreams disconnected; shutting down");
+                shutdown = true;
+            }
+            _ => {}
+        }
+        if shutdown {
+            break;
+        }
+        // Yield briefly to avoid hogging CPU in example loop
+        sleep(Duration::from_millis(1));
+    }
     Ok(())
 }
 ```
 
 ## Async WebSocket: WASM upstream → TCP downstream
 
-Add the `ws-server` feature:
+Add the `upstream-ws` feature:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", features = ["ws-server"] }
-mbus-network = { version = "0.12.0", features = ["async"] }
+mbus-gateway = { version = "0.12.0", features = ["upstream-ws"] }
 ```
 
 <!-- validate: skip -->
 ```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
-use mbus_gateway::{AsyncWsGatewayServer, UnitRouteTable, WsGatewayConfig};
+
 use mbus_core::transport::UnitIdOrSlaveAddr;
+use mbus_gateway::{AsyncWsGatewayServer, NoopEventHandler, UnitRouteTable, WsGatewayConfig};
 use mbus_network::TokioTcpTransport;
+use tokio::sync::Mutex;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Connect to downstream Modbus TCP device
-    let ds = TokioTcpTransport::connect("192.168.1.10:502").await?;
-    let shared = Arc::new(Mutex::new(ds));
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // ── Downstream TCP connections ────────────────────────────────────────────
+    //
+    // Two Modbus TCP devices are reachable on the local network.
+    // Channel 0 → device at 192.168.1.10:502 (units 1–16)
+    // Channel 1 → device at 192.168.1.11:502 (units 17–32)
+    let ds0 = TokioTcpTransport::connect("192.168.1.10:502")
+        .await
+        .map_err(|e| format!("{:?}", e))?;
+    let ds1 = TokioTcpTransport::connect("192.168.1.11:502")
+        .await
+        .map_err(|e| format!("{:?}", e))?;
+    let downstreams = vec![Arc::new(Mutex::new(ds0)), Arc::new(Mutex::new(ds1))];
 
-    // Build route table
-    let mut router: UnitRouteTable<10> = UnitRouteTable::new();
-    for id in 1u8..=10 {
-        router.add(UnitIdOrSlaveAddr::new(id).unwrap(), 0).unwrap();
+    // ── Routing table ─────────────────────────────────────────────────────────
+    let mut router: UnitRouteTable<32> = UnitRouteTable::new();
+    for unit in 1u8..=16 {
+        router
+            .add(UnitIdOrSlaveAddr::new(unit).unwrap(), 0)
+            .unwrap();
+    }
+    for unit in 17u8..=32 {
+        router
+            .add(UnitIdOrSlaveAddr::new(unit).unwrap(), 1)
+            .unwrap();
     }
 
-    // Configure the WebSocket gateway
+    // ── Security configuration ────────────────────────────────────────────────
     let config = WsGatewayConfig {
+        // Drop any session that is silent for 30 seconds.
         idle_timeout: Some(Duration::from_secs(30)),
+
+        // Reject the 33rd+ concurrent connection at the WS handshake stage.
         max_sessions: 32,
+
+        // Browser must include "modbus" in Sec-WebSocket-Protocol.
         require_modbus_subprotocol: true,
+
+        // Only allow connections from our known HMI origin.
         allowed_origins: vec!["https://hmi.example.com".to_string()],
     };
 
-    // Listen for browser WebSocket connections on port 8502
-    // The browser WasmModbusClient connects to ws://localhost:8502
-    AsyncWsGatewayServer::serve("0.0.0.0:8502", config, router, vec![shared]).await?;
+    // ── Graceful shutdown on Ctrl-C ───────────────────────────────────────────
+    let shutdown = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C signal handler");
+        println!("\nShutdown signal received — stopping accept loop.");
+    };
+
+    println!("WebSocket gateway listening on ws://0.0.0.0:8502");
+    println!("Allowed origins:  {:?}", config.allowed_origins);
+    println!("Max sessions:     {}", config.max_sessions);
+    println!("Idle timeout:     {:?}", config.idle_timeout);
+
+    let handler = Arc::new(Mutex::new(NoopEventHandler));
+    AsyncWsGatewayServer::serve_with_shutdown(
+        "0.0.0.0:8502",
+        config,
+        router,
+        downstreams,
+        handler,
+        Duration::from_secs(1),
+        shutdown,
+    )
+    .await?;
+
     Ok(())
 }
 ```

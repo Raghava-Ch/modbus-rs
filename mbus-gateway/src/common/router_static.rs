@@ -57,9 +57,10 @@ pub trait GatewayRoutingPolicy {
 // UnitRouteTable
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct UnitRouteEntry {
-    unit: u8,
-    channel: usize,
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct UnitRouteEntry {
+    pub(crate) unit: u8,
+    pub(crate) channel: usize,
 }
 
 /// Exact unit-ID → channel mapping backed by a fixed-capacity heapless Vec.
@@ -245,7 +246,6 @@ impl<const N: usize> GatewayRoutingPolicy for RangeRouteTable<N> {
 pub struct PassthroughRouter;
 
 impl GatewayRoutingPolicy for PassthroughRouter {
-
     #[inline]
     #[allow(unused_variables)]
     fn route(&self, unit_id: UnitIdOrSlaveAddr) -> Option<usize> {

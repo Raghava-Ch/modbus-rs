@@ -95,6 +95,22 @@ impl<const N: usize> TxnMap<N> {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    /// Remove all in-flight entries belonging to `session_id`.
+    /// Returns the count removed.
+    pub fn remove_by_session(&mut self, session_id: u8) -> usize {
+        let mut count = 0;
+        let mut i = 0;
+        while i < self.entries.len() {
+            if self.entries[i].session_id == session_id {
+                self.entries.swap_remove(i);
+                count += 1;
+            } else {
+                i += 1;
+            }
+        }
+        count
+    }
 }
 
 impl<const N: usize> Default for TxnMap<N> {
