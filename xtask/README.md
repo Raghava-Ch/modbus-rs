@@ -231,22 +231,31 @@ cargo run -p xtask -- check-server-gen
 
 ## FFI Header Commands
 
-### `gen-header`
-Regenerate `modbus_rs_client.h` and `modbus_rs_client_feature_gated.h`:
+### `gen-client-header`
+Regenerate `modbus_rs_client.h`:
 
 ```bash
-cargo run -p xtask -- gen-header
+cargo run -p xtask -- gen-client-header
 ```
 
-### `check-header`
-Verify the headers are up to date (CI):
+You can select a custom feature set by using the `--features` option:
 
 ```bash
-cargo run -p xtask -- check-header
+cargo run -p xtask -- gen-client-header --features coils,registers
 ```
 
-### `gen-feature-header` / `check-feature-header`
-Regenerate or verify only `modbus_rs_client_feature_gated.h`.
+### `check-client-header`
+Verify the header is up to date (CI):
+
+```bash
+cargo run -p xtask -- check-client-header
+```
+
+Like the generator command, you can verify with a specific feature set:
+
+```bash
+cargo run -p xtask -- check-client-header --features coils,registers
+```
 
 ---
 
@@ -318,7 +327,7 @@ cargo run -p xtask -- check-doc-links -f documentation/README.md -f mbus-ffi/REA
 - Links inside fenced code blocks
 
 ### `check-release`
-Run the full release gate: `check-header` → `check-server-gen` → `build-c-smoke` → `build-c-demo --demo c_server_demo` → `check-feature-matrix`.
+Run the full release gate: `check-client-header` → `check-server-gen` → `build-c-smoke` → `build-c-demo --demo c_server_demo` → `check-feature-matrix`.
 
 ---
 

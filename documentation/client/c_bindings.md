@@ -43,13 +43,11 @@ cargo build -p mbus-ffi --release
 The header is generated using cbindgen. To regenerate:
 
 ```bash
-cargo run -p xtask -- check-header
-cargo run -p xtask -- gen-feature-header
+cargo run -p xtask -- gen-client-header
 ```
 
 This produces:
-- `modbus_rs_client.h` — Base header
-- `modbus_rs_client_feature_gated.h` — Feature-gated header
+- `modbus_rs_client.h` — Client header
 
 ---
 

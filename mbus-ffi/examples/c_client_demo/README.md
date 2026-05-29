@@ -25,7 +25,7 @@ cargo run -p xtask -- build-c-demo --demo c_client_demo --static
 Or manually:
 
 ```bash
-cargo build -p mbus-ffi --features c,full
+cargo build -p mbus-ffi --features c-client,full
 cmake -S mbus-ffi/examples/c_client_demo -B mbus-ffi/examples/c_client_demo/build \
       -DMBUS_FFI_LINK_STATIC=OFF
 cmake --build mbus-ffi/examples/c_client_demo/build
