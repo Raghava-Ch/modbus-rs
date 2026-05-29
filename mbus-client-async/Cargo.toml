@@ -9,7 +9,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
-description = "Role-focused async Modbus client facade re-exported from mbus-async"
+description = "Native async Modbus client stack for Tokio-based applications"
 
 [dependencies]
 mbus-async = { version = "0.12.0", path = "../mbus-async", default-features = false }
@@ -21,7 +21,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 default = [
     "network-tcp",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
