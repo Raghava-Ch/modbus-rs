@@ -7,9 +7,7 @@ macro_rules! client_log_debug {
 
 #[cfg(not(feature = "logging"))]
 macro_rules! client_log_debug {
-    ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
-    }};
+    ($($arg:tt)*) => {{}};
 }
 
 #[cfg(feature = "logging")]
@@ -21,9 +19,7 @@ macro_rules! client_log_trace {
 
 #[cfg(not(feature = "logging"))]
 macro_rules! client_log_trace {
-    ($($arg:tt)*) => {{
-        let _ = core::format_args!($($arg)*);
-    }};
+    ($($arg:tt)*) => {{}};
 }
 
 pub(crate) use client_log_debug;
