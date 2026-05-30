@@ -7,6 +7,8 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 use super::callbacks::MbusReadDiscreteInputsCtx;
 #[cfg(feature = "fifo")]
 use super::callbacks::MbusReadFifoQueueCtx;
+#[cfg(feature = "input-registers")]
+use super::callbacks::MbusReadInputRegistersCtx;
 use super::callbacks::{MbusCallbacks, MbusRequestFailedCtx};
 #[cfg(feature = "diagnostics")]
 use super::callbacks::{
@@ -15,10 +17,10 @@ use super::callbacks::{
 };
 #[cfg(feature = "file-record")]
 use super::callbacks::{MbusFileRecordResult, MbusReadFileRecordCtx, MbusWriteFileRecordCtx};
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 use super::callbacks::{
-    MbusMaskWriteRegisterCtx, MbusReadHoldingRegistersCtx, MbusReadInputRegistersCtx,
-    MbusReadWriteMultipleRegistersCtx, MbusWriteMultipleRegistersCtx, MbusWriteSingleRegisterCtx,
+    MbusMaskWriteRegisterCtx, MbusReadHoldingRegistersCtx, MbusReadWriteMultipleRegistersCtx,
+    MbusWriteMultipleRegistersCtx, MbusWriteSingleRegisterCtx,
 };
 #[cfg(feature = "coils")]
 use super::callbacks::{MbusReadCoilsCtx, MbusWriteMultipleCoilsCtx, MbusWriteSingleCoilCtx};
@@ -178,8 +180,9 @@ impl mbus_client::app::CoilResponse for CApp {
 
 // ── RegisterResponse ──────────────────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 impl mbus_client::app::RegisterResponse for CApp {
+    #[cfg(feature = "holding-registers")]
     fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
@@ -200,6 +203,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_single_holding_register_response(
         &mut self,
         txn_id: u16,
@@ -223,6 +227,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "input-registers")]
     fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
@@ -243,6 +248,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "input-registers")]
     fn read_single_input_register_response(
         &mut self,
         txn_id: u16,
@@ -266,6 +272,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn write_single_register_response(
         &mut self,
         txn_id: u16,
@@ -287,6 +294,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -308,6 +316,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -328,6 +337,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_single_register_response(
         &mut self,
         txn_id: u16,
@@ -352,6 +362,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr) {
         if let Some(cb) = self.callbacks.on_mask_write_register {
             let ctx = MbusMaskWriteRegisterCtx {

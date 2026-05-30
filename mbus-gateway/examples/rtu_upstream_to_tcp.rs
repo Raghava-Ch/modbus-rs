@@ -29,15 +29,14 @@
     feature = "async"
 ))]
 fn main() {
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     use mbus_core::transport::{
-        BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-        Parity, SerialMode, UnitIdOrSlaveAddr,
+        BaudRate, DataBits, Parity, SerialMode, UnitIdOrSlaveAddr,
     };
     use mbus_gateway::{
-        AsyncSerialGatewayServer, GatewayShutdown, NoopEventHandler, TokioRtuTransport,
-        UnitRouteTable,
+        AsyncSerialGatewayServer, GatewayShutdown, NoopEventHandler,
+        UnitRouteTable, SerialGatewayConfig, GatewayTransport, GatewayEventHandler,
     };
     use mbus_network::TokioTcpTransport;
     use tokio::sync::Mutex;
@@ -55,28 +54,11 @@ fn main() {
         .build()
         .unwrap()
         .block_on(async {
-            // ── Open the RTU upstream serial port ────────────────────────────
-            let serial_cfg = ModbusConfig::Serial(ModbusSerialConfig {
-                port_path: SERIAL_PORT.try_into().expect("port path too long"),
-                mode: SerialMode::Rtu,
-                baud_rate: BaudRate::Baud19200,
-                data_bits: DataBits::Eight,
-                stop_bits: 1,
-                parity: Parity::None,
-                response_timeout_ms: 1000,
-                retry_attempts: 0,
-                retry_backoff_strategy: BackoffStrategy::Immediate,
-                retry_jitter_strategy: JitterStrategy::None,
-                retry_random_fn: None,
-            });
-            let rtu_upstream =
-                TokioRtuTransport::new(&serial_cfg).expect("failed to open serial port");
-
             // ── Connect to the downstream TCP slave ───────────────────────────
             let downstream = TokioTcpTransport::connect(DOWNSTREAM_ADDR)
                 .await
                 .expect("failed to connect to downstream");
-            let shared_ds = Arc::new(Mutex::new(downstream));
+            let shared_ds = Arc::new(Mutex::new(GatewayTransport::Tcp(downstream)));
 
             // ── Route units 1–8 to channel 0 ─────────────────────────────────
             let mut router: UnitRouteTable<8> = UnitRouteTable::new();
@@ -85,6 +67,7 @@ fn main() {
                     .add(UnitIdOrSlaveAddr::new(unit).unwrap(), 0)
                     .unwrap();
             }
+            let router_lock = Arc::new(RwLock::new(router));
 
             // ── Graceful shutdown on Ctrl+C ───────────────────────────────────
             let (token, shutdown) = GatewayShutdown::new();
@@ -101,13 +84,22 @@ fn main() {
                 SERIAL_PORT, DOWNSTREAM_ADDR
             );
 
-            let handler = Arc::new(Mutex::new(NoopEventHandler));
+            let handler: Arc<Mutex<dyn GatewayEventHandler + Send>> = Arc::new(Mutex::new(NoopEventHandler));
+            let cfg = SerialGatewayConfig {
+                port: SERIAL_PORT.to_string(),
+                mode: SerialMode::Rtu,
+                baud_rate: BaudRate::Baud19200,
+                data_bits: DataBits::Eight,
+                stop_bits: 1,
+                parity: Parity::None,
+                response_timeout: std::time::Duration::from_secs(1),
+            };
+
             AsyncSerialGatewayServer::serve_with_shutdown(
-                rtu_upstream,
-                router,
+                cfg,
+                router_lock,
                 vec![shared_ds],
                 handler,
-                std::time::Duration::from_secs(1),
                 shutdown,
             )
             .await

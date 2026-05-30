@@ -37,7 +37,7 @@ pub mod discrete_inputs;
 pub mod fifo;
 #[cfg(feature = "file-record")]
 pub mod file_record;
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod registers;
 
 // ── Re-exports ───────────────────────────────────────────────────────────────

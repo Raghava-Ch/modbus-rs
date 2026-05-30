@@ -45,15 +45,28 @@ server-traffic = ["c-server", "mbus-server/traffic"]
 ## Feature forwarding — each feature enables the corresponding FC group on
 ## mbus-client AND (when c-server is active) on mbus-server.
 coils = ["mbus-client?/coils", "mbus-server?/coils"]
-holding-registers = ["mbus-client?/holding-registers", "mbus-server?/holding-registers"]
-input-registers = ["mbus-client?/input-registers", "mbus-server?/input-registers"]
+holding-registers = [
+    "mbus-client?/holding-registers",
+    "mbus-server?/holding-registers",
+]
+input-registers = [
+    "mbus-client?/input-registers",
+    "mbus-server?/input-registers",
+]
 registers = ["holding-registers", "input-registers"]
-discrete-inputs = ["mbus-client?/discrete-inputs", "mbus-server?/discrete-inputs"]
+discrete-inputs = [
+    "mbus-client?/discrete-inputs",
+    "mbus-server?/discrete-inputs",
+]
 fifo = ["mbus-client?/fifo", "mbus-server?/fifo"]
 file-record = ["mbus-client?/file-record", "mbus-server?/file-record"]
 diagnostics = ["mbus-client?/diagnostics", "mbus-server?/diagnostics"]
 
-traffic = ["mbus-client?/traffic", "mbus-server-async?/traffic", "mbus-client-async?/traffic"]
+traffic = [
+    "mbus-client?/traffic",
+    "mbus-server-async?/traffic",
+    "mbus-client-async?/traffic",
+]
 ## Enables TCP network transport support (mbus-client-async, mbus-gateway).
 network-tcp = [
     "mbus-client-async?/network-tcp",
@@ -96,7 +109,23 @@ full = [
 server-full = [
     "c-server",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
+]
+
+## Convenience alias — enables all server features (c-server must also be enabled)
+client-full = [
+    "c-client",
+    "coils",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -214,6 +243,7 @@ nodejs = [
     "dep:napi",
     "dep:napi-derive",
     "dep:serde_json",
+    "dep:serde",
     "dep:tokio",
     "dep:mbus-client-async",
     "dep:mbus-server-async",
@@ -233,7 +263,11 @@ nodejs = [
     "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Node.js server/client.
-nodejs-traffic = ["nodejs", "mbus-server-async/traffic", "mbus-client-async/traffic"]
+nodejs-traffic = [
+    "nodejs",
+    "mbus-server-async/traffic",
+    "mbus-client-async/traffic",
+]
 
 ## Convenience alias for Node.js bindings — enables client/gateway/server features
 ## Note: Does NOT include c-server (YAML-based application server)
@@ -307,17 +341,41 @@ mbus-server = { workspace = true, optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = [
+    "derive",
+], optional = true }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
-pyo3-async-runtimes = { version = "0.28.0", features = ["tokio-runtime"], optional = true }
+pyo3-async-runtimes = { version = "0.28.0", features = [
+    "tokio-runtime",
+], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
-mbus-client-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
-mbus-server-async = { workspace = true, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"], optional = true }
+mbus-client-async = { workspace = true, features = [
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+], optional = true }
+mbus-server-async = { workspace = true, features = [
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+], optional = true }
 
 ## Node.js binding deps — only pulled in when `nodejs` feature is enabled.
-napi = { version = "3", default-features = false, features = ["napi6", "tokio_rt", "async", "compat-mode", "serde-json"], optional = true }
+napi = { version = "3", default-features = false, features = [
+    "napi6",
+    "tokio_rt",
+    "async",
+    "compat-mode",
+    "serde-json",
+], optional = true }
 napi-derive = { version = "3", optional = true }
 serde_json = { version = "1", optional = true }
 
@@ -352,7 +410,10 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ## In-process AsyncTcpServer used by the .NET binding integration test.
-mbus-async = { version = "0.12.0", path = "../mbus-async", features = ["server-tcp", "registers"] }
+mbus-async = { version = "0.12.0", path = "../mbus-async", features = [
+    "server-tcp",
+    "registers",
+] }
 anyhow = "1"
 
 [[example]]

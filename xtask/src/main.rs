@@ -58,10 +58,19 @@ fn run_step_with_env(
 
 struct GenClientHeaderOpts {
     features: Option<String>,
+    out_dir: PathBuf,
+    target: Option<String>,
+    profile: Option<String>,
 }
 
-fn parse_gen_client_header_opts(args: &[String]) -> Result<GenClientHeaderOpts, String> {
+fn parse_gen_client_header_opts(
+    root: &Path,
+    args: &[String],
+) -> Result<GenClientHeaderOpts, String> {
     let mut features = None;
+    let mut out_dir = None;
+    let mut target = None;
+    let mut profile = None;
     let mut i = 0usize;
     while i < args.len() {
         match args[i].as_str() {
@@ -73,26 +82,150 @@ fn parse_gen_client_header_opts(args: &[String]) -> Result<GenClientHeaderOpts, 
                         .clone(),
                 );
             }
-            other => return Err(format!("unknown flag for gen-client-header: {other}")),
+            "--out-dir" => {
+                i += 1;
+                let path_str = args
+                    .get(i)
+                    .ok_or_else(|| "--out-dir requires a value".to_string())?;
+                out_dir = Some(root.join(path_str));
+            }
+            "--target" => {
+                i += 1;
+                target = Some(
+                    args.get(i)
+                        .ok_or_else(|| "--target requires a value".to_string())?
+                        .clone(),
+                );
+            }
+            "--profile" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "--profile requires a value".to_string())?
+                    .clone();
+                if val != "release" && val != "debug" {
+                    return Err(format!("--profile must be 'release' or 'debug', got '{val}'"));
+                }
+                profile = Some(val);
+            }
+            other => return Err(format!("unknown flag for gen-client-lib/check-client-header: {other}")),
         }
         i += 1;
     }
-    Ok(GenClientHeaderOpts { features })
+    let out_dir = out_dir.unwrap_or_else(|| root.join("target/mbus-ffi"));
+    Ok(GenClientHeaderOpts {
+        features,
+        out_dir,
+        target,
+        profile,
+    })
 }
 
 fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
-    let opts = parse_gen_client_header_opts(args)?;
+    let opts = parse_gen_client_header_opts(root, args)?;
     let mut script_args = vec!["./scripts/check_header.sh", "--fix"];
     let features_arg;
     if let Some(feats) = &opts.features {
         features_arg = format!("--features={feats}");
         script_args.push(&features_arg);
     }
-    run_step("bash", &script_args, root)
+    run_step("bash", &script_args, root)?;
+
+    let profile = opts.profile.as_deref().unwrap_or("release");
+
+    // Build mbus-ffi in selected mode & target
+    let mut build_args = vec!["build", "-p", "mbus-ffi"];
+    if profile == "release" {
+        build_args.push("--release");
+    }
+    if let Some(target) = &opts.target {
+        build_args.push("--target");
+        build_args.push(target);
+    }
+
+    let features_str;
+    if let Some(feats) = &opts.features {
+        features_str = format!("c-client,{feats}");
+        build_args.push("--features");
+        build_args.push(&features_str);
+    } else {
+        features_str = "full".to_string();
+        build_args.push("--features");
+        build_args.push(&features_str);
+    }
+
+    println!(
+        "Building mbus-ffi for FFI bundling with features: {} (profile={}, target={:?}) ...",
+        features_str,
+        profile,
+        opts.target
+    );
+    run_step("cargo", &build_args, root)?;
+
+    // Create target folders
+    let include_dir = opts.out_dir.join("include");
+    let library_dir = opts.out_dir.join("library");
+    fs::create_dir_all(&include_dir)
+        .map_err(|e| format!("failed to create {}: {e}", include_dir.display()))?;
+    fs::create_dir_all(&library_dir)
+        .map_err(|e| format!("failed to create {}: {e}", library_dir.display()))?;
+
+    // Copy modbus_rs_client.h
+    let src_header = root.join("target/mbus-ffi/include/modbus_rs_client.h");
+    if !src_header.exists() {
+        return Err(
+            "Generated header modbus_rs_client.h not found in target/mbus-ffi/include/".to_string(),
+        );
+    }
+    let dest_header = include_dir.join("modbus_rs_client.h");
+    fs::copy(&src_header, &dest_header)
+        .map_err(|e| format!("failed to copy header to {}: {e}", dest_header.display()))?;
+    println!("  copied header -> {}", dest_header.display());
+
+    // Copy built libraries
+    let target_dir = if let Some(target) = &opts.target {
+        root.join("target").join(target).join(profile)
+    } else {
+        root.join("target").join(profile)
+    };
+
+    let mut copied_any = false;
+    let lib_filenames = &[
+        "libmbus_ffi.a",
+        "mbus_ffi.lib",
+        "libmbus_ffi.so",
+        "libmbus_ffi.dylib",
+        "mbus_ffi.dll",
+    ];
+    for filename in lib_filenames {
+        let src = target_dir.join(filename);
+        if src.exists() {
+            let dest = library_dir.join(filename);
+            fs::copy(&src, &dest).map_err(|e| {
+                format!(
+                    "failed to copy library {} to {}: {e}",
+                    filename,
+                    dest.display()
+                )
+            })?;
+            println!("  copied library -> {}", dest.display());
+            copied_any = true;
+        }
+    }
+
+    if !copied_any {
+        return Err(format!(
+            "No built library files found in {}",
+            target_dir.display()
+        ));
+    }
+
+    println!("Client FFI bundle is ready at {}", opts.out_dir.display());
+    Ok(())
 }
 
 fn cmd_check_client_header(root: &Path, args: &[String]) -> Result<(), String> {
-    let opts = parse_gen_client_header_opts(args)?;
+    let opts = parse_gen_client_header_opts(root, args)?;
     let mut script_args = vec!["./scripts/check_header.sh"];
     let features_arg;
     if let Some(feats) = &opts.features {
@@ -539,12 +672,20 @@ fn print_help() {
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
     println!();
     println!("FFI HEADER COMMANDS");
-    println!("  gen-client-header [OPTIONS]");
+    println!("  gen-client-lib [OPTIONS]");
     println!("      Regenerate modbus_rs_client.h.");
     println!("      --features <list> Select a custom Rust feature set to expose in the C header.");
+    println!(
+        "      --out-dir <path>  Output directory root (creates include/ and library/ subdirectories)."
+    );
+    println!("                        [default: target/mbus-ffi]");
+    println!("      --target <triple> Target triple for cross-compilation (e.g. thumbv7em-none-eabi).");
+    println!("      --profile <mode>  Build profile: release (default) or debug.");
     println!("  check-client-header [OPTIONS]");
     println!("      Verify that modbus_rs_client.h is up to date.");
     println!("      --features <list> Select a custom Rust feature set to verify.");
+    println!("      --target <triple> Target triple (accepted for compatibility/verification).");
+    println!("      --profile <mode>  Build profile (accepted for compatibility/verification).");
     println!();
     println!("VALIDATION COMMANDS");
     println!("  check-feature-matrix");
@@ -575,7 +716,7 @@ fn main() -> ExitCode {
     let remaining_args: Vec<String> = args.collect();
 
     let result = match cmd.as_str() {
-        "gen-client-header" | "gen-header" => cmd_gen_client_header(&root, &remaining_args),
+        "gen-client-lib" | "gen-header" => cmd_gen_client_header(&root, &remaining_args),
         "check-client-header" | "check-header" => cmd_check_client_header(&root, &remaining_args),
         "list-c-demos" => cmd_list_c_demos(&root),
         "build-c-demo" => cmd_build_c_demo(&root, &remaining_args),
