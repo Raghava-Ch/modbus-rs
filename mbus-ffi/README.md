@@ -183,10 +183,14 @@ Server header:
 cbindgen --config mbus-ffi/cbindgen_server.toml --crate mbus-ffi --output target/mbus-ffi/include/modbus_rs_server.h
 ```
 
-The workspace also provides an xtask helper for the client header:
+The workspace also provides an xtask helper to generate the client header, build the release FFI library, and bundle them together:
 
 ```bash
-cargo run -p xtask -- gen-client-header
+# Default: bundles to target/mbus-ffi/
+cargo run -p xtask -- gen-client-lib
+
+# Custom SDK path (creates include/ and library/)
+cargo run -p xtask -- gen-client-lib --out-dir /path/to/my_sdk
 ```
 
 ### Header / Feature Compatibility

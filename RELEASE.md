@@ -38,7 +38,7 @@ cargo run -p xtask -- check-server-gen      # mbus_server_app.h matches the exam
 Regenerate if needed:
 
 ```bash
-cargo run -p xtask -- gen-client-header
+cargo run -p xtask -- gen-client-lib
 cargo run -p xtask -- gen-server-app \
   --config mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
   --emit-c-header target/mbus-ffi/include/mbus_server_app.h

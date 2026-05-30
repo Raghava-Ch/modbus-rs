@@ -53,33 +53,33 @@ macro_rules! serial_fn {
 
 // ── Read holding registers (FC 0x03) ──────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 tcp_fn!(mbus_tcp_read_holding_registers,    read_holding_registers,        address: u16, quantity: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 serial_fn!(mbus_serial_read_holding_registers, read_holding_registers,     address: u16, quantity: u16);
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 tcp_fn!(mbus_tcp_read_single_holding_register,    read_single_holding_register,    address: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 serial_fn!(mbus_serial_read_single_holding_register, read_single_holding_register, address: u16);
 
 // ── Read input registers (FC 0x04) ────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 tcp_fn!(mbus_tcp_read_input_registers,    read_input_registers,        address: u16, quantity: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 serial_fn!(mbus_serial_read_input_registers, read_input_registers,     address: u16, quantity: u16);
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 tcp_fn!(mbus_tcp_read_single_input_register,    read_single_input_register,    address: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 serial_fn!(mbus_serial_read_single_input_register, read_single_input_register, address: u16);
 
 // ── Write single register (FC 0x06) ───────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 tcp_fn!(mbus_tcp_write_single_register,    write_single_register,    address: u16, value: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 serial_fn!(mbus_serial_write_single_register, write_single_register, address: u16, value: u16);
 
 // ── Write multiple registers (FC 0x10) ────────────────────────────────────────
@@ -90,7 +90,7 @@ serial_fn!(mbus_serial_write_single_register, write_single_register, address: u1
 ///
 /// # Safety
 /// `values` must be a valid non-null pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_write_multiple_registers(
     id: MbusClientId,
@@ -121,7 +121,7 @@ pub unsafe extern "C" fn mbus_tcp_write_multiple_registers(
 ///
 /// # Safety
 /// `values` must be a valid non-null pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_write_multiple_registers(
     id: MbusClientId,
@@ -150,9 +150,9 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_registers(
 
 // ── Mask write register (FC 0x16) ─────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 tcp_fn!(mbus_tcp_mask_write_register,    mask_write_register,    address: u16, and_mask: u16, or_mask: u16);
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 serial_fn!(mbus_serial_mask_write_register, mask_write_register, address: u16, and_mask: u16, or_mask: u16);
 
 // ── Read/Write multiple registers (FC 0x17) ───────────────────────────────────
@@ -163,7 +163,7 @@ serial_fn!(mbus_serial_mask_write_register, mask_write_register, address: u16, a
 ///
 /// # Safety
 /// `write_values` must be a valid non-null pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_read_write_multiple_registers(
     id: MbusClientId,
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn mbus_tcp_read_write_multiple_registers(
 ///
 /// # Safety
 /// `write_values` must be a valid non-null pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_read_write_multiple_registers(
     id: MbusClientId,

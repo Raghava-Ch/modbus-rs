@@ -191,7 +191,7 @@ pub use gateway_async::ws_gateway::{AsyncWsGatewayServer, WsGatewayConfig};
     feature = "async",
     any(feature = "upstream-serial-rtu", feature = "upstream-serial-ascii")
 ))]
-pub use gateway_async::serial_gateway::AsyncSerialGatewayServer;
+pub use gateway_async::serial_gateway::{AsyncSerialGatewayServer, SerialGatewayConfig, GatewayError};
 
 // ── Concrete transport re-exports ─────────────────────────────────────────────
 
