@@ -337,7 +337,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
-    #[cfg(feature = "holding-registers")]
+    #[cfg(feature = "input-registers")]
     fn read_single_register_response(
         &mut self,
         txn_id: u16,

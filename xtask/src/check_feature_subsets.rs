@@ -767,6 +767,26 @@ static STEPS: &[Step] = &[
         ],
     ),
     Step::check(
+        "ffi / c-client+coils+holding-registers",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,holding-registers",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+input-registers",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,input-registers",
+        ],
+    ),
+    Step::check(
         "ffi / c-server+server-traffic+full",
         &[
             "-p",

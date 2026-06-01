@@ -48,8 +48,8 @@ exclude = [
 [struct]
 
 [defines]
-'feature = "dotnet"' = "MBUS_FEATURE_DOTNET"
-'feature = "coils"' = "MBUS_FEATURE_COILS"
-'feature = "registers"' = "MBUS_FEATURE_REGISTERS"
-'feature = "discrete-inputs"' = "MBUS_FEATURE_DISCRETE_INPUTS"
-'cbindgen' = "CBINDGEN"
+"feature = dotnet" = "MBUS_FEATURE_DOTNET"
+"feature = coils" = "MBUS_FEATURE_COILS"
+"feature = registers" = "MBUS_FEATURE_REGISTERS"
+"feature = discrete-inputs" = "MBUS_FEATURE_DISCRETE_INPUTS"
+"cbindgen" = "CBINDGEN"

@@ -17,10 +17,6 @@ fn repo_root() -> PathBuf {
     manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf()
 }
 
-fn ffi_include_dir(root: &Path) -> PathBuf {
-    root.join("target/mbus-ffi/include")
-}
-
 fn run_step(program: &str, args: &[&str], cwd: &Path) -> Result<(), String> {
     let status = Command::new(program)
         .args(args)
@@ -104,11 +100,17 @@ fn parse_gen_client_header_opts(
                     .ok_or_else(|| "--profile requires a value".to_string())?
                     .clone();
                 if val != "release" && val != "debug" {
-                    return Err(format!("--profile must be 'release' or 'debug', got '{val}'"));
+                    return Err(format!(
+                        "--profile must be 'release' or 'debug', got '{val}'"
+                    ));
                 }
                 profile = Some(val);
             }
-            other => return Err(format!("unknown flag for gen-client-lib/check-client-header: {other}")),
+            other => {
+                return Err(format!(
+                    "unknown flag for gen-client-lib/check-client-header: {other}"
+                ));
+            }
         }
         i += 1;
     }
@@ -138,9 +140,21 @@ fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
     if profile == "release" {
         build_args.push("--release");
     }
+    
+    let mut is_bare_metal = false;
     if let Some(target) = &opts.target {
         build_args.push("--target");
         build_args.push(target);
+        if target.contains("thumb") || target.contains("none") || target.contains("wasm") {
+            is_bare_metal = true;
+        }
+    }
+
+    if !is_bare_metal {
+        // Build as cdylib for standard OSes
+        build_args.push("--crate-type=cdylib");
+        build_args.push("--crate-type=staticlib");
+        build_args.push("--crate-type=rlib");
     }
 
     let features_str;
@@ -156,9 +170,7 @@ fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
 
     println!(
         "Building mbus-ffi for FFI bundling with features: {} (profile={}, target={:?}) ...",
-        features_str,
-        profile,
-        opts.target
+        features_str, profile, opts.target
     );
     run_step("cargo", &build_args, root)?;
 
@@ -170,14 +182,14 @@ fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
     fs::create_dir_all(&library_dir)
         .map_err(|e| format!("failed to create {}: {e}", library_dir.display()))?;
 
-    // Copy modbus_rs_client.h
-    let src_header = root.join("target/mbus-ffi/include/modbus_rs_client.h");
+    // Copy modbus_rs.h
+    let src_header = root.join("target/mbus-ffi/include/modbus_rs.h");
     if !src_header.exists() {
         return Err(
-            "Generated header modbus_rs_client.h not found in target/mbus-ffi/include/".to_string(),
+            "Generated header modbus_rs.h not found in target/mbus-ffi/include/".to_string(),
         );
     }
-    let dest_header = include_dir.join("modbus_rs_client.h");
+    let dest_header = include_dir.join("modbus_rs.h");
     fs::copy(&src_header, &dest_header)
         .map_err(|e| format!("failed to copy header to {}: {e}", dest_header.display()))?;
     println!("  copied header -> {}", dest_header.display());
@@ -673,16 +685,18 @@ fn print_help() {
     println!();
     println!("FFI HEADER COMMANDS");
     println!("  gen-client-lib [OPTIONS]");
-    println!("      Regenerate modbus_rs_client.h.");
+    println!("      Regenerate modbus_rs.h.");
     println!("      --features <list> Select a custom Rust feature set to expose in the C header.");
     println!(
         "      --out-dir <path>  Output directory root (creates include/ and library/ subdirectories)."
     );
     println!("                        [default: target/mbus-ffi]");
-    println!("      --target <triple> Target triple for cross-compilation (e.g. thumbv7em-none-eabi).");
+    println!(
+        "      --target <triple> Target triple for cross-compilation (e.g. thumbv7em-none-eabi)."
+    );
     println!("      --profile <mode>  Build profile: release (default) or debug.");
     println!("  check-client-header [OPTIONS]");
-    println!("      Verify that modbus_rs_client.h is up to date.");
+    println!("      Verify that modbus_rs.h is up to date.");
     println!("      --features <list> Select a custom Rust feature set to verify.");
     println!("      --target <triple> Target triple (accepted for compatibility/verification).");
     println!("      --profile <mode>  Build profile (accepted for compatibility/verification).");

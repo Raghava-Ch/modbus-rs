@@ -94,7 +94,7 @@ Example dependency setup:
 
 ```toml
 [dependencies]
-mbus-network = { version = "0.12.0", features = ["logging"] }
+mbus-network = { version = "0.13.0", features = ["logging"] }
 env_logger = "0.11"
 ```
 

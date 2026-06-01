@@ -37,8 +37,10 @@ use crate::services::discrete_input::DiscreteInputs;
 use crate::services::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
 use crate::services::file_record::SubRequestParams;
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
-use crate::services::register::{HoldingRegisters, InputRegisters};
+#[cfg(feature = "holding-registers")]
+use crate::services::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use crate::services::register::InputRegisters;
 
 /// Trait for receiving notifications about failed Modbus requests.
 ///
@@ -332,6 +334,7 @@ pub trait RegisterResponse {
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
     /// - `registers`: An `InputRegisters` struct containing the values of the read input registers.
+    #[cfg(feature = "input-registers")]
     fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
@@ -350,6 +353,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register that was read.
     /// - `value`: The value of the read register.
+    #[cfg(feature = "input-registers")]
     fn read_single_input_register_response(
         &mut self,
         txn_id: u16,
@@ -368,6 +372,7 @@ pub trait RegisterResponse {
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
     /// - `registers`: A `HoldingRegisters` struct containing the values of the read holding registers.
+    #[cfg(feature = "holding-registers")]
     fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
@@ -386,6 +391,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register that was written.
     /// - `value`: The value that was written to the register.
+    #[cfg(feature = "holding-registers")]
     fn write_single_register_response(
         &mut self,
         txn_id: u16,
@@ -405,6 +411,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `starting_address`: The starting address of the registers that were written.
     /// - `quantity`: The number of registers that were written.
+    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -423,6 +430,7 @@ pub trait RegisterResponse {
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
     /// - `registers`: A `HoldingRegisters` struct containing the values of the registers that were read.
+    #[cfg(feature = "holding-registers")]
     fn read_write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -443,6 +451,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register that was read.
     /// - `value`: The value of the read register.
+    #[cfg(feature = "input-registers")]
     fn read_single_register_response(
         &mut self,
         txn_id: u16,
@@ -462,6 +471,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register that was written.
     /// - `value`: The value that was written to the register.
+    #[cfg(feature = "holding-registers")]
     fn read_single_holding_register_response(
         &mut self,
         txn_id: u16,
@@ -479,6 +489,7 @@ pub trait RegisterResponse {
     /// - `unit_id_slave_addr`: The unit ID of the device that responded.
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
+    #[cfg(feature = "holding-registers")]
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr);
 }
 

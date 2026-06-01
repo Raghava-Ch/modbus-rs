@@ -5,19 +5,23 @@
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_gateway::GatewayEventHandler;
 
+#[cfg(feature = "c-gateway")]
 use super::callbacks::MbusGatewayCallbacks;
 
 /// Adapter that fans out trait-method calls to the optional C function pointers.
+#[cfg(feature = "c-gateway")]
 pub struct CGatewayEventAdapter {
     callbacks: MbusGatewayCallbacks,
 }
 
+#[cfg(feature = "c-gateway")]
 impl CGatewayEventAdapter {
     pub fn new(callbacks: MbusGatewayCallbacks) -> Self {
         Self { callbacks }
     }
 }
 
+#[cfg(feature = "c-gateway")]
 impl GatewayEventHandler for CGatewayEventAdapter {
     fn on_forward(&mut self, session_id: u8, unit: UnitIdOrSlaveAddr, channel_idx: usize) {
         if let Some(cb) = self.callbacks.on_forward {

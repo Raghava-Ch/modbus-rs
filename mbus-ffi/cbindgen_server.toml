@@ -140,5 +140,20 @@ include = [
 [struct]
 
 [defines]
-'feature = "c-server"' = "MBUS_FEATURE_C_SERVER"
-'cbindgen' = "CBINDGEN"
+"feature = c-client" = "MBUS_FEATURE_C_CLIENT"
+"feature = c-server" = "MBUS_FEATURE_C_SERVER"
+"feature = c-gateway" = "MBUS_FEATURE_C_GATEWAY"
+"feature = coils" = "MBUS_FEATURE_COILS"
+"feature = holding-registers" = "MBUS_FEATURE_HOLDING_REGISTERS"
+"feature = input-registers" = "MBUS_FEATURE_INPUT_REGISTERS"
+"feature = discrete-inputs" = "MBUS_FEATURE_DISCRETE_INPUTS"
+"feature = fifo" = "MBUS_FEATURE_FIFO"
+"feature = file-record" = "MBUS_FEATURE_FILE_RECORD"
+"feature = diagnostics" = "MBUS_FEATURE_DIAGNOSTICS"
+"feature = traffic" = "MBUS_FEATURE_TRAFFIC"
+"feature = server-traffic" = "MBUS_FEATURE_SERVER_TRAFFIC"
+"feature = network-tcp" = "MBUS_FEATURE_NETWORK_TCP"
+"feature = serial-rtu" = "MBUS_FEATURE_SERIAL_RTU"
+"feature = serial-ascii" = "MBUS_FEATURE_SERIAL_ASCII"
+"target_arch = wasm32" = "MBUS_TARGET_WASM32"
+"cbindgen" = "CBINDGEN"

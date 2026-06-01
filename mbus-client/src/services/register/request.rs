@@ -40,6 +40,7 @@ impl ReqPduCompiler {
     }
 
     /// Creates a Modbus PDU for a Read Input Registers (FC 0x04) request.
+    #[cfg(feature = "input-registers")]
     pub(super) fn read_input_registers_request(
         address: u16,
         quantity: u16,

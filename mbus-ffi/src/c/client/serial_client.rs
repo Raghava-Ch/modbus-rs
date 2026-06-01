@@ -8,14 +8,24 @@ use mbus_core::transport::SerialMode;
 use super::app::CApp;
 use super::callbacks::MbusCallbacks;
 use super::config::{MbusSerialConfig, serial_config_from_c};
-use super::pool::{
-    MBUS_INVALID_CLIENT_ID, MbusClientId, pool_allocate_serial_ascii, pool_allocate_serial_rtu,
-    pool_free, with_serial_client_uniform,
-};
+use super::pool::{MBUS_INVALID_CLIENT_ID, MbusClientId, pool_free};
+
+#[cfg(feature = "serial-rtu")]
+use super::pool::pool_allocate_serial_rtu;
+
+#[cfg(feature = "serial-ascii")]
+use super::pool::pool_allocate_serial_ascii;
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use super::pool::with_serial_client_uniform;
 use crate::c::error::MbusStatusCode;
-use crate::c::transport::{
-    CAsciiTransport, CRtuTransport, MbusTransportCallbacks, validate_transport_callbacks,
-};
+use crate::c::transport::{MbusTransportCallbacks, validate_transport_callbacks};
+
+#[cfg(feature = "serial-rtu")]
+use crate::c::transport::CRtuTransport;
+
+#[cfg(feature = "serial-ascii")]
+use crate::c::transport::CAsciiTransport;
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -51,7 +61,9 @@ pub unsafe extern "C" fn mbus_serial_client_new(
         return MBUS_INVALID_CLIENT_ID;
     }
 
+    #[allow(unreachable_code)]
     match serial_config.mode {
+        #[cfg(feature = "serial-rtu")]
         SerialMode::Rtu => {
             let app = CApp::new(cb);
             let transport = CRtuTransport::new(transport_cb);
@@ -64,6 +76,7 @@ pub unsafe extern "C" fn mbus_serial_client_new(
                 Err(_) => MBUS_INVALID_CLIENT_ID,
             }
         }
+        #[cfg(feature = "serial-ascii")]
         SerialMode::Ascii => {
             let app = CApp::new(cb);
             let transport = CAsciiTransport::new(transport_cb);
@@ -76,6 +89,7 @@ pub unsafe extern "C" fn mbus_serial_client_new(
                 Err(_) => MBUS_INVALID_CLIENT_ID,
             }
         }
+        _ => MBUS_INVALID_CLIENT_ID,
     }
 }
 

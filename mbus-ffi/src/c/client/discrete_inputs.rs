@@ -2,13 +2,19 @@
 
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+use super::pool::MbusClientId;
+
+#[cfg(feature = "network-tcp")]
+use super::pool::with_tcp_client;
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use super::pool::with_serial_client_uniform;
 use crate::c::error::MbusStatusCode;
 
 /// Queue a Read Discrete Inputs (FC 0x02) request.
 ///
 /// The response is delivered via `MbusCallbacks::on_read_discrete_inputs`.
-#[cfg(feature = "discrete-inputs")]
+#[cfg(all(feature = "discrete-inputs", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_discrete_inputs(
     id: MbusClientId,
@@ -31,7 +37,7 @@ pub extern "C" fn mbus_tcp_read_discrete_inputs(
 }
 
 /// Queue a Read Discrete Inputs (FC 0x02) request on a serial client.
-#[cfg(feature = "discrete-inputs")]
+#[cfg(all(feature = "discrete-inputs", any(feature = "serial-rtu", feature = "serial-ascii")))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_discrete_inputs(
     id: MbusClientId,
@@ -54,7 +60,7 @@ pub extern "C" fn mbus_serial_read_discrete_inputs(
 }
 
 /// Queue a Read Single Discrete Input request (FC 0x02 with quantity=1).
-#[cfg(feature = "discrete-inputs")]
+#[cfg(all(feature = "discrete-inputs", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_single_discrete_input(
     id: MbusClientId,
@@ -76,7 +82,7 @@ pub extern "C" fn mbus_tcp_read_single_discrete_input(
 }
 
 /// Queue a Read Single Discrete Input request on a serial client.
-#[cfg(feature = "discrete-inputs")]
+#[cfg(all(feature = "discrete-inputs", any(feature = "serial-rtu", feature = "serial-ascii")))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_single_discrete_input(
     id: MbusClientId,

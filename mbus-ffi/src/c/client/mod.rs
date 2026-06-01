@@ -24,7 +24,9 @@ pub mod callbacks;
 pub mod config;
 pub mod models;
 pub mod pool;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub mod serial_client;
+#[cfg(feature = "network-tcp")]
 pub mod tcp_client;
 
 #[cfg(feature = "coils")]

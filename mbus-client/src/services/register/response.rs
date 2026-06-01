@@ -44,6 +44,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Read Input Registers (FC 0x04) response.
+    #[cfg(feature = "input-registers")]
     pub(super) fn parse_read_input_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -220,6 +221,7 @@ where
     }
 
     /// Handles a Read Input Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    #[cfg(feature = "input-registers")]
     pub(super) fn handle_read_input_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
