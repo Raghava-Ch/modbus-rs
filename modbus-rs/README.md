@@ -398,7 +398,7 @@ env_logger = "0.11"
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.13.0"
 ```
 
 ### Minimal TCP client setup

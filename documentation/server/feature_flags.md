@@ -36,7 +36,7 @@ If you use `default-features = false`, none of the above are enabled until you l
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.13.0"
 ```
 
 This includes client and server support.

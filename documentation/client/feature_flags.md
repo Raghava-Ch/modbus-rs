@@ -31,7 +31,7 @@ Control binary size and functionality by enabling only what you need.
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.13.0"
 ```
 
 Includes: `client`, `server`, `network-tcp`, `serial-rtu`, and all function-code model

@@ -49,7 +49,7 @@ The crate re-exports, depending on target/features:
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.13.0"
 ```
 
 ### 2) Create TCP config and connect transport

@@ -10,7 +10,7 @@ If you are fine with the top-level default stack, this is enough:
 
 ```toml
 [dependencies]
-modbus-rs = "0.9.0"
+modbus-rs = "0.13.0"
 ```
 
 That default includes both client and server support. For a smaller TCP-only server build,
