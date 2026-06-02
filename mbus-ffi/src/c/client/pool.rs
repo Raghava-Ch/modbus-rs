@@ -25,16 +25,52 @@
 //! Thread-safety is layered on via the `mbus_pool_lock` / `mbus_client_lock`
 //! extern-C hooks.
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use core::cell::UnsafeCell;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicBool, Ordering};
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use core::sync::atomic::AtomicBool;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use core::sync::atomic::Ordering;
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_client::services::ClientServices;
 
 #[cfg(feature = "internal-lock-stubs")]
 use crate::c::lock_stubs::*;
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use super::app::CApp;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use crate::c::error::MbusStatusCode;
 
 #[cfg(feature = "serial-ascii")]
@@ -79,7 +115,14 @@ const TAG_SERIAL_ASCII: u8 = 0x02;
 
 // ── Extern Locks ──────────────────────────────────────────────────────────────
 
-#[cfg(not(feature = "internal-lock-stubs"))]
+#[cfg(all(
+    not(feature = "internal-lock-stubs"),
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 unsafe extern "C" {
     /// Lock the global pool (used only during client creation/destruction).
     fn mbus_pool_lock();
@@ -93,13 +136,28 @@ unsafe extern "C" {
 }
 
 /// A Drop guard to ensure `mbus_pool_unlock` is called even if a panic unwinds.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct PoolLockGuard;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl PoolLockGuard {
     pub(super) fn new() -> Self {
         unsafe { mbus_pool_lock() };
         Self
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for PoolLockGuard {
     fn drop(&mut self) {
         unsafe { mbus_pool_unlock() };
@@ -107,13 +165,28 @@ impl Drop for PoolLockGuard {
 }
 
 /// A Drop guard for per-client locks.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct ClientLockGuard(MbusClientId);
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl ClientLockGuard {
     pub(super) fn new(id: MbusClientId) -> Self {
         unsafe { mbus_client_lock(id) };
         Self(id)
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for ClientLockGuard {
     fn drop(&mut self) {
         unsafe { mbus_client_unlock(self.0) };
@@ -126,13 +199,28 @@ impl Drop for ClientLockGuard {
 /// `swap`) before constructing this guard. The guard's only job is
 /// to reset the flag to `false` on drop, ensuring cleanup even if
 /// the borrowing closure panics (relevant in `has_unwind` / test builds).
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct BorrowGuard<'a>(&'a AtomicBool);
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl<'a> BorrowGuard<'a> {
     /// Wrap an already-armed borrow flag. Does NOT set the flag.
     pub(super) fn new(flag: &'a AtomicBool) -> Self {
         Self(flag)
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for BorrowGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
@@ -155,18 +243,33 @@ pub(super) type SerialAsciiInner = ClientServices<CAsciiTransport, CApp, SERIAL_
 
 /// Extracts the pool tag (high byte) from a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn id_tag(id: MbusClientId) -> u8 {
     (id >> 8) as u8
 }
 
 /// Extracts the slot index (low byte) from a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn id_index(id: MbusClientId) -> usize {
     (id & 0xFF) as usize
 }
 
 /// Encodes a pool tag and slot index into a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn encode_id(tag: u8, index: usize) -> MbusClientId {
     ((tag as u16) << 8) | (index as u16)
 }
@@ -208,12 +311,22 @@ fn is_serial_ascii_id(id: MbusClientId) -> bool {
 
 // ── Typed slot ────────────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct Slot<T> {
     occupied: bool,
     value: MaybeUninit<T>,
     borrow_flag: AtomicBool,
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl<T> Slot<T> {
     const fn empty() -> Self {
         Self {
@@ -226,6 +339,11 @@ impl<T> Slot<T> {
 
 // ── Pool internals ────────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct Pool {
     #[cfg(feature = "network-tcp")]
     tcp_slots: [Slot<TcpInner>; MAX_TCP_CLIENTS],
@@ -235,6 +353,11 @@ struct Pool {
     serial_ascii_slots: [Slot<SerialAsciiInner>; MAX_SERIAL_CLIENTS],
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Pool {
     const fn new() -> Self {
         Self {
@@ -290,6 +413,11 @@ impl Pool {
     }
 
     /// Free any client by ID. Returns `true` if a slot was freed.
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn free(&mut self, id: MbusClientId) -> bool {
         let idx = id_index(id);
         match id_tag(id) {
@@ -340,6 +468,11 @@ impl Pool {
     }
 
     /// Returns whether the slot for `id` is occupied.
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn is_occupied(&self, id: MbusClientId) -> bool {
         let idx = id_index(id);
         match id_tag(id) {
@@ -361,10 +494,25 @@ impl Pool {
 /// SAFETY: External synchronization is provided via the extern "C" lock hooks,
 /// enforced structurally via Drop guards. Re-entrancy is detected by the
 /// per-slot `AtomicBool` borrow flags.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct SyncPool(UnsafeCell<Pool>);
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 unsafe impl Sync for SyncPool {}
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 static POOL: SyncPool = SyncPool(UnsafeCell::new(Pool::new()));
 
 // ── Public pool operations ────────────────────────────────────────────────────
@@ -401,6 +549,11 @@ pub(super) fn pool_allocate_serial_ascii(
 }
 
 /// Free the client at `id` (any type). Returns true if freed.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) fn pool_free(id: MbusClientId) -> bool {
     let _client_guard = ClientLockGuard::new(id);
     let _guard = PoolLockGuard::new();
@@ -437,6 +590,7 @@ where
 }
 
 /// Internal helper: borrow from a typed slot array.
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 macro_rules! dispatch_serial {
     ($id:expr, $pool:expr, $slots:ident, $f:expr) => {{
         let idx = id_index($id);
