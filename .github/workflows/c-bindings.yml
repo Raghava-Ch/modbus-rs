@@ -70,7 +70,7 @@ jobs:
         run: cargo install cbindgen --locked
 
       - name: Build C client demo
-        run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers
+        run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers,network-tcp,serial-rtu,serial-ascii
 
       - name: Build C server demo
         run: cargo run -p xtask -- build-c-demo --demo c_server_demo

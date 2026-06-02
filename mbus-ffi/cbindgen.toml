@@ -89,6 +89,8 @@ exclude = [
     "MbusRegisters",
     "MbusHoldingRegisters",
     "MbusInputRegisters",
+    # Manually defined in after_includes
+    "MbusGoServerVtable",
 ]
 
 [struct]

@@ -1,7 +1,17 @@
 //! Register service functions — ID-based C API.
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use super::pool::MbusClientId;
 
 #[cfg(feature = "network-tcp")]
@@ -9,6 +19,11 @@ use super::pool::with_tcp_client;
 
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 use super::pool::with_serial_client_uniform;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use crate::c::error::MbusStatusCode;
 
 #[cfg(feature = "network-tcp")]

@@ -1,15 +1,37 @@
-use core::ffi::{CStr, c_char};
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use core::ffi::CStr;
+use core::ffi::c_char;
 
-use mbus_core::transport::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
-};
-
-use crate::c::error::MbusStatusCode;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use mbus_core::transport::BackoffStrategy;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use mbus_core::transport::JitterStrategy;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use mbus_core::transport::{BaudRate, DataBits, ModbusSerialConfig, Parity, SerialMode};
 
 #[cfg(feature = "network-tcp")]
 use mbus_core::transport::ModbusConfig;
 #[cfg(feature = "network-tcp")]
 use mbus_core::transport::ModbusTcpConfig;
+
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use crate::c::error::MbusStatusCode;
 
 /// Backoff strategy selector for retry logic.
 #[repr(C)]
@@ -90,6 +112,11 @@ pub struct MbusSerialConfig {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn map_backoff(strategy: MbusBackoffStrategy, base: u32, max: u32) -> BackoffStrategy {
     match strategy {
         MbusBackoffStrategy::MbusBackoffImmediate => BackoffStrategy::Immediate,
@@ -106,6 +133,11 @@ fn map_backoff(strategy: MbusBackoffStrategy, base: u32, max: u32) -> BackoffStr
     }
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn map_jitter(percent: u8) -> JitterStrategy {
     if percent == 0 {
         JitterStrategy::None

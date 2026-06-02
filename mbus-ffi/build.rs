@@ -250,15 +250,17 @@ fn main() {
     let _ = std::fs::copy(&output_file, &dotnet_h);
     let _ = std::fs::copy(&output_file, &go_h);
 
-    // Go-specific: copy to internal go include dir if exists
-    let go_include_dir = std::path::Path::new(&crate_dir)
-        .join("go")
-        .join("internal")
-        .join("cgo")
-        .join("include");
-    if go_include_dir.exists() {
-        let dst = go_include_dir.join("modbus_rs_go.h");
-        let _ = std::fs::copy(&go_h, &dst);
+    // Go-specific: copy to internal go include dir if exists and the `go` feature is enabled
+    if std::env::var("CARGO_FEATURE_GO").is_ok() {
+        let go_include_dir = std::path::Path::new(&crate_dir)
+            .join("go")
+            .join("internal")
+            .join("cgo")
+            .join("include");
+        if go_include_dir.exists() {
+            let dst = go_include_dir.join("modbus_rs_go.h");
+            let _ = std::fs::copy(&go_h, &dst);
+        }
     }
 
     // ── Server app code generation ────────────────────────────────────────
@@ -377,6 +379,8 @@ fn get_active_defines() -> String {
         ("CARGO_FEATURE_NETWORK_TCP", "MBUS_FEATURE_NETWORK_TCP"),
         ("CARGO_FEATURE_SERIAL_RTU", "MBUS_FEATURE_SERIAL_RTU"),
         ("CARGO_FEATURE_SERIAL_ASCII", "MBUS_FEATURE_SERIAL_ASCII"),
+        ("CARGO_FEATURE_DOTNET", "MBUS_FEATURE_DOTNET"),
+        ("CARGO_FEATURE_GO", "MBUS_FEATURE_GO"),
     ];
 
     for &(cargo_feat, c_macro) in &features {

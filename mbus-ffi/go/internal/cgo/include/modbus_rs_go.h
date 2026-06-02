@@ -21,6 +21,8 @@
 #define MBUS_FEATURE_NETWORK_TCP 1
 #define MBUS_FEATURE_SERIAL_RTU 1
 #define MBUS_FEATURE_SERIAL_ASCII 1
+/* #undef MBUS_FEATURE_DOTNET */
+#define MBUS_FEATURE_GO 1
 
 
 #include <stdint.h>
@@ -2756,133 +2758,6 @@ typedef struct MbusGoSubRequest {
 } MbusGoSubRequest;
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
-/**
- * C-compatible vtable of optional Modbus request handler callbacks.
- *
- * Set any slot to `None` (`null` from Go) to return an `IllegalFunction`
- * exception for that function code.  All function pointers receive `ctx` as
- * their first argument.
- *
- * # Repr
- *
- * The struct uses `#[repr(C)]` so that it has a stable, platform-defined
- * layout.  Pass it by pointer to `mbus_go_tcp_server_new`.
- */
-typedef struct MbusGoServerVtable {
-    /**
-     * Caller-supplied opaque context forwarded unchanged to every callback.
-     */
-    void *ctx;
-#if defined(MBUS_FEATURE_COILS)
-    /**
-     * `fn(ctx, address, count, out_packed_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*read_coils)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_COILS)
-    /**
-     * `fn(ctx, address, value_bool) -> i32`
-     */
-    int32_t (*write_single_coil)(void*, uint16_t, uint8_t)
-#endif
-    ;
-#if defined(MBUS_FEATURE_COILS)
-    /**
-     * `fn(ctx, address, packed_bytes, byte_count, coil_count) -> i32`
-     */
-    int32_t (*write_multiple_coils)(void*, uint16_t, const uint8_t*, uint16_t, uint16_t)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DISCRETE_INPUTS)
-    /**
-     * `fn(ctx, address, count, out_packed_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*)
-#endif
-    ;
-    /**
-     * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
-    /**
-     * `fn(ctx, address, value) -> i32`
-     */
-    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
-    /**
-     * `fn(ctx, address, values_be_bytes, count) -> i32`
-     */
-    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
-    /**
-     * `fn(ctx, address, and_mask, or_mask) -> i32`
-     */
-    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
-    /**
-     * `fn(ctx, read_addr, read_count, write_addr, write_values_be_bytes,
-     *    write_count, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_write_multiple_registers)(void*,
-                                             uint16_t,
-                                             uint16_t,
-                                             uint16_t,
-                                             const uint8_t*,
-                                             uint16_t,
-                                             uint16_t*,
-                                             uint16_t*);
-#if defined(MBUS_FEATURE_FIFO)
-    /**
-     * `fn(ctx, pointer_address, out_u16_values, out_count) -> i32`
-     */
-    int32_t (*read_fifo_queue)(void*, uint16_t, uint16_t*, uint16_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DIAGNOSTICS)
-    /**
-     * `fn(ctx, out_status_byte) -> i32`
-     */
-    int32_t (*read_exception_status)(void*, uint8_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DIAGNOSTICS)
-    /**
-     * `fn(ctx, sub_fn, data, out_sub_fn, out_data) -> i32`
-     */
-    int32_t (*diagnostics)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DIAGNOSTICS)
-    /**
-     * `fn(ctx, out_status_word, out_event_count) -> i32`
-     */
-    int32_t (*get_comm_event_counter)(void*, uint16_t*, uint16_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DIAGNOSTICS)
-    /**
-     * `fn(ctx, out_payload_bytes, out_byte_count) -> i32`
-     *
-     * The payload must be formatted as:
-     * `[status_hi, status_lo, event_count_hi, event_count_lo,
-     *   msg_count_hi, msg_count_lo, event_bytes...]`
-     */
-    int32_t (*get_comm_event_log)(void*, uint8_t*, uint16_t*)
-#endif
-    ;
-#if defined(MBUS_FEATURE_DIAGNOSTICS)
-    /**
-     * `fn(ctx, out_payload_bytes, out_byte_count) -> i32`
-     */
-    int32_t (*report_server_id)(void*, uint8_t*, uint16_t*)
-#endif
-    ;
-} MbusGoServerVtable;
-#endif
-
 #if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Sentinel value meaning "no valid client".
@@ -3134,28 +3009,28 @@ enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
 const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Lock the global pool (used only during client creation/destruction).
  */
 extern void mbus_pool_lock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Unlock the global pool.
  */
 extern void mbus_pool_unlock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Lock a specific client instance (used continuously during polling and requests).
  */
 extern void mbus_client_lock(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Unlock a specific client instance.
  */
@@ -6106,7 +5981,7 @@ void mbus_go_tcp_gateway_stop(struct MbusGoTcpGateway *handle);
 struct MbusGoTcpServer *mbus_go_tcp_server_new(const char *host,
                                                uint16_t port,
                                                uint8_t unit_id,
-                                               const struct MbusGoServerVtable *vtable);
+                                               const MbusGoServerVtable *vtable);
 #endif
 
 #if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))

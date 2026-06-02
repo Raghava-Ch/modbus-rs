@@ -130,6 +130,7 @@ exclude = [
     "MbusGoSerialClient",
     "MbusGoTcpServer",
     "MbusGoTcpGateway",
+    "MbusGoServerVtable",
     # Pool / gateway constants leaking from `c/gateway` and `c/server` modules
     # even when those features are disabled, because cbindgen does not fully
     # honour module-level `#[cfg(feature = ...)]` gates. Strip them — they are
