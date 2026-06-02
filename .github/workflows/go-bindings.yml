@@ -65,7 +65,9 @@ jobs:
 
       - name: Build native bindings (Linux/macOS)
         if: runner.os != 'Windows'
-        run: ./mbus-ffi/go/scripts/build_native.sh
+        run: |
+          cargo clean -p mbus-ffi
+          ./mbus-ffi/go/scripts/build_native.sh
         shell: bash
 
       # Build with the GNU (MinGW) target so the static archive is compatible
@@ -81,6 +83,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo clean -p mbus-ffi
           # Use --crate-type staticlib to skip the cdylib (.dll) link phase.
           # MinGW 15+ removed the libc.a stub that older toolchains provided,
           # so the cdylib link fails with "cannot find -lc".  A staticlib is a
