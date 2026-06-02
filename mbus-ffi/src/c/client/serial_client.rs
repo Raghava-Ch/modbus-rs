@@ -61,7 +61,7 @@ pub unsafe extern "C" fn mbus_serial_client_new(
         return MBUS_INVALID_CLIENT_ID;
     }
 
-    #[allow(unreachable_code)]
+    #[allow(unreachable_code, unreachable_patterns)]
     match serial_config.mode {
         #[cfg(feature = "serial-rtu")]
         SerialMode::Rtu => {

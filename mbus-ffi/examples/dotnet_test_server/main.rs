@@ -6,6 +6,7 @@
 //! holding-register store for FC03/FC06/FC16 until killed.
 
 #![cfg(all(feature = "registers", not(target_arch = "wasm32")))]
+#![allow(unreachable_patterns)]
 
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -37,6 +38,7 @@ impl AsyncAppHandler for TestApp {
 }
 
 impl TestApp {
+    #[allow(unreachable_patterns)]
     fn process(&self, req: ModbusRequest) -> ModbusResponse {
         match req {
             ModbusRequest::ReadHoldingRegisters { address, count, .. } => {

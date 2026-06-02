@@ -315,6 +315,9 @@ npm install modbus-rs
 
 # Or build locally:
 cd mbus-ffi/nodejs && npm install && npm run build
+
+#Optionally you can run tests
+npm test
 ```
 
 ```js

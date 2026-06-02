@@ -57,28 +57,40 @@ macro_rules! serial_diag_fn {
 
 #[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_read_exception_status, read_exception_status);
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_read_exception_status, read_exception_status);
 
 // ── Get Comm Event Counter (FC 0x0B) ──────────────────────────────────────────
 
 #[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_get_comm_event_counter, get_comm_event_counter);
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_get_comm_event_counter, get_comm_event_counter);
 
 // ── Get Comm Event Log (FC 0x0C) ──────────────────────────────────────────────
 
 #[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_get_comm_event_log, get_comm_event_log);
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_get_comm_event_log, get_comm_event_log);
 
 // ── Report Server ID (FC 0x11) ────────────────────────────────────────────────
 
 #[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_report_server_id, report_server_id);
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_report_server_id, report_server_id);
 
 // ── Diagnostics (FC 0x08) ─────────────────────────────────────────────────────
@@ -107,7 +119,10 @@ pub unsafe extern "C" fn mbus_tcp_diagnostics(
 ///
 /// # Safety
 /// If `data_len > 0`, `data` must be valid for that many `u16` words.
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_diagnostics(
     id: MbusClientId,
@@ -177,7 +192,10 @@ pub extern "C" fn mbus_tcp_read_device_identification(
 }
 
 /// Queue a Read Device Identification request on a serial client.
-#[cfg(all(feature = "diagnostics", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_device_identification(
     id: MbusClientId,

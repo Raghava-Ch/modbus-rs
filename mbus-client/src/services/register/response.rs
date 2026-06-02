@@ -177,6 +177,7 @@ where
     APP: ClientCommon + RegisterResponse,
 {
     /// Handles a Read Holding Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_holding_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -271,6 +272,7 @@ where
     }
 
     /// Handles a Write Single Register response by invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_single_register_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -300,6 +302,7 @@ where
     }
 
     /// Handles a Write Multiple Registers response by invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_multiple_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -330,6 +333,7 @@ where
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_write_multiple_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -362,6 +366,7 @@ where
         );
     }
 
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_mask_write_register_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
