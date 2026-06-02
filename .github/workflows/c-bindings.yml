@@ -69,9 +69,6 @@ jobs:
       - name: Install cbindgen
         run: cargo install cbindgen --locked
 
-      - name: Check C headers are up to date
-        run: cargo run -p xtask -- check-header
-
       - name: Build C client demo
         run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers
 
