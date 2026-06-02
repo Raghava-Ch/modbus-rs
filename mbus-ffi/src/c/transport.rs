@@ -312,7 +312,7 @@ mod c_impl {
         }
     }
 
-    #[cfg(feature = "serial-rtu")]
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     pub struct CSerialTransport<const ASCII: bool = false> {
         pub(crate) callbacks: MbusTransportCallbacks,
     }

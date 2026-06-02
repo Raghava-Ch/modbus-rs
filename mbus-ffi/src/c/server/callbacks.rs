@@ -143,7 +143,7 @@ pub type MbusServerReadDiscreteInputsFn = Option<
 ///
 /// `out_data` receives big-endian register bytes (2 bytes per register).
 /// `out_byte_count` must be set to `quantity * 2` on success.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 pub struct MbusServerReadHoldingRegistersReq {
     pub unit_id: u8,
@@ -156,7 +156,7 @@ pub struct MbusServerReadHoldingRegistersReq {
 }
 
 /// C callback type for FC 0x03.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub type MbusServerReadHoldingRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadHoldingRegistersReq,
@@ -165,7 +165,7 @@ pub type MbusServerReadHoldingRegistersFn = Option<
 >;
 
 /// Request context for FC 0x04 — Read Input Registers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 #[repr(C)]
 pub struct MbusServerReadInputRegistersReq {
     pub unit_id: u8,
@@ -178,7 +178,7 @@ pub struct MbusServerReadInputRegistersReq {
 }
 
 /// C callback type for FC 0x04.
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 pub type MbusServerReadInputRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadInputRegistersReq,
@@ -209,7 +209,7 @@ pub type MbusServerWriteSingleCoilFn = Option<
 >;
 
 /// Request context for FC 0x06 — Write Single Register.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 pub struct MbusServerWriteSingleRegisterReq {
     pub unit_id: u8,
@@ -219,7 +219,7 @@ pub struct MbusServerWriteSingleRegisterReq {
 }
 
 /// C callback type for FC 0x06.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub type MbusServerWriteSingleRegisterFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteSingleRegisterReq,
@@ -371,7 +371,7 @@ pub type MbusServerWriteMultipleCoilsFn = Option<
 ///
 /// `values` contains the decoded `u16` register values (big-endian already parsed).
 /// Valid for the duration of the callback only.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 pub struct MbusServerWriteMultipleRegistersReq {
     pub unit_id: u8,
@@ -384,7 +384,7 @@ pub struct MbusServerWriteMultipleRegistersReq {
 }
 
 /// C callback type for FC 0x10.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub type MbusServerWriteMultipleRegistersFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerWriteMultipleRegistersReq,
@@ -480,7 +480,7 @@ pub type MbusServerWriteFileRecordFn = Option<
 // ── FC16 — Mask Write Register ────────────────────────────────────────────────
 
 /// Request context for FC 0x16 — Mask Write Register.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 pub struct MbusServerMaskWriteRegisterReq {
     pub unit_id: u8,
@@ -491,7 +491,7 @@ pub struct MbusServerMaskWriteRegisterReq {
 }
 
 /// C callback type for FC 0x16.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub type MbusServerMaskWriteRegisterFn = Option<
     unsafe extern "C" fn(
         req: *const MbusServerMaskWriteRegisterReq,
@@ -505,7 +505,7 @@ pub type MbusServerMaskWriteRegisterFn = Option<
 ///
 /// C writes the read result into `out_data` (big-endian register bytes) and sets
 /// `out_byte_count`. `write_values` contains the decoded write values from the master.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 pub struct MbusServerReadWriteMultipleRegistersReq {
     pub unit_id: u8,
@@ -523,7 +523,7 @@ pub struct MbusServerReadWriteMultipleRegistersReq {
 }
 
 /// C callback type for FC 0x17.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub type MbusServerReadWriteMultipleRegistersFn = Option<
     unsafe extern "C" fn(
         req: *mut MbusServerReadWriteMultipleRegistersReq,
@@ -654,19 +654,19 @@ pub struct MbusServerHandlers {
     pub on_read_discrete_inputs: MbusServerReadDiscreteInputsFn,
 
     // ── Holding Register handlers (FC03, FC06, FC10, FC16, FC17) ─────────────
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_read_holding_registers: MbusServerReadHoldingRegistersFn,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_write_single_register: MbusServerWriteSingleRegisterFn,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_write_multiple_registers: MbusServerWriteMultipleRegistersFn,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_mask_write_register: MbusServerMaskWriteRegisterFn,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_read_write_multiple_registers: MbusServerReadWriteMultipleRegistersFn,
 
     // ── Input Register handlers (FC04) ────────────────────────────────────────
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     pub on_read_input_registers: MbusServerReadInputRegistersFn,
 
     // ── FIFO Queue handlers (FC18) ────────────────────────────────────────────
