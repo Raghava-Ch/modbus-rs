@@ -191,7 +191,7 @@ impl AsyncSerialGatewayServer {
         match cfg.mode {
             SerialMode::Rtu => {
                 let mut upstream = TokioRtuTransport::new(&modbus_cfg)
-                    .map_err(|e| AsyncGatewayError::Modbus(e))?;
+                    .map_err(AsyncGatewayError::Modbus)?;
                 Self::run_loop(
                     &mut upstream,
                     true,
@@ -205,7 +205,7 @@ impl AsyncSerialGatewayServer {
             }
             SerialMode::Ascii => {
                 let mut upstream = TokioAsciiTransport::new(&modbus_cfg)
-                    .map_err(|e| AsyncGatewayError::Modbus(e))?;
+                    .map_err(AsyncGatewayError::Modbus)?;
                 Self::run_loop(
                     &mut upstream,
                     false,

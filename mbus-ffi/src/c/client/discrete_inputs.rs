@@ -37,7 +37,10 @@ pub extern "C" fn mbus_tcp_read_discrete_inputs(
 }
 
 /// Queue a Read Discrete Inputs (FC 0x02) request on a serial client.
-#[cfg(all(feature = "discrete-inputs", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "discrete-inputs",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_discrete_inputs(
     id: MbusClientId,
@@ -82,7 +85,10 @@ pub extern "C" fn mbus_tcp_read_single_discrete_input(
 }
 
 /// Queue a Read Single Discrete Input request on a serial client.
-#[cfg(all(feature = "discrete-inputs", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "discrete-inputs",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_single_discrete_input(
     id: MbusClientId,

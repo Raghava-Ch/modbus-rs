@@ -12,7 +12,7 @@ categories.workspace = true
 description = "Native C FFI and browser WASM bindings for modbus-rs client APIs, with optional generated server bindings"
 
 [lib]
-crate-type = ["rlib", "staticlib"]
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]
 default = []
@@ -30,6 +30,7 @@ wasm = [
     "dep:js-sys",
     "dep:wasm-bindgen-futures",
     "dep:gloo-timers",
+    "dep:mbus-client",
     "mbus-network/wasm",
     "mbus-serial/wasm",
 ]

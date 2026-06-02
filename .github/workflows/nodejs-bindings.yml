@@ -169,5 +169,9 @@ jobs:
         working-directory: mbus-ffi/nodejs
         run: node -e "const m = require('.'); console.log('Loaded:', Object.keys(m))"
 
+      - name: Run npm tests
+        working-directory: mbus-ffi/nodejs
+        run: npm test
+
   # publish job lives in .github/workflows/release-nodejs-npm.yml
   # trigger: git tag nodejs-v*

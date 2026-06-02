@@ -194,6 +194,7 @@ fn is_serial_id(id: MbusClientId) -> bool {
 /// Returns `true` if `id` belongs to the Serial RTU sub-pool.
 #[inline(always)]
 #[cfg(feature = "serial-rtu")]
+#[allow(dead_code)]
 fn is_serial_rtu_id(id: MbusClientId) -> bool {
     id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_SERIAL_RTU
 }

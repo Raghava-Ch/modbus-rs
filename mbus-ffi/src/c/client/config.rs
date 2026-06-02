@@ -1,11 +1,15 @@
 use core::ffi::{CStr, c_char};
 
 use mbus_core::transport::{
-    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig,
-    ModbusTcpConfig, Parity, SerialMode,
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusSerialConfig, Parity, SerialMode,
 };
 
 use crate::c::error::MbusStatusCode;
+
+#[cfg(feature = "network-tcp")]
+use mbus_core::transport::ModbusConfig;
+#[cfg(feature = "network-tcp")]
+use mbus_core::transport::ModbusTcpConfig;
 
 /// Backoff strategy selector for retry logic.
 #[repr(C)]
@@ -114,6 +118,7 @@ fn map_jitter(percent: u8) -> JitterStrategy {
 ///
 /// # Safety
 /// `cfg` must be a valid non-null pointer to an initialised `MbusTcpConfig`.
+#[cfg(feature = "network-tcp")]
 pub(super) unsafe fn tcp_config_from_c(
     cfg: *const MbusTcpConfig,
 ) -> Result<ModbusConfig, MbusStatusCode> {
@@ -150,6 +155,7 @@ pub(super) unsafe fn tcp_config_from_c(
 ///
 /// # Safety
 /// `cfg` must be a valid non-null pointer to an initialised `MbusSerialConfig`.
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub(super) unsafe fn serial_config_from_c(
     cfg: *const MbusSerialConfig,
 ) -> Result<ModbusSerialConfig, MbusStatusCode> {

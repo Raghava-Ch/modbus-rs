@@ -689,18 +689,42 @@ fn validate_rust_blocks(
             }
 
             let mut suffix = String::new();
-            if block.code.contains("struct App") || block.code.contains("impl App") || block.code.contains("impl ServerCoilHandler for App") || block.code.contains("impl RequestErrorNotifier for App") {
-                if !block.code.contains("impl TimeKeeper for App") && !block.code.contains("impl mbus_core::transport::TimeKeeper for App") {
+            if block.code.contains("struct App")
+                || block.code.contains("impl App")
+                || block.code.contains("impl ServerCoilHandler for App")
+                || block.code.contains("impl RequestErrorNotifier for App")
+            {
+                if !block.code.contains("impl TimeKeeper for App")
+                    && !block
+                        .code
+                        .contains("impl mbus_core::transport::TimeKeeper for App")
+                {
                     suffix.push_str("\nimpl mbus_core::transport::TimeKeeper for App { fn current_millis(&self) -> u64 { 0 } }\n");
                 }
-                if !block.code.contains("impl TrafficNotifier for App") && !block.code.contains("impl mbus_client::app::TrafficNotifier for App") {
+                if !block.code.contains("impl TrafficNotifier for App")
+                    && !block
+                        .code
+                        .contains("impl mbus_client::app::TrafficNotifier for App")
+                {
                     suffix.push_str("\nimpl mbus_client::app::TrafficNotifier for App {}\n");
                 }
-                if !block.code.contains("impl TrafficNotifier for App") && !block.code.contains("impl mbus_server::app::TrafficNotifier for App") {
+                if !block.code.contains("impl TrafficNotifier for App")
+                    && !block
+                        .code
+                        .contains("impl mbus_server::app::TrafficNotifier for App")
+                {
                     suffix.push_str("\nimpl mbus_server::app::TrafficNotifier for App {}\n");
                 }
-                if !block.code.contains("impl AsyncServerTrafficNotifier for App") && !block.code.contains("impl mbus_server_async::AsyncServerTrafficNotifier for App") {
-                    suffix.push_str("\nimpl mbus_server_async::AsyncServerTrafficNotifier for App {}\n");
+                if !block
+                    .code
+                    .contains("impl AsyncServerTrafficNotifier for App")
+                    && !block
+                        .code
+                        .contains("impl mbus_server_async::AsyncServerTrafficNotifier for App")
+                {
+                    suffix.push_str(
+                        "\nimpl mbus_server_async::AsyncServerTrafficNotifier for App {}\n",
+                    );
                 }
             }
 
@@ -710,7 +734,9 @@ fn validate_rust_blocks(
             content.push_str(&helpers);
 
             if !block.code.contains("fn main") {
-                content.push_str("fn dummy_doc_wrapper() -> Result<(), Box<dyn std::error::Error>> {\n");
+                content.push_str(
+                    "fn dummy_doc_wrapper() -> Result<(), Box<dyn std::error::Error>> {\n",
+                );
                 content.push_str("use modbus_rs::*;\n");
                 content.push_str(&block.code);
                 content.push_str(&suffix);
@@ -752,7 +778,8 @@ fn validate_rust_blocks(
                 }
                 Ok(o) => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
-                    let is_types_marker = block.marker.as_deref() == Some("types") || block.marker.as_deref() == Some("exports");
+                    let is_types_marker = block.marker.as_deref() == Some("types")
+                        || block.marker.as_deref() == Some("exports");
                     if (check_snippets || is_types_marker) && !has_real_type_errors(&stderr) {
                         println!("{}", ok("✓"));
                         passed += 1;
@@ -1084,8 +1111,8 @@ pub fn cmd_validate_docs(root: &Path, args: &[String]) -> Result<(), String> {
         println!("\n");
         println!(
             "  {} {} documentation examples have warnings:",
-            warn("⚠"),
-            warn(&format!("BOLD: {} total", total_warnings))
+            warn("⚠️"),
+            warn(&format!(" {} total", total_warnings))
         );
 
         if !cargo_warnings.is_empty() {

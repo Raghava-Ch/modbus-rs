@@ -1,0 +1,70 @@
+name: WASM bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/python/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/wasm-bindings.yml'
+  pull_request:
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/python/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/wasm-bindings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wasm:
+    name: WASM (wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-bindings-v2
+          cache-bin: false
+
+      - name: Check mbus-ffi WASM bindings
+        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Run WASM server binding tests (Node)
+        run: wasm-pack test --node --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait --test wasm_server_bindings
+        working-directory: mbus-ffi

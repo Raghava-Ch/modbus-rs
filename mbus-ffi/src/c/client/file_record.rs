@@ -65,7 +65,10 @@ pub unsafe extern "C" fn mbus_tcp_read_file_record(
 ///
 /// # Safety
 /// `sub_reqs` must be a valid non-null pointer to `count` items.
-#[cfg(all(feature = "file-record", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "file-record",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_read_file_record(
     id: MbusClientId,
@@ -144,7 +147,10 @@ pub unsafe extern "C" fn mbus_tcp_write_file_record(
 /// # Safety
 /// `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
 /// `sub_reqs[i].data_len` words.
-#[cfg(all(feature = "file-record", any(feature = "serial-rtu", feature = "serial-ascii")))]
+#[cfg(all(
+    feature = "file-record",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_write_file_record(
     id: MbusClientId,

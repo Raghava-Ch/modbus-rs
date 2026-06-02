@@ -107,9 +107,7 @@ fn parse_gen_client_header_opts(
                 profile = Some(val);
             }
             other => {
-                return Err(format!(
-                    "unknown flag for gen-client-lib/check-client-header: {other}"
-                ));
+                return Err(format!("unknown flag for gen-header-lib: {other}"));
             }
         }
         i += 1;
@@ -140,7 +138,7 @@ fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
     if profile == "release" {
         build_args.push("--release");
     }
-    
+
     let mut is_bare_metal = false;
     if let Some(target) = &opts.target {
         build_args.push("--target");
@@ -684,7 +682,7 @@ fn print_help() {
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
     println!();
     println!("FFI HEADER COMMANDS");
-    println!("  gen-client-lib [OPTIONS]");
+    println!("  gen-header-lib [OPTIONS]");
     println!("      Regenerate modbus_rs.h.");
     println!("      --features <list> Select a custom Rust feature set to expose in the C header.");
     println!(
@@ -730,7 +728,7 @@ fn main() -> ExitCode {
     let remaining_args: Vec<String> = args.collect();
 
     let result = match cmd.as_str() {
-        "gen-client-lib" | "gen-header" => cmd_gen_client_header(&root, &remaining_args),
+        "gen-header-lib" | "gen-header" => cmd_gen_client_header(&root, &remaining_args),
         "check-client-header" | "check-header" => cmd_check_client_header(&root, &remaining_args),
         "list-c-demos" => cmd_list_c_demos(&root),
         "build-c-demo" => cmd_build_c_demo(&root, &remaining_args),

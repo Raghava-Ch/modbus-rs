@@ -451,7 +451,7 @@ pub trait RegisterResponse {
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the register that was read.
     /// - `value`: The value of the read register.
-    #[cfg(feature = "input-registers")]
+    #[cfg(feature = "holding-registers")]
     fn read_single_register_response(
         &mut self,
         txn_id: u16,

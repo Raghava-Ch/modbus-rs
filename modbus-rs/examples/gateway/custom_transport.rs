@@ -11,7 +11,7 @@
 //! ## Build & run
 //!
 //! ```bash
-//! cargo run --example custom_transport -p mbus-gateway
+//! cargo run --example custom_transport -p modbus-rs
 //! ```
 //!
 //! No extra feature flags are required; the example compiles with the crate
