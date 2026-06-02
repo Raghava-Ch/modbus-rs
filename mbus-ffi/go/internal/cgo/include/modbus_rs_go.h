@@ -7,7 +7,7 @@
 
 /* Active feature configuration defines built into the library */
 #define MBUS_FEATURE_C_CLIENT 1
-/* #undef MBUS_FEATURE_C_SERVER */
+#define MBUS_FEATURE_C_SERVER 1
 #define MBUS_FEATURE_C_GATEWAY 1
 #define MBUS_FEATURE_COILS 1
 #define MBUS_FEATURE_HOLDING_REGISTERS 1
@@ -1855,7 +1855,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadDiscreteInputsFn)(struct Mb
                                                                        void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x03 — Read Holding Registers.
  *
@@ -1873,7 +1873,7 @@ typedef struct MbusServerReadHoldingRegistersReq {
 } MbusServerReadHoldingRegistersReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x03.
  */
@@ -1881,7 +1881,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadHoldingRegistersFn)(struct 
                                                                          void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x06 — Write Single Register.
  */
@@ -1893,7 +1893,7 @@ typedef struct MbusServerWriteSingleRegisterReq {
 } MbusServerWriteSingleRegisterReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x06.
  */
@@ -1901,7 +1901,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteSingleRegisterFn)(const st
                                                                         void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x10 — Write Multiple Registers.
  *
@@ -1923,7 +1923,7 @@ typedef struct MbusServerWriteMultipleRegistersReq {
 } MbusServerWriteMultipleRegistersReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x10.
  */
@@ -1931,7 +1931,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleRegistersFn)(const
                                                                            void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x16 — Mask Write Register.
  */
@@ -1944,7 +1944,7 @@ typedef struct MbusServerMaskWriteRegisterReq {
 } MbusServerMaskWriteRegisterReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x16.
  */
@@ -1952,7 +1952,7 @@ typedef enum MbusServerExceptionCode (*MbusServerMaskWriteRegisterFn)(const stru
                                                                       void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x17 — Read/Write Multiple Registers.
  *
@@ -1979,7 +1979,7 @@ typedef struct MbusServerReadWriteMultipleRegistersReq {
 } MbusServerReadWriteMultipleRegistersReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x17.
  */
@@ -1987,7 +1987,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadWriteMultipleRegistersFn)(s
                                                                                void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Request context for FC 0x04 — Read Input Registers.
  */
@@ -2002,7 +2002,7 @@ typedef struct MbusServerReadInputRegistersReq {
 } MbusServerReadInputRegistersReq;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * C callback type for FC 0x04.
  */
@@ -2371,12 +2371,30 @@ typedef struct MbusServerHandlers {
     MbusServerReadDiscreteInputsFn on_read_discrete_inputs
 #endif
     ;
-    MbusServerReadHoldingRegistersFn on_read_holding_registers;
-    MbusServerWriteSingleRegisterFn on_write_single_register;
-    MbusServerWriteMultipleRegistersFn on_write_multiple_registers;
-    MbusServerMaskWriteRegisterFn on_mask_write_register;
-    MbusServerReadWriteMultipleRegistersFn on_read_write_multiple_registers;
-    MbusServerReadInputRegistersFn on_read_input_registers;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
+    MbusServerReadHoldingRegistersFn on_read_holding_registers
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
+    MbusServerWriteSingleRegisterFn on_write_single_register
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
+    MbusServerWriteMultipleRegistersFn on_write_multiple_registers
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
+    MbusServerMaskWriteRegisterFn on_mask_write_register
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
+    MbusServerReadWriteMultipleRegistersFn on_read_write_multiple_registers
+#endif
+    ;
+#if defined(MBUS_FEATURE_INPUT_REGISTERS)
+    MbusServerReadInputRegistersFn on_read_input_registers
+#endif
+    ;
 #if defined(MBUS_FEATURE_FIFO)
     MbusServerReadFifoQueueFn on_read_fifo_queue
 #endif

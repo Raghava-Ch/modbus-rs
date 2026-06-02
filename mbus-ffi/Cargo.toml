@@ -110,6 +110,7 @@ full = [
 server-full = [
     "c-server",
     "coils",
+    "registers",
     "holding-registers",
     "input-registers",
     "discrete-inputs",
@@ -125,6 +126,7 @@ server-full = [
 client-full = [
     "c-client",
     "coils",
+    "registers",
     "holding-registers",
     "input-registers",
     "discrete-inputs",
