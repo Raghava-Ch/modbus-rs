@@ -25,26 +25,77 @@
 //! Thread-safety is layered on via the `mbus_pool_lock` / `mbus_client_lock`
 //! extern-C hooks.
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use core::cell::UnsafeCell;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicBool, Ordering};
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use core::sync::atomic::AtomicBool;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use core::sync::atomic::Ordering;
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_client::services::ClientServices;
 
 #[cfg(feature = "internal-lock-stubs")]
 use crate::c::lock_stubs::*;
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use super::app::CApp;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use crate::c::error::MbusStatusCode;
-use crate::c::transport::{CAsciiTransport, CRtuTransport, CTcpTransport};
 
-use crate::{MAX_SERIAL_CLIENTS, MAX_TCP_CLIENTS};
+#[cfg(feature = "serial-ascii")]
+use crate::c::transport::CAsciiTransport;
+
+#[cfg(feature = "serial-rtu")]
+use crate::c::transport::CRtuTransport;
+
+#[cfg(feature = "network-tcp")]
+use crate::c::transport::CTcpTransport;
+
+#[cfg(any(feature = "serial-ascii", feature = "serial-rtu"))]
+use crate::MAX_SERIAL_CLIENTS;
+
+#[cfg(feature = "network-tcp")]
+use crate::MAX_TCP_CLIENTS;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Pipeline depth for TCP clients (may have >1 concurrent requests).
+#[cfg(feature = "network-tcp")]
 pub(super) const TCP_PIPELINE: usize = 10;
+
 /// Pipeline depth for serial clients (half-duplex = 1).
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub(super) const SERIAL_PIPELINE: usize = 1;
 
 /// Client ID type: an opaque `u16` index into one of the three sub-pools.
@@ -55,13 +106,23 @@ pub type MbusClientId = u16;
 pub const MBUS_INVALID_CLIENT_ID: MbusClientId = 0xFFFF;
 
 /// Pool tag occupying the high byte of a `MbusClientId`.
+#[cfg(feature = "network-tcp")]
 const TAG_TCP: u8 = 0x00;
+#[cfg(feature = "serial-rtu")]
 const TAG_SERIAL_RTU: u8 = 0x01;
+#[cfg(feature = "serial-ascii")]
 const TAG_SERIAL_ASCII: u8 = 0x02;
 
 // ── Extern Locks ──────────────────────────────────────────────────────────────
 
-#[cfg(not(feature = "internal-lock-stubs"))]
+#[cfg(all(
+    not(feature = "internal-lock-stubs"),
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 unsafe extern "C" {
     /// Lock the global pool (used only during client creation/destruction).
     fn mbus_pool_lock();
@@ -75,13 +136,28 @@ unsafe extern "C" {
 }
 
 /// A Drop guard to ensure `mbus_pool_unlock` is called even if a panic unwinds.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct PoolLockGuard;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl PoolLockGuard {
     pub(super) fn new() -> Self {
         unsafe { mbus_pool_lock() };
         Self
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for PoolLockGuard {
     fn drop(&mut self) {
         unsafe { mbus_pool_unlock() };
@@ -89,13 +165,28 @@ impl Drop for PoolLockGuard {
 }
 
 /// A Drop guard for per-client locks.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct ClientLockGuard(MbusClientId);
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl ClientLockGuard {
     pub(super) fn new(id: MbusClientId) -> Self {
         unsafe { mbus_client_lock(id) };
         Self(id)
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for ClientLockGuard {
     fn drop(&mut self) {
         unsafe { mbus_client_unlock(self.0) };
@@ -108,13 +199,28 @@ impl Drop for ClientLockGuard {
 /// `swap`) before constructing this guard. The guard's only job is
 /// to reset the flag to `false` on drop, ensuring cleanup even if
 /// the borrowing closure panics (relevant in `has_unwind` / test builds).
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct BorrowGuard<'a>(&'a AtomicBool);
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl<'a> BorrowGuard<'a> {
     /// Wrap an already-armed borrow flag. Does NOT set the flag.
     pub(super) fn new(flag: &'a AtomicBool) -> Self {
         Self(flag)
     }
 }
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Drop for BorrowGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
@@ -124,65 +230,103 @@ impl Drop for BorrowGuard<'_> {
 // ── Client inner types ────────────────────────────────────────────────────────
 
 /// Type alias for a fully-specialised TCP client.
+#[cfg(feature = "network-tcp")]
 pub(super) type TcpInner = ClientServices<CTcpTransport, CApp, TCP_PIPELINE>;
 /// Type alias for a fully-specialised Serial RTU client.
+#[cfg(feature = "serial-rtu")]
 pub(super) type SerialRtuInner = ClientServices<CRtuTransport, CApp, SERIAL_PIPELINE>;
 /// Type alias for a fully-specialised Serial ASCII client.
+#[cfg(feature = "serial-ascii")]
 pub(super) type SerialAsciiInner = ClientServices<CAsciiTransport, CApp, SERIAL_PIPELINE>;
 
 // ── ID helpers ────────────────────────────────────────────────────────────────
 
 /// Extracts the pool tag (high byte) from a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn id_tag(id: MbusClientId) -> u8 {
     (id >> 8) as u8
 }
 
 /// Extracts the slot index (low byte) from a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn id_index(id: MbusClientId) -> usize {
     (id & 0xFF) as usize
 }
 
 /// Encodes a pool tag and slot index into a `MbusClientId`.
 #[inline(always)]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 fn encode_id(tag: u8, index: usize) -> MbusClientId {
     ((tag as u16) << 8) | (index as u16)
 }
 
 /// Returns `true` if `id` belongs to the TCP sub-pool.
 #[inline(always)]
+#[cfg(feature = "network-tcp")]
 fn is_tcp_id(id: MbusClientId) -> bool {
     id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_TCP
 }
 
 /// Returns `true` if `id` belongs to either Serial sub-pool (RTU or ASCII).
 #[inline(always)]
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 fn is_serial_id(id: MbusClientId) -> bool {
-    id != MBUS_INVALID_CLIENT_ID && (id_tag(id) == TAG_SERIAL_RTU || id_tag(id) == TAG_SERIAL_ASCII)
+    #[cfg(all(feature = "serial-rtu", feature = "serial-ascii"))]
+    return id != MBUS_INVALID_CLIENT_ID
+        && (id_tag(id) == TAG_SERIAL_RTU || id_tag(id) == TAG_SERIAL_ASCII);
+    #[cfg(all(feature = "serial-rtu", not(feature = "serial-ascii")))]
+    return id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_SERIAL_RTU;
+    #[cfg(all(feature = "serial-ascii", not(feature = "serial-rtu")))]
+    return id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_SERIAL_ASCII;
 }
 
 /// Returns `true` if `id` belongs to the Serial RTU sub-pool.
 #[inline(always)]
+#[cfg(feature = "serial-rtu")]
+#[allow(dead_code)]
 fn is_serial_rtu_id(id: MbusClientId) -> bool {
     id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_SERIAL_RTU
 }
 
 /// Returns `true` if `id` belongs to the Serial ASCII sub-pool.
 #[inline(always)]
-#[cfg(test)]
+#[cfg(all(feature = "serial-ascii", test))]
 fn is_serial_ascii_id(id: MbusClientId) -> bool {
     id != MBUS_INVALID_CLIENT_ID && id_tag(id) == TAG_SERIAL_ASCII
 }
 
 // ── Typed slot ────────────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct Slot<T> {
     occupied: bool,
     value: MaybeUninit<T>,
     borrow_flag: AtomicBool,
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl<T> Slot<T> {
     const fn empty() -> Self {
         Self {
@@ -195,22 +339,39 @@ impl<T> Slot<T> {
 
 // ── Pool internals ────────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct Pool {
+    #[cfg(feature = "network-tcp")]
     tcp_slots: [Slot<TcpInner>; MAX_TCP_CLIENTS],
+    #[cfg(feature = "serial-rtu")]
     serial_rtu_slots: [Slot<SerialRtuInner>; MAX_SERIAL_CLIENTS],
+    #[cfg(feature = "serial-ascii")]
     serial_ascii_slots: [Slot<SerialAsciiInner>; MAX_SERIAL_CLIENTS],
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl Pool {
     const fn new() -> Self {
         Self {
+            #[cfg(feature = "network-tcp")]
             tcp_slots: [const { Slot::empty() }; MAX_TCP_CLIENTS],
+            #[cfg(feature = "serial-rtu")]
             serial_rtu_slots: [const { Slot::empty() }; MAX_SERIAL_CLIENTS],
+            #[cfg(feature = "serial-ascii")]
             serial_ascii_slots: [const { Slot::empty() }; MAX_SERIAL_CLIENTS],
         }
     }
 
     /// Insert a TCP client into the first free TCP slot.
+    #[cfg(feature = "network-tcp")]
     fn allocate_tcp(&mut self, value: TcpInner) -> Option<MbusClientId> {
         for (i, slot) in self.tcp_slots.iter_mut().enumerate() {
             if !slot.occupied {
@@ -224,6 +385,7 @@ impl Pool {
     }
 
     /// Insert a Serial RTU client into the first free RTU slot.
+    #[cfg(feature = "serial-rtu")]
     fn allocate_serial_rtu(&mut self, value: SerialRtuInner) -> Option<MbusClientId> {
         for (i, slot) in self.serial_rtu_slots.iter_mut().enumerate() {
             if !slot.occupied {
@@ -237,6 +399,7 @@ impl Pool {
     }
 
     /// Insert a Serial ASCII client into the first free ASCII slot.
+    #[cfg(feature = "serial-ascii")]
     fn allocate_serial_ascii(&mut self, value: SerialAsciiInner) -> Option<MbusClientId> {
         for (i, slot) in self.serial_ascii_slots.iter_mut().enumerate() {
             if !slot.occupied {
@@ -250,9 +413,15 @@ impl Pool {
     }
 
     /// Free any client by ID. Returns `true` if a slot was freed.
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn free(&mut self, id: MbusClientId) -> bool {
         let idx = id_index(id);
         match id_tag(id) {
+            #[cfg(feature = "network-tcp")]
             TAG_TCP => {
                 if idx >= MAX_TCP_CLIENTS {
                     return false;
@@ -266,6 +435,7 @@ impl Pool {
                 slot.occupied = false;
                 true
             }
+            #[cfg(feature = "serial-rtu")]
             TAG_SERIAL_RTU => {
                 if idx >= MAX_SERIAL_CLIENTS {
                     return false;
@@ -279,6 +449,7 @@ impl Pool {
                 slot.occupied = false;
                 true
             }
+            #[cfg(feature = "serial-ascii")]
             TAG_SERIAL_ASCII => {
                 if idx >= MAX_SERIAL_CLIENTS {
                     return false;
@@ -297,11 +468,19 @@ impl Pool {
     }
 
     /// Returns whether the slot for `id` is occupied.
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn is_occupied(&self, id: MbusClientId) -> bool {
         let idx = id_index(id);
         match id_tag(id) {
+            #[cfg(feature = "network-tcp")]
             TAG_TCP => idx < MAX_TCP_CLIENTS && self.tcp_slots[idx].occupied,
+            #[cfg(feature = "serial-rtu")]
             TAG_SERIAL_RTU => idx < MAX_SERIAL_CLIENTS && self.serial_rtu_slots[idx].occupied,
+            #[cfg(feature = "serial-ascii")]
             TAG_SERIAL_ASCII => idx < MAX_SERIAL_CLIENTS && self.serial_ascii_slots[idx].occupied,
             _ => false,
         }
@@ -315,15 +494,31 @@ impl Pool {
 /// SAFETY: External synchronization is provided via the extern "C" lock hooks,
 /// enforced structurally via Drop guards. Re-entrancy is detected by the
 /// per-slot `AtomicBool` borrow flags.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 struct SyncPool(UnsafeCell<Pool>);
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 unsafe impl Sync for SyncPool {}
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 static POOL: SyncPool = SyncPool(UnsafeCell::new(Pool::new()));
 
 // ── Public pool operations ────────────────────────────────────────────────────
 
 /// Allocate a new TCP client in the pool. Returns ID or error.
+#[cfg(feature = "network-tcp")]
 pub(super) fn pool_allocate_tcp(inner: TcpInner) -> Result<MbusClientId, MbusStatusCode> {
     let _guard = PoolLockGuard::new();
     let pool = unsafe { &mut *POOL.0.get() };
@@ -332,6 +527,7 @@ pub(super) fn pool_allocate_tcp(inner: TcpInner) -> Result<MbusClientId, MbusSta
 }
 
 /// Allocate a new Serial RTU client in the pool. Returns ID or error.
+#[cfg(feature = "serial-rtu")]
 pub(super) fn pool_allocate_serial_rtu(
     inner: SerialRtuInner,
 ) -> Result<MbusClientId, MbusStatusCode> {
@@ -342,6 +538,7 @@ pub(super) fn pool_allocate_serial_rtu(
 }
 
 /// Allocate a new Serial ASCII client in the pool. Returns ID or error.
+#[cfg(feature = "serial-ascii")]
 pub(super) fn pool_allocate_serial_ascii(
     inner: SerialAsciiInner,
 ) -> Result<MbusClientId, MbusStatusCode> {
@@ -352,6 +549,11 @@ pub(super) fn pool_allocate_serial_ascii(
 }
 
 /// Free the client at `id` (any type). Returns true if freed.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) fn pool_free(id: MbusClientId) -> bool {
     let _client_guard = ClientLockGuard::new(id);
     let _guard = PoolLockGuard::new();
@@ -360,6 +562,7 @@ pub(super) fn pool_free(id: MbusClientId) -> bool {
 }
 
 /// Operate on a borrowed TCP client, providing reentrancy protection.
+#[cfg(feature = "network-tcp")]
 pub(super) fn with_tcp_client<F, R>(id: MbusClientId, f: F) -> Result<R, MbusStatusCode>
 where
     F: FnOnce(&mut TcpInner) -> R,
@@ -387,6 +590,7 @@ where
 }
 
 /// Internal helper: borrow from a typed slot array.
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 macro_rules! dispatch_serial {
     ($id:expr, $pool:expr, $slots:ident, $f:expr) => {{
         let idx = id_index($id);
@@ -407,6 +611,7 @@ macro_rules! dispatch_serial {
 /// both closures have identical bodies (they only call `ClientServices` methods
 /// which are uniform across transport generics). Use the convenience macro
 /// [`with_serial_client_uniform!`] to avoid the duplication at call sites.
+#[cfg(all(feature = "serial-rtu", feature = "serial-ascii"))]
 pub(super) fn with_serial_client<F1, F2, R>(
     id: MbusClientId,
     f_rtu: F1,
@@ -434,6 +639,56 @@ where
     }
 }
 
+/// Operate on a borrowed Serial client (RTU only).
+#[cfg(all(feature = "serial-rtu", not(feature = "serial-ascii")))]
+pub(super) fn with_serial_client<F1, F2, R>(
+    id: MbusClientId,
+    f_rtu: F1,
+    _f_ascii: F2,
+) -> Result<R, MbusStatusCode>
+where
+    F1: FnOnce(&mut SerialRtuInner) -> R,
+    F2: FnOnce(&mut SerialRtuInner) -> R,
+{
+    if !is_serial_id(id) {
+        return Err(MbusStatusCode::MbusErrClientTypeMismatch);
+    }
+
+    let _guard = ClientLockGuard::new(id);
+    let pool = unsafe { &mut *POOL.0.get() };
+
+    if !pool.is_occupied(id) {
+        return Err(MbusStatusCode::MbusErrInvalidClientId);
+    }
+
+    dispatch_serial!(id, pool, serial_rtu_slots, f_rtu)
+}
+
+/// Operate on a borrowed Serial client (ASCII only).
+#[cfg(all(feature = "serial-ascii", not(feature = "serial-rtu")))]
+pub(super) fn with_serial_client<F1, F2, R>(
+    id: MbusClientId,
+    _f_rtu: F1,
+    f_ascii: F2,
+) -> Result<R, MbusStatusCode>
+where
+    F1: FnOnce(&mut SerialAsciiInner) -> R,
+    F2: FnOnce(&mut SerialAsciiInner) -> R,
+{
+    if !is_serial_id(id) {
+        return Err(MbusStatusCode::MbusErrClientTypeMismatch);
+    }
+
+    let _guard = ClientLockGuard::new(id);
+    let pool = unsafe { &mut *POOL.0.get() };
+
+    if !pool.is_occupied(id) {
+        return Err(MbusStatusCode::MbusErrInvalidClientId);
+    }
+
+    dispatch_serial!(id, pool, serial_ascii_slots, f_ascii)
+}
+
 /// Convenience macro for call sites that pass the same closure body to both
 /// RTU and ASCII dispatch paths of [`with_serial_client`].
 ///
@@ -441,11 +696,13 @@ where
 /// ```ignore
 /// with_serial_client_uniform!(id, |inner| { inner.poll() })
 /// ```
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 macro_rules! with_serial_client_uniform {
     ($id:expr, |$inner:ident| $body:expr) => {
         $crate::c::client::pool::with_serial_client($id, |$inner| $body, |$inner| $body)
     };
 }
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub(super) use with_serial_client_uniform;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -457,6 +714,7 @@ mod tests {
     // ── ID encoding helpers ───────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_id_encoding() {
         let id = encode_id(TAG_TCP, 0);
         assert_eq!(id, 0x0000);
@@ -470,36 +728,47 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn serial_rtu_id_encoding() {
         let id = encode_id(TAG_SERIAL_RTU, 0);
         assert_eq!(id, 0x0100);
+        #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
         assert!(is_serial_id(id));
         assert!(is_serial_rtu_id(id));
+        #[cfg(feature = "serial-ascii")]
         assert!(!is_serial_ascii_id(id));
+        #[cfg(feature = "network-tcp")]
         assert!(!is_tcp_id(id));
 
         let id = encode_id(TAG_SERIAL_RTU, 5);
         assert_eq!(id, 0x0105);
+        #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
         assert!(is_serial_id(id));
         assert!(is_serial_rtu_id(id));
     }
 
     #[test]
+    #[cfg(feature = "serial-ascii")]
     fn serial_ascii_id_encoding() {
         let id = encode_id(TAG_SERIAL_ASCII, 0);
         assert_eq!(id, 0x0200);
+        #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
         assert!(is_serial_id(id));
         assert!(is_serial_ascii_id(id));
+        #[cfg(feature = "serial-rtu")]
         assert!(!is_serial_rtu_id(id));
+        #[cfg(feature = "network-tcp")]
         assert!(!is_tcp_id(id));
 
         let id = encode_id(TAG_SERIAL_ASCII, 3);
         assert_eq!(id, 0x0203);
+        #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
         assert!(is_serial_id(id));
         assert!(is_serial_ascii_id(id));
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_index_roundtrip() {
         for i in 0..MAX_TCP_CLIENTS {
             let id = encode_id(TAG_TCP, i);
@@ -508,6 +777,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn serial_rtu_index_roundtrip() {
         for i in 0..MAX_SERIAL_CLIENTS {
             let id = encode_id(TAG_SERIAL_RTU, i);
@@ -516,6 +786,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-ascii")]
     fn serial_ascii_index_roundtrip() {
         for i in 0..MAX_SERIAL_CLIENTS {
             let id = encode_id(TAG_SERIAL_ASCII, i);
@@ -525,9 +796,13 @@ mod tests {
 
     #[test]
     fn invalid_id_is_neither_tcp_nor_serial() {
+        #[cfg(feature = "network-tcp")]
         assert!(!is_tcp_id(MBUS_INVALID_CLIENT_ID));
+        #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
         assert!(!is_serial_id(MBUS_INVALID_CLIENT_ID));
+        #[cfg(feature = "serial-rtu")]
         assert!(!is_serial_rtu_id(MBUS_INVALID_CLIENT_ID));
+        #[cfg(feature = "serial-ascii")]
         assert!(!is_serial_ascii_id(MBUS_INVALID_CLIENT_ID));
     }
 
@@ -540,11 +815,16 @@ mod tests {
     #[test]
     fn pool_starts_fully_empty() {
         let pool = make_pool();
+        #[cfg(feature = "network-tcp")]
         for i in 0..MAX_TCP_CLIENTS {
             assert!(!pool.tcp_slots[i].occupied);
         }
+        #[cfg(feature = "serial-rtu")]
         for i in 0..MAX_SERIAL_CLIENTS {
             assert!(!pool.serial_rtu_slots[i].occupied);
+        }
+        #[cfg(feature = "serial-ascii")]
+        for i in 0..MAX_SERIAL_CLIENTS {
             assert!(!pool.serial_ascii_slots[i].occupied);
         }
     }
@@ -553,21 +833,28 @@ mod tests {
     fn is_occupied_rejects_invalid_id() {
         let pool = make_pool();
         assert!(!pool.is_occupied(MBUS_INVALID_CLIENT_ID));
+        #[cfg(feature = "network-tcp")]
         assert!(!pool.is_occupied(encode_id(TAG_TCP, 0)));
+        #[cfg(feature = "serial-rtu")]
         assert!(!pool.is_occupied(encode_id(TAG_SERIAL_RTU, 0)));
+        #[cfg(feature = "serial-ascii")]
         assert!(!pool.is_occupied(encode_id(TAG_SERIAL_ASCII, 0)));
     }
 
     #[test]
     fn free_of_unoccupied_slot_returns_false() {
         let mut pool = make_pool();
+        #[cfg(feature = "network-tcp")]
         assert!(!pool.free(encode_id(TAG_TCP, 0)));
+        #[cfg(feature = "serial-rtu")]
         assert!(!pool.free(encode_id(TAG_SERIAL_RTU, 0)));
+        #[cfg(feature = "serial-ascii")]
         assert!(!pool.free(encode_id(TAG_SERIAL_ASCII, 0)));
         assert!(!pool.free(MBUS_INVALID_CLIENT_ID));
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn free_out_of_bounds_id_returns_false() {
         let mut pool = make_pool();
         let oob = encode_id(TAG_TCP, MAX_TCP_CLIENTS);
@@ -576,49 +863,64 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn with_tcp_client_rejects_serial_id() {
         assert!(!is_tcp_id(encode_id(TAG_SERIAL_RTU, 0)));
         assert!(!is_tcp_id(encode_id(TAG_SERIAL_ASCII, 0)));
     }
 
     #[test]
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     fn with_serial_client_rejects_tcp_id() {
         assert!(!is_serial_id(encode_id(TAG_TCP, 0)));
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_pool_capacity_boundary() {
         if MAX_TCP_CLIENTS > 0 {
             let last = encode_id(TAG_TCP, MAX_TCP_CLIENTS - 1);
             assert!(is_tcp_id(last));
+            #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
             assert!(!is_serial_id(last));
             assert_ne!(last, MBUS_INVALID_CLIENT_ID);
         }
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn serial_rtu_pool_capacity_boundary() {
         if MAX_SERIAL_CLIENTS > 0 {
             let last = encode_id(TAG_SERIAL_RTU, MAX_SERIAL_CLIENTS - 1);
+            #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
             assert!(is_serial_id(last));
             assert!(is_serial_rtu_id(last));
+            #[cfg(feature = "network-tcp")]
             assert!(!is_tcp_id(last));
             assert_ne!(last, MBUS_INVALID_CLIENT_ID);
         }
     }
 
     #[test]
+    #[cfg(feature = "serial-ascii")]
     fn serial_ascii_pool_capacity_boundary() {
         if MAX_SERIAL_CLIENTS > 0 {
             let last = encode_id(TAG_SERIAL_ASCII, MAX_SERIAL_CLIENTS - 1);
+            #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
             assert!(is_serial_id(last));
             assert!(is_serial_ascii_id(last));
+            #[cfg(feature = "network-tcp")]
             assert!(!is_tcp_id(last));
             assert_ne!(last, MBUS_INVALID_CLIENT_ID);
         }
     }
 
     #[test]
+    #[cfg(all(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn tcp_rtu_ascii_id_spaces_do_not_overlap() {
         for ti in 0..MAX_TCP_CLIENTS {
             for si in 0..MAX_SERIAL_CLIENTS {
@@ -635,12 +937,14 @@ mod tests {
     // ── Pool exhaustion & free/realloc ────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_pool_all_slots_start_unoccupied() {
         let pool = Pool::new();
         assert!(pool.tcp_slots.iter().all(|s| !s.occupied));
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_pool_fill_then_all_occupied() {
         let mut pool = Pool::new();
         for slot in pool.tcp_slots.iter_mut() {
@@ -655,6 +959,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "network-tcp")]
     fn tcp_free_marks_slot_unoccupied() {
         let mut pool = Pool::new();
         pool.tcp_slots[0].occupied = true;
@@ -664,6 +969,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn serial_rtu_free_marks_slot_unoccupied() {
         let mut pool = Pool::new();
         pool.serial_rtu_slots[0].occupied = true;
@@ -673,6 +979,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-ascii")]
     fn serial_ascii_free_marks_slot_unoccupied() {
         let mut pool = Pool::new();
         pool.serial_ascii_slots[0].occupied = true;
@@ -682,46 +989,63 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn free_clears_borrow_flag() {
         let mut pool = Pool::new();
-        pool.tcp_slots[0].occupied = true;
-        pool.tcp_slots[0].borrow_flag.store(true, Ordering::SeqCst);
-        pool.free(encode_id(TAG_TCP, 0));
-        assert!(!pool.tcp_slots[0].borrow_flag.load(Ordering::SeqCst));
+        pool.serial_rtu_slots[0].occupied = true;
+        pool.serial_rtu_slots[0]
+            .borrow_flag
+            .store(true, Ordering::SeqCst);
+        pool.free(encode_id(TAG_SERIAL_RTU, 0));
+        assert!(!pool.serial_rtu_slots[0].borrow_flag.load(Ordering::SeqCst));
     }
 
     #[test]
+    #[cfg(feature = "serial-rtu")]
     fn double_free_returns_false() {
         let mut pool = Pool::new();
-        pool.tcp_slots[0].occupied = true;
-        assert!(pool.free(encode_id(TAG_TCP, 0)));
-        assert!(!pool.free(encode_id(TAG_TCP, 0)));
+        pool.serial_rtu_slots[0].occupied = true;
+        assert!(pool.free(encode_id(TAG_SERIAL_RTU, 0)));
+        assert!(!pool.free(encode_id(TAG_SERIAL_RTU, 0)));
     }
 
     #[test]
     fn all_slots_free_after_full_fill_and_clear() {
         let mut pool = Pool::new();
+        #[cfg(feature = "network-tcp")]
         for slot in pool.tcp_slots.iter_mut() {
             slot.occupied = true;
         }
+        #[cfg(feature = "serial-rtu")]
         for slot in pool.serial_rtu_slots.iter_mut() {
             slot.occupied = true;
         }
+        #[cfg(feature = "serial-ascii")]
         for slot in pool.serial_ascii_slots.iter_mut() {
             slot.occupied = true;
         }
+        #[cfg(feature = "network-tcp")]
         for i in 0..MAX_TCP_CLIENTS {
             assert!(pool.free(encode_id(TAG_TCP, i)));
         }
+        #[cfg(feature = "serial-rtu")]
         for i in 0..MAX_SERIAL_CLIENTS {
             assert!(pool.free(encode_id(TAG_SERIAL_RTU, i)));
+        }
+        #[cfg(feature = "serial-ascii")]
+        for i in 0..MAX_SERIAL_CLIENTS {
             assert!(pool.free(encode_id(TAG_SERIAL_ASCII, i)));
         }
+        #[cfg(feature = "network-tcp")]
         for i in 0..MAX_TCP_CLIENTS {
             assert!(!pool.is_occupied(encode_id(TAG_TCP, i)));
         }
+        #[cfg(feature = "serial-rtu")]
         for i in 0..MAX_SERIAL_CLIENTS {
             assert!(!pool.is_occupied(encode_id(TAG_SERIAL_RTU, i)));
+        }
+        #[cfg(feature = "serial-ascii")]
+        for i in 0..MAX_SERIAL_CLIENTS {
             assert!(!pool.is_occupied(encode_id(TAG_SERIAL_ASCII, i)));
         }
     }

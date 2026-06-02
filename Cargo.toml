@@ -19,7 +19,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 authors = ["Raghava Ch <ch.raghava44@gmail.com>"]
 license-file = "LICENSE"
@@ -34,19 +34,19 @@ description = "Feature-gated Modbus client and server stack for embedded and std
 
 [workspace.dependencies]
 # Shared dependencies across workspace
-mbus-codegen = { version = "0.12.0", path = "./mbus-codegen" }
-mbus-core   = { version = "0.12.0", path = "./mbus-core" }
-mbus-serial = { version = "0.12.0", path = "./mbus-serial" }
-mbus-network= { version = "0.12.0", path = "./mbus-network" }
-mbus-client = { version = "0.12.0", path = "./mbus-client" }
-mbus-async = { version = "0.12.0", path = "./mbus-async" }
-mbus-client-async = { version = "0.12.0", path = "./mbus-client-async" }
-mbus-server-async = { version = "0.12.0", path = "./mbus-server-async" }
-mbus-ffi    = { version = "0.12.0", path = "./mbus-ffi" }
-mbus-server = { version = "0.12.0", path = "./mbus-server", default-features = false }
-mbus-macros = { version = "0.12.0", path = "./mbus-macros" }
+mbus-codegen = { version = "0.13.0", path = "./mbus-codegen" }
+mbus-core   = { version = "0.13.0", path = "./mbus-core" }
+mbus-serial = { version = "0.13.0", path = "./mbus-serial" }
+mbus-network= { version = "0.13.0", path = "./mbus-network" }
+mbus-client = { version = "0.13.0", path = "./mbus-client", default-features = false }
+mbus-async = { version = "0.13.0", path = "./mbus-async" }
+mbus-client-async = { version = "0.13.0", path = "./mbus-client-async" }
+mbus-server-async = { version = "0.13.0", path = "./mbus-server-async" }
+mbus-ffi    = { version = "0.13.0", path = "./mbus-ffi" }
+mbus-server = { version = "0.13.0", path = "./mbus-server", default-features = false }
+mbus-macros = { version = "0.13.0", path = "./mbus-macros" }
 
-mbus-gateway = { version = "0.12.0", path = "./mbus-gateway" }
+mbus-gateway = { version = "0.13.0", path = "./mbus-gateway" }
 
 defmt = "1.0.1"
 heapless = { version = "0.9.0" }

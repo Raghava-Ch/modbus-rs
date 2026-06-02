@@ -84,7 +84,7 @@ pub struct MbusWriteMultipleCoilsCtx {
 
 // ── Register callbacks (feature "registers") ─────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 /// Context passed to the read-holding-registers callback.
 pub struct MbusReadHoldingRegistersCtx {
@@ -98,7 +98,7 @@ pub struct MbusReadHoldingRegistersCtx {
     pub userdata: *mut c_void,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 #[repr(C)]
 /// Context passed to the read-input-registers callback.
 pub struct MbusReadInputRegistersCtx {
@@ -112,7 +112,7 @@ pub struct MbusReadInputRegistersCtx {
     pub userdata: *mut c_void,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 /// Context passed to the read-write-multiple-registers callback.
 pub struct MbusReadWriteMultipleRegistersCtx {
@@ -126,7 +126,7 @@ pub struct MbusReadWriteMultipleRegistersCtx {
     pub userdata: *mut c_void,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 /// Context passed to the write-single-register callback.
 pub struct MbusWriteSingleRegisterCtx {
@@ -142,7 +142,7 @@ pub struct MbusWriteSingleRegisterCtx {
     pub userdata: *mut c_void,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 /// Context passed to the write-multiple-registers callback.
 pub struct MbusWriteMultipleRegistersCtx {
@@ -158,7 +158,7 @@ pub struct MbusWriteMultipleRegistersCtx {
     pub userdata: *mut c_void,
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[repr(C)]
 /// Context passed to the mask-write-register callback.
 pub struct MbusMaskWriteRegisterCtx {
@@ -401,27 +401,27 @@ pub struct MbusCallbacks {
         Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleCoilsCtx)>,
 
     // ── Register callbacks (feature "registers") ──────────────────────────
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// Called when a Read Holding Registers response is received.
     pub on_read_holding_registers:
         Option<unsafe extern "C" fn(ctx: *const MbusReadHoldingRegistersCtx)>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     /// Called when a Read Input Registers response is received.
     pub on_read_input_registers:
         Option<unsafe extern "C" fn(ctx: *const MbusReadInputRegistersCtx)>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// Called when a Read/Write Multiple Registers response is received.
     pub on_read_write_multiple_registers:
         Option<unsafe extern "C" fn(ctx: *const MbusReadWriteMultipleRegistersCtx)>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// Called when a Write Single Register response is received.
     pub on_write_single_register:
         Option<unsafe extern "C" fn(ctx: *const MbusWriteSingleRegisterCtx)>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// Called when a Write Multiple Registers response is received.
     pub on_write_multiple_registers:
         Option<unsafe extern "C" fn(ctx: *const MbusWriteMultipleRegistersCtx)>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     /// Called when a Mask Write Register response is received.
     pub on_mask_write_register: Option<unsafe extern "C" fn(ctx: *const MbusMaskWriteRegisterCtx)>,
 

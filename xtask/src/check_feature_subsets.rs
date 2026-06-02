@@ -767,6 +767,66 @@ static STEPS: &[Step] = &[
         ],
     ),
     Step::check(
+        "ffi / c-client+coils+registers+serial-rtu",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,registers,serial-rtu",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+registers+serial-ascii",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,registers,serial-ascii",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+registers+network-tcp",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,registers,network-tcp",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+registers+serial-rtu+serial-ascii",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,registers,serial-rtu,serial-ascii",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+holding-registers",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,holding-registers",
+        ],
+    ),
+    Step::check(
+        "ffi / c-client+coils+input-registers",
+        &[
+            "-p",
+            "mbus-ffi",
+            "--no-default-features",
+            "--features",
+            "c-client,coils,input-registers",
+        ],
+    ),
+    Step::check(
         "ffi / c-server+server-traffic+full",
         &[
             "-p",

@@ -231,22 +231,53 @@ cargo run -p xtask -- check-server-gen
 
 ## FFI Header Commands
 
-### `gen-header`
-Regenerate `modbus_rs_client.h` and `modbus_rs_client_feature_gated.h`:
+### `gen-client-lib`
+Regenerate the client FFI header (`modbus_rs_client.h`), compile `mbus-ffi` in the selected profile mode (release or debug) for the selected target, and bundle the header and compiled libraries (both static and dynamic formats) into the output directory:
 
 ```bash
-cargo run -p xtask -- gen-header
+# Default: generate and bundle under target/mbus-ffi/ (release profile)
+cargo run -p xtask -- gen-client-lib
+
+# Generate and bundle under a custom directory (creates include/ and library/)
+cargo run -p xtask -- gen-client-lib --out-dir /path/to/output
+
+# Generate and compile in debug mode
+cargo run -p xtask -- gen-client-lib --profile debug
+
+# Cross-compile for a specific target (e.g. thumbv7em-none-eabi) in release mode
+cargo run -p xtask -- gen-client-lib --target thumbv7em-none-eabi
 ```
 
-### `check-header`
-Verify the headers are up to date (CI):
+This will automatically:
+1. Generate the C FFI client header (`modbus_rs_client.h`).
+2. Run `cargo build -p mbus-ffi` (with `--release` if release profile, and with `--target` if specified) with the chosen features (defaults to `full`).
+3. Create `include/` and `library/` folders under the output directory.
+4. Copy the header to `<out-dir>/include/` and all compiled libraries (`libmbus_ffi.a`, `libmbus_ffi.dylib`, `libmbus_ffi.so`, `mbus_ffi.dll`, `mbus_ffi.lib` depending on the platform) from the correct build folder to `<out-dir>/library/`.
+
+You can select a custom feature set by using the `--features` option:
 
 ```bash
-cargo run -p xtask -- check-header
+cargo run -p xtask -- gen-client-lib --features coils,registers
 ```
 
-### `gen-feature-header` / `check-feature-header`
-Regenerate or verify only `modbus_rs_client_feature_gated.h`.
+### `check-client-header`
+Verify the header is up to date (CI):
+
+```bash
+cargo run -p xtask -- check-client-header
+```
+
+Like the generator command, you can verify with a specific feature set:
+
+```bash
+cargo run -p xtask -- check-client-header --features coils,registers
+```
+
+You can also pass `--target` and `--profile` options to ensure command-line compatibility with generator invocations:
+
+```bash
+cargo run -p xtask -- check-client-header --target thumbv7em-none-eabi --profile debug
+```
 
 ---
 
@@ -318,7 +349,7 @@ cargo run -p xtask -- check-doc-links -f documentation/README.md -f mbus-ffi/REA
 - Links inside fenced code blocks
 
 ### `check-release`
-Run the full release gate: `check-header` → `check-server-gen` → `build-c-smoke` → `build-c-demo --demo c_server_demo` → `check-feature-matrix`.
+Run the full release gate: `check-client-header` → `check-server-gen` → `build-c-smoke` → `build-c-demo --demo c_server_demo` → `check-feature-matrix`.
 
 ---
 

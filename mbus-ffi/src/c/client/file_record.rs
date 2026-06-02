@@ -5,7 +5,13 @@ use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 use mbus_core::models::file_record::SubRequest;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+use super::pool::MbusClientId;
+
+#[cfg(feature = "network-tcp")]
+use super::pool::with_tcp_client;
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use super::pool::with_serial_client_uniform;
 use crate::c::error::MbusStatusCode;
 
 /// A single sub-request passed to [`mbus_tcp_read_file_record`] /
@@ -37,7 +43,7 @@ pub struct MbusSubRequest {
 ///
 /// # Safety
 /// `sub_reqs` must be a valid non-null pointer to `count` items.
-#[cfg(feature = "file-record")]
+#[cfg(all(feature = "file-record", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_read_file_record(
     id: MbusClientId,
@@ -59,7 +65,10 @@ pub unsafe extern "C" fn mbus_tcp_read_file_record(
 ///
 /// # Safety
 /// `sub_reqs` must be a valid non-null pointer to `count` items.
-#[cfg(feature = "file-record")]
+#[cfg(all(
+    feature = "file-record",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_read_file_record(
     id: MbusClientId,
@@ -115,7 +124,7 @@ where
 /// # Safety
 /// `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
 /// `sub_reqs[i].data_len` words.
-#[cfg(feature = "file-record")]
+#[cfg(all(feature = "file-record", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_write_file_record(
     id: MbusClientId,
@@ -138,7 +147,10 @@ pub unsafe extern "C" fn mbus_tcp_write_file_record(
 /// # Safety
 /// `sub_reqs` must be valid. Each `sub_reqs[i].data` must be valid for
 /// `sub_reqs[i].data_len` words.
-#[cfg(feature = "file-record")]
+#[cfg(all(
+    feature = "file-record",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_write_file_record(
     id: MbusClientId,

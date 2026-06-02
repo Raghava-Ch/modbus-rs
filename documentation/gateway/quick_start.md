@@ -7,7 +7,7 @@ This page walks you through the three ways to run a Modbus gateway:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.12.0", features = ["gateway", "network-tcp", "serial-rtu"] }
+modbus-rs = { version = "0.13.0", features = ["gateway", "network-tcp", "serial-rtu"] }
 ```
 
 ## Sync: TCP upstream → RTU downstream
@@ -110,7 +110,7 @@ Add the `upstream-ws` feature:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", features = ["upstream-ws"] }
+mbus-gateway = { version = "0.13.0", features = ["upstream-ws"] }
 ```
 
 <!-- validate: skip -->
@@ -232,3 +232,15 @@ MBUS_GATEWAY_DOWNSTREAM=192.168.1.10:502 \
 ```
 
 **Source:** [modbus-rs/examples/gateway/async_tcp_to_tcp.rs](../../modbus-rs/examples/gateway/async_tcp_to_tcp.rs)
+
+### Custom Transport Example (`custom_transport`)
+
+Demonstrates how to implement a custom, in-memory loopback transport by implementing the `Transport` trait and wiring it into `GatewayServices`.
+
+```sh
+cargo run --example custom_transport -p modbus-rs \
+  --features gateway,async,network-tcp,error-trait
+```
+
+**Source:** [modbus-rs/examples/gateway/custom_transport.rs](../../modbus-rs/examples/gateway/custom_transport.rs)
+

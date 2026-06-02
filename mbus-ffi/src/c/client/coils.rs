@@ -1,12 +1,38 @@
 //! Coil service functions — ID-based C API.
 
-#[cfg(feature = "coils")]
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_client::services::coil::Coils;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
+use super::pool::MbusClientId;
+
+#[cfg(feature = "network-tcp")]
+use super::pool::with_tcp_client;
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use super::pool::with_serial_client_uniform;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use crate::c::error::MbusStatusCode;
 
+#[cfg(feature = "network-tcp")]
 macro_rules! call_tcp {
     ($id:ident, $method:ident, $txn_id:ident, $unit_id:ident $(, $arg:ident)*) => {{
         with_tcp_client($id, |inner| {
@@ -22,6 +48,7 @@ macro_rules! call_tcp {
     }};
 }
 
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 macro_rules! call_serial {
     ($id:ident, $method:ident, $txn_id:ident, $unit_id:ident $(, $arg:ident)*) => {{
         with_serial_client_uniform!($id, |inner| {
@@ -42,7 +69,7 @@ macro_rules! call_serial {
 /// Queue a Read Coils (FC 0x01) request.
 ///
 /// The response is delivered via `MbusCallbacks::on_read_coils`.
-#[cfg(feature = "coils")]
+#[cfg(all(feature = "coils", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_coils(
     id: MbusClientId,
@@ -54,8 +81,13 @@ pub extern "C" fn mbus_tcp_read_coils(
     call_tcp!(id, read_multiple_coils, txn_id, unit_id, address, quantity)
 }
 
-/// Queue a Read Coils (FC 0x01) request on a serial client.
-#[cfg(feature = "coils")]
+/// Queue a Read Coils (FC 0x01) request.
+///
+/// The response is delivered via `MbusCallbacks::on_read_coils`.
+#[cfg(all(
+    feature = "coils",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_coils(
     id: MbusClientId,
@@ -70,7 +102,7 @@ pub extern "C" fn mbus_serial_read_coils(
 // ── Read single coil ──────────────────────────────────────────────────────────
 
 /// Queue a Read Single Coil request (reads FC 0x01 with quantity=1).
-#[cfg(feature = "coils")]
+#[cfg(all(feature = "coils", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_single_coil(
     id: MbusClientId,
@@ -82,7 +114,10 @@ pub extern "C" fn mbus_tcp_read_single_coil(
 }
 
 /// Queue a Read Single Coil request on a serial client.
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_single_coil(
     id: MbusClientId,
@@ -96,7 +131,7 @@ pub extern "C" fn mbus_serial_read_single_coil(
 // ── Write single coil ─────────────────────────────────────────────────────────
 
 /// Queue a Write Single Coil (FC 0x05) request. `value`: 1 = ON, 0 = OFF.
-#[cfg(feature = "coils")]
+#[cfg(all(feature = "coils", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_write_single_coil(
     id: MbusClientId,
@@ -119,7 +154,10 @@ pub extern "C" fn mbus_tcp_write_single_coil(
 }
 
 /// Queue a Write Single Coil (FC 0x05) request on a serial client.
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_write_single_coil(
     id: MbusClientId,
@@ -150,7 +188,7 @@ pub extern "C" fn mbus_serial_write_single_coil(
 ///
 /// # Safety
 /// `values` must be a valid non-null pointer.
-#[cfg(feature = "coils")]
+#[cfg(all(feature = "coils", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_write_multiple_coils(
     id: MbusClientId,
@@ -192,7 +230,10 @@ pub unsafe extern "C" fn mbus_tcp_write_multiple_coils(
 ///
 /// # Safety
 /// `values` must be a valid non-null pointer.
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_write_multiple_coils(
     id: MbusClientId,

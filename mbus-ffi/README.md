@@ -92,10 +92,10 @@ Requires a Rust toolchain and [Maturin](https://maturin.rs) (`pip install maturi
 
 ```bash
 # install into an active venv (editable / dev mode)
-cd mbus-ffi && maturin develop --features python,full
+cd mbus-ffi && maturin develop --features python-full
 
 # build a release wheel
-cd mbus-ffi && maturin build --release --features python,full
+cd mbus-ffi && maturin build --release --features python-full
 ```
 
 ### Running the Python test suite
@@ -112,7 +112,7 @@ Enable the optional `python-gateway` feature to expose `TcpGateway` (sync) and
 to one or more downstream Modbus TCP servers.
 
 ```bash
-cd mbus-ffi && maturin develop --features python,python-gateway,full
+cd mbus-ffi && maturin develop --features python-full,python-gateway
 ```
 
 Minimal sync example:
@@ -155,7 +155,7 @@ The native FFI is designed specifically for **Strict `no_std`** and embedded use
 Pool sizing is determined strictly at compile time. By default, the system provisions exactly `1` slot.
 To increase maximum clients, set both environment variables explicitly:
 ```bash
-MBUS_MAX_TCP_CLIENTS=10 MBUS_MAX_SERIAL_CLIENTS=10 cargo build -p mbus-ffi --features c,full
+MBUS_MAX_TCP_CLIENTS=10 MBUS_MAX_SERIAL_CLIENTS=10 cargo build -p mbus-ffi --features full
 ```
 
 - `MBUS_MAX_TCP_CLIENTS`: valid range `1..=255`
@@ -164,7 +164,7 @@ MBUS_MAX_TCP_CLIENTS=10 MBUS_MAX_SERIAL_CLIENTS=10 cargo build -p mbus-ffi --fea
 ### Build & Link
 `mbus-ffi` supports compiling directly to shared (`.so`/`.dylib`) and static (`.a`) libraries:
 ```bash
-cargo build --release -p mbus-ffi --features c,full
+cargo build --release -p mbus-ffi --features full
 ```
 
 *Note: Even in strict `no_std` environments, standard LLVM targets like `target/debug` on mac/linux will naturally map underlying memory routines (`memcpy`, `memmove`) strictly via system libc. When targeting explicit embedded system triples like `thumbv7em-none-eabihf`, compiler built-ins will resolve them.*
@@ -183,11 +183,14 @@ Server header:
 cbindgen --config mbus-ffi/cbindgen_server.toml --crate mbus-ffi --output target/mbus-ffi/include/modbus_rs_server.h
 ```
 
-The workspace also provides xtask helpers for the client headers:
+The workspace also provides an xtask helper to generate the client header, build the release FFI library, and bundle them together:
 
 ```bash
-cargo run -p xtask -- gen-header
-cargo run -p xtask -- gen-feature-header
+# Default: bundles to target/mbus-ffi/
+cargo run -p xtask -- gen-client-lib
+
+# Custom SDK path (creates include/ and library/)
+cargo run -p xtask -- gen-client-lib --out-dir /path/to/my_sdk
 ```
 
 ### Header / Feature Compatibility
@@ -195,7 +198,7 @@ cargo run -p xtask -- gen-feature-header
 The generated header is intended for native C builds with:
 
 ```bash
---features c,full
+--features full
 ```
 
 For native server builds, `modbus_rs_server.h` is generated from the `c-server`
@@ -312,7 +315,7 @@ and static client-pool behavior.
 First build the native FFI library with the C API enabled:
 
 ```bash
-cargo build -p mbus-ffi --features c,full
+cargo build -p mbus-ffi --features full
 ```
 
 Then compile the standalone C binding test source:
@@ -420,11 +423,11 @@ external `mbus-ffi` consumers should set `MBUS_SERVER_APP_CONFIG` explicitly.
 
 The `dotnet` feature compiles the `mbus_dn_*` entry-point family — a flat,
 versioned C ABI specifically designed for .NET P/Invoke (`[LibraryImport]`).
-The managed wrapper lives in [`mbus-ffi/dotnet/`](dotnet/).
+The managed code:
 
 ```bash
 # Build the native cdylib with .NET support and all FCs
-cargo build -p mbus-ffi --features dotnet,full
+cargo build -p mbus-ffi --features dotnet-full
 ```
 
 Output: `target/debug/mbus_ffi.dll` (Windows) / `libmbus_ffi.so` (Linux) /
@@ -456,6 +459,60 @@ await client.DisconnectAsync();
 
 ---
 
+## Go Bindings
+
+The `go` feature compiles `libmbus_ffi` into a native static archive or shared library, exposing Go APIs through a cgo module at `github.com/Raghava-Ch/modbus-rs/mbus-ffi/go`.
+
+### Build & Test
+
+The bindings require cgo. Build the native library and run the Go test suite:
+
+```bash
+# Build the native static library for Go and run tests
+./mbus-ffi/go/scripts/build_native.sh
+cd mbus-ffi/go
+go test ./...
+```
+
+### Quick Start (Go)
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/Raghava-Ch/modbus-rs/mbus-ffi/go/client/tcp"
+)
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := tcp.NewClient("192.168.1.10", 502)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	if err := client.Connect(ctx); err != nil {
+		panic(err)
+	}
+
+	regs, err := client.ReadHoldingRegisters(ctx, 1, 0, 10)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(regs)
+}
+```
+
+📖 **[Full Go Binding Documentation →](../documentation/go_bindings.md)**
+
+---
+
 ## Node.js Bindings (`modbus-rs` on npm)
 
 The `nodejs` feature compiles `mbus-ffi` into a Node.js native addon via
@@ -465,7 +522,8 @@ and TypeScript API. The package source lives in
 
 ```bash
 # Build the native addon with all Modbus features
-cargo build -p mbus-ffi --features nodejs,full
+cargo build -p mbus-ffi --features nodejs-full
+```
 
 # Then build the npm package
 cd mbus-ffi/nodejs
@@ -717,15 +775,67 @@ cd mbus-ffi
 python3 -m http.server 8089
 ```
 
-## Supported Modbus Operations
-Client-side WASM/FFI wrappers expose internal client services configured by feature flags:
-- `coils`: read single/multiple, write single/multiple
-- `registers`: read holding/input, write single/multiple, mask write, read-write multiple
-- `discrete-inputs`: read single/multiple
-- `fifo`: read
-- `file-record`: read/write
-- `diagnostics`: exception status, diagnostics, comm event counter/log, report server id, read device ID
-- `full`: Enables all Modbus service features.
+## Feature Gates and Supported Modbus Operations
+
+`mbus-ffi` exposes internal Modbus stack features configured via Cargo feature flags. These are divided into **Service (Function Code) Features**, **Transport Features**, **Language/Platform Binding Features**, and **Convenience Aliases**.
+
+### 1. Service Features (Function Codes)
+
+These features enable compile-time support for specific Modbus function codes:
+
+| Feature | Description | Mapped Function Codes |
+|---|---|---|
+| `coils` | Read/Write coils | FC01 (Read Coils), FC05 (Write Single Coil), FC0F (Write Multiple Coils) |
+| `holding-registers` | Read/Write holding registers | FC03 (Read Holding Registers), FC06 (Write Single Register), FC10 (Write Multiple Registers), FC16 (Mask Write), FC17 (Read/Write Multiple) |
+| `input-registers` | Read input registers | FC04 (Read Input Registers) |
+| `registers` | Convenience helper | Enables both `holding-registers` and `input-registers` |
+| `discrete-inputs` | Read discrete inputs | FC02 (Read Discrete Inputs) |
+| `fifo` | Read FIFO queue | FC18 (Read FIFO Queue) |
+| `file-record` | Read/Write file records | FC14 (Read File Record), FC15 (Write File Record) |
+| `diagnostics` | Server diagnostics & IDs | FC07 (Read Exception Status), FC08 (Diagnostics), FC0B (Comm Event Counter), FC0C (Comm Event Log), FC11 (Report Server ID), FC2B (Read Device ID) |
+| `traffic` | Traffic monitoring | Enables traffic notification callbacks on async clients/servers |
+
+### 2. Transport Features
+
+These features control compile-time transport support:
+
+| Feature | Description |
+|---|---|
+| `network-tcp` | Enables Modbus TCP network transport support |
+| `serial-rtu` | Enables Modbus RTU serial transport support |
+| `serial-ascii` | Enables Modbus ASCII serial transport support |
+
+### 3. Language & Platform Bindings
+
+These features compile native binding interfaces and platform bindings:
+
+| Feature | Description |
+|---|---|
+| `wasm` | Enables browser WebAssembly bindings and transports (`mbus-network/wasm`, `mbus-serial/wasm`) |
+| `c-client` | Enables native C FFI client APIs and static client pool |
+| `c-server` | Enables native C FFI server APIs (YAML dispatch, custom handlers) |
+| `c-gateway` | Enables native C FFI gateway APIs |
+| `server-traffic` | Enables traffic callbacks specifically for the native C server |
+| `python` | Enables Python bindings via PyO3 and Maturin |
+| `python-gateway` | Enables Python bindings for `TcpGateway` / `AsyncTcpGateway` |
+| `go` | Enables Go cgo bindings |
+| `go-traffic` | Enables traffic notification callbacks for the Go server/client |
+| `nodejs` | Enables Node.js native addon bindings via napi-rs |
+| `nodejs-traffic` | Enables traffic callbacks for the Node.js server/client |
+| `dotnet` | Enables flat C ABI bindings specifically for .NET P/Invoke |
+
+### 4. Convenience Aliases
+
+These bundle related features for simple compile commands:
+
+| Feature Alias | Bundled Features |
+|---|---|
+| `full` | `c-client`, `c-server`, `c-gateway`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`, `error-trait`, `network-tcp`, `serial-rtu`, `serial-ascii` |
+| `server-full` | `c-server` along with all service and transport features |
+| `python-full` | `python`, `c-client`, `c-gateway`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`, `error-trait`, `network-tcp`, `serial-rtu`, `serial-ascii` |
+| `go-full` | `go`, `c-client`, `c-gateway`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`, `error-trait`, `network-tcp`, `serial-rtu`, `serial-ascii` |
+| `nodejs-full` | `nodejs`, `c-client`, `c-gateway`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`, `error-trait`, `network-tcp`, `serial-rtu`, `serial-ascii` |
+| `dotnet-full` | `dotnet`, `c-client`, `c-gateway`, `coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`, `traffic`, `error-trait`, `network-tcp`, `serial-rtu`, `serial-ascii` |
 
 ## WASM Test Coverage
 

@@ -1,0 +1,80 @@
+name: Python bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/python-bindings.yml'
+  pull_request:
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/examples/c_*/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/python-bindings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: python-bindings-v2
+          cache-bin: false
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libudev-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maturin + test dependencies
+        run: pip install maturin pytest pytest-asyncio
+
+      - name: Build Python wheel
+        run: maturin build --features python,python-gateway,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
+        working-directory: mbus-ffi
+
+      - name: Install built wheel
+        run: |
+          WHEEL_PATH=$(find . -path '*/target/wheels/*.whl' | head -1)
+          test -n "$WHEEL_PATH"
+          pip install "$WHEEL_PATH"
+
+      - name: Run Python tests
+        run: pytest

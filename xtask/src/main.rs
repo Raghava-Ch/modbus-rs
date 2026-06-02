@@ -17,10 +17,6 @@ fn repo_root() -> PathBuf {
     manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf()
 }
 
-fn ffi_include_dir(root: &Path) -> PathBuf {
-    root.join("target/mbus-ffi/include")
-}
-
 fn run_step(program: &str, args: &[&str], cwd: &Path) -> Result<(), String> {
     let status = Command::new(program)
         .args(args)
@@ -56,181 +52,197 @@ fn run_step_with_env(
     }
 }
 
-fn headers_paths(root: &Path) -> (PathBuf, PathBuf) {
-    let include_dir = ffi_include_dir(root);
-    let base = include_dir.join("modbus_rs_client.h");
-    let gated = include_dir.join("modbus_rs_client_feature_gated.h");
-    (base, gated)
+struct GenClientHeaderOpts {
+    features: Option<String>,
+    out_dir: PathBuf,
+    target: Option<String>,
+    profile: Option<String>,
 }
 
-fn feature_macro_for_declaration(line: &str) -> Option<&'static str> {
-    let trimmed = line.trim_start();
-    let decl_like = trimmed.starts_with("typedef")
-        || trimmed.starts_with("enum ")
-        || trimmed.starts_with("const ")
-        || trimmed.starts_with("uint")
-        || trimmed.starts_with("MbusClientId ")
-        || trimmed.starts_with("bool ")
-        || trimmed.starts_with("void (*")
-        || trimmed.starts_with('}');
+fn parse_gen_client_header_opts(
+    root: &Path,
+    args: &[String],
+) -> Result<GenClientHeaderOpts, String> {
+    let mut features = None;
+    let mut out_dir = None;
+    let mut target = None;
+    let mut profile = None;
+    let mut i = 0usize;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--features" => {
+                i += 1;
+                features = Some(
+                    args.get(i)
+                        .ok_or_else(|| "--features requires a value".to_string())?
+                        .clone(),
+                );
+            }
+            "--out-dir" => {
+                i += 1;
+                let path_str = args
+                    .get(i)
+                    .ok_or_else(|| "--out-dir requires a value".to_string())?;
+                out_dir = Some(root.join(path_str));
+            }
+            "--target" => {
+                i += 1;
+                target = Some(
+                    args.get(i)
+                        .ok_or_else(|| "--target requires a value".to_string())?
+                        .clone(),
+                );
+            }
+            "--profile" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "--profile requires a value".to_string())?
+                    .clone();
+                if val != "release" && val != "debug" {
+                    return Err(format!(
+                        "--profile must be 'release' or 'debug', got '{val}'"
+                    ));
+                }
+                profile = Some(val);
+            }
+            other => {
+                return Err(format!("unknown flag for gen-header-lib: {other}"));
+            }
+        }
+        i += 1;
+    }
+    let out_dir = out_dir.unwrap_or_else(|| root.join("target/mbus-ffi"));
+    Ok(GenClientHeaderOpts {
+        features,
+        out_dir,
+        target,
+        profile,
+    })
+}
 
-    if !decl_like {
-        return None;
+fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
+    let opts = parse_gen_client_header_opts(root, args)?;
+    let mut script_args = vec!["./scripts/check_header.sh", "--fix"];
+    let features_arg;
+    if let Some(feats) = &opts.features {
+        features_arg = format!("--features={feats}");
+        script_args.push(&features_arg);
+    }
+    run_step("bash", &script_args, root)?;
+
+    let profile = opts.profile.as_deref().unwrap_or("release");
+
+    // Build mbus-ffi in selected mode & target
+    let mut build_args = vec!["build", "-p", "mbus-ffi"];
+    if profile == "release" {
+        build_args.push("--release");
     }
 
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.contains("discrete_input") || lower.contains("discreteinputs") {
-        Some("MBUS_FEATURE_DISCRETE_INPUTS")
-    } else if lower.contains("file_record")
-        || lower.contains("file record")
-        || lower.contains("filerecord")
-    {
-        Some("MBUS_FEATURE_FILE_RECORD")
-    } else if lower.contains("diagnostic") {
-        Some("MBUS_FEATURE_DIAGNOSTICS")
-    } else if lower.contains("register") {
-        Some("MBUS_FEATURE_REGISTERS")
-    } else if lower.contains("coils") || lower.contains("coil") {
-        Some("MBUS_FEATURE_COILS")
-    } else if lower.contains("fifo") {
-        Some("MBUS_FEATURE_FIFO")
+    let mut is_bare_metal = false;
+    if let Some(target) = &opts.target {
+        build_args.push("--target");
+        build_args.push(target);
+        if target.contains("thumb") || target.contains("none") || target.contains("wasm") {
+            is_bare_metal = true;
+        }
+    }
+
+    if !is_bare_metal {
+        // Build as cdylib for standard OSes
+        build_args.push("--crate-type=cdylib");
+        build_args.push("--crate-type=staticlib");
+        build_args.push("--crate-type=rlib");
+    }
+
+    let features_str;
+    if let Some(feats) = &opts.features {
+        features_str = format!("c-client,{feats}");
+        build_args.push("--features");
+        build_args.push(&features_str);
     } else {
-        None
-    }
-}
-
-fn generate_feature_gated_header(base_header: &str) -> String {
-    let mut out = String::new();
-    let mut current_gate: Option<&'static str> = None;
-
-    let mut in_multiline_decl = false;
-    let mut multiline_decl_gate: Option<&'static str> = None;
-
-    let mut in_struct_block = false;
-    let mut struct_block_gate: Option<&'static str> = None;
-
-    for line in base_header.lines() {
-        let trimmed = line.trim_start();
-
-        let gate = if in_multiline_decl {
-            multiline_decl_gate
-        } else if in_struct_block {
-            struct_block_gate
-        } else {
-            feature_macro_for_declaration(line)
-        };
-
-        if gate != current_gate {
-            if current_gate.is_some() {
-                out.push_str("#endif\n");
-            }
-            if let Some(m) = gate {
-                out.push_str(&format!("#if defined({m})\n"));
-            }
-            current_gate = gate;
-        }
-
-        out.push_str(line);
-        out.push('\n');
-
-        if !in_multiline_decl
-            && gate.is_some()
-            && trimmed.contains("mbus_")
-            && trimmed.contains('(')
-            && !trimmed.ends_with(";")
-        {
-            in_multiline_decl = true;
-            multiline_decl_gate = gate;
-        }
-
-        if in_multiline_decl && trimmed.ends_with(");") {
-            in_multiline_decl = false;
-            multiline_decl_gate = None;
-        }
-
-        if !in_struct_block
-            && gate.is_some()
-            && trimmed.starts_with("typedef struct")
-            && trimmed.ends_with('{')
-        {
-            in_struct_block = true;
-            struct_block_gate = gate;
-        }
-
-        if in_struct_block && trimmed.starts_with('}') && trimmed.ends_with(';') {
-            in_struct_block = false;
-            struct_block_gate = None;
-        }
+        features_str = "full".to_string();
+        build_args.push("--features");
+        build_args.push(&features_str);
     }
 
-    if current_gate.is_some() {
-        out.push_str("#endif\n");
-    }
-
-    let out = out.replacen(
-        "#ifndef MODBUS_RS_CLIENT_H",
-        "#ifndef MODBUS_RS_CLIENT_FEATURE_GATED_H",
-        1,
+    println!(
+        "Building mbus-ffi for FFI bundling with features: {} (profile={}, target={:?}) ...",
+        features_str, profile, opts.target
     );
-    out.replacen(
-        "#define MODBUS_RS_CLIENT_H",
-        "#define MODBUS_RS_CLIENT_FEATURE_GATED_H",
-        1,
-    )
-}
+    run_step("cargo", &build_args, root)?;
 
-fn cmd_gen_feature_header(root: &Path) -> Result<(), String> {
-    let (base, gated) = headers_paths(root);
-    let base_header =
-        fs::read_to_string(&base).map_err(|e| format!("failed to read {}: {e}", base.display()))?;
-    let generated = generate_feature_gated_header(&base_header);
-    if let Some(parent) = gated.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
+    // Create target folders
+    let include_dir = opts.out_dir.join("include");
+    let library_dir = opts.out_dir.join("library");
+    fs::create_dir_all(&include_dir)
+        .map_err(|e| format!("failed to create {}: {e}", include_dir.display()))?;
+    fs::create_dir_all(&library_dir)
+        .map_err(|e| format!("failed to create {}: {e}", library_dir.display()))?;
+
+    // Copy modbus_rs.h
+    let src_header = root.join("target/mbus-ffi/include/modbus_rs.h");
+    if !src_header.exists() {
+        return Err(
+            "Generated header modbus_rs.h not found in target/mbus-ffi/include/".to_string(),
+        );
     }
-    fs::write(&gated, generated)
-        .map_err(|e| format!("failed to write {}: {e}", gated.display()))?;
-    println!("Feature-gated header regenerated: {}", gated.display());
+    let dest_header = include_dir.join("modbus_rs.h");
+    fs::copy(&src_header, &dest_header)
+        .map_err(|e| format!("failed to copy header to {}: {e}", dest_header.display()))?;
+    println!("  copied header -> {}", dest_header.display());
+
+    // Copy built libraries
+    let target_dir = if let Some(target) = &opts.target {
+        root.join("target").join(target).join(profile)
+    } else {
+        root.join("target").join(profile)
+    };
+
+    let mut copied_any = false;
+    let lib_filenames = &[
+        "libmbus_ffi.a",
+        "mbus_ffi.lib",
+        "libmbus_ffi.so",
+        "libmbus_ffi.dylib",
+        "mbus_ffi.dll",
+    ];
+    for filename in lib_filenames {
+        let src = target_dir.join(filename);
+        if src.exists() {
+            let dest = library_dir.join(filename);
+            fs::copy(&src, &dest).map_err(|e| {
+                format!(
+                    "failed to copy library {} to {}: {e}",
+                    filename,
+                    dest.display()
+                )
+            })?;
+            println!("  copied library -> {}", dest.display());
+            copied_any = true;
+        }
+    }
+
+    if !copied_any {
+        return Err(format!(
+            "No built library files found in {}",
+            target_dir.display()
+        ));
+    }
+
+    println!("Client FFI bundle is ready at {}", opts.out_dir.display());
     Ok(())
 }
 
-fn cmd_check_feature_header(root: &Path) -> Result<(), String> {
-    let (base, gated) = headers_paths(root);
-    let base_header =
-        fs::read_to_string(&base).map_err(|e| format!("failed to read {}: {e}", base.display()))?;
-    let expected = generate_feature_gated_header(&base_header);
-    if !gated.exists() {
-        if let Some(parent) = gated.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("failed to create {}: {e}", parent.display()))?;
-        }
-        fs::write(&gated, &expected)
-            .map_err(|e| format!("failed to write {}: {e}", gated.display()))?;
-        println!("Feature-gated header bootstrapped: {}", gated.display());
-        return Ok(());
+fn cmd_check_client_header(root: &Path, args: &[String]) -> Result<(), String> {
+    let opts = parse_gen_client_header_opts(root, args)?;
+    let mut script_args = vec!["./scripts/check_header.sh"];
+    let features_arg;
+    if let Some(feats) = &opts.features {
+        features_arg = format!("--features={feats}");
+        script_args.push(&features_arg);
     }
-    let current = fs::read_to_string(&gated)
-        .map_err(|e| format!("failed to read {}: {e}", gated.display()))?;
-
-    if current == expected {
-        println!("OK: modbus_rs_client_feature_gated.h is up to date.");
-        Ok(())
-    } else {
-        Err(
-            "modbus_rs_client_feature_gated.h is out of date. Run: cargo run -p xtask -- gen-feature-header"
-                .to_string(),
-        )
-    }
-}
-
-fn cmd_gen_header(root: &Path) -> Result<(), String> {
-    run_step("bash", &["./scripts/check_header.sh", "--fix"], root)?;
-    cmd_gen_feature_header(root)
-}
-
-fn cmd_check_header(root: &Path) -> Result<(), String> {
-    run_step("bash", &["./scripts/check_header.sh"], root)?;
-    cmd_check_feature_header(root)
+    run_step("bash", &script_args, root)
 }
 
 // ── C demo: build ─────────────────────────────────────────────────────────
@@ -605,7 +617,7 @@ fn cmd_check_feature_matrix(root: &Path) -> Result<(), String> {
 }
 
 fn cmd_check_release(root: &Path) -> Result<(), String> {
-    cmd_check_header(root)?;
+    cmd_check_client_header(root, &[])?;
     cmd_check_server_gen(root)?;
     cmd_build_c_demo(root, &["--demo".into(), "c_client_demo".into()])?;
     cmd_build_c_demo(root, &["--demo".into(), "c_server_demo".into()])?;
@@ -670,10 +682,22 @@ fn print_help() {
     println!("      Verify the generated mbus_server_app.h matches the current YAML config.");
     println!();
     println!("FFI HEADER COMMANDS");
-    println!("  gen-header");
-    println!("  check-header");
-    println!("  gen-feature-header");
-    println!("  check-feature-header");
+    println!("  gen-header-lib [OPTIONS]");
+    println!("      Regenerate modbus_rs.h.");
+    println!("      --features <list> Select a custom Rust feature set to expose in the C header.");
+    println!(
+        "      --out-dir <path>  Output directory root (creates include/ and library/ subdirectories)."
+    );
+    println!("                        [default: target/mbus-ffi]");
+    println!(
+        "      --target <triple> Target triple for cross-compilation (e.g. thumbv7em-none-eabi)."
+    );
+    println!("      --profile <mode>  Build profile: release (default) or debug.");
+    println!("  check-client-header [OPTIONS]");
+    println!("      Verify that modbus_rs.h is up to date.");
+    println!("      --features <list> Select a custom Rust feature set to verify.");
+    println!("      --target <triple> Target triple (accepted for compatibility/verification).");
+    println!("      --profile <mode>  Build profile (accepted for compatibility/verification).");
     println!();
     println!("VALIDATION COMMANDS");
     println!("  check-feature-matrix");
@@ -704,10 +728,8 @@ fn main() -> ExitCode {
     let remaining_args: Vec<String> = args.collect();
 
     let result = match cmd.as_str() {
-        "gen-header" => cmd_gen_header(&root),
-        "check-header" => cmd_check_header(&root),
-        "gen-feature-header" => cmd_gen_feature_header(&root),
-        "check-feature-header" => cmd_check_feature_header(&root),
+        "gen-header-lib" | "gen-header" => cmd_gen_client_header(&root, &remaining_args),
+        "check-client-header" | "check-header" => cmd_check_client_header(&root, &remaining_args),
         "list-c-demos" => cmd_list_c_demos(&root),
         "build-c-demo" => cmd_build_c_demo(&root, &remaining_args),
         "run-c-demo" => cmd_run_c_demo(&root, &remaining_args),

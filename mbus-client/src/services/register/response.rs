@@ -44,6 +44,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Read Input Registers (FC 0x04) response.
+    #[cfg(feature = "input-registers")]
     pub(super) fn parse_read_input_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -176,6 +177,7 @@ where
     APP: ClientCommon + RegisterResponse,
 {
     /// Handles a Read Holding Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_holding_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -220,6 +222,7 @@ where
     }
 
     /// Handles a Read Input Registers response by validating it against the expected response metadata and invoking the appropriate application callback.
+    #[cfg(feature = "input-registers")]
     pub(super) fn handle_read_input_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -269,6 +272,7 @@ where
     }
 
     /// Handles a Write Single Register response by invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_single_register_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -298,6 +302,7 @@ where
     }
 
     /// Handles a Write Multiple Registers response by invoking the appropriate application callback.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_multiple_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -328,6 +333,7 @@ where
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_write_multiple_registers_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,
@@ -360,6 +366,7 @@ where
         );
     }
 
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_mask_write_register_response(
         &mut self,
         ctx: &ExpectedResponse<T, APP, N>,

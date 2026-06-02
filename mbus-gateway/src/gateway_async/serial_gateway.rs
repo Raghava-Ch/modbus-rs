@@ -98,14 +98,39 @@
 //! ```
 
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+use std::str::FromStr;
 
-use mbus_core::transport::AsyncTransport;
+use mbus_core::errors::{ExceptionCode, MbusError};
+use mbus_core::transport::{
+    AsyncTransport, BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig,
+    ModbusSerialConfig, Parity, SerialMode, TransportType,
+};
+use mbus_core::data_unit::common::{decompile_adu_frame, compile_adu_frame};
 use tokio::sync::Mutex;
 
-use crate::common::log_compat::gateway_log_debug;
-use crate::common::router::GatewayRoutingPolicy;
-use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
+use crate::common::event::GatewayEventHandler;
+use crate::common::log_compat::{gateway_log_debug, gateway_log_trace, gateway_log_warn};
+use crate::common::router::{GatewayRoutingPolicy, UnitRouteTable};
+use crate::gateway_async::downstream::GatewayTransport;
+use crate::gateway_async::gateway::{AsyncGatewayError, send_async_exception};
+use mbus_serial::{TokioAsciiTransport, TokioRtuTransport};
+
+/// Configuration for the upstream serial gateway server.
+#[derive(Debug, Clone)]
+pub struct SerialGatewayConfig {
+    pub port: String,
+    pub mode: SerialMode,
+    pub baud_rate: BaudRate,
+    pub data_bits: DataBits,
+    pub stop_bits: u8,
+    pub parity: Parity,
+    pub response_timeout: Duration,
+}
+
+/// Gateway error type alias.
+pub type GatewayError = AsyncGatewayError;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AsyncSerialGatewayServer
@@ -114,116 +139,308 @@ use crate::gateway_async::gateway::{AsyncGatewayError, run_async_session};
 /// Async Modbus serial upstream gateway.
 ///
 /// Runs a single gateway session where the **upstream** is a serial Modbus
-/// master (RTU or ASCII) connected via `TokioRtuTransport` /
-/// `TokioAsciiTransport`, and the **downstreams** are any [`AsyncTransport`]
-/// channels (TCP, more serial ports, custom, …).
-///
-/// Unlike [`AsyncTcpGatewayServer`] or [`AsyncWsGatewayServer`], which run a
-/// listener loop accepting multiple concurrent upstream clients, this server runs
-/// a **single session** — serial links are point-to-point by nature.
-///
-/// The session automatically restarts when the serial port reports a connection
-/// error (e.g., device unplugged) if `serve` is called in a loop by the caller.
-///
-/// [`AsyncTcpGatewayServer`]: crate::AsyncTcpGatewayServer
-/// [`AsyncWsGatewayServer`]: crate::AsyncWsGatewayServer
+/// master (RTU or ASCII) configured with [`SerialGatewayConfig`], and the
+/// **downstreams** are [`GatewayTransport`] channels (TCP, RTU, or ASCII).
 pub struct AsyncSerialGatewayServer;
 
 impl AsyncSerialGatewayServer {
-    // ── serve ─────────────────────────────────────────────────────────────────
-
-    /// Run the gateway session on the given serial upstream transport until an
-    /// unrecoverable error occurs.
+    /// Run the gateway session until it ends naturally **or** `shutdown_future` resolves.
     ///
-    /// `upstream` is the open, ready-to-use serial transport (e.g.
-    /// `TokioRtuTransport::new(&config)?`).  The gateway forwards every
-    /// upstream request to the appropriate downstream channel according to
-    /// `router` and returns the response.
-    ///
-    /// # When to restart
-    ///
-    /// If the serial master resets or the cable is unplugged, `serve` returns
-    /// `Err(AsyncGatewayError::Modbus(_))`.  The caller can reconstruct the
-    /// transport and call `serve` again:
-    ///
-    /// ```rust,no_run
-    /// # async fn example() {}
-    /// // loop { match AsyncSerialGatewayServer::serve(...).await { ... } }
-    /// ```
-    pub async fn serve<US, R, DS, EVENT>(
-        upstream: US,
-        router: R,
-        downstreams: Vec<Arc<Mutex<DS>>>,
-        handler: Arc<Mutex<EVENT>>,
-        response_timeout: std::time::Duration,
-    ) -> Result<(), AsyncGatewayError>
+    /// Under the hood, this method:
+    /// 1. Opens the specified serial port asynchronously via `tokio-serial`.
+    /// 2. Delineates packets:
+    ///    - **RTU mode**: Using a 3.5 character timeout, verifying CRC-16.
+    ///    - **ASCII mode**: Reading until `\r\n` (CRLF) delimiters, verifying LRC check.
+    /// 3. Parses the Modbus Slave Address (Unit ID) and request PDU.
+    /// 4. Looks up `router.read()` to match the target downstream channel.
+    /// 5. Locks the matching downstream channel's transport mutex, translates the PDU,
+    ///    waits for the response, and writes the formatted response back to the serial line.
+    /// 6. Triggers observer callbacks on `handler` to feed metrics and traffic logs.
+    pub async fn serve_with_shutdown<F, const MAX_ROUTES: usize>(
+        cfg: SerialGatewayConfig,
+        router: Arc<RwLock<UnitRouteTable<MAX_ROUTES>>>,
+        downstreams: Vec<Arc<Mutex<GatewayTransport>>>,
+        handler: Arc<Mutex<dyn GatewayEventHandler + Send>>,
+        shutdown_future: F,
+    ) -> Result<(), GatewayError>
     where
-        US: AsyncTransport + Send + 'static,
-        R: GatewayRoutingPolicy + Send + Sync + 'static,
-        DS: AsyncTransport + Send + 'static,
-        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
     {
-        let router = Arc::new(router);
-        let downstreams = Arc::new(downstreams);
+        gateway_log_debug!("serial upstream gateway session started with config: {:?}", cfg);
 
-        gateway_log_debug!("serial upstream gateway session started");
-        if let Err(e) =
-            run_async_session(upstream, router, downstreams, handler, response_timeout).await
-        {
-            gateway_log_debug!("serial upstream session ended: {:?}", e);
-            return Err(AsyncGatewayError::Modbus(e));
+        // 1. Open the specified serial port asynchronously via `tokio-serial` / Tokio transports.
+        let port_path = heapless::String::<64>::from_str(&cfg.port)
+            .map_err(|_| AsyncGatewayError::Modbus(MbusError::InvalidConfiguration))?;
+
+        let modbus_cfg = ModbusConfig::Serial(ModbusSerialConfig {
+            port_path,
+            mode: cfg.mode,
+            baud_rate: cfg.baud_rate,
+            data_bits: cfg.data_bits,
+            stop_bits: cfg.stop_bits,
+            parity: cfg.parity,
+            response_timeout_ms: cfg.response_timeout.as_millis() as u32,
+            retry_attempts: 0,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        });
+
+        tokio::pin!(shutdown_future);
+
+        match cfg.mode {
+            SerialMode::Rtu => {
+                let mut upstream = TokioRtuTransport::new(&modbus_cfg)
+                    .map_err(AsyncGatewayError::Modbus)?;
+                Self::run_loop(
+                    &mut upstream,
+                    true,
+                    router,
+                    downstreams,
+                    handler,
+                    cfg.response_timeout,
+                    shutdown_future,
+                )
+                .await
+            }
+            SerialMode::Ascii => {
+                let mut upstream = TokioAsciiTransport::new(&modbus_cfg)
+                    .map_err(AsyncGatewayError::Modbus)?;
+                Self::run_loop(
+                    &mut upstream,
+                    false,
+                    router,
+                    downstreams,
+                    handler,
+                    cfg.response_timeout,
+                    shutdown_future,
+                )
+                .await
+            }
         }
-        Ok(())
     }
 
-    // ── serve_with_shutdown ───────────────────────────────────────────────────
-
-    /// Run the gateway session until it ends naturally **or** `shutdown` resolves.
-    ///
-    /// Pass any `Future<Output = ()>` as `shutdown`.  The easiest way is to use
-    /// [`GatewayShutdown`](crate::GatewayShutdown):
-    ///
-    /// ```rust,no_run
-    /// # async fn example() {}
-    /// // let (token, shutdown) = GatewayShutdown::new();
-    /// // token.cancel(); // from another task
-    /// // AsyncSerialGatewayServer::serve_with_shutdown(upstream, router, ds, shutdown).await?;
-    /// ```
-    pub async fn serve_with_shutdown<US, R, DS, EVENT, F>(
-        upstream: US,
-        router: R,
-        downstreams: Vec<Arc<Mutex<DS>>>,
-        handler: Arc<Mutex<EVENT>>,
-        response_timeout: std::time::Duration,
-        shutdown: F,
-    ) -> Result<(), AsyncGatewayError>
+    async fn run_loop<T, F, const MAX_ROUTES: usize>(
+        upstream: &mut T,
+        is_rtu: bool,
+        router: Arc<RwLock<UnitRouteTable<MAX_ROUTES>>>,
+        downstreams: Vec<Arc<Mutex<GatewayTransport>>>,
+        handler: Arc<Mutex<dyn GatewayEventHandler + Send>>,
+        response_timeout: Duration,
+        mut shutdown_future: std::pin::Pin<&mut F>,
+    ) -> Result<(), GatewayError>
     where
-        US: AsyncTransport + Send + 'static,
-        R: GatewayRoutingPolicy + Send + Sync + 'static,
-        DS: AsyncTransport + Send + 'static,
-        EVENT: crate::common::event::GatewayEventHandler + Send + 'static,
-        F: Future<Output = ()>,
+        T: AsyncTransport + Send,
+        F: Future<Output = ()> + Send + 'static,
     {
-        let router = Arc::new(router);
-        let downstreams = Arc::new(downstreams);
+        let transport_type = if is_rtu {
+            TransportType::StdSerial(SerialMode::Rtu)
+        } else {
+            TransportType::StdSerial(SerialMode::Ascii)
+        };
 
-        gateway_log_debug!("serial upstream gateway session started (with shutdown)");
-
-        tokio::pin!(shutdown);
-        tokio::select! {
-            result = run_async_session(upstream, router, downstreams, handler, response_timeout) => {
-                match result {
-                    Ok(()) => Ok(()),
-                    Err(e) => {
-                        gateway_log_debug!("serial upstream session ended: {:?}", e);
-                        Err(AsyncGatewayError::Modbus(e))
+        loop {
+            // 2. Delineate packets using a 3.5 character timeout or CRLF delimiter
+            let frame = tokio::select! {
+                _ = &mut shutdown_future => {
+                    gateway_log_debug!("serial upstream gateway received shutdown signal");
+                    return Ok(());
+                }
+                recv_res = upstream.recv() => {
+                    match recv_res {
+                        Ok(f) => f,
+                        Err(MbusError::ConnectionClosed) | Err(MbusError::ConnectionLost) => {
+                            gateway_log_debug!("upstream disconnected");
+                            break;
+                        }
+                        Err(e) => {
+                            gateway_log_debug!("upstream recv error: {:?}", e);
+                            return Err(AsyncGatewayError::Modbus(e));
+                        }
                     }
                 }
+            };
+
+            #[cfg(feature = "traffic")]
+            {
+                let mut h = handler.lock().await;
+                h.on_upstream_rx(0, &frame);
             }
-            _ = &mut shutdown => {
-                gateway_log_debug!("serial upstream gateway received shutdown signal");
-                Ok(())
+
+            gateway_log_trace!(
+                "upstream rx: {} bytes (type={:?})",
+                frame.len(),
+                transport_type
+            );
+
+            // Delineating RTU/ASCII and verifying CRC-16 / LRC checksums
+            let msg = match decompile_adu_frame(&frame, transport_type) {
+                Ok(m) => m,
+                Err(e) => {
+                    gateway_log_debug!("upstream frame checksum or parsing failure: {:?}", e);
+                    continue;
+                }
+            };
+
+            // 3. Parse the Modbus Slave Address (Unit ID) and the request PDU.
+            let unit = msg.unit_id_or_slave_addr();
+            let upstream_txn = msg.transaction_id();
+            let fc = msg.pdu.function_code();
+
+            // 4. Lookup `router.read()` to match the target downstream channel.
+            let route_result = {
+                let r = router.read().unwrap();
+                r.route(unit)
+            };
+
+            let channel_idx = match route_result {
+                Some(idx) => {
+                    let mut h = handler.lock().await;
+                    h.on_forward(0, unit, idx);
+                    idx
+                }
+                None => {
+                    gateway_log_debug!("routing miss for unit={}", unit.get());
+                    let _ = send_async_exception(
+                        upstream,
+                        upstream_txn,
+                        unit,
+                        fc,
+                        ExceptionCode::ServerDeviceFailure,
+                        transport_type,
+                    )
+                    .await;
+                    continue;
+                }
+            };
+
+            if channel_idx >= downstreams.len() {
+                gateway_log_warn!(
+                    "routing index out of bounds: {} (available downstreams: {})",
+                    channel_idx,
+                    downstreams.len()
+                );
+                let _ = send_async_exception(
+                    upstream,
+                    upstream_txn,
+                    unit,
+                    fc,
+                    ExceptionCode::ServerDeviceFailure,
+                    transport_type,
+                )
+                .await;
+                continue;
             }
+
+            let downstream_unit = {
+                let r = router.read().unwrap();
+                r.rewrite(unit)
+            };
+
+            // 5. Lock the `downstreams[channel_idx]` transport mutex, execute PDU translation, wait for response, and write the formatted Modbus response frame back to the serial line.
+            let ds_adu = match compile_adu_frame(
+                0,
+                downstream_unit.get(),
+                msg.pdu.clone(),
+                TransportType::StdTcp,
+            ) {
+                Ok(adu) => adu,
+                Err(e) => {
+                    gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
+                    continue;
+                }
+            };
+
+            #[cfg(feature = "traffic")]
+            {
+                let mut h = handler.lock().await;
+                h.on_downstream_tx(channel_idx, &ds_adu);
+            }
+
+            let response_bytes = {
+                let mut ds = downstreams[channel_idx].lock().await;
+
+                if let Err(e) = ds.send(&ds_adu).await {
+                    gateway_log_debug!("downstream send error: {:?}", e);
+                    continue;
+                }
+
+                match tokio::time::timeout(response_timeout, ds.recv()).await {
+                    Ok(Ok(b)) => b,
+                    Ok(Err(e)) => {
+                        gateway_log_debug!("downstream recv error: {:?}", e);
+                        continue;
+                    }
+                    Err(_) => {
+                        gateway_log_debug!("downstream recv timeout");
+                        let mut h = handler.lock().await;
+                        h.on_downstream_timeout(0, 0);
+                        let _ = send_async_exception(
+                            upstream,
+                            upstream_txn,
+                            unit,
+                            fc,
+                            ExceptionCode::GatewayTargetDeviceFailedToRespond,
+                            transport_type,
+                        )
+                        .await;
+                        continue;
+                    }
+                }
+            };
+
+            #[cfg(feature = "traffic")]
+            {
+                let mut h = handler.lock().await;
+                h.on_downstream_rx(0, channel_idx, &response_bytes);
+            }
+
+            let response_msg = match decompile_adu_frame(&response_bytes, TransportType::StdTcp) {
+                Ok(m) => m,
+                Err(e) => {
+                    gateway_log_debug!("downstream response parse error: {:?}", e);
+                    continue;
+                }
+            };
+
+            let us_adu = match compile_adu_frame(
+                upstream_txn,
+                unit.get(),
+                response_msg.pdu.clone(),
+                transport_type,
+            ) {
+                Ok(adu) => adu,
+                Err(e) => {
+                    gateway_log_debug!("failed to encode upstream response: {:?}", e);
+                    continue;
+                }
+            };
+
+            if let Err(e) = upstream.send(&us_adu).await {
+                gateway_log_debug!("upstream send error: {:?}", e);
+                break;
+            }
+
+            // 6. Trigger callback methods on `handler`
+            #[cfg(feature = "traffic")]
+            {
+                let mut h = handler.lock().await;
+                h.on_upstream_tx(0, &us_adu);
+            }
+
+            {
+                let mut h = handler.lock().await;
+                h.on_response_returned(0, upstream_txn);
+            }
+
+            tokio::time::sleep(Duration::from_micros(10)).await;
         }
+
+        {
+            let mut h = handler.lock().await;
+            h.on_upstream_disconnect(0);
+        }
+
+        Ok(())
     }
 }

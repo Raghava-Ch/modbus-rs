@@ -1,6 +1,6 @@
 //! Modbus TCP client — ID-based C API.
 
-#![cfg(feature = "c-client")]
+#![cfg(all(feature = "c-client", feature = "network-tcp"))]
 
 use mbus_client::services::ClientServices;
 

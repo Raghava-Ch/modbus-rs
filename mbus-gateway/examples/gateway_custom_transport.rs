@@ -11,19 +11,19 @@
 //! ## Build & run
 //!
 //! ```bash
-//! cargo run --example custom_transport -p modbus-rs
+//! cargo run --example gateway_custom_transport -p mbus-gateway
 //! ```
 //!
 //! No extra feature flags are required; the example compiles with the crate
 //! defaults.
 
 use heapless::Vec as HVec;
+use mbus_core::data_unit::common::Pdu;
+use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, compile_adu_frame};
+use mbus_core::errors::MbusError;
+use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::transport::{ModbusConfig, Transport, TransportType};
 use mbus_gateway::{DownstreamChannel, GatewayServices, NoopEventHandler, PassthroughRouter};
-use modbus_rs::mbus_core::data_unit::common::Pdu;
-use modbus_rs::mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, compile_adu_frame};
-use modbus_rs::mbus_core::errors::MbusError;
-use modbus_rs::mbus_core::function_codes::public::FunctionCode;
-use modbus_rs::mbus_core::transport::{ModbusConfig, Transport, TransportType};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Transport — a simple single-frame in-memory loopback

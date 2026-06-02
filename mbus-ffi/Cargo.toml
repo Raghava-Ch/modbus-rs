@@ -1,6 +1,6 @@
 [package]
 name = "mbus-ffi"
-version = "0.12.0"
+version = "0.13.0"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"
@@ -12,7 +12,7 @@ categories.workspace = true
 description = "Native C FFI and browser WASM bindings for modbus-rs client APIs, with optional generated server bindings"
 
 [lib]
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]
 default = []
@@ -30,6 +30,7 @@ wasm = [
     "dep:js-sys",
     "dep:wasm-bindgen-futures",
     "dep:gloo-timers",
+    "dep:mbus-client",
     "mbus-network/wasm",
     "mbus-serial/wasm",
 ]
@@ -110,6 +111,24 @@ server-full = [
     "c-server",
     "coils",
     "registers",
+    "holding-registers",
+    "input-registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "network-tcp",
+    "serial-rtu",
+    "serial-ascii",
+]
+
+## Convenience alias — enables all server features (c-server must also be enabled)
+client-full = [
+    "c-client",
+    "coils",
+    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -227,6 +246,7 @@ nodejs = [
     "dep:napi",
     "dep:napi-derive",
     "dep:serde_json",
+    "dep:serde",
     "dep:tokio",
     "dep:mbus-client-async",
     "dep:mbus-server-async",
@@ -319,15 +339,14 @@ dotnet-full = [
 mbus-core = { workspace = true }
 # mbus-client is optional to prevent its symbols from being unconditionally baked
 # into the C static library. This avoids binary bloat for server-only builds on bare-metal targets.
-mbus-client = { workspace = true, optional = true }
+mbus-client = { workspace = true, default-features = false, optional = true }
 mbus-server = { workspace = true, optional = true, default-features = false }
 mbus-gateway = { workspace = true, optional = true }
 mbus-network = { workspace = true, optional = true }
 heapless = { workspace = true }
 serde = { version = "1.0", default-features = false, features = [
     "derive",
-    "alloc",
-] }
+], optional = true }
 
 ## Python binding deps — only pulled in when `python` feature is enabled.
 pyo3 = { version = "0.28.3", features = ["extension-module"], optional = true }
@@ -337,8 +356,7 @@ pyo3-async-runtimes = { version = "0.28.0", features = [
 tokio = { version = "1", features = ["full"], optional = true }
 mbus-client-async = { workspace = true, features = [
     "coils",
-    "holding-registers",
-    "input-registers",
+    "registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -346,8 +364,7 @@ mbus-client-async = { workspace = true, features = [
 ], optional = true }
 mbus-server-async = { workspace = true, features = [
     "coils",
-    "holding-registers",
-    "input-registers",
+    "registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -367,7 +384,7 @@ serde_json = { version = "1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ## mbus-client provides the sync client state machine (used by WASM bindings)
-mbus-client = { workspace = true }
+mbus-client = { workspace = true, default-features = false, optional = true }
 ## mbus-network is needed for WasmWsTransport (re-exported when `wasm` feature is on)
 mbus-network = { workspace = true }
 ## mbus-serial provides WasmSerialTransport for browser Web Serial integration.
@@ -396,7 +413,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ## In-process AsyncTcpServer used by the .NET binding integration test.
-mbus-async = { version = "0.12.0", path = "../mbus-async", features = [
+mbus-async = { version = "0.13.0", path = "../mbus-async", features = [
     "server-tcp",
     "registers",
 ] }

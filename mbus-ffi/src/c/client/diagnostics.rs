@@ -4,7 +4,13 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
-use super::pool::{MbusClientId, with_serial_client_uniform, with_tcp_client};
+use super::pool::MbusClientId;
+
+#[cfg(feature = "network-tcp")]
+use super::pool::with_tcp_client;
+
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
+use super::pool::with_serial_client_uniform;
 use crate::c::error::MbusStatusCode;
 
 macro_rules! tcp_diag_fn {
@@ -49,30 +55,42 @@ macro_rules! serial_diag_fn {
 
 // ── Read Exception Status (FC 0x07) ───────────────────────────────────────────
 
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_read_exception_status, read_exception_status);
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_read_exception_status, read_exception_status);
 
 // ── Get Comm Event Counter (FC 0x0B) ──────────────────────────────────────────
 
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_get_comm_event_counter, get_comm_event_counter);
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_get_comm_event_counter, get_comm_event_counter);
 
 // ── Get Comm Event Log (FC 0x0C) ──────────────────────────────────────────────
 
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_get_comm_event_log, get_comm_event_log);
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_get_comm_event_log, get_comm_event_log);
 
 // ── Report Server ID (FC 0x11) ────────────────────────────────────────────────
 
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 tcp_diag_fn!(mbus_tcp_report_server_id, report_server_id);
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 serial_diag_fn!(mbus_serial_report_server_id, report_server_id);
 
 // ── Diagnostics (FC 0x08) ─────────────────────────────────────────────────────
@@ -81,7 +99,7 @@ serial_diag_fn!(mbus_serial_report_server_id, report_server_id);
 ///
 /// # Safety
 /// If `data_len > 0`, `data` must be valid for that many `u16` words.
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_tcp_diagnostics(
     id: MbusClientId,
@@ -101,7 +119,10 @@ pub unsafe extern "C" fn mbus_tcp_diagnostics(
 ///
 /// # Safety
 /// If `data_len > 0`, `data` must be valid for that many `u16` words.
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_serial_diagnostics(
     id: MbusClientId,
@@ -155,7 +176,7 @@ where
 ///
 /// `dev_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
 /// `object_id`: starting object ID (0x00–0xFF).
-#[cfg(feature = "diagnostics")]
+#[cfg(all(feature = "diagnostics", feature = "network-tcp"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_tcp_read_device_identification(
     id: MbusClientId,
@@ -171,7 +192,10 @@ pub extern "C" fn mbus_tcp_read_device_identification(
 }
 
 /// Queue a Read Device Identification request on a serial client.
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(feature = "serial-rtu", feature = "serial-ascii")
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn mbus_serial_read_device_identification(
     id: MbusClientId,

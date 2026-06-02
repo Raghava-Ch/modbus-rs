@@ -244,6 +244,7 @@ where
     APP: ClientCommon + crate::app::RegisterResponse,
 {
     /// Forwards to `ClientServices::read_holding_registers`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_holding_registers(
         &mut self,
@@ -257,6 +258,7 @@ where
     }
 
     /// Forwards to `ClientServices::read_single_holding_register`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_holding_register(
         &mut self,
@@ -269,6 +271,7 @@ where
     }
 
     /// Forwards to `ClientServices::read_input_registers`.
+    #[cfg(feature = "input-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_input_registers(
         &mut self,
@@ -282,6 +285,7 @@ where
     }
 
     /// Forwards to `ClientServices::read_single_input_register`.
+    #[cfg(feature = "input-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_single_input_register(
         &mut self,
@@ -294,6 +298,7 @@ where
     }
 
     /// Forwards to `ClientServices::write_single_register`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_single_register(
         &mut self,
@@ -307,6 +312,7 @@ where
     }
 
     /// Forwards to `ClientServices::write_multiple_registers`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn write_multiple_registers(
         &mut self,
@@ -321,6 +327,7 @@ where
     }
 
     /// Forwards to `ClientServices::read_write_multiple_registers`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn read_write_multiple_registers(
         &mut self,
@@ -342,6 +349,7 @@ where
     }
 
     /// Forwards to `ClientServices::mask_write_register`.
+    #[cfg(feature = "holding-registers")]
     #[must_use = "request submission errors should be handled; the request may not have been queued/sent"]
     pub fn mask_write_register(
         &mut self,
@@ -1007,6 +1015,8 @@ where
     }
 
     fn handle_parse_error(&mut self, err: MbusError) {
+        #[cfg(not(feature = "traffic"))]
+        let _ = err;
         #[cfg(feature = "traffic")]
         self.app.on_rx_error(
             0,
@@ -1066,7 +1076,9 @@ where
     }
 
     fn fail_all_pending_requests(&mut self, error: MbusError) {
+        #[cfg(feature = "logging")]
         let pending_count = self.expected_responses.len();
+        #[cfg(feature = "logging")]
         client_log_debug!(
             "failing {} pending request(s) with error {:?}",
             pending_count,
@@ -1221,7 +1233,9 @@ where
         response_timeout_ms: u64,
         new_next_check: &mut u64,
     ) -> LoopAction {
+        #[cfg(feature = "logging")]
         let expected_response = &self.expected_responses[i];
+        #[cfg(feature = "logging")]
         client_log_debug!(
             "retry due now: txn_id={}, unit_id_or_slave_addr={}, retry_attempt_index={}, retries_left={}",
             expected_response.txn_id,

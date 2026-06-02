@@ -31,14 +31,14 @@ cargo test --workspace
 Verify the generated headers match the current Rust API:
 
 ```bash
-cargo run -p xtask -- check-header          # modbus_rs_client.h + feature-gated variant
+cargo run -p xtask -- check-client-header    # modbus_rs_client.h + feature-gated variant
 cargo run -p xtask -- check-server-gen      # mbus_server_app.h matches the example YAML
 ```
 
 Regenerate if needed:
 
 ```bash
-cargo run -p xtask -- gen-header
+cargo run -p xtask -- gen-client-lib
 cargo run -p xtask -- gen-server-app \
   --config mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
   --emit-c-header target/mbus-ffi/include/mbus_server_app.h
@@ -58,10 +58,10 @@ Spot-check the key `mbus-ffi` combinations manually:
 
 ```bash
 cargo check -p mbus-ffi                              # no features
-cargo check -p mbus-ffi --features c,full            # client only
+cargo check -p mbus-ffi --features c-client,full            # client only
 cargo check -p mbus-ffi --features c-server,full     # requires MBUS_SERVER_APP_CONFIG — expected build-script panic
 MBUS_SERVER_APP_CONFIG=mbus-ffi/examples/c_server_demo_yaml/mbus_server_app.example.yaml \
-  cargo check -p mbus-ffi --features c,c-server,full # client + server
+  cargo check -p mbus-ffi --features c-client,c-server,full # client + server
 ```
 
 > `--features c-server` without `MBUS_SERVER_APP_CONFIG` is expected to panic with a clear
@@ -117,7 +117,7 @@ Run the single xtask command that exercises all of the above in sequence:
 cargo run -p xtask -- check-release
 ```
 
-This runs: `check-header` → `check-server-gen` → `build-c-demo c_client_demo` →
+This runs: `check-client-header` → `check-server-gen` → `build-c-demo c_client_demo` →
 `build-c-demo c_server_demo` → `check-feature-matrix`.
 
 > Note: `c_server_demo_yaml` is not in the automated gate because it requires

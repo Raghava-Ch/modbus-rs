@@ -24,7 +24,9 @@ pub mod callbacks;
 pub mod config;
 pub mod models;
 pub mod pool;
+#[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub mod serial_client;
+#[cfg(feature = "network-tcp")]
 pub mod tcp_client;
 
 #[cfg(feature = "coils")]
@@ -37,7 +39,7 @@ pub mod discrete_inputs;
 pub mod fifo;
 #[cfg(feature = "file-record")]
 pub mod file_record;
-#[cfg(feature = "registers")]
+#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
 pub mod registers;
 
 // ── Re-exports ───────────────────────────────────────────────────────────────

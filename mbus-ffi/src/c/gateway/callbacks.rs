@@ -14,6 +14,7 @@ use core::ffi::c_void;
 /// Any field set to `None` (`NULL` from C) is treated as a no-op.
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[cfg(feature = "c-gateway")]
 pub struct MbusGatewayCallbacks {
     /// Opaque user pointer threaded to every callback.
     pub userdata: *mut c_void,
@@ -42,9 +43,12 @@ pub struct MbusGatewayCallbacks {
 // SAFETY: The C application is responsible for ensuring the userdata pointer
 // is safely shareable across threads (or for serializing all access via the
 // extern lock hooks).
+#[cfg(feature = "c-gateway")]
 unsafe impl Send for MbusGatewayCallbacks {}
+#[cfg(feature = "c-gateway")]
 unsafe impl Sync for MbusGatewayCallbacks {}
 
+#[cfg(feature = "c-gateway")]
 impl Default for MbusGatewayCallbacks {
     fn default() -> Self {
         Self {

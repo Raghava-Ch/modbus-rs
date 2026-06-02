@@ -22,16 +22,28 @@ The `mbus-ffi` crate provides C-compatible bindings for use in native applicatio
 
 ## Prerequisites
 
-1. Build the shared library:
+The easiest way to prepare the C client FFI SDK is by using the workspace maintenance tool `xtask`. This will automatically generate the C header, build the library in release mode, and bundle everything into an output directory containing `include/` and `library/` folders:
+
+```bash
+# Default: generate and bundle under target/mbus-ffi/
+cargo run -p xtask -- gen-client-lib
+
+# Or bundle into a custom SDK path
+cargo run -p xtask -- gen-client-lib --out-dir /path/to/my_sdk
+```
+
+Alternatively, you can build the library and locate the header manually:
+
+1. Build the library:
 
 ```bash
 cargo build -p mbus-ffi --release
 ```
 
 2. Find the library at:
-   - macOS: `target/release/libmbus_ffi.dylib`
-   - Linux: `target/release/libmbus_ffi.so`
-   - Windows: `target/release/mbus_ffi.dll`
+   - macOS: `target/release/libmbus_ffi.dylib` and `libmbus_ffi.a`
+   - Linux: `target/release/libmbus_ffi.so` and `libmbus_ffi.a`
+   - Windows: `target/release/mbus_ffi.dll` and `mbus_ffi.lib`
 
 3. Copy the header file:
     - `target/mbus-ffi/include/modbus_rs_client.h`
@@ -40,16 +52,15 @@ cargo build -p mbus-ffi --release
 
 ## Header Generation
 
-The header is generated using cbindgen. To regenerate:
+The client header is generated using cbindgen. To regenerate (and rebuild the bundled library):
 
 ```bash
-cargo run -p xtask -- check-header
-cargo run -p xtask -- gen-feature-header
+cargo run -p xtask -- gen-client-lib
 ```
 
 This produces:
-- `modbus_rs_client.h` — Base header
-- `modbus_rs_client_feature_gated.h` — Feature-gated header
+- `include/modbus_rs_client.h` — Client header
+- `library/` — Compiled FFI library files
 
 ---
 

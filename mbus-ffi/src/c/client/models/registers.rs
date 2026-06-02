@@ -1,4 +1,7 @@
-use mbus_core::models::register::{HoldingRegisters, InputRegisters};
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
 
 /// Opaque wrapper around a `HoldingRegisters` value passed through a C callback.
 ///
@@ -26,5 +29,7 @@ pub struct MbusInputRegisters(pub(crate) InputRegisters);
 /// can cover all register reads. On the Rust side, the pointer always points to
 /// either a `MbusHoldingRegisters` or `MbusInputRegisters` value whose layout is
 /// identical (both are `#[repr(transparent)]` wrappers over the same struct).
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 pub use MbusHoldingRegisters as MbusRegisters;
+#[cfg(all(feature = "input-registers", not(feature = "holding-registers")))]
+pub use MbusInputRegisters as MbusRegisters;

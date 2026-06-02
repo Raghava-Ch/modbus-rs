@@ -1,12 +1,46 @@
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_client::app::RequestErrorNotifier;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_core::errors::MbusError;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_core::transport::TimeKeeper;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 #[cfg(feature = "discrete-inputs")]
 use super::callbacks::MbusReadDiscreteInputsCtx;
 #[cfg(feature = "fifo")]
 use super::callbacks::MbusReadFifoQueueCtx;
+#[cfg(all(
+    feature = "input-registers",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
+use super::callbacks::MbusReadInputRegistersCtx;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use super::callbacks::{MbusCallbacks, MbusRequestFailedCtx};
 #[cfg(feature = "diagnostics")]
 use super::callbacks::{
@@ -15,32 +49,82 @@ use super::callbacks::{
 };
 #[cfg(feature = "file-record")]
 use super::callbacks::{MbusFileRecordResult, MbusReadFileRecordCtx, MbusWriteFileRecordCtx};
-#[cfg(feature = "registers")]
+#[cfg(all(
+    feature = "holding-registers",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 use super::callbacks::{
-    MbusMaskWriteRegisterCtx, MbusReadHoldingRegistersCtx, MbusReadInputRegistersCtx,
-    MbusReadWriteMultipleRegistersCtx, MbusWriteMultipleRegistersCtx, MbusWriteSingleRegisterCtx,
+    MbusMaskWriteRegisterCtx, MbusReadHoldingRegistersCtx, MbusReadWriteMultipleRegistersCtx,
+    MbusWriteMultipleRegistersCtx, MbusWriteSingleRegisterCtx,
 };
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 use super::callbacks::{MbusReadCoilsCtx, MbusWriteMultipleCoilsCtx, MbusWriteSingleCoilCtx};
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 use super::models::coils::MbusCoils;
 #[cfg(feature = "discrete-inputs")]
 use super::models::discrete_inputs::MbusDiscreteInputs;
 #[cfg(feature = "fifo")]
 use super::models::fifo::MbusFifoQueue;
-#[cfg(feature = "holding-registers")]
+#[cfg(all(
+    feature = "holding-registers",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 use super::models::registers::MbusHoldingRegisters;
-#[cfg(feature = "input-registers")]
+#[cfg(all(
+    feature = "input-registers",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 use super::models::registers::MbusInputRegisters;
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 use crate::c::error::MbusStatusCode;
 
 // ── CApp ──────────────────────────────────────────────────────────────────────
 
 /// Internal App implementation that dispatches Modbus responses to C callbacks.
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 pub(super) struct CApp {
     pub(super) callbacks: MbusCallbacks,
 }
 
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl CApp {
     pub(super) fn new(callbacks: MbusCallbacks) -> Self {
         Self { callbacks }
@@ -48,7 +132,11 @@ impl CApp {
 }
 
 // ── TimeKeeper ────────────────────────────────────────────────────────────────
-
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl TimeKeeper for CApp {
     fn current_millis(&self) -> u64 {
         if let Some(cb) = self.callbacks.on_current_millis {
@@ -60,7 +148,11 @@ impl TimeKeeper for CApp {
 }
 
 // ── RequestErrorNotifier ──────────────────────────────────────────────────────
-
+#[cfg(any(
+    feature = "network-tcp",
+    feature = "serial-rtu",
+    feature = "serial-ascii"
+))]
 impl RequestErrorNotifier for CApp {
     fn request_failed(
         &mut self,
@@ -82,12 +174,26 @@ impl RequestErrorNotifier for CApp {
     }
 }
 
-#[cfg(feature = "traffic")]
+#[cfg(all(
+    feature = "traffic",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::TrafficNotifier for CApp {}
 
 // ── CoilResponse ─────────────────────────────────────────────────────────────
 
-#[cfg(feature = "coils")]
+#[cfg(all(
+    feature = "coils",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::CoilResponse for CApp {
     fn read_coils_response(
         &mut self,
@@ -178,8 +284,16 @@ impl mbus_client::app::CoilResponse for CApp {
 
 // ── RegisterResponse ──────────────────────────────────────────────────────────
 
-#[cfg(feature = "registers")]
+#[cfg(all(
+    any(feature = "holding-registers", feature = "input-registers"),
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::RegisterResponse for CApp {
+    #[cfg(feature = "holding-registers")]
     fn read_multiple_holding_registers_response(
         &mut self,
         txn_id: u16,
@@ -200,6 +314,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_single_holding_register_response(
         &mut self,
         txn_id: u16,
@@ -223,6 +338,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "input-registers")]
     fn read_multiple_input_registers_response(
         &mut self,
         txn_id: u16,
@@ -243,6 +359,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "input-registers")]
     fn read_single_input_register_response(
         &mut self,
         txn_id: u16,
@@ -266,6 +383,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn write_single_register_response(
         &mut self,
         txn_id: u16,
@@ -287,6 +405,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -308,6 +427,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_write_multiple_registers_response(
         &mut self,
         txn_id: u16,
@@ -328,6 +448,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn read_single_register_response(
         &mut self,
         txn_id: u16,
@@ -352,6 +473,7 @@ impl mbus_client::app::RegisterResponse for CApp {
         }
     }
 
+    #[cfg(feature = "holding-registers")]
     fn mask_write_register_response(&mut self, txn_id: u16, unit_id_slave_addr: UnitIdOrSlaveAddr) {
         if let Some(cb) = self.callbacks.on_mask_write_register {
             let ctx = MbusMaskWriteRegisterCtx {
@@ -368,7 +490,14 @@ impl mbus_client::app::RegisterResponse for CApp {
 
 // ── DiscreteInputResponse ─────────────────────────────────────────────────────
 
-#[cfg(feature = "discrete-inputs")]
+#[cfg(all(
+    feature = "discrete-inputs",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::DiscreteInputResponse for CApp {
     fn read_multiple_discrete_inputs_response(
         &mut self,
@@ -418,7 +547,14 @@ impl mbus_client::app::DiscreteInputResponse for CApp {
 
 // ── FifoQueueResponse ─────────────────────────────────────────────────────────
 
-#[cfg(feature = "fifo")]
+#[cfg(all(
+    feature = "fifo",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::FifoQueueResponse for CApp {
     fn read_fifo_queue_response(
         &mut self,
@@ -443,7 +579,14 @@ impl mbus_client::app::FifoQueueResponse for CApp {
 
 // ── FileRecordResponse ────────────────────────────────────────────────────────
 
-#[cfg(feature = "file-record")]
+#[cfg(all(
+    feature = "file-record",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::FileRecordResponse for CApp {
     fn read_file_record_response(
         &mut self,
@@ -500,7 +643,14 @@ impl mbus_client::app::FileRecordResponse for CApp {
 
 // ── DiagnosticsResponse ───────────────────────────────────────────────────────
 
-#[cfg(feature = "diagnostics")]
+#[cfg(all(
+    feature = "diagnostics",
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 impl mbus_client::app::DiagnosticsResponse for CApp {
     fn read_device_identification_response(
         &mut self,

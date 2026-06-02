@@ -200,7 +200,7 @@ Disable the default features and enable only what you need:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", default-features = false }
+mbus-gateway = { version = "0.13.0", default-features = false }
 ```
 
 All routing, transaction-ID mapping, and session management use `heapless::Vec`/`Deque` with const-generic capacities. No allocator is required for the sync gateway core.
@@ -234,7 +234,7 @@ request to any `AsyncTransport` downstream (TCP, RTU, ASCII):
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.12.0", features = ["upstream-ws"] }
+mbus-gateway = { version = "0.13.0", features = ["upstream-ws"] }
 ```
 
 <!-- validate: verify -->

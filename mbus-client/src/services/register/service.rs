@@ -1,7 +1,10 @@
 use heapless::Vec;
 
 use crate::services::register::{request::ReqPduCompiler, response::ResponseParser};
-use mbus_core::models::register::{HoldingRegisters, InputRegisters};
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
 use mbus_core::{
     data_unit::common::MAX_ADU_FRAME_LEN,
     data_unit::common::{self, Pdu},
@@ -16,6 +19,7 @@ pub(super) struct ServiceBuilder;
 
 impl ServiceBuilder {
     /// Sends a Read Holding Registers request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn read_holding_registers(
         txn_id: u16,
         unit_id: u8,
@@ -28,6 +32,7 @@ impl ServiceBuilder {
     }
 
     /// Sends a Read Input Registers request.
+    #[cfg(feature = "input-registers")]
     pub(super) fn read_input_registers(
         txn_id: u16,
         unit_id: u8,
@@ -40,6 +45,7 @@ impl ServiceBuilder {
     }
 
     /// Sends a Write Single Register request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn write_single_register(
         txn_id: u16,
         unit_id: u8,
@@ -52,6 +58,7 @@ impl ServiceBuilder {
     }
 
     /// Sends a Write Multiple Registers request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn write_multiple_registers(
         txn_id: u16,
         unit_id: u8,
@@ -65,6 +72,7 @@ impl ServiceBuilder {
     }
 
     /// Sends a Read/Write Multiple Registers request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn read_write_multiple_registers(
         txn_id: u16,
         unit_id: u8,
@@ -84,6 +92,7 @@ impl ServiceBuilder {
     }
 
     /// Sends a Mask Write Register request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn mask_write_register(
         txn_id: u16,
         unit_id: u8,
@@ -101,6 +110,7 @@ pub(super) struct ServiceDecompiler;
 
 impl ServiceDecompiler {
     /// Handles a Write Single Register response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_single_register_rsp(
         pdu: &Pdu,
         address: u16,
@@ -113,6 +123,7 @@ impl ServiceDecompiler {
     }
 
     /// Handles a Read Holding Registers response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_holding_register_rsp(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -128,6 +139,7 @@ impl ServiceDecompiler {
     }
 
     /// Handles a Read Input Registers response.
+    #[cfg(feature = "input-registers")]
     pub(super) fn handle_read_input_register_rsp(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -143,6 +155,7 @@ impl ServiceDecompiler {
     }
 
     /// Handles a Write Multiple Registers response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_write_multiple_registers_rsp(
         pdu: &Pdu,
         expected_address: u16,
@@ -159,6 +172,7 @@ impl ServiceDecompiler {
     }
 
     /// Handles a Read/Write Multiple Registers response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_read_write_multiple_registers_rsp(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -175,6 +189,7 @@ impl ServiceDecompiler {
     }
 
     /// Handles a Mask Write Register response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn handle_mask_write_register_rsp(
         pdu: &Pdu,
         address: u16,

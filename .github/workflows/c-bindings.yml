@@ -1,0 +1,76 @@
+name: C bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/python/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/c-bindings.yml'
+  pull_request:
+    paths:
+      - 'mbus-ffi/**'
+      - '!mbus-ffi/dotnet/**'
+      - '!mbus-ffi/go/**'
+      - '!mbus-ffi/nodejs/**'
+      - '!mbus-ffi/python/**'
+      - 'mbus-core/**'
+      - 'mbus-async/**'
+      - 'mbus-client-async/**'
+      - 'mbus-server-async/**'
+      - 'mbus-gateway/**'
+      - 'mbus-network/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/c-bindings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c-ffi:
+    name: C FFI (headers + demo build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: c-bindings-v2
+          cache-bin: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libudev-dev cmake gcc
+
+      - name: Check C FFI feature slices
+        run: |
+          cargo check -p mbus-ffi --no-default-features --features c-client,full
+          cargo check -p mbus-ffi --no-default-features --features c-server,server-traffic,full
+          cargo check -p mbus-ffi --no-default-features --features c-gateway,full
+
+      - name: Install cbindgen
+        run: cargo install cbindgen --locked
+
+      - name: Build C client demo
+        run: cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers,network-tcp,serial-rtu,serial-ascii
+
+      - name: Build C server demo
+        run: cargo run -p xtask -- build-c-demo --demo c_server_demo

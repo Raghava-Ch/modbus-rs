@@ -10,7 +10,7 @@ Enable the `async` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.12.0", features = ["async"] }
+modbus-rs = { version = "0.13.0", features = ["async"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -223,7 +223,7 @@ Enable with `traffic` feature:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.12.0", features = ["async", "traffic"] }
+modbus-rs = { version = "0.13.0", features = ["async", "traffic"] }
 ```
 
 ```rust

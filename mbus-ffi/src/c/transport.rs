@@ -239,85 +239,85 @@ pub struct MbusTransportCallbacks {
     pub on_is_connected: Option<unsafe extern "C" fn(userdata: *mut c_void) -> u8>,
 }
 
-#[cfg(any(feature = "c-client", feature = "c-server", feature = "c-gateway"))]
+#[cfg(all(
+    any(feature = "c-client", feature = "c-server", feature = "c-gateway"),
+    any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    )
+))]
 pub(crate) use c_impl::validate_transport_callbacks;
 
-#[cfg(any(
-    feature = "c-client",
-    all(feature = "c-server", feature = "serial-rtu")
-))]
+#[cfg(feature = "serial-rtu")]
 pub(crate) use c_impl::CRtuTransport;
 
-#[cfg(any(
-    feature = "c-client",
-    all(feature = "c-server", feature = "serial-ascii")
-))]
+#[cfg(feature = "serial-ascii")]
 pub(crate) use c_impl::CAsciiTransport;
 
-#[cfg(any(
-    feature = "c-client",
-    feature = "c-gateway",
-    all(feature = "c-server", feature = "network-tcp")
-))]
+#[cfg(feature = "network-tcp")]
 pub(crate) use c_impl::CTcpTransport;
 
-/// Implementation types — only compiled when the `c`, `c-server`, or `c-gateway` feature is active.
 #[cfg(any(feature = "c-client", feature = "c-server", feature = "c-gateway"))]
 mod c_impl {
-    use heapless::Vec;
-    use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-    use mbus_core::errors::MbusError;
     #[cfg(any(
-        feature = "c-client",
-        all(
-            feature = "c-server",
-            any(feature = "serial-rtu", feature = "serial-ascii")
-        )
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
     ))]
+    use heapless::Vec;
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
+    use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
+    use mbus_core::errors::MbusError;
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     use mbus_core::transport::SerialMode;
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     use mbus_core::transport::{ModbusConfig, Transport, TransportType};
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     use super::MbusTransportCallbacks;
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     use crate::c::error::MbusStatusCode;
 
-    #[cfg(any(
-        feature = "c-client",
-        feature = "c-gateway",
-        all(feature = "c-server", feature = "network-tcp")
-    ))]
+    #[cfg(feature = "network-tcp")]
     pub struct CTcpTransport {
         pub(crate) callbacks: MbusTransportCallbacks,
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        feature = "c-gateway",
-        all(feature = "c-server", feature = "network-tcp")
-    ))]
+    #[cfg(feature = "network-tcp")]
     impl CTcpTransport {
         pub fn new(callbacks: MbusTransportCallbacks) -> Self {
             Self { callbacks }
         }
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        all(
-            feature = "c-server",
-            any(feature = "serial-rtu", feature = "serial-ascii")
-        )
-    ))]
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     pub struct CSerialTransport<const ASCII: bool = false> {
         pub(crate) callbacks: MbusTransportCallbacks,
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        all(
-            feature = "c-server",
-            any(feature = "serial-rtu", feature = "serial-ascii")
-        )
-    ))]
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     impl<const ASCII: bool> CSerialTransport<ASCII> {
         pub const MODE: SerialMode = if ASCII {
             SerialMode::Ascii
@@ -330,17 +330,16 @@ mod c_impl {
         }
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        all(feature = "c-server", feature = "serial-rtu")
-    ))]
+    #[cfg(feature = "serial-rtu")]
     pub type CRtuTransport = CSerialTransport<false>;
-    #[cfg(any(
-        feature = "c-client",
-        all(feature = "c-server", feature = "serial-ascii")
-    ))]
+    #[cfg(feature = "serial-ascii")]
     pub type CAsciiTransport = CSerialTransport<true>;
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     pub fn validate_transport_callbacks(callbacks: &MbusTransportCallbacks) -> bool {
         callbacks.on_connect.is_some()
             && callbacks.on_disconnect.is_some()
@@ -349,6 +348,11 @@ mod c_impl {
             && callbacks.on_is_connected.is_some()
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn c_connect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
         let cb = callbacks
             .on_connect
@@ -357,6 +361,11 @@ mod c_impl {
         status_to_result(status)
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn c_disconnect(callbacks: &MbusTransportCallbacks) -> Result<(), MbusError> {
         let cb = callbacks
             .on_disconnect
@@ -365,6 +374,11 @@ mod c_impl {
         status_to_result(status)
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn c_send(callbacks: &MbusTransportCallbacks, adu: &[u8]) -> Result<(), MbusError> {
         let cb = callbacks.on_send.ok_or(MbusError::InvalidConfiguration)?;
         let len = u16::try_from(adu.len()).map_err(|_| MbusError::BufferTooSmall)?;
@@ -372,6 +386,11 @@ mod c_impl {
         status_to_result(status)
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn c_recv(callbacks: &MbusTransportCallbacks) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         let cb = callbacks.on_recv.ok_or(MbusError::InvalidConfiguration)?;
 
@@ -405,6 +424,11 @@ mod c_impl {
         Ok(out)
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn c_is_connected(callbacks: &MbusTransportCallbacks) -> bool {
         match callbacks.on_is_connected {
             Some(cb) => unsafe { cb(callbacks.userdata) != 0 },
@@ -412,11 +436,7 @@ mod c_impl {
         }
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        feature = "c-gateway",
-        all(feature = "c-server", feature = "network-tcp")
-    ))]
+    #[cfg(feature = "network-tcp")]
     impl Transport for CTcpTransport {
         type Error = MbusError;
         const TRANSPORT_TYPE: TransportType = TransportType::CustomTcp;
@@ -442,13 +462,7 @@ mod c_impl {
         }
     }
 
-    #[cfg(any(
-        feature = "c-client",
-        all(
-            feature = "c-server",
-            any(feature = "serial-rtu", feature = "serial-ascii")
-        )
-    ))]
+    #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
     impl<const ASCII: bool> Transport for CSerialTransport<ASCII> {
         type Error = MbusError;
         const SUPPORTS_BROADCAST_WRITES: bool = true;
@@ -475,6 +489,11 @@ mod c_impl {
         }
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn status_to_result(status: MbusStatusCode) -> Result<(), MbusError> {
         if status == MbusStatusCode::MbusOk {
             Ok(())
@@ -483,6 +502,11 @@ mod c_impl {
         }
     }
 
+    #[cfg(any(
+        feature = "network-tcp",
+        feature = "serial-rtu",
+        feature = "serial-ascii"
+    ))]
     fn status_to_error(status: MbusStatusCode) -> MbusError {
         match status {
             MbusStatusCode::MbusErrParseError => MbusError::ParseError,

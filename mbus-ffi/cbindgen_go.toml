@@ -130,6 +130,7 @@ exclude = [
     "MbusGoSerialClient",
     "MbusGoTcpServer",
     "MbusGoTcpGateway",
+    "MbusGoServerVtable",
     # Pool / gateway constants leaking from `c/gateway` and `c/server` modules
     # even when those features are disabled, because cbindgen does not fully
     # honour module-level `#[cfg(feature = ...)]` gates. Strip them — they are
@@ -156,11 +157,11 @@ exclude = [
 [struct]
 
 [defines]
-'feature = "go"' = "MBUS_FEATURE_GO"
-'feature = "coils"' = "MBUS_FEATURE_COILS"
-'feature = "registers"' = "MBUS_FEATURE_REGISTERS"
-'feature = "discrete-inputs"' = "MBUS_FEATURE_DISCRETE_INPUTS"
-'feature = "fifo"' = "MBUS_FEATURE_FIFO"
-'feature = "file-record"' = "MBUS_FEATURE_FILE_RECORD"
-'feature = "diagnostics"' = "MBUS_FEATURE_DIAGNOSTICS"
-'cbindgen' = "CBINDGEN"
+"feature = go" = "MBUS_FEATURE_GO"
+"feature = coils" = "MBUS_FEATURE_COILS"
+"feature = registers" = "MBUS_FEATURE_REGISTERS"
+"feature = discrete-inputs" = "MBUS_FEATURE_DISCRETE_INPUTS"
+"feature = fifo" = "MBUS_FEATURE_FIFO"
+"feature = file-record" = "MBUS_FEATURE_FILE_RECORD"
+"feature = diagnostics" = "MBUS_FEATURE_DIAGNOSTICS"
+"cbindgen" = "CBINDGEN"
