@@ -9,16 +9,16 @@
  * Run:    node examples/01-tcp-client-read-holding.mjs
  */
 
-import { AsyncTcpModbusClient } from 'modbus-rs';
+import { AsyncTcpTransport } from 'modbus-rs';
 
 async function main() {
   // Connect to a Modbus TCP server
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: 502,
-    unitId: 1,
     timeoutMs: 5000,
   });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     // Read holding registers (FC03)
@@ -74,7 +74,7 @@ async function main() {
     console.error('Error:', err.message);
   } finally {
     // Close the connection
-    await client.close();
+    await transport.close();
   }
 }
 

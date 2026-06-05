@@ -20,7 +20,7 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
 use crate::nodejs::client_tcp::{
-    DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
+    CreateClientOptions, DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
     DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions, ReadDeviceIdentificationOptions,
     ReadFifoQueueOptions, ReadFileRecordOptions, ReadRegistersOptions,
     ReadWriteMultipleRegistersOptions, WriteFileRecordOptions, WriteMultipleCoilsOptions,
@@ -34,10 +34,10 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
-/// Connection options for the serial client.
+/// Connection options for the serial RTU transport.
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct SerialClientOptions {
+pub struct RtuTransportOptions {
     /// Serial port path (e.g., "/dev/ttyUSB0", "COM3").
     pub port_path: String,
     /// Baud rate (e.g., 9600, 19200, 38400, 57600, 115200).
@@ -48,8 +48,26 @@ pub struct SerialClientOptions {
     pub parity: Option<String>,
     /// Stop bits (1 or 2).
     pub stop_bits: Option<u8>,
-    /// Modbus unit ID (1-247).
-    pub unit_id: u8,
+    /// Response timeout in milliseconds.
+    pub response_timeout_ms: Option<u32>,
+    /// Per-request timeout in milliseconds.
+    pub request_timeout_ms: Option<u32>,
+}
+
+/// Connection options for the serial ASCII transport.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct AsciiTransportOptions {
+    /// Serial port path (e.g., "/dev/ttyUSB0", "COM3").
+    pub port_path: String,
+    /// Baud rate (e.g., 9600, 19200, 38400, 57600, 115200).
+    pub baud_rate: u32,
+    /// Data bits (5, 6, 7, or 8).
+    pub data_bits: Option<u8>,
+    /// Parity ("none", "even", "odd").
+    pub parity: Option<String>,
+    /// Stop bits (1 or 2).
+    pub stop_bits: Option<u8>,
     /// Response timeout in milliseconds.
     pub response_timeout_ms: Option<u32>,
     /// Per-request timeout in milliseconds.
@@ -106,8 +124,8 @@ fn parse_stop_bits(bits: u8) -> Result<u8> {
     }
 }
 
-/// Builds a ModbusSerialConfig from options with defaults.
-fn build_serial_config(opts: &SerialClientOptions, mode: SerialMode) -> Result<ModbusSerialConfig> {
+/// Builds a ModbusSerialConfig from RTU options.
+fn build_rtu_config(opts: &RtuTransportOptions) -> Result<ModbusSerialConfig> {
     let baud_rate = parse_baud_rate(opts.baud_rate)?;
     let data_bits = opts
         .data_bits
@@ -132,7 +150,7 @@ fn build_serial_config(opts: &SerialClientOptions, mode: SerialMode) -> Result<M
 
     Ok(ModbusSerialConfig {
         port_path,
-        mode,
+        mode: SerialMode::Rtu,
         baud_rate,
         data_bits,
         stop_bits,
@@ -145,24 +163,59 @@ fn build_serial_config(opts: &SerialClientOptions, mode: SerialMode) -> Result<M
     })
 }
 
-// ── AsyncSerialModbusClient ──────────────────────────────────────────────────
+/// Builds a ModbusSerialConfig from ASCII options.
+fn build_ascii_config(opts: &AsciiTransportOptions) -> Result<ModbusSerialConfig> {
+    let baud_rate = parse_baud_rate(opts.baud_rate)?;
+    let data_bits = opts
+        .data_bits
+        .map(parse_data_bits)
+        .transpose()?
+        .unwrap_or(DataBits::Eight);
+    let parity = opts
+        .parity
+        .as_ref()
+        .map(|s| parse_parity(s))
+        .transpose()?
+        .unwrap_or(Parity::None);
+    let stop_bits = opts
+        .stop_bits
+        .map(parse_stop_bits)
+        .transpose()?
+        .unwrap_or(1);
+    let response_timeout_ms = opts.response_timeout_ms.unwrap_or(1000);
 
-/// Async Modbus Serial client supporting RTU and ASCII transports.
+    let port_path = heapless::String::try_from(opts.port_path.as_str())
+        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+
+    Ok(ModbusSerialConfig {
+        port_path,
+        mode: SerialMode::Ascii,
+        baud_rate,
+        data_bits,
+        stop_bits,
+        parity,
+        response_timeout_ms,
+        retry_attempts: 0,
+        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_jitter_strategy: JitterStrategy::None,
+        retry_random_fn: None,
+    })
+}
+
+// ── AsyncRtuTransport ────────────────────────────────────────────────────────
+
+/// Physical serial port in RTU mode. Factory for device clients.
 #[napi]
-pub struct AsyncSerialModbusClient {
+pub struct AsyncRtuTransport {
     inner: Mutex<Option<Arc<AsyncSerialClientKind>>>,
-    unit_id: u8,
 }
 
 #[napi]
-impl AsyncSerialModbusClient {
-    /// Creates and connects a new Serial RTU client.
+impl AsyncRtuTransport {
+    /// Opens the serial port in RTU mode.
     #[napi(factory)]
-    pub async fn connect_rtu(opts: SerialClientOptions) -> Result<AsyncSerialModbusClient> {
-        UnitIdOrSlaveAddr::new(opts.unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
-
-        let config = build_serial_config(&opts, SerialMode::Rtu)?;
+    pub async fn open(opts: RtuTransportOptions) -> Result<AsyncRtuTransport> {
+        let config = build_rtu_config(&opts)?;
 
         let client = AsyncRtuClient::new_rtu(config)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
@@ -173,32 +226,8 @@ impl AsyncSerialModbusClient {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
 
-        Ok(AsyncSerialModbusClient {
+        Ok(AsyncRtuTransport {
             inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Rtu(client)))),
-            unit_id: opts.unit_id,
-        })
-    }
-
-    /// Creates and connects a new Serial ASCII client.
-    #[napi(factory)]
-    pub async fn connect_ascii(opts: SerialClientOptions) -> Result<AsyncSerialModbusClient> {
-        UnitIdOrSlaveAddr::new(opts.unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
-
-        let config = build_serial_config(&opts, SerialMode::Ascii)?;
-
-        let client = AsyncAsciiClient::new_ascii(config)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
-
-        client.connect().await.map_err(from_async_error)?;
-
-        if let Some(timeout_ms) = opts.request_timeout_ms {
-            client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
-        }
-
-        Ok(AsyncSerialModbusClient {
-            inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Ascii(client)))),
-            unit_id: opts.unit_id,
         })
     }
 
@@ -209,7 +238,22 @@ impl AsyncSerialModbusClient {
             .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
         guard
             .clone()
-            .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Client is closed"))
+            .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Transport is closed"))
+    }
+
+    /// Creates a device client bound to the specified unit ID.
+    #[napi]
+    pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
+        let client = self.get_client()?;
+        let unit_id = opts.unit_id.ok_or_else(|| {
+            napi::Error::new(Status::InvalidArg, "unitId is required for serial client")
+        })?;
+        UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        Ok(AsyncSerialModbusClient {
+            inner: client,
+            unit_id,
+        })
     }
 
     /// Sets the per-request timeout in milliseconds.
@@ -235,7 +279,7 @@ impl AsyncSerialModbusClient {
         Ok(client.has_pending_requests())
     }
 
-    /// Closes the client connection.
+    /// Closes the transport.
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let client = {
@@ -251,13 +295,126 @@ impl AsyncSerialModbusClient {
         Ok(())
     }
 
-    /// Reconnects the client after a disconnect.
+    /// Reconnects the transport after a disconnect.
     #[napi]
     pub async fn reconnect(&self) -> Result<()> {
         let client = self.get_client()?;
         client.connect().await.map_err(from_async_error)
     }
+}
 
+// ── AsyncAsciiTransport ──────────────────────────────────────────────────────
+
+/// Physical serial port in ASCII mode. Factory for device clients.
+#[napi]
+pub struct AsyncAsciiTransport {
+    inner: Mutex<Option<Arc<AsyncSerialClientKind>>>,
+}
+
+#[napi]
+impl AsyncAsciiTransport {
+    /// Opens the serial port in ASCII mode.
+    #[napi(factory)]
+    pub async fn open(opts: AsciiTransportOptions) -> Result<AsyncAsciiTransport> {
+        let config = build_ascii_config(&opts)?;
+
+        let client = AsyncAsciiClient::new_ascii(config)
+            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+
+        client.connect().await.map_err(from_async_error)?;
+
+        if let Some(timeout_ms) = opts.request_timeout_ms {
+            client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        }
+
+        Ok(AsyncAsciiTransport {
+            inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Ascii(client)))),
+        })
+    }
+
+    fn get_client(&self) -> Result<Arc<AsyncSerialClientKind>> {
+        let guard = self
+            .inner
+            .lock()
+            .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
+        guard
+            .clone()
+            .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Transport is closed"))
+    }
+
+    /// Creates a device client bound to the specified unit ID.
+    #[napi]
+    pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
+        let client = self.get_client()?;
+        let unit_id = opts.unit_id.ok_or_else(|| {
+            napi::Error::new(Status::InvalidArg, "unitId is required for serial client")
+        })?;
+        UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        Ok(AsyncSerialModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    /// Sets the per-request timeout in milliseconds.
+    #[napi]
+    pub fn set_request_timeout(&self, timeout_ms: u32) -> Result<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    /// Clears the per-request timeout.
+    #[napi]
+    pub fn clear_request_timeout(&self) -> Result<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    /// Returns whether there are pending requests.
+    #[napi(getter)]
+    pub fn pending_requests(&self) -> Result<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+
+    /// Closes the transport.
+    #[napi]
+    pub async fn close(&self) -> Result<()> {
+        let client = {
+            let mut guard = self
+                .inner
+                .lock()
+                .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
+            guard.take()
+        };
+        if let Some(inner) = client {
+            let _ = inner.disconnect().await;
+        }
+        Ok(())
+    }
+
+    /// Reconnects the transport after a disconnect.
+    #[napi]
+    pub async fn reconnect(&self) -> Result<()> {
+        let client = self.get_client()?;
+        client.connect().await.map_err(from_async_error)
+    }
+}
+
+// ── AsyncSerialModbusClient ──────────────────────────────────────────────────
+
+/// Lightweight device client sharing the serial transport.
+#[napi]
+pub struct AsyncSerialModbusClient {
+    inner: Arc<AsyncSerialClientKind>,
+    unit_id: u8,
+}
+
+#[napi]
+impl AsyncSerialModbusClient {
     // ── Register methods ─────────────────────────────────────────────────────
 
     /// Reads holding registers (FC03).
@@ -268,7 +425,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -299,7 +456,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -330,7 +487,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: WriteSingleRegisterOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -361,7 +518,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: WriteMultipleRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -392,7 +549,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadWriteMultipleRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let read_address = opts.read_address;
@@ -433,7 +590,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadBitsOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<bool>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -469,7 +626,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: WriteSingleCoilOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -502,7 +659,7 @@ impl AsyncSerialModbusClient {
     ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::models::coil::Coils;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -546,7 +703,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadBitsOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<bool>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -584,7 +741,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadFifoQueueOptions<'_>,
     ) -> Result<PromiseRaw<'static, FifoQueueResponse>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -618,7 +775,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: ReadFileRecordOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<Vec<u16>>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -669,7 +826,7 @@ impl AsyncSerialModbusClient {
     ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -715,8 +872,7 @@ impl AsyncSerialModbusClient {
     #[napi]
     #[cfg(feature = "diagnostics")]
     pub async fn read_exception_status(&self) -> Result<u8> {
-        let client = self.get_client()?;
-        client
+        self.inner
             .read_exception_status(self.unit_id)
             .await
             .map_err(from_async_error)
@@ -730,7 +886,7 @@ impl AsyncSerialModbusClient {
         env: Env,
         opts: DiagnosticsOptions<'_>,
     ) -> Result<PromiseRaw<'static, DiagnosticsResponse>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -776,7 +932,7 @@ impl AsyncSerialModbusClient {
     ) -> Result<PromiseRaw<'static, DeviceIdentificationResponse>> {
         use mbus_core::models::diagnostic::ConformityLevel;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 

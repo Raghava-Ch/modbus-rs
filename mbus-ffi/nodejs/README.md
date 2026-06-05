@@ -21,18 +21,22 @@ npm install modbus-rs
 
 ## Quick Start
 
+### Examples
+[https://github.com/Raghava-Ch/modbus-rs/tree/main/mbus-ffi/nodejs/examples](https://github.com/Raghava-Ch/modbus-rs/tree/main/mbus-ffi/nodejs/examples)
+
 ### TCP Client
 
 ```javascript
-const { AsyncTcpModbusClient } = require('modbus-rs');
+const { AsyncTcpTransport } = require('modbus-rs');
 
 async function main() {
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: 502,
-    unitId: 1,
     timeoutMs: 5000,
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     // Read holding registers (FC03)
@@ -48,7 +52,7 @@ async function main() {
       value: 12345,
     });
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 
@@ -58,17 +62,18 @@ main().catch(console.error);
 ### Serial RTU Client
 
 ```javascript
-const { AsyncSerialModbusClient } = require('modbus-rs');
+const { AsyncRtuTransport } = require('modbus-rs');
 
 async function main() {
-  const client = await AsyncSerialModbusClient.connectRtu({
+  const transport = await AsyncRtuTransport.open({
     portPath: '/dev/ttyUSB0',
-    unitId: 1,
     baudRate: 19200,
     dataBits: 8,
     stopBits: 1,
     parity: 'even',
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     const registers = await client.readHoldingRegisters({
@@ -77,7 +82,7 @@ async function main() {
     });
     console.log('Registers:', registers);
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 
@@ -91,16 +96,15 @@ const { AsyncTcpModbusServer } = require('modbus-rs');
 
 const holdingRegisters = new Array(1000).fill(0);
 
-async function main() {
-  const server = await AsyncTcpModbusServer.bind(
-    { host: '0.0.0.0', port: 502 },
+function main() {
+  const server = AsyncTcpModbusServer.bind(
+    { host: '0.0.0.0', port: 502, unitId: 1 },
     {
       onReadHoldingRegisters: (req) => {
-        return holdingRegisters.slice(req.address, req.address + req.count);
+        return holdingRegisters.slice(req.address, req.address + req.quantity);
       },
       onWriteSingleRegister: (req) => {
         holdingRegisters[req.address] = req.value;
-        return true;
       },
     }
   );
@@ -113,7 +117,11 @@ async function main() {
   });
 }
 
-main().catch(console.error);
+try {
+  main();
+} catch (err) {
+  console.error(err);
+}
 ```
 
 ### TCP Gateway
@@ -149,10 +157,30 @@ main().catch(console.error);
 
 ## API Reference
 
-### AsyncTcpModbusClient
+### AsyncTcpTransport
 
-- `connect(opts: TcpClientOptions)` - Connect to a Modbus TCP server
-- `close()` - Close the connection
+- `static connect(opts: TcpTransportOptions): Promise<AsyncTcpTransport>` - Connect to a Modbus TCP server
+- `close(): Promise<void>` - Close the connection
+- `reconnect(): Promise<void>` - Re-establish the connection
+- `createClient(opts?: CreateClientOptions): AsyncTcpModbusClient` - Create a logical client instance bound to a specific unit ID (defaults to `1`)
+- `setRequestTimeout(ms: number): void` - Set a global request timeout (in milliseconds)
+- `clearRequestTimeout(): void` - Clear the global request timeout
+- `pendingRequests: boolean` - (Getter) Returns whether there are requests currently in flight
+
+### AsyncRtuTransport / AsyncAsciiTransport
+
+- `static open(opts: RtuTransportOptions | AsciiTransportOptions): Promise<AsyncRtuTransport | AsyncAsciiTransport>` - Open the serial port
+- `close(): Promise<void>` - Close the connection
+- `reconnect(): Promise<void>` - Re-establish the connection
+- `createClient(opts: CreateClientOptions): AsyncSerialModbusClient` - Create a logical client instance bound to a specific unit ID (required)
+- `setRequestTimeout(ms: number): void` - Set a global request timeout (in milliseconds)
+- `clearRequestTimeout(): void` - Clear the global request timeout
+- `pendingRequests: boolean` - (Getter) Returns whether there are requests currently in flight
+
+### AsyncTcpModbusClient / AsyncSerialModbusClient
+
+These logical clients contain all the Modbus function code methods:
+
 - `readCoils(opts)` - FC01: Read Coils
 - `readDiscreteInputs(opts)` - FC02: Read Discrete Inputs
 - `readHoldingRegisters(opts)` - FC03: Read Holding Registers
@@ -168,13 +196,6 @@ main().catch(console.error);
 - `readExceptionStatus()` - FC07: Read Exception Status
 - `diagnostics(opts)` - FC08: Diagnostics
 - `readDeviceIdentification(opts)` - FC43/14: Read Device Identification
-
-### AsyncSerialModbusClient
-
-Same methods as `AsyncTcpModbusClient`, with different connection options:
-
-- `connectRtu(opts: SerialClientOptions)` - Connect using Modbus RTU
-- `connectAscii(opts: SerialClientOptions)` - Connect using Modbus ASCII
 
 ### AsyncTcpModbusServer
 
@@ -192,7 +213,7 @@ All errors are thrown as JavaScript Error objects with descriptive messages:
 
 ```javascript
 try {
-  await client.readHoldingRegisters({ address: 0, count: 10 });
+  await client.readHoldingRegisters({ address: 0, quantity: 10 });
 } catch (err) {
   if (err.message.includes('MODBUS_EXCEPTION')) {
     console.error('Modbus exception:', err.message);
@@ -211,7 +232,7 @@ Pre-built binaries are published for:
 - Linux x64 (glibc), Linux arm64 (glibc)
 - macOS x64, macOS arm64
 - Windows x64 (MSVC)
-- WebAssembly `modbus-rs-wasm`
+- WebAssembly [modbus-rs-wasm](https://www.npmjs.com/package/modbus-rs-wasm)
 
 Other targets can be built locally via `cargo build -p mbus-ffi --features nodejs,full`
 followed by `npm run build`.

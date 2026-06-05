@@ -72,6 +72,7 @@ use super::{CommEventLogResponse, DiagnosticsDataResponse};
 ///
 /// Dropping this value closes the channel, which causes the background
 /// `ClientTask` to exit cleanly via its `cmd_rx.recv()` returning `None`.
+#[derive(Clone)]
 pub struct AsyncClientCore {
     cmd_tx: mpsc::Sender<TaskCommand>,
     pending_count_rx: PendingCountReceiver,

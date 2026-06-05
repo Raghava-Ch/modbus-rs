@@ -7,18 +7,18 @@
  * Run:    node examples/03-tcp-client-coils-and-discrete-inputs.mjs
  */
 
-import { AsyncTcpModbusClient } from 'modbus-rs';
+import { AsyncTcpTransport } from 'modbus-rs';
 
 const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
 const PORT = Number(process.env.MODBUS_PORT ?? 5502);
 
 async function main() {
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    unitId: 1,
     timeoutMs: 2000,
   });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     // FC05 — Write Single Coil
@@ -38,7 +38,7 @@ async function main() {
     const dis = await client.readDiscreteInputs({ address: 0, quantity: 8 });
     console.log('FC02 discrete inputs[0..8]:', dis);
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 

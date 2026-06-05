@@ -24,18 +24,24 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
-/// Connection options for the TCP client.
+/// Connection options for the TCP transport.
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct TcpClientOptions {
+pub struct TcpTransportOptions {
     /// Target host address (IP or hostname).
     pub host: String,
     /// Target TCP port (typically 502).
     pub port: u16,
-    /// Modbus unit ID (1-247).
-    pub unit_id: u8,
     /// Per-request timeout in milliseconds (optional).
     pub timeout_ms: Option<u32>,
+}
+
+/// Options for creating a device client.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct CreateClientOptions {
+    /// Modbus unit ID (1-247).
+    pub unit_id: Option<u8>,
 }
 
 /// Options for reading registers.
@@ -236,30 +242,19 @@ pub struct DeviceIdentificationResponse {
     pub objects: Vec<DeviceIdentificationObject>,
 }
 
-// ── AsyncTcpModbusClient ─────────────────────────────────────────────────────
+// ── AsyncTcpTransport ────────────────────────────────────────────────────────
 
-/// Async Modbus TCP client.
-///
-/// All methods are async and return Promises. The client must be connected
-/// before issuing Modbus requests.
+/// Physical TCP socket connection to a Modbus device or gateway.
 #[napi]
-pub struct AsyncTcpModbusClient {
+pub struct AsyncTcpTransport {
     inner: Mutex<Option<Arc<AsyncTcpClient>>>,
-    unit_id: u8,
 }
 
 #[napi]
-impl AsyncTcpModbusClient {
-    /// Creates and connects a new TCP client.
-    ///
-    /// @param opts - Connection options including host, port, unitId, and optional timeout.
-    /// @returns A connected client instance.
+impl AsyncTcpTransport {
+    /// Connects to a Modbus TCP device or gateway.
     #[napi(factory)]
-    pub async fn connect(opts: TcpClientOptions) -> Result<AsyncTcpModbusClient> {
-        // Validate unit ID
-        UnitIdOrSlaveAddr::new(opts.unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
-
+    pub async fn connect(opts: TcpTransportOptions) -> Result<AsyncTcpTransport> {
         let client = AsyncTcpClient::new(&opts.host, opts.port)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
@@ -269,9 +264,8 @@ impl AsyncTcpModbusClient {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
 
-        Ok(AsyncTcpModbusClient {
+        Ok(AsyncTcpTransport {
             inner: Mutex::new(Some(Arc::new(client))),
-            unit_id: opts.unit_id,
         })
     }
 
@@ -282,7 +276,20 @@ impl AsyncTcpModbusClient {
             .map_err(|_| napi::Error::new(Status::GenericFailure, "Failed to acquire lock"))?;
         guard
             .clone()
-            .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Client is closed"))
+            .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Transport is closed"))
+    }
+
+    /// Creates a device client bound to the specified unit ID.
+    #[napi]
+    pub fn create_client(&self, opts: Option<CreateClientOptions>) -> Result<AsyncTcpModbusClient> {
+        let client = self.get_client()?;
+        let unit_id = opts.and_then(|o| o.unit_id).unwrap_or(1);
+        UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        Ok(AsyncTcpModbusClient {
+            inner: client,
+            unit_id,
+        })
     }
 
     /// Sets the per-request timeout in milliseconds.
@@ -308,7 +315,7 @@ impl AsyncTcpModbusClient {
         Ok(client.has_pending_requests())
     }
 
-    /// Closes the client connection.
+    /// Closes the connection.
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let client = {
@@ -324,13 +331,25 @@ impl AsyncTcpModbusClient {
         Ok(())
     }
 
-    /// Reconnects the client after a disconnect.
+    /// Reconnects the transport after a disconnect.
     #[napi]
     pub async fn reconnect(&self) -> Result<()> {
         let client = self.get_client()?;
         client.connect().await.map_err(from_async_error)
     }
+}
 
+// ── AsyncTcpModbusClient ─────────────────────────────────────────────────────
+
+/// Lightweight device client sharing the TCP transport.
+#[napi]
+pub struct AsyncTcpModbusClient {
+    inner: Arc<AsyncTcpClient>,
+    unit_id: u8,
+}
+
+#[napi]
+impl AsyncTcpModbusClient {
     // ── Register methods ─────────────────────────────────────────────────────
 
     /// Reads holding registers (FC03).
@@ -341,7 +360,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -372,7 +391,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -403,7 +422,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: WriteSingleRegisterOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -434,7 +453,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: WriteMultipleRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -465,7 +484,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadWriteMultipleRegistersOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<u16>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let read_address = opts.read_address;
@@ -506,7 +525,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadBitsOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<bool>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -542,7 +561,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: WriteSingleCoilOptions<'_>,
     ) -> Result<PromiseRaw<'static, ()>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -575,7 +594,7 @@ impl AsyncTcpModbusClient {
     ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::models::coil::Coils;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -619,7 +638,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadBitsOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<bool>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -657,7 +676,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadFifoQueueOptions<'_>,
     ) -> Result<PromiseRaw<'static, FifoQueueResponse>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
         let address = opts.address;
@@ -691,7 +710,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: ReadFileRecordOptions<'_>,
     ) -> Result<PromiseRaw<'static, Vec<Vec<u16>>>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -742,7 +761,7 @@ impl AsyncTcpModbusClient {
     ) -> Result<PromiseRaw<'static, ()>> {
         use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -788,8 +807,7 @@ impl AsyncTcpModbusClient {
     #[napi]
     #[cfg(feature = "diagnostics")]
     pub async fn read_exception_status(&self) -> Result<u8> {
-        let client = self.get_client()?;
-        client
+        self.inner
             .read_exception_status(self.unit_id)
             .await
             .map_err(from_async_error)
@@ -803,7 +821,7 @@ impl AsyncTcpModbusClient {
         env: Env,
         opts: DiagnosticsOptions<'_>,
     ) -> Result<PromiseRaw<'static, DiagnosticsResponse>> {
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 
@@ -849,7 +867,7 @@ impl AsyncTcpModbusClient {
     ) -> Result<PromiseRaw<'static, DeviceIdentificationResponse>> {
         use mbus_core::models::diagnostic::ConformityLevel;
 
-        let client = self.get_client()?;
+        let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, opts.signal)?;
         let unit_id = self.unit_id;
 

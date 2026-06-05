@@ -1,6 +1,6 @@
 [package]
 name = "mbus-ffi"
-version = "0.13.0"
+version = "0.14.0"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"
@@ -413,7 +413,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ## In-process AsyncTcpServer used by the .NET binding integration test.
-mbus-async = { version = "0.13.0", path = "../mbus-async", features = [
+mbus-async = { version = "0.14.0", path = "../mbus-async", features = [
     "server-tcp",
     "registers",
 ] }

@@ -1,6 +1,6 @@
 [package]
 name = "mbus-client-async"
-version = "0.13.0"
+version = "0.14.0"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"
@@ -12,7 +12,7 @@ categories.workspace = true
 description = "Role-focused async Modbus client facade re-exported from mbus-async"
 
 [dependencies]
-mbus-async = { version = "0.13.0", path = "../mbus-async", default-features = false }
+mbus-async = { version = "0.14.0", path = "../mbus-async", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

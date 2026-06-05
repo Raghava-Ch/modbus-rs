@@ -13,20 +13,20 @@
  */
 
 import {
-  AsyncTcpModbusClient,
-  type TcpClientOptions,
+  AsyncTcpTransport,
+  type TcpTransportOptions,
   type ReadRegistersOptions,
 } from 'modbus-rs';
 
-const opts: TcpClientOptions = {
+const opts: TcpTransportOptions = {
   host: process.env.MODBUS_HOST ?? '127.0.0.1',
   port: Number(process.env.MODBUS_PORT ?? 5502),
-  unitId: 1,
   timeoutMs: 2000,
 };
 
 async function main(): Promise<void> {
-  const client: AsyncTcpModbusClient = await AsyncTcpModbusClient.connect(opts);
+  const transport: AsyncTcpTransport = await AsyncTcpTransport.connect(opts);
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     const readReq: ReadRegistersOptions = { address: 0, quantity: 4 };
@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     });
     console.log('Incremented and wrote back.');
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 

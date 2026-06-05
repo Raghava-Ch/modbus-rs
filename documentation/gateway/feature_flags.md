@@ -37,7 +37,7 @@ To use the gateway in a bare-metal `no_std` environment, specify `default-featur
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.13.0", default-features = false }
+mbus-gateway = { version = "0.14.0", default-features = false }
 ```
 
 This compiles only the synchronous, poll-driven gateway core:
@@ -50,7 +50,7 @@ If you want traffic inspection callbacks but still want to stay `no_std`:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.13.0", default-features = false, features = ["traffic"] }
+mbus-gateway = { version = "0.14.0", default-features = false, features = ["traffic"] }
 ```
 
 This activates `on_upstream_rx`/`on_downstream_tx` callbacks in your custom `GatewayEventHandler` to let you capture raw frames.
@@ -61,7 +61,7 @@ If you are running in a `std` environment (like Linux/macOS/Windows) and want to
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.13.0", default-features = false, features = ["upstream-ws", "downstream-tcp"] }
+mbus-gateway = { version = "0.14.0", default-features = false, features = ["upstream-ws", "downstream-tcp"] }
 ```
 
 ## `modbus-rs` top-level crate
@@ -70,7 +70,7 @@ When using the umbrella `modbus-rs` crate, the `gateway` feature pulls in `mbus-
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.13.0", features = ["gateway"] }
+modbus-rs = { version = "0.14.0", features = ["gateway"] }
 ```
 
 The gateway types are fully re-exported at the top-level path `modbus_rs::gateway` (e.g., `modbus_rs::gateway::GatewayServices`, `modbus_rs::gateway::AsyncTcpGatewayServer`, etc.).

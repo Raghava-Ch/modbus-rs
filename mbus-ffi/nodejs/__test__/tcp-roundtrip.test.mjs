@@ -19,7 +19,7 @@ try {
   process.exit(0);
 }
 
-const { AsyncTcpModbusClient, AsyncTcpModbusServer } = modbus;
+const { AsyncTcpTransport, AsyncTcpModbusServer, AsyncTcpGateway } = modbus;
 
 const PORT = 25502;
 
@@ -42,13 +42,15 @@ test('client lifecycle: connect / close against stub server', async (t) => {
   });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 1,
-    unitId: 1,
     timeoutMs: 2000,
   });
-  assert.ok(client, 'connect() should return a client instance');
+  assert.ok(transport, 'connect() should return a transport instance');
+
+  const client = transport.createClient({ unitId: 1 });
+  assert.ok(client, 'createClient() should return a client instance');
 
   // The stub server echoes write requests, so a write should succeed.
   await client.writeSingleRegister({ address: 0, value: 42 });
@@ -57,7 +59,7 @@ test('client lifecycle: connect / close against stub server', async (t) => {
     values: [1, 2, 3, 4],
   });
 
-  await client.close();
+  await transport.close();
 });
 
 test('client surface: all expected methods exist', async (t) => {
@@ -70,15 +72,16 @@ test('client surface: all expected methods exist', async (t) => {
   });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 2,
-    unitId: 1,
     timeoutMs: 2000,
   });
   t.after(async () => {
-    await client.close();
+    await transport.close();
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   for (const method of [
     'readHoldingRegisters',
@@ -89,7 +92,6 @@ test('client surface: all expected methods exist', async (t) => {
     'readDiscreteInputs',
     'writeSingleCoil',
     'writeMultipleCoils',
-    'close',
   ]) {
     assert.equal(
       typeof client[method],
@@ -138,15 +140,16 @@ test('round-trip reads/writes with JS server handlers', async (t) => {
   });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 3,
-    unitId: 1,
     timeoutMs: 2000,
   });
   t.after(async () => {
-    await client.close();
+    await transport.close();
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   // Test holding registers round-trip
   await client.writeSingleRegister({ address: 10, value: 1234 });
@@ -181,15 +184,16 @@ test('server exception handling: returning custom error exceptions', async (t) =
   });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 4,
-    unitId: 1,
     timeoutMs: 2000,
   });
   t.after(async () => {
-    await client.close();
+    await transport.close();
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   // Valid address should succeed
   const ok = await client.readHoldingRegisters({ address: 10, quantity: 1 });
@@ -217,15 +221,16 @@ test('per-request client AbortSignal cancellation', async (t) => {
   });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 5,
-    unitId: 1,
     timeoutMs: 2000,
   });
   t.after(async () => {
-    await client.close();
+    await transport.close();
   });
+
+  const client = transport.createClient({ unitId: 1 });
 
   const controller = new AbortController();
   const promise = client.readHoldingRegisters({
@@ -264,12 +269,149 @@ test('round-trip with sync (non-async) handlers', async (t) => {
   t.after(async () => { await server.shutdown(); });
   await new Promise((r) => setTimeout(r, 100));
 
-  const client = await AsyncTcpModbusClient.connect({
-    host: '127.0.0.1', port: PORT + 6, unitId: 1, timeoutMs: 2000,
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1', port: PORT + 6, timeoutMs: 2000,
   });
-  t.after(async () => { await client.close(); });
+  t.after(async () => { await transport.close(); });
+
+  const client = transport.createClient({ unitId: 1 });
 
   await client.writeSingleRegister({ address: 0, value: 42 });
   const regs = await client.readHoldingRegisters({ address: 0, quantity: 1 });
   assert.deepEqual(regs, [42]);
 });
+
+test('multi-drop TCP client sharing (same unit ID)', async (t) => {
+  const server = AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 7, unitId: 1 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        return [100 + req.address];
+      },
+    }
+  );
+  t.after(async () => {
+    await server.shutdown();
+  });
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 7,
+    timeoutMs: 2000,
+  });
+  t.after(async () => {
+    await transport.close();
+  });
+
+  const client1 = transport.createClient({ unitId: 1 });
+  const client2 = transport.createClient({ unitId: 1 });
+
+  const res1 = await client1.readHoldingRegisters({ address: 5, quantity: 1 });
+  const res2 = await client2.readHoldingRegisters({ address: 10, quantity: 1 });
+
+  assert.deepEqual(res1, [105]);
+  assert.deepEqual(res2, [110]);
+});
+
+test('logical client lifecycle on transport close', async (t) => {
+  const server = AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 8, unitId: 1 },
+    {}
+  );
+  t.after(async () => {
+    await server.shutdown();
+  });
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 8,
+    timeoutMs: 2000,
+  });
+  const client = transport.createClient({ unitId: 1 });
+
+  await transport.close();
+
+  await assert.rejects(
+    async () => {
+      await client.readHoldingRegisters({ address: 0, quantity: 1 });
+    },
+    (err) => {
+      assert.ok(err.message.includes('closed') || err.message.includes('WorkerClosed') || err.message.includes('connection'), `Unexpected close error: ${err.message}`);
+      return true;
+    }
+  );
+});
+
+test('gateway routing (different unit IDs) over single transport', async (t) => {
+  // Bind backend server for unit 10
+  const server10 = AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 9, unitId: 10 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        return [1000 + req.address];
+      },
+    }
+  );
+  t.after(async () => {
+    await server10.shutdown();
+  });
+
+  // Bind backend server for unit 20
+  const server20 = AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 10, unitId: 20 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        return [2000 + req.address];
+      },
+    }
+  );
+  t.after(async () => {
+    await server20.shutdown();
+  });
+
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Bind gateway to route unit 10 -> server10, unit 20 -> server20
+  const gateway = await AsyncTcpGateway.bind(
+    { host: '127.0.0.1', port: PORT + 11 },
+    {
+      downstreams: [
+        { host: '127.0.0.1', port: PORT + 9 },
+        { host: '127.0.0.1', port: PORT + 10 },
+      ],
+      routes: [
+        { unitId: 10, channel: 0 },
+        { unitId: 20, channel: 1 },
+      ],
+    }
+  );
+  t.after(async () => {
+    await gateway.shutdown();
+  });
+
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Connect client transport to gateway
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 11,
+    timeoutMs: 2000,
+  });
+  t.after(async () => {
+    await transport.close();
+  });
+
+  // Create clients for units 10 and 20 from same transport connection
+  const client10 = transport.createClient({ unitId: 10 });
+  const client20 = transport.createClient({ unitId: 20 });
+
+  // Query both and assert they routed to the correct backend server
+  const res10 = await client10.readHoldingRegisters({ address: 5, quantity: 1 });
+  const res20 = await client20.readHoldingRegisters({ address: 5, quantity: 1 });
+
+  assert.deepEqual(res10, [1005]);
+  assert.deepEqual(res20, [2005]);
+});
+

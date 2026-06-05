@@ -19,7 +19,7 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 ```toml
 [dependencies]
-modbus-rs = "0.13.0"
+modbus-rs = "0.14.0"
 ```
 
 <!-- validate: exports -->
@@ -41,21 +41,21 @@ Use `default-features = false` and opt into only the features you need.
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.13.0", default-features = false, features = ["client", "network-tcp", "coils"] }
+modbus-rs = { version = "0.14.0", default-features = false, features = ["client", "network-tcp", "coils"] }
 ```
 
 ### Minimal Embedded / no_std Client
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.13.0", default-features = false, features = ["client", "coils", "registers"] }
+modbus-rs = { version = "0.14.0", default-features = false, features = ["client", "coils", "registers"] }
 ```
 
 ### Core-only (protocol + models)
 
 ```toml
 [dependencies]
-mbus-core = { version = "0.13.0", default-features = false, features = ["coils", "registers"] }
+mbus-core = { version = "0.14.0", default-features = false, features = ["coils", "registers"] }
 ```
 
 📖 **[Full Documentation →](documentation/README.md)**
@@ -70,7 +70,7 @@ mbus-core = { version = "0.13.0", default-features = false, features = ["coils",
 | **Server** | [Quick Start](documentation/server/quick_start.md) · [Examples](documentation/server/examples.md) · [Building Apps](documentation/server/building_applications.md) · [Sync](documentation/server/sync.md) · [Async](documentation/server/async.md) · [Macros](documentation/server/macros.md) · [Write Hooks](documentation/server/write_hooks.md) · [Function Codes](documentation/server/function_codes.md) |
 | **Gateway** | [Quick Start](documentation/gateway/quick_start.md) · [Architecture](documentation/gateway/architecture.md) · [Routing](documentation/gateway/routing.md) · [WebSocket Gateway](documentation/gateway/ws_gateway.md) · [Feature Flags](documentation/gateway/feature_flags.md) |
 | **Bindings** | [C/FFI](documentation/client/c_bindings.md) · [WASM](documentation/client/wasm.md) · [Python](documentation/python_bindings.md) · [.NET / C#](documentation/dotnet_bindings.md) · [Go](documentation/go_bindings.md) · [Node.js](documentation/nodejs_bindings.md) |
-| **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guide](documentation/migration_guide.md) |
+| **Reference** | [Client Feature Flags](documentation/client/feature_flags.md) · [Server Feature Flags](documentation/server/feature_flags.md) · [Migration Guides](documentation/migrations) |
 
 ---
 

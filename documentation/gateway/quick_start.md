@@ -7,7 +7,7 @@ This page walks you through the three ways to run a Modbus gateway:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.13.0", features = ["gateway", "network-tcp", "serial-rtu"] }
+modbus-rs = { version = "0.14.0", features = ["gateway", "network-tcp", "serial-rtu"] }
 ```
 
 ## Sync: TCP upstream → RTU downstream
@@ -110,7 +110,7 @@ Add the `upstream-ws` feature:
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.13.0", features = ["upstream-ws"] }
+mbus-gateway = { version = "0.14.0", features = ["upstream-ws"] }
 ```
 
 <!-- validate: skip -->

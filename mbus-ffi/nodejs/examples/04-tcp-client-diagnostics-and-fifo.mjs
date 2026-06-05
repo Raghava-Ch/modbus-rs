@@ -8,18 +8,18 @@
  * Run:    node examples/04-tcp-client-diagnostics-and-fifo.mjs
  */
 
-import { AsyncTcpModbusClient } from 'modbus-rs';
+import { AsyncTcpTransport } from 'modbus-rs';
 
 const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
 const PORT = Number(process.env.MODBUS_PORT ?? 502);
 
 async function main() {
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    unitId: 1,
     timeoutMs: 2000,
   });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     // FC08 — Diagnostics, sub-function 0x0000 = Return Query Data (loopback)
@@ -46,7 +46,7 @@ async function main() {
       console.log('FC18 not supported by this server:', err.message);
     }
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 

@@ -14,7 +14,7 @@ Welcome to the modbus-rs documentation. This guide covers both client and server
 | Build with **.NET / C# bindings** | [.NET Bindings](dotnet_bindings.md) |
 | Build with **Go bindings** | [Go Bindings](go_bindings.md) |
 | Build with **Node.js bindings** | [Node.js Bindings](nodejs_bindings.md) |
-| Migrate from an older version | [Migration Guide](migration_guide.md) |
+| Migrate from an older version | [Migration Guides](migrations) |
 
 ---
 

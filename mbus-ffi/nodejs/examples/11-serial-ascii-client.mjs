@@ -12,20 +12,20 @@
  * Run:    PORT=/dev/ttyUSB0 node examples/11-serial-ascii-client.mjs
  */
 
-import { AsyncSerialModbusClient } from 'modbus-rs';
+import { AsyncAsciiTransport } from 'modbus-rs';
 
 const PORT = process.env.PORT ?? '/dev/ttyUSB0';
 
 async function main() {
-  const client = await AsyncSerialModbusClient.connectAscii({
+  const transport = await AsyncAsciiTransport.open({
     portPath: PORT,
-    unitId: 1,
     baudRate: 19200,
     dataBits: 7,    // ASCII typically uses 7 data bits
     stopBits: 1,
     parity: 'even',
     requestTimeoutMs: 1500,
   });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
@@ -37,7 +37,7 @@ async function main() {
     });
     console.log('Wrote 4 registers');
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 

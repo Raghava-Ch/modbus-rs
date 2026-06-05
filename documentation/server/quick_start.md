@@ -10,7 +10,7 @@ If you are fine with the top-level default stack, this is enough:
 
 ```toml
 [dependencies]
-modbus-rs = "0.13.0"
+modbus-rs = "0.14.0"
 ```
 
 That default includes both client and server support. For a smaller TCP-only server build,
@@ -18,7 +18,7 @@ disable defaults and opt in explicitly:
 
 ```toml
 [dependencies]
-modbus-rs = { version = "0.13.0", default-features = false, features = [
+modbus-rs = { version = "0.14.0", default-features = false, features = [
     "server",
     "network-tcp",
     "coils",

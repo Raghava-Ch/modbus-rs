@@ -7,18 +7,18 @@
  * Run:    node examples/02-tcp-client-write-multiple.mjs
  */
 
-import { AsyncTcpModbusClient } from 'modbus-rs';
+import { AsyncTcpTransport } from 'modbus-rs';
 
 const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
 const PORT = Number(process.env.MODBUS_PORT ?? 5502);
 
 async function main() {
-  const client = await AsyncTcpModbusClient.connect({
+  const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    unitId: 1,
     timeoutMs: 2000,
   });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     const values = [10, 20, 30, 40, 50, 60, 70, 80];
@@ -34,7 +34,7 @@ async function main() {
     const ok = readBack.every((v, i) => v === values[i]);
     console.log(ok ? '✓ Round trip OK' : '✗ Mismatch!');
   } finally {
-    await client.close();
+    await transport.close();
   }
 }
 
