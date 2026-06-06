@@ -67,7 +67,7 @@ jobs:
         run: pip install maturin pytest pytest-asyncio mypy
 
       - name: Build Python wheel
-        run: maturin build --features python,python-gateway,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
+        run: maturin build --features python-full
         working-directory: mbus-ffi
 
       - name: Install built wheel
