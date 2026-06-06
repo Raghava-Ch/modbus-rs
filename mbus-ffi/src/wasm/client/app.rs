@@ -99,6 +99,56 @@ impl RequestErrorNotifier for WasmAppRouter {
 #[cfg(feature = "traffic")]
 impl mbus_client::app::TrafficNotifier for WasmAppRouter {}
 
+// ── Shared Option Parsing Helpers ───────────────────────────────────────────
+
+pub(super) fn get_u32(obj: &JsValue, key: &str, default: u32) -> u32 {
+    if obj.is_null() || obj.is_undefined() {
+        return default;
+    }
+    Reflect::get(obj, &JsValue::from_str(key))
+        .ok()
+        .and_then(|v| {
+            if v.is_null() || v.is_undefined() {
+                None
+            } else {
+                v.as_f64().map(|f| f as u32)
+            }
+        })
+        .unwrap_or(default)
+}
+
+pub(super) fn get_u8(obj: &JsValue, key: &str, default: u8) -> u8 {
+    if obj.is_null() || obj.is_undefined() {
+        return default;
+    }
+    Reflect::get(obj, &JsValue::from_str(key))
+        .ok()
+        .and_then(|v| {
+            if v.is_null() || v.is_undefined() {
+                None
+            } else {
+                v.as_f64().map(|f| f as u8)
+            }
+        })
+        .unwrap_or(default)
+}
+
+pub(super) fn get_string(obj: &JsValue, key: &str, default: &str) -> String {
+    if obj.is_null() || obj.is_undefined() {
+        return default.to_string();
+    }
+    Reflect::get(obj, &JsValue::from_str(key))
+        .ok()
+        .and_then(|v| {
+            if v.is_null() || v.is_undefined() {
+                None
+            } else {
+                v.as_string()
+            }
+        })
+        .unwrap_or_else(|| default.to_string())
+}
+
 // ── CoilResponse ─────────────────────────────────────────────────────────────
 
 impl CoilResponse for WasmAppRouter {

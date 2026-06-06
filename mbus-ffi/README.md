@@ -673,69 +673,97 @@ Not part of the current server binding contract (planned later):
 This separation is intentional for phase stability: current bindings provide lifecycle + bridge + transport plumbing, while higher-level protocol handling is integrated incrementally.
 
 ### Build WASM Package
+To build the distribution packages, navigate to the `wasm` directory and use the npm build script:
 ```bash
-wasm-pack build --target web --features wasm,full
+cd mbus-ffi/wasm
+npm install
+npm run build
 ```
-Generated JS/WASM package is written to `mbus-ffi/pkg`.
+This builds both the web and bundler targets under the `dist/` folder.
 
-### Quick Start (WebSocket)
+### Quick Start (Web Target - Direct Imports)
+For direct browser usage without a bundler, import from `dist/web/modbus-rs.js` and await the initialization promise:
+
 ```javascript
-import init, { WasmModbusClient } from "./pkg/mbus_ffi.js";
+import init, { WasmTcpTransport } from "./wasm/dist/web/modbus-rs.js";
 
 await init();
 
-const client = new WasmModbusClient(
-	"ws://127.0.0.1:8080", // ws_proxy_url
-	1,                      // unit_id
-	3000,                   // response_timeout_ms
-	1,                      // retry_attempts
-	20                      // tick_interval_ms
-);
+// Create the connection transport
+const transport = new WasmTcpTransport("ws://127.0.0.1:8080", {
+  responseTimeoutMs: 3000,
+  retryAttempts: 1,
+  tickIntervalMs: 20,
+});
 
-const regs = await client.read_holding_registers(0, 2);
+// Bind lightweight clients to different Unit IDs sharing the same WebSocket transport
+const client1 = transport.createClient({ unitId: 1 });
+const client2 = transport.createClient({ unitId: 2 });
+
+const regs = await client1.read_holding_registers(0, 2);
 console.log(Array.from(regs));
+```
+
+### Quick Start (Bundlers - Vite, Svelte, React, etc.)
+When using a bundler (Vite, Webpack, etc.), import directly from the package:
+
+```javascript
+import { WasmTcpTransport } from "modbus-rs-wasm";
+
+// Create the transport and clients
+const transport = new WasmTcpTransport("ws://127.0.0.1:8080", { responseTimeoutMs: 3000 });
+const client = transport.createClient({ unitId: 1 });
 ```
 
 ### Quick Start (Web Serial)
 ```javascript
-import init, { request_serial_port, WasmSerialModbusClient } from "./pkg/mbus_ffi.js";
+import init, { request_serial_port, WasmSerialTransport } from "./wasm/dist/web/modbus-rs.js";
 
 await init();
 
-// Must be called from a user gesture (e.g. button double click)
+// Must be called from a user gesture (e.g. click handler)
 const portHandle = await request_serial_port();
 
-const client = new WasmSerialModbusClient(
-	portHandle,
-	1,      // unit_id
-	"rtu",  // mode: "rtu" | "ascii"
-	9600,   // baud_rate
-	... 
-);
-const ok = await client.read_single_coil(0);
+// Open one transport for the physical serial port
+const transport = new WasmSerialTransport(portHandle, {
+  mode: "rtu",            // "rtu" | "ascii"
+  baudRate: 9600,
+  dataBits: 8,
+  stopBits: 1,
+  parity: "even",
+  responseTimeoutMs: 1000,
+  retryAttempts: 3,
+  tickIntervalMs: 20,
+});
+
+// Create multiple clients on the same port (e.g. RS-485 multi-drop)
+const slave1 = transport.createClient({ unitId: 1 });
+const slave2 = transport.createClient({ unitId: 2 });
+
+const ok = await slave1.read_single_coil(0);
 ```
 
 ### Quick Start (WASM Server Bindings)
 
 ```javascript
 import init, {
-	WasmTcpServer,
-	WasmTcpGatewayConfig,
-	WasmSerialServer,
-	WasmSerialServerConfig,
-} from "./pkg/mbus_ffi.js";
+  WasmTcpServer,
+  WasmTcpGatewayConfig,
+  WasmSerialServer,
+  WasmSerialServerConfig,
+} from "./wasm/dist/web/modbus-rs.js";
 
 await init();
 
 const tcpServer = new WasmTcpServer(
-	new WasmTcpGatewayConfig("ws://127.0.0.1:8080"),
-	(req) => Promise.resolve({ ok: true, echo: req })
+  new WasmTcpGatewayConfig("ws://127.0.0.1:8080"),
+  (req) => Promise.resolve({ ok: true, echo: req })
 );
 await tcpServer.start();
 
 const serialServer = new WasmSerialServer(
-	WasmSerialServerConfig.rtu(),
-	(req) => Promise.resolve(req)
+  WasmSerialServerConfig.rtu(),
+  (req) => Promise.resolve(req)
 );
 // Attach browser SerialPort object from navigator.serial.requestPort() before start.
 ```
@@ -749,34 +777,35 @@ binding-level failure.
 ```javascript
 const snap = tcpServer.status_snapshot();
 console.log({
-	transport: snap.transport(),
-	running: snap.running(),
-	connected: snap.transport_connected(),
-	dispatched: snap.dispatched_requests(),
-	sent: snap.sent_frames(),
-	received: snap.received_frames(),
-	hasError: snap.last_error_present(),
+  transport: snap.transport(),
+  running: snap.running(),
+  connected: snap.transport_connected(),
+  dispatched: snap.dispatched_requests(),
+  sent: snap.sent_frames(),
+  received: snap.received_frames(),
+  hasError: snap.last_error_present(),
 });
 
 const lastErr = tcpServer.last_error_message();
 if (lastErr !== undefined) {
-	console.warn("server last error:", lastErr);
-	tcpServer.clear_last_error();
+  console.warn("server last error:", lastErr);
+  tcpServer.clear_last_error();
 }
 ```
 
 ### Example Web Pages
-Use the browser examples under `mbus-ffi/examples`:
-- `network_smoke.html` (WebSocket/TCP path)
-- `serial_smoke.html` (Web Serial path, full serial API smoke runner)
-- `network_server_smoke.html` (WASM TCP server lifecycle + dispatch + frame passthrough)
-- `serial_server_smoke.html` (WASM Serial server lifecycle + dispatch + frame passthrough)
+Use the browser examples under `mbus-ffi/wasm/examples`:
+- `wasm_client/network_smoke.html` (WebSocket/TCP path client)
+- `wasm_client/serial_smoke.html` (Web Serial path client, full serial API smoke runner)
+- `wasm_server/network_smoke.html` (WASM TCP server lifecycle + dispatch + frame passthrough)
+- `wasm_server/serial_smoke.html` (WASM Serial server lifecycle + dispatch + frame passthrough)
 
 Serve the examples over localhost:
 ```bash
-cd mbus-ffi
+cd mbus-ffi/wasm
 python3 -m http.server 8089
 ```
+
 
 ## Feature Gates and Supported Modbus Operations
 
@@ -850,8 +879,8 @@ WASM browser tests are in `mbus-ffi/tests/wasm_e2e.rs` and cover:
 Run wasm-target checks:
 
 ```bash
-cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm
-cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,full
+cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm-client
+cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm-full
 ```
 
 Run browser E2E tests:
@@ -869,7 +898,7 @@ Prerequisites for browser E2E test runs:
 Notes:
 
 - The script enforces these prerequisites before executing tests.
-- Canonical command target is fixed to `wasm-pack test --headless --chrome --features wasm,full --test wasm_e2e`.
+- Canonical command target is fixed to `wasm-pack test --headless --chrome --features wasm-full --test wasm_e2e`.
 
 ## Licensing
 

@@ -52,9 +52,9 @@
   <h1>mbus-ffi WASM TCP Server Smoke</h1>
 
   <p class="hint">
-    Build package first in <code>mbus-ffi</code>:
+    Build package first in <code>mbus-ffi/wasm</code>:
     <br />
-    <code>wasm-pack build --target web --features wasm,full</code>
+    <code>npm run build</code>
   </p>
   <div class="row">
     <label for="wsUrl">Gateway WebSocket URL</label>
@@ -87,7 +87,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmTcpGatewayConfig, WasmTcpServer } from "../../pkg/mbus_ffi.js";
+    import init, { WasmTcpGatewayConfig, WasmTcpServer } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {

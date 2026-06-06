@@ -55,9 +55,9 @@
     Requires Chromium-based browser + HTTPS/localhost + user gesture for serial permission.
   </p>
   <p class="hint">
-    Build package first in <code>mbus-ffi</code>:
+    Build package first in <code>mbus-ffi/wasm</code>:
     <br />
-    <code>wasm-pack build --target web --features wasm,full</code>
+    <code>npm run build</code>
   </p>
 
   <div class="row">
@@ -95,7 +95,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmSerialServer, WasmSerialServerConfig } from "../../pkg/mbus_ffi.js";
+    import init, { WasmSerialServer, WasmSerialServerConfig } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {

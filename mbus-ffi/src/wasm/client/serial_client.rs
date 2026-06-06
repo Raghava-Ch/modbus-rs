@@ -32,7 +32,30 @@ use mbus_serial::{WasmAsciiTransport, WasmRtuTransport};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
-use super::app::{PendingHandle, PendingMap, WasmAppRouter};
+use super::app::{PendingHandle, PendingMap, WasmAppRouter, get_u8, get_u32, get_string};
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT_SERIAL: &str = r#"
+export interface WasmSerialTransportOptions {
+    mode?: "rtu" | "ascii";
+    baudRate: number;
+    dataBits?: 5 | 6 | 7 | 8;
+    stopBits?: 1 | 2;
+    parity?: "none" | "even" | "odd";
+    responseTimeoutMs?: number;
+    retryAttempts?: number;
+    tickIntervalMs?: number;
+}
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "WasmSerialTransportOptions")]
+    pub type SerialOptions;
+
+    #[wasm_bindgen(typescript_type = "WasmCreateClientOptions")]
+    pub type CreateClientOpts;
+}
 
 const PIPELINE: usize = 1;
 
@@ -160,47 +183,44 @@ pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
     Ok(WasmSerialPortHandle { port })
 }
 
+// ── WasmSerialTransport ──────────────────────────────────────────────────────
+
 #[wasm_bindgen]
-/// Browser-facing Modbus client that communicates over Web Serial RTU or ASCII.
-pub struct WasmSerialModbusClient {
+/// Connection and polling manager for browser Modbus Serial clients.
+pub struct WasmSerialTransport {
     inner: Rc<RefCell<Inner>>,
     pending: PendingMap,
-    unit_id: u8,
-    next_txn: u16,
+    next_txn: Rc<RefCell<u16>>,
 }
 
 #[wasm_bindgen]
-impl WasmSerialModbusClient {
-    /// Creates a Modbus serial client over browser Web Serial.
+impl WasmSerialTransport {
+    /// Creates a new Serial (RTU) transport using the provided `port_handle`.
     ///
-    /// `mode` accepts "rtu" or "ascii" (case-insensitive).
-    /// `parity` accepts "none", "even", or "odd".
+    /// The transport claims the underlying serial stream and manages the
+    /// read/write loop, allowing multiple clients to multiplex requests over it.
     #[wasm_bindgen(constructor)]
     pub fn new(
         port_handle: &WasmSerialPortHandle,
-        unit_id: u8,
-        mode: &str,
-        baud_rate: u32,
-        data_bits: u8,
-        stop_bits: u8,
-        parity: &str,
-        response_timeout_ms: u32,
-        retry_attempts: u8,
-        tick_interval_ms: u32,
-    ) -> Result<WasmSerialModbusClient, JsValue> {
-        let serial_mode = match mode.to_ascii_lowercase().as_str() {
+        options: Option<SerialOptions>,
+    ) -> Result<WasmSerialTransport, JsValue> {
+        let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
+        let mode_str = get_string(&options_val, "mode", "rtu");
+        let serial_mode = match mode_str.to_ascii_lowercase().as_str() {
             "rtu" => SerialMode::Rtu,
             "ascii" => SerialMode::Ascii,
             _ => return Err(JsValue::from_str("mode must be 'rtu' or 'ascii'")),
         };
 
-        let parity_cfg = match parity.to_ascii_lowercase().as_str() {
+        let parity_str = get_string(&options_val, "parity", "none");
+        let parity_cfg = match parity_str.to_ascii_lowercase().as_str() {
             "none" => Parity::None,
             "even" => Parity::Even,
             "odd" => Parity::Odd,
             _ => return Err(JsValue::from_str("parity must be 'none', 'even', or 'odd'")),
         };
 
+        let data_bits = get_u8(&options_val, "dataBits", 8);
         let data_bits_cfg = match data_bits {
             5 => DataBits::Five,
             6 => DataBits::Six,
@@ -208,6 +228,12 @@ impl WasmSerialModbusClient {
             8 => DataBits::Eight,
             _ => return Err(JsValue::from_str("data_bits must be one of 5, 6, 7, or 8")),
         };
+
+        let stop_bits = get_u8(&options_val, "stopBits", 1);
+        let baud_rate = get_u32(&options_val, "baudRate", 9600);
+        let response_timeout_ms = get_u32(&options_val, "responseTimeoutMs", 1000);
+        let retry_attempts = get_u8(&options_val, "retryAttempts", 3);
+        let tick_interval_ms = get_u32(&options_val, "tickIntervalMs", 20);
 
         let mut transport = WasmRuntimeSerialTransport::new(serial_mode);
         transport.attach_port(port_handle.clone_port());
@@ -244,6 +270,8 @@ impl WasmSerialModbusClient {
         let _ = inner_client.connect();
 
         let inner = Rc::new(RefCell::new(inner_client));
+        let next_txn = Rc::new(RefCell::new(1));
+
         let weak = Rc::downgrade(&inner);
         let tick_ms = tick_interval_ms as u64;
         let idle_ms = core::cmp::max(50, tick_ms.saturating_mul(5));
@@ -270,27 +298,24 @@ impl WasmSerialModbusClient {
             }
         });
 
-        Ok(WasmSerialModbusClient {
+        Ok(WasmSerialTransport {
             inner,
             pending,
-            unit_id,
-            next_txn: 1,
+            next_txn,
         })
     }
 
-    /// Returns `true` when the serial port is open and the transport considers itself connected.
+    /// Returns `true` when the serial port is open and connected.
     pub fn is_connected(&self) -> bool {
         self.inner.borrow().is_connected()
     }
 
-    /// Returns `true` if there are in-flight Modbus requests waiting for
-    /// response/timeout resolution.
+    /// Returns `true` if there are in-flight Modbus requests.
     pub fn has_pending_requests(&self) -> bool {
         self.inner.borrow().has_pending_requests()
     }
 
     /// Drop all pending in-flight requests and attempt to reopen the serial port.
-    /// Outstanding Promises for dropped requests will be rejected with `"ConnectionLost"`.
     pub fn reconnect(&mut self) -> bool {
         for (_, handle) in self.pending.borrow_mut().drain() {
             let _ = handle
@@ -298,6 +323,59 @@ impl WasmSerialModbusClient {
                 .call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
         }
         self.inner.borrow_mut().reconnect().is_ok()
+    }
+
+    /// Closes the serial port connection and rejects all pending requests.
+    pub fn close(&mut self) {
+        for (_, handle) in self.pending.borrow_mut().drain() {
+            let _ = handle
+                .reject
+                .call1(&JsValue::NULL, &JsValue::from_str("TransportClosed"));
+        }
+        let _ = self.inner.borrow_mut().disconnect();
+    }
+
+    /// Creates a device client bound to the specified unit ID.
+    #[wasm_bindgen(js_name = "createClient")]
+    pub fn create_client(&self, options: Option<CreateClientOpts>) -> Result<WasmSerialModbusClient, JsValue> {
+        let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
+        let unit_id = get_u8(&options_val, "unitId", 1);
+
+        UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        Ok(WasmSerialModbusClient {
+            inner: self.inner.clone(),
+            pending: self.pending.clone(),
+            unit_id,
+            next_txn: self.next_txn.clone(),
+        })
+    }
+}
+
+// ── WasmSerialModbusClient ───────────────────────────────────────────────────
+
+#[wasm_bindgen]
+/// Browser-facing Modbus client bound to a specific serial unit ID.
+pub struct WasmSerialModbusClient {
+    inner: Rc<RefCell<Inner>>,
+    pending: PendingMap,
+    unit_id: u8,
+    next_txn: Rc<RefCell<u16>>,
+}
+
+#[wasm_bindgen]
+impl WasmSerialModbusClient {
+    // ── Status ───────────────────────────────────────────────────────────────
+
+    /// Returns `true` when the serial port is open.
+    pub fn is_connected(&self) -> bool {
+        self.inner.borrow().is_connected()
+    }
+
+    /// Returns `true` if there are in-flight Modbus requests.
+    pub fn has_pending_requests(&self) -> bool {
+        self.inner.borrow().has_pending_requests()
     }
 
     /// Read `quantity` coils starting at `address`.
@@ -921,9 +999,10 @@ impl WasmSerialModbusClient {
 }
 
 impl WasmSerialModbusClient {
-    fn alloc_txn(&mut self) -> u16 {
-        let id = self.next_txn;
-        self.next_txn = self.next_txn.wrapping_add(1).max(1);
+    fn alloc_txn(&self) -> u16 {
+        let mut next = self.next_txn.borrow_mut();
+        let id = *next;
+        *next = next.wrapping_add(1).max(1);
         id
     }
 

@@ -4,6 +4,7 @@ use js_sys::{Array, Function, Object, Reflect, Uint8Array, Uint16Array};
 use mbus_ffi::{
     WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, WasmSerialServer,
     WasmSerialServerConfig, WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
+    WasmTcpTransport, WasmSerialTransport,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -11,6 +12,26 @@ use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
+
+fn new_tcp_client(url: &str, unit_id: u8, response_timeout_ms: u32, retry_attempts: u8, tick_interval_ms: u32) -> Result<WasmModbusClient, JsValue> {
+    let opts = js_sys::eval(&format!(
+        "({{ responseTimeoutMs: {}, retryAttempts: {}, tickIntervalMs: {} }})",
+        response_timeout_ms, retry_attempts, tick_interval_ms
+    ))?;
+    let transport = WasmTcpTransport::new(url, Some(opts.into()))?;
+    let client_opts = js_sys::eval(&format!("({{ unitId: {} }})", unit_id))?;
+    transport.create_client(Some(client_opts.into()))
+}
+
+fn new_serial_client(port_handle: &WasmSerialPortHandle, unit_id: u8, mode: &str, baud_rate: u32, data_bits: u8, stop_bits: u8, parity: &str, response_timeout_ms: u32, retry_attempts: u8, tick_interval_ms: u32) -> Result<WasmSerialModbusClient, JsValue> {
+    let opts = js_sys::eval(&format!(
+        "({{ mode: '{}', baudRate: {}, dataBits: {}, stopBits: {}, parity: '{}', responseTimeoutMs: {}, retryAttempts: {}, tickIntervalMs: {} }})",
+        mode, baud_rate, data_bits, stop_bits, parity, response_timeout_ms, retry_attempts, tick_interval_ms
+    ))?;
+    let transport = WasmSerialTransport::new(port_handle, Some(opts.into()))?;
+    let client_opts = js_sys::eval(&format!("({{ unitId: {} }})", unit_id))?;
+    transport.create_client(Some(client_opts.into()))
+}
 
 fn install_fake_websocket() {
     // Installs a deterministic in-browser fake WebSocket used by all tests.
@@ -160,7 +181,7 @@ async fn e2e_read_holding_registers_resolves_typed_array() {
     install_fake_websocket();
     let url = "ws://e2e-read-holding";
 
-    let mut client = WasmModbusClient::new(url, 1, 100, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 100, 0, 1).expect("client creation failed");
     open_fake_ws(url);
     assert!(client.is_connected());
 
@@ -201,7 +222,7 @@ async fn e2e_write_single_register_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-single";
 
-    let mut client = WasmModbusClient::new(url, 1, 100, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 100, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.write_single_register(0x000A, 0x00FF);
@@ -239,7 +260,7 @@ async fn e2e_timeout_rejects_promise() {
     let url = "ws://e2e-timeout";
 
     // timeout=20ms, retries=0, tick every 1ms => reject should happen quickly.
-    let mut client = WasmModbusClient::new(url, 1, 20, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 20, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_holding_registers(0x0000, 1);
@@ -253,11 +274,14 @@ async fn e2e_reconnect_rejects_inflight_requests() {
     install_fake_websocket();
     let url = "ws://e2e-reconnect";
 
-    let mut client = WasmModbusClient::new(url, 1, 1_000, 0, 1).expect("client creation failed");
+    let opts = js_sys::eval("({ responseTimeoutMs: 1000, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let mut transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let client_opts = js_sys::eval("({ unitId: 1 })").unwrap();
+    let mut client = transport.create_client(Some(client_opts.into())).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_holding_registers(0x0000, 1);
-    assert!(client.reconnect(), "reconnect should return true");
+    assert!(transport.reconnect(), "reconnect should return true");
 
     let result = JsFuture::from(promise).await;
     assert!(
@@ -278,7 +302,7 @@ async fn e2e_reconnect_rejects_inflight_requests() {
 async fn e2e_read_coils_resolves_uint8array() {
     install_fake_websocket();
     let url = "ws://e2e-read-coils";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // Read 8 coils at address 0x0001
@@ -314,7 +338,7 @@ async fn e2e_read_coils_resolves_uint8array() {
 async fn e2e_read_single_coil_resolves_bool() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-coil";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_single_coil(0x0005);
@@ -340,7 +364,7 @@ async fn e2e_read_single_coil_resolves_bool() {
 async fn e2e_write_single_coil_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-single-coil";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.write_single_coil(0x0010, true);
@@ -374,7 +398,7 @@ async fn e2e_write_single_coil_resolves_object() {
 async fn e2e_write_multiple_coils_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-multi-coils";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // Write 2 coils at 0x0020, both ON (packed=0x03)
@@ -411,7 +435,7 @@ async fn e2e_write_multiple_coils_resolves_object() {
 async fn e2e_read_single_holding_register_resolves_number() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-hreg";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_single_holding_register(0x0100);
@@ -435,7 +459,7 @@ async fn e2e_read_single_holding_register_resolves_number() {
 async fn e2e_read_input_registers_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-read-input-regs";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_input_registers(0x0200, 2);
@@ -464,7 +488,7 @@ async fn e2e_read_input_registers_resolves_uint16array() {
 async fn e2e_read_single_input_register_resolves_number() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-ireg";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_single_input_register(0x0200);
@@ -488,7 +512,7 @@ async fn e2e_read_single_input_register_resolves_number() {
 async fn e2e_write_multiple_registers_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-multi-regs";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.write_multiple_registers(0x0300, 2, &[0x1234, 0x5678]);
@@ -525,7 +549,7 @@ async fn e2e_write_multiple_registers_resolves_object() {
 async fn e2e_read_write_multiple_registers_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-rw-multi-regs";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // Read 2 regs from 0x0400, simultaneously write [0x1234] to 0x0401
@@ -558,7 +582,7 @@ async fn e2e_read_write_multiple_registers_resolves_uint16array() {
 async fn e2e_mask_write_register_resolves_true() {
     install_fake_websocket();
     let url = "ws://e2e-mask-write-reg";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.mask_write_register(0x0500, 0xFFFF, 0x0000);
@@ -590,7 +614,7 @@ async fn e2e_mask_write_register_resolves_true() {
 async fn e2e_read_discrete_inputs_resolves_uint8array() {
     install_fake_websocket();
     let url = "ws://e2e-read-disc-inputs";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_discrete_inputs(0x0600, 8);
@@ -616,7 +640,7 @@ async fn e2e_read_discrete_inputs_resolves_uint8array() {
 async fn e2e_read_single_discrete_input_resolves_bool() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-di";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_single_discrete_input(0x0601);
@@ -640,7 +664,7 @@ async fn e2e_read_single_discrete_input_resolves_bool() {
 async fn e2e_read_fifo_queue_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-read-fifo";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_fifo_queue(0x0700);
@@ -677,7 +701,7 @@ async fn e2e_read_fifo_queue_resolves_uint16array() {
 async fn e2e_read_file_record_resolves_array() {
     install_fake_websocket();
     let url = "ws://e2e-read-file-rec";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // Read file 1, record 0, length 1
@@ -715,7 +739,7 @@ async fn e2e_read_file_record_resolves_array() {
 async fn e2e_write_file_record_resolves_true() {
     install_fake_websocket();
     let url = "ws://e2e-write-file-rec";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // Write value [0xDEAD] to file 1, record 0
@@ -751,7 +775,7 @@ async fn e2e_write_file_record_resolves_true() {
 async fn e2e_read_exception_status_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-exception-status";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x07 is serial-line only; TCP path should reject immediately.
@@ -767,7 +791,7 @@ async fn e2e_read_exception_status_rejects_on_tcp() {
 async fn e2e_diagnostics_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-diagnostics";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x08 is serial-line only; TCP path should reject immediately.
@@ -780,7 +804,7 @@ async fn e2e_diagnostics_rejects_on_tcp() {
 async fn e2e_get_comm_event_counter_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-comm-event-ctr";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x0B is serial-line only; TCP path should reject immediately.
@@ -796,7 +820,7 @@ async fn e2e_get_comm_event_counter_rejects_on_tcp() {
 async fn e2e_get_comm_event_log_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-comm-event-log";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x0C is serial-line only; TCP path should reject immediately.
@@ -809,7 +833,7 @@ async fn e2e_get_comm_event_log_rejects_on_tcp() {
 async fn e2e_report_server_id_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-report-server-id";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x11 is serial-line only; TCP path should reject immediately.
@@ -822,7 +846,7 @@ async fn e2e_report_server_id_rejects_on_tcp() {
 async fn e2e_read_device_identification_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-read-device-id";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // read_device_id_code=1 (Basic), object_id=0 (VendorName)
@@ -883,7 +907,7 @@ async fn e2e_read_device_identification_resolves_object() {
 async fn e2e_diagnostics_invalid_sub_function_rejects() {
     install_fake_websocket();
     let url = "ws://e2e-diag-invalid-sf";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // 0xFFFF is a reserved/invalid sub_function
@@ -899,7 +923,7 @@ async fn e2e_diagnostics_invalid_sub_function_rejects() {
 async fn e2e_read_device_identification_invalid_code_rejects() {
     install_fake_websocket();
     let url = "ws://e2e-dev-id-bad-code";
-    let mut client = WasmModbusClient::new(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
     open_fake_ws(url);
 
     // 0x00 is not a valid ReadDeviceIdCode (valid: 1–4)
@@ -946,7 +970,7 @@ fn e2e_serial_client_new_valid_params_succeeds() {
     let handle = WasmSerialPortHandle::new_for_testing(port);
     assert!(handle.is_valid(), "fake port handle should be valid");
 
-    let result = WasmSerialModbusClient::new(
+    let result = new_serial_client(
         &handle, 1, // unit_id
         "rtu", 9600, 8, 1, "none", 500, 0, 5,
     );
@@ -960,7 +984,7 @@ fn e2e_serial_client_new_valid_params_succeeds() {
 #[wasm_bindgen_test]
 fn e2e_serial_client_new_ascii_mode_succeeds() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let result = WasmSerialModbusClient::new(&handle, 1, "ascii", 19200, 7, 1, "even", 500, 0, 5);
+    let result = new_serial_client(&handle, 1, "ascii", 19200, 7, 1, "even", 500, 0, 5);
     assert!(
         result.is_ok(),
         "ASCII mode construction should succeed: {:?}",
@@ -971,21 +995,21 @@ fn e2e_serial_client_new_ascii_mode_succeeds() {
 #[wasm_bindgen_test]
 fn e2e_serial_client_new_invalid_mode_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let result = WasmSerialModbusClient::new(&handle, 1, "notamode", 9600, 8, 1, "none", 500, 0, 5);
+    let result = new_serial_client(&handle, 1, "notamode", 9600, 8, 1, "none", 500, 0, 5);
     assert!(result.is_err(), "invalid mode should fail construction");
 }
 
 #[wasm_bindgen_test]
 fn e2e_serial_client_new_invalid_parity_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let result = WasmSerialModbusClient::new(&handle, 1, "rtu", 9600, 8, 1, "space", 500, 0, 5);
+    let result = new_serial_client(&handle, 1, "rtu", 9600, 8, 1, "space", 500, 0, 5);
     assert!(result.is_err(), "invalid parity should fail construction");
 }
 
 #[wasm_bindgen_test]
 fn e2e_serial_client_new_invalid_data_bits_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let result = WasmSerialModbusClient::new(
+    let result = new_serial_client(
         &handle, 1, "rtu", 9600, 9, /* invalid */
         1, "none", 500, 0, 5,
     );
@@ -998,7 +1022,7 @@ fn e2e_serial_client_new_invalid_data_bits_rejects() {
 #[wasm_bindgen_test]
 fn e2e_serial_client_is_connected_true_while_opening_or_connected() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let client = WasmSerialModbusClient::new(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
+    let client = new_serial_client(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
         .expect("construction should succeed");
     // `is_connected` returns true for both opening and connected states.
     assert!(
@@ -1010,7 +1034,7 @@ fn e2e_serial_client_is_connected_true_while_opening_or_connected() {
 #[wasm_bindgen_test(async)]
 async fn e2e_serial_client_diagnostics_invalid_sub_function_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let mut client = WasmSerialModbusClient::new(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
+    let mut client = new_serial_client(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
         .expect("construction should succeed");
 
     // 0xFFFF is a reserved/invalid sub_function — reject_immediate path.
@@ -1025,7 +1049,7 @@ async fn e2e_serial_client_diagnostics_invalid_sub_function_rejects() {
 #[wasm_bindgen_test(async)]
 async fn e2e_serial_client_read_device_id_invalid_code_rejects() {
     let handle = WasmSerialPortHandle::new_for_testing(make_fake_serial_port());
-    let mut client = WasmSerialModbusClient::new(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
+    let mut client = new_serial_client(&handle, 1, "rtu", 9600, 8, 1, "none", 500, 0, 5)
         .expect("construction should succeed");
 
     // 0x00 is invalid (valid ReadDeviceIdCode: 1–4).
@@ -1394,4 +1418,122 @@ async fn e2e_wasm_tcp_server_status_snapshot_and_last_error_observability() {
     assert_eq!(snap2.sent_frames(), 1);
     assert_eq!(snap2.received_frames(), 1);
     assert_eq!(snap2.dispatched_requests(), 1);
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_tcp_transport_multi_unit_sharing() {
+    install_fake_websocket();
+    let url = "ws://e2e-tcp-multi-unit";
+
+    let opts = js_sys::eval("({ responseTimeoutMs: 100, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+
+    let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
+    let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
+
+    let mut client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
+    let mut client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+
+    open_fake_ws(url);
+    assert!(client1.is_connected());
+    assert!(client2.is_connected());
+
+    let _p1 = client1.read_holding_registers(0, 1);
+    let _p2 = client2.read_holding_registers(10, 1);
+
+    // Verify first request sent. Txn ID = 1, Unit ID = 1.
+    let sent1 = get_sent_frame(url, 0).to_vec();
+    assert_eq!(sent1[0], 0x00); // txn hi
+    assert_eq!(sent1[1], 0x01); // txn lo (starts at 1)
+    assert_eq!(sent1[6], 0x01); // unit ID 1 (in MBAP header index 6 is unit ID)
+
+    // Verify second request sent. Txn ID = 2, Unit ID = 2.
+    // (Shares the next_txn counter on the transport!)
+    let sent2 = get_sent_frame(url, 1).to_vec();
+    assert_eq!(sent2[0], 0x00);
+    assert_eq!(sent2[1], 0x02); // next txn is 2
+    assert_eq!(sent2[6], 0x02); // unit ID 2
+}
+
+#[wasm_bindgen_test(async)]
+async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
+    install_fake_websocket();
+    let url = "ws://e2e-tcp-multi-unit-concurrent";
+
+    let opts = js_sys::eval("({ responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+
+    let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
+    let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
+
+    let mut client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
+    let mut client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+
+    open_fake_ws(url);
+    assert!(client1.is_connected());
+    assert!(client2.is_connected());
+
+    // Send two requests concurrently
+    let p1 = client1.read_holding_registers(0, 1);
+    let p2 = client2.read_holding_registers(10, 1);
+
+    // Validate they were sent
+    let sent1 = get_sent_frame(url, 0).to_vec();
+    let txn1_hi = sent1[0];
+    let txn1_lo = sent1[1];
+    
+    let sent2 = get_sent_frame(url, 1).to_vec();
+    let txn2_hi = sent2[0];
+    let txn2_lo = sent2[1];
+
+    // Respond to client2 FIRST (out of order response)
+    let rsp2 = [
+        txn2_hi, txn2_lo, // txn id
+        0x00, 0x00, // protocol
+        0x00, 0x05, // length
+        0x02, // unit id = 2
+        0x03, // FC
+        0x02, // byte count
+        0xAA, 0xBB, // data
+    ];
+    emit_fake_ws(url, &rsp2);
+
+    // Respond to client1 SECOND
+    let rsp1 = [
+        txn1_hi, txn1_lo, // txn id
+        0x00, 0x00, // protocol
+        0x00, 0x05, // length
+        0x01, // unit id = 1
+        0x03, // FC
+        0x02, // byte count
+        0xCC, 0xDD, // data
+    ];
+    emit_fake_ws(url, &rsp1);
+
+    // Both should resolve to the correct values without mixing up
+    let val2 = JsFuture::from(p2).await.expect("p2 should resolve");
+    let regs2 = val2.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    assert_eq!(regs2.get_index(0), 0xAABB);
+
+    let val1 = JsFuture::from(p1).await.expect("p1 should resolve");
+    let regs1 = val1.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    assert_eq!(regs1.get_index(0), 0xCCDD);
+}
+
+#[wasm_bindgen_test]
+fn e2e_serial_transport_multi_unit_sharing() {
+    let port = make_fake_serial_port();
+    let handle = WasmSerialPortHandle::new_for_testing(port);
+
+    let opts = js_sys::eval("({ mode: 'rtu', baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 5 })").unwrap();
+    let transport = WasmSerialTransport::new(&handle, Some(opts.into())).expect("transport creation failed");
+
+    let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
+    let client2_opts = js_sys::eval("({ unitId: 42 })").unwrap();
+
+    let client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
+    let client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+
+    assert!(client1.is_connected());
+    assert!(client2.is_connected());
 }

@@ -60,13 +60,17 @@ jobs:
           cache-bin: false
 
       - name: Check mbus-ffi WASM bindings
-        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
+        run: cargo check -p mbus-ffi --target wasm32-unknown-unknown --features wasm-full
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Run WASM server binding tests (Node)
-        run: wasm-pack test --node --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait --test wasm_server_bindings
+        run: wasm-pack test --node --features wasm-full --test wasm_server_bindings
+        working-directory: mbus-ffi
+
+      - name: Run WASM browser E2E tests (Chrome)
+        run: wasm-pack test --chrome --headless --features wasm-full --test wasm_e2e
         working-directory: mbus-ffi
 
       - name: Setup Node.js

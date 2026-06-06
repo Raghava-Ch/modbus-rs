@@ -31,10 +31,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:web": "wasm-pack build ../. --target web --out-name modbus-rs --out-dir wasm/dist/web --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics",
-    "build:bundler": "wasm-pack build ../. --target bundler --out-name modbus-rs --out-dir wasm/dist/bundler --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics",
+    "build:web": "wasm-pack build ../. --target web --out-name modbus-rs --out-dir wasm/dist/web --features wasm-full",
+    "build:bundler": "wasm-pack build ../. --target bundler --out-name modbus-rs --out-dir wasm/dist/bundler --features wasm-full",
     "build": "npm run build:web && npm run build:bundler && rm -f dist/web/.gitignore dist/bundler/.gitignore dist/web/package.json dist/bundler/package.json dist/web/README.md dist/bundler/README.md",
-    "test": "wasm-pack test --headless --chrome ../. --test wasm_e2e --features wasm,coils,registers,discrete-inputs,fifo,file-record,diagnostics",
+    "test": "wasm-pack test --headless --chrome ../. --test wasm_e2e --features wasm-full",
     "verify": "node verify-dist.js"
   },
   "keywords": [

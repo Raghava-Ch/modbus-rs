@@ -33,9 +33,9 @@
   <h1>mbus-ffi Minimal Full Smoke</h1>
 
   <p class="hint">
-    Before opening this page, build the wasm package in <code>mbus-ffi</code>:
+    Before opening this page, build the wasm package in <code>mbus-ffi/wasm</code>:
     <br />
-    <code>wasm-pack build --target web --features wasm,full</code>
+    <code>npm run build</code>
   </p>
 
   <p class="hint">
@@ -83,7 +83,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmModbusClient } from "../../wasm/dist/web/modbus-rs.js";
+    import init, { WasmTcpTransport, WasmModbusClient } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {
@@ -158,8 +158,8 @@
       } catch (err) {
         const text = String(err);
         if (retries > 0 && text.includes("NoRetriesLeft")) {
-          if (client) {
-            const restarted = client.reconnect();
+          if (transport) {
+            const restarted = transport.reconnect();
             log(`RETRY ${name}: ${text} -> reconnect=${restarted}, retrying once`);
           }
           await sleep(500);
@@ -172,6 +172,7 @@
     const runRobust = async (name, run) =>
       withTransportRecovery(name, () => withBusyRetry(name, run, 2), 1);
 
+    let transport = null;
     let client = null;
 
     await init();
@@ -185,8 +186,13 @@
         const retries = Number(document.getElementById("retries").value);
         const tick = Number(document.getElementById("tick").value);
 
-        client = new WasmModbusClient(ws, unitId, timeout, retries, tick);
-        const reconnectStarted = client.reconnect();
+        transport = new WasmTcpTransport(ws, {
+          responseTimeoutMs: timeout,
+          retryAttempts: retries,
+          tickIntervalMs: tick
+        });
+        client = transport.createClient({ unitId });
+        const reconnectStarted = transport.reconnect();
         log(`Client created for ${ws}, unit=${unitId}. reconnect=${reconnectStarted}`);
       } catch (err) {
         log(`Connect setup error: ${String(err)}`);

@@ -14,5 +14,7 @@ mod app;
 mod net_client;
 mod serial_client;
 
-pub use net_client::WasmModbusClient;
-pub use serial_client::{WasmSerialModbusClient, WasmSerialPortHandle, request_serial_port};
+pub use net_client::{WasmModbusClient, WasmTcpTransport};
+pub use serial_client::{
+    WasmSerialModbusClient, WasmSerialPortHandle, WasmSerialTransport, request_serial_port,
+};

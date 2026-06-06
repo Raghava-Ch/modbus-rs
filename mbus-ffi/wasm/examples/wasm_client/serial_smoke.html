@@ -79,7 +79,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { request_serial_port, WasmSerialModbusClient } from "../../wasm/dist/web/modbus-rs.js";
+    import init, { request_serial_port, WasmSerialTransport, WasmSerialModbusClient } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {
@@ -150,6 +150,7 @@
     };
 
     let portHandle = null;
+    let transport = null;
     let client = null;
 
     await init();
@@ -174,18 +175,20 @@
         return;
       }
       try {
-        client = new WasmSerialModbusClient(
+        transport = new WasmSerialTransport(
           portHandle,
-          num("unitId"),
-          str("mode"),
-          num("baud"),
-          num("dataBits"),
-          num("stopBits"),
-          str("parity"),
-          num("timeout"),
-          num("retries"),
-          num("tick"),
+          {
+            mode: str("mode"),
+            baudRate: num("baud"),
+            dataBits: num("dataBits"),
+            stopBits: num("stopBits"),
+            parity: str("parity"),
+            responseTimeoutMs: num("timeout"),
+            retryAttempts: num("retries"),
+            tickIntervalMs: num("tick")
+          }
         );
+        client = transport.createClient({ unitId: num("unitId") });
         log("WasmSerialModbusClient created.");
       } catch (err) {
         log(`Create client ERROR: ${String(err)}`);

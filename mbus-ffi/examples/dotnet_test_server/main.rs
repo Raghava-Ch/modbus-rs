@@ -5,21 +5,25 @@
 //! stdout (so the parent process can parse it), and serves an in-memory
 //! holding-register store for FC03/FC06/FC16 until killed.
 
-#![cfg(all(feature = "registers", not(target_arch = "wasm32")))]
-#![allow(unreachable_patterns)]
-
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 use std::future::Future;
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 use std::sync::{Arc, Mutex};
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 use mbus_async::server::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusResponse};
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 use mbus_core::function_codes::public::FunctionCode;
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 #[derive(Clone)]
 struct TestApp {
     holding: Arc<Mutex<[u16; 256]>>,
 }
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 impl Default for TestApp {
     fn default() -> Self {
         Self {
@@ -28,8 +32,10 @@ impl Default for TestApp {
     }
 }
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 impl mbus_async::server::AsyncServerTrafficNotifier for TestApp {}
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 impl AsyncAppHandler for TestApp {
     fn handle(&mut self, req: ModbusRequest) -> impl Future<Output = ModbusResponse> + Send {
         let response = self.process(req);
@@ -37,6 +43,7 @@ impl AsyncAppHandler for TestApp {
     }
 }
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 impl TestApp {
     #[allow(unreachable_patterns)]
     fn process(&self, req: ModbusRequest) -> ModbusResponse {
@@ -102,6 +109,7 @@ impl TestApp {
     }
 }
 
+#[cfg(all(feature = "registers", not(target_arch = "wasm32")))]
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unit = UnitIdOrSlaveAddr::try_from(1u8).unwrap();
@@ -123,3 +131,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+#[cfg(any(not(feature = "registers"), target_arch = "wasm32"))]
+fn main() {}

@@ -41,46 +41,58 @@ use mbus_core::transport::{
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-use super::app::{PendingHandle, PendingMap, WasmAppRouter};
+use super::app::{PendingHandle, PendingMap, WasmAppRouter, get_u8, get_u32};
 use mbus_network::WasmWsTransport;
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &str = r#"
+export interface WasmTcpTransportOptions {
+    responseTimeoutMs?: number;
+    retryAttempts?: number;
+    tickIntervalMs?: number;
+}
+export interface WasmCreateClientOptions {
+    unitId?: number;
+}
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "WasmTcpTransportOptions")]
+    pub type TcpOptions;
+
+    #[wasm_bindgen(typescript_type = "WasmCreateClientOptions")]
+    pub type CreateClientOpts;
+}
 
 // Pipeline depth: up to 10 concurrent in-flight TCP requests.
 const PIPELINE: usize = 10;
 
 type Inner = ClientServices<WasmWsTransport, WasmAppRouter, PIPELINE>;
 
-// ── WasmModbusClient ──────────────────────────────────────────────────────────
+// ── WasmTcpTransport ─────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
-/// Browser-facing Modbus client that communicates over a WebSocket transport.
-pub struct WasmModbusClient {
+/// Connection and background polling manager for browser Modbus TCP clients.
+pub struct WasmTcpTransport {
     inner: Rc<RefCell<Inner>>,
     pending: PendingMap,
-    unit_id: u8,
-    /// Monotonically increasing transaction ID counter.
-    next_txn: u16,
+    next_txn: Rc<RefCell<u16>>,
 }
 
 #[wasm_bindgen]
-impl WasmModbusClient {
-    // ── Constructor ───────────────────────────────────────────────────────────
-
-    /// Create a new Modbus master client and immediately start the background tick loop.
+impl WasmTcpTransport {
+    /// Creates a new TCP/WebSocket transport.
     ///
-    /// # Arguments
-    /// - `ws_url`           — WebSocket URL of the Modbus/TCP gateway (e.g. `"ws://192.168.1.1:8502"`).
-    /// - `unit_id`          — Modbus unit ID / slave address of the target device (1–247).
-    /// - `response_timeout_ms` — How long (ms) to wait before retrying or failing a request.
-    /// - `retry_attempts`   — Number of retries before reporting an error to JS.
-    /// - `tick_interval_ms` — How often (ms) the tick loop calls `poll()`. 20 ms is a safe default.
+    /// This establishes a connection to the provided `ws_url` and handles
+    /// the underlying read/write loops.
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        ws_url: &str,
-        unit_id: u8,
-        response_timeout_ms: u32,
-        retry_attempts: u8,
-        tick_interval_ms: u32,
-    ) -> Result<WasmModbusClient, JsValue> {
+    pub fn new(ws_url: &str, options: Option<TcpOptions>) -> Result<WasmTcpTransport, JsValue> {
+        let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
+        let response_timeout_ms = get_u32(&options_val, "responseTimeoutMs", 3000);
+        let retry_attempts = get_u8(&options_val, "retryAttempts", 1);
+        let tick_interval_ms = get_u32(&options_val, "tickIntervalMs", 20);
+
         let pending: PendingMap = Rc::new(RefCell::new(HashMap::new()));
         let app = WasmAppRouter::new(pending.clone());
         let transport = WasmWsTransport::new(ws_url);
@@ -103,10 +115,8 @@ impl WasmModbusClient {
         let _ = inner_client.connect();
 
         let inner = Rc::new(RefCell::new(inner_client));
+        let next_txn = Rc::new(RefCell::new(1));
 
-        // ── Background tick loop ──────────────────────────────────────────
-        // Uses a `Weak` reference so the loop terminates naturally when JS
-        // lets the `WasmModbusClient` be garbage collected.
         let weak = Rc::downgrade(&inner);
         let tick_ms = tick_interval_ms as u64;
         let idle_ms = core::cmp::max(50, tick_ms.saturating_mul(5));
@@ -128,43 +138,89 @@ impl WasmModbusClient {
                         }
                         continue;
                     }
-                    None => break, // client dropped → stop the loop
+                    None => break,
                 }
             }
         });
 
-        Ok(WasmModbusClient {
+        Ok(WasmTcpTransport {
             inner,
             pending,
-            unit_id,
-            next_txn: 1,
+            next_txn,
         })
     }
 
-    // ── Status ───────────────────────────────────────────────────────────────
-
-    /// Returns `true` when the underlying WebSocket is open and the transport
-    /// considers itself connected.
+    /// Returns `true` when the underlying WebSocket is open and connected.
     pub fn is_connected(&self) -> bool {
         self.inner.borrow().is_connected()
     }
 
-    /// Returns `true` if there are in-flight Modbus requests waiting for
-    /// response/timeout resolution.
+    /// Returns `true` if there are in-flight Modbus requests.
     pub fn has_pending_requests(&self) -> bool {
         self.inner.borrow().has_pending_requests()
     }
 
-    /// Drop all pending in-flight requests and attempt to reconnect the WebSocket.
-    /// Outstanding Promises for dropped requests will be rejected with `"ConnectionLost"`.
+    /// Drop all pending in-flight requests and attempt to reconnect.
     pub fn reconnect(&mut self) -> bool {
-        // Reject all pending promises before the internal queue is cleared.
         for (_, handle) in self.pending.borrow_mut().drain() {
             let _ = handle
                 .reject
                 .call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
         }
         self.inner.borrow_mut().reconnect().is_ok()
+    }
+
+    /// Closes the connection and rejects all pending requests.
+    pub fn close(&mut self) {
+        for (_, handle) in self.pending.borrow_mut().drain() {
+            let _ = handle
+                .reject
+                .call1(&JsValue::NULL, &JsValue::from_str("TransportClosed"));
+        }
+        let _ = self.inner.borrow_mut().disconnect();
+    }
+
+    /// Creates a device client bound to the specified unit ID.
+    #[wasm_bindgen(js_name = "createClient")]
+    pub fn create_client(&self, options: Option<CreateClientOpts>) -> Result<WasmModbusClient, JsValue> {
+        let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
+        let unit_id = get_u8(&options_val, "unitId", 1);
+
+        UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        Ok(WasmModbusClient {
+            inner: self.inner.clone(),
+            pending: self.pending.clone(),
+            unit_id,
+            next_txn: self.next_txn.clone(),
+        })
+    }
+}
+
+// ── WasmModbusClient ──────────────────────────────────────────────────────────
+
+#[wasm_bindgen]
+/// Browser-facing Modbus client bound to a specific unit ID.
+pub struct WasmModbusClient {
+    inner: Rc<RefCell<Inner>>,
+    pending: PendingMap,
+    unit_id: u8,
+    next_txn: Rc<RefCell<u16>>,
+}
+
+#[wasm_bindgen]
+impl WasmModbusClient {
+    // ── Status ───────────────────────────────────────────────────────────────
+
+    /// Returns `true` when the underlying WebSocket is open.
+    pub fn is_connected(&self) -> bool {
+        self.inner.borrow().is_connected()
+    }
+
+    /// Returns `true` if there are in-flight Modbus requests.
+    pub fn has_pending_requests(&self) -> bool {
+        self.inner.borrow().has_pending_requests()
     }
 
     // ── Coil operations ──────────────────────────────────────────────────────
@@ -346,10 +402,10 @@ impl WasmModbusClient {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 impl WasmModbusClient {
-    fn alloc_txn(&mut self) -> u16 {
-        let id = self.next_txn;
-        // Wrap around at u16::MAX, skipping 0 which some devices treat as broadcast.
-        self.next_txn = self.next_txn.wrapping_add(1).max(1);
+    fn alloc_txn(&self) -> u16 {
+        let mut next = self.next_txn.borrow_mut();
+        let id = *next;
+        *next = next.wrapping_add(1).max(1);
         id
     }
 

@@ -33,4 +33,4 @@ if ! command -v chromedriver >/dev/null 2>&1; then
 fi
 
 echo "[wasm-browser-tests] Running mbus-ffi wasm browser tests (headless Chrome)..."
-wasm-pack test --headless --chrome --features wasm,full --test wasm_e2e
+wasm-pack test --headless --chrome --features wasm-full --test wasm_e2e
