@@ -64,10 +64,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install maturin + test dependencies
-        run: pip install maturin pytest pytest-asyncio
+        run: pip install maturin pytest pytest-asyncio mypy
 
       - name: Build Python wheel
-        run: maturin build --features python,python-gateway,coils,registers,discrete-inputs,fifo,file-record,diagnostics,error-trait
+        run: maturin build --features python-full
         working-directory: mbus-ffi
 
       - name: Install built wheel
@@ -75,6 +75,9 @@ jobs:
           WHEEL_PATH=$(find . -path '*/target/wheels/*.whl' | head -1)
           test -n "$WHEEL_PATH"
           pip install "$WHEEL_PATH"
+
+      - name: Type-check Python stubs
+        run: mypy mbus-ffi/python/modbus_rs/_modbus_rs.pyi --strict
 
       - name: Run Python tests
         run: pytest

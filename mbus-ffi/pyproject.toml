@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "modbus-rs"
 version = "0.14.0"
 description = "Fast, full-featured Modbus TCP + Serial bindings for Python — powered by Rust"
-readme = "PYPI_README.md"
+readme = "python/README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 keywords = ["modbus", "rtu", "tcp", "serial", "industrial", "automation"]
@@ -34,7 +34,7 @@ Commercial-Licensing = "https://github.com/Raghava-Ch/modbus-rs?tab=License-1-ov
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
-features = ["python", "full"]
+features = ["python-full"]
 module-name = "modbus_rs._modbus_rs"
 python-source = "python"
 # Strip debug symbols in release builds to reduce wheel size.

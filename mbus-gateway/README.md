@@ -39,9 +39,9 @@ C and Python bindings for the gateway live in the `mbus-ffi` crate:
   `target/mbus-ffi/include/modbus_rs_gateway.h`. A runnable demo lives at
   `mbus-ffi/examples/c_gateway_demo/`.
 * **Python** — enable the `python-gateway` feature on `mbus-ffi` (build with
-  `maturin develop --features python,python-gateway,full`). The bindings
+  `maturin develop --features python-client,python-gateway` or `--features python-full`). The bindings
   expose `modbus_rs.TcpGateway` (sync) and `modbus_rs.AsyncTcpGateway`
-  (asyncio); demos live in `mbus-ffi/examples/python_gateway/`.
+  (asyncio); demos live in `mbus-ffi/python/examples/python_gateway/`.
 
 ## Quick Start — Sync Gateway (no_std-compatible)
 

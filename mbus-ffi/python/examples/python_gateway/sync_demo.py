@@ -1,22 +1,19 @@
-"""Async Modbus TCP gateway demo.
+"""Sync Modbus TCP gateway demo.
 
 Pipeline:
 
-    raw socket client ──▶ AsyncTcpGateway (127.0.0.1:5021) ──▶ AsyncTcpServer
-
-The downstream Modbus server runs on its own asyncio loop in a background
-thread to keep the test client free of cross-runtime interference.
+    raw socket client ──▶ TcpGateway (127.0.0.1:5020) ──▶ AsyncTcpServer (127.0.0.1:<free>)
 
 Run::
     # 1. Ensure you are using the virtual environment
     source .venv/bin/activate
 
-    # 2. Build the python extension natively (without the `full` feature)
+    # 2. Build the python extension natively
     cd mbus-ffi 
-    maturin develop --features python,python-gateway
+    maturin develop --features python-client,python-gateway
 
     # 3. Run the demo script
-    python examples/python_gateway/async_demo.py
+    python examples/python_gateway/sync_demo.py
 """
 
 from __future__ import annotations
@@ -32,7 +29,7 @@ from contextlib import closing
 import modbus_rs
 
 
-GATEWAY_PORT = 5021
+GATEWAY_PORT = 5020
 UNIT_ID = 1
 
 
@@ -59,6 +56,7 @@ def wait_port(host: str, port: int, timeout: float = 3.0) -> None:
 
 
 def start_downstream(port: int) -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
+    """Spin up an EchoApp AsyncTcpServer in a background thread."""
     loop = asyncio.new_event_loop()
     ready = threading.Event()
 
@@ -77,6 +75,7 @@ def start_downstream(port: int) -> tuple[asyncio.AbstractEventLoop, threading.Th
         try:
             loop.run_until_complete(_run())
         except RuntimeError:
+            # loop.stop() was called; expected during shutdown
             pass
         except Exception as exc:  # noqa: BLE001
             print(f"[downstream] event loop error: {exc!r}", file=sys.stderr)
@@ -108,39 +107,34 @@ def send_read_holding_registers(host: str, port: int, unit: int, start: int, qty
         return body
 
 
-async def amain() -> None:
+def main() -> None:
     downstream_port = free_port()
     print(f"Starting downstream Modbus server on 127.0.0.1:{downstream_port} (unit={UNIT_ID})")
-    server_loop, server_thread = await asyncio.get_event_loop().run_in_executor(
-        None, start_downstream, downstream_port
-    )
+    server_loop, server_thread = start_downstream(downstream_port)
 
-    print(f"Starting AsyncTcpGateway on 127.0.0.1:{GATEWAY_PORT}")
-    gw = modbus_rs.AsyncTcpGateway(f"127.0.0.1:{GATEWAY_PORT}")
+    print(f"Starting sync TcpGateway on 127.0.0.1:{GATEWAY_PORT}")
+    gw = modbus_rs.TcpGateway(
+        f"127.0.0.1:{GATEWAY_PORT}",
+        event_handler=modbus_rs.GatewayEventHandler(),
+    )
     ch = gw.add_tcp_downstream("127.0.0.1", downstream_port)
     gw.add_unit_route(unit=UNIT_ID, channel=ch)
 
-    gw_task = asyncio.ensure_future(gw.serve_forever())
-    await asyncio.get_event_loop().run_in_executor(
-        None, wait_port, "127.0.0.1", GATEWAY_PORT, 3.0
-    )
+    gw_thread = threading.Thread(target=gw.serve_forever, daemon=True)
+    gw_thread.start()
+    wait_port("127.0.0.1", GATEWAY_PORT)
 
     try:
-        body = await asyncio.get_event_loop().run_in_executor(
-            None, send_read_holding_registers, "127.0.0.1", GATEWAY_PORT, UNIT_ID, 0, 5
+        body = send_read_holding_registers(
+            "127.0.0.1", GATEWAY_PORT, unit=UNIT_ID, start=10, qty=4
         )
-        regs = struct.unpack(">HHHHH", body[2:12])
-        print(f"OK: gateway returned registers {list(regs)} (expected [0, 1, 2, 3, 4])")
+        regs = struct.unpack(">HHHH", body[2:10])
+        print(f"OK: gateway returned registers {list(regs)} (expected [10, 11, 12, 13])")
     finally:
         gw.stop()
-        try:
-            await asyncio.wait_for(gw_task, timeout=3)
-        except asyncio.TimeoutError:
-            gw_task.cancel()
-        await asyncio.get_event_loop().run_in_executor(
-            None, stop_loop, server_loop, server_thread
-        )
+        gw_thread.join(timeout=3)
+        stop_loop(server_loop, server_thread)
 
 
 if __name__ == "__main__":
-    asyncio.run(amain())
+    main()

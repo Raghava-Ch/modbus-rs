@@ -21,13 +21,13 @@ pip install modbus-rs
 ```python
 import modbus_rs
 
-with modbus_rs.TcpClient("192.168.1.10", port=502, unit_id=1) as client:
-    client.connect()
+with modbus_rs.TcpTransport.connect("192.168.1.10", port=502) as transport:
+    client = transport.create_client(unit_id=1)
     regs = client.read_holding_registers(0, 10)
     print(regs)                     # [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    client.write_register(0, 0xFF)
+    client.write_coil(0, True)
     coils = client.read_coils(0, 8)
-    print(coils)                    # [False, False, ...]
+    print(coils)                    # [True, False, ...]
 ```
 
 ### Quick Start — Asyncio TCP client
@@ -37,7 +37,8 @@ import asyncio
 import modbus_rs
 
 async def main():
-    async with modbus_rs.AsyncTcpClient("192.168.1.10", unit_id=1) as client:
+    async with await modbus_rs.AsyncTcpTransport.connect("192.168.1.10") as transport:
+        client = transport.create_client(unit_id=1)
         regs = await client.read_holding_registers(0, 10)
         print(regs)
 
@@ -49,8 +50,8 @@ asyncio.run(main())
 ```python
 import modbus_rs
 
-with modbus_rs.SerialClient("/dev/ttyUSB0", baud_rate=9600, unit_id=1) as client:
-    client.connect()
+with modbus_rs.RtuTransport.open("/dev/ttyUSB0", baud_rate=9600) as transport:
+    client = transport.create_client(unit_id=1)
     regs = client.read_holding_registers(0, 5)
     print(regs)
 ```
@@ -102,6 +103,7 @@ cd mbus-ffi && maturin build --release --features python-full
 
 ```bash
 pip install pytest pytest-asyncio
+source .venv/bin/activate
 pytest mbus-ffi/tests/python/ -v
 ```
 
@@ -112,7 +114,7 @@ Enable the optional `python-gateway` feature to expose `TcpGateway` (sync) and
 to one or more downstream Modbus TCP servers.
 
 ```bash
-cd mbus-ffi && maturin develop --features python-full,python-gateway
+cd mbus-ffi && maturin develop --features python-full
 ```
 
 Minimal sync example:
@@ -126,8 +128,8 @@ gw.add_unit_route(unit=1, channel=ch)
 gw.serve_forever()  # call gw.stop() from another thread to exit
 ```
 
-Runnable demos: [`examples/python_gateway/sync_demo.py`](examples/python_gateway/sync_demo.py)
-and [`examples/python_gateway/async_demo.py`](examples/python_gateway/async_demo.py).
+Runnable demos: [`python/examples/python_gateway/sync_demo.py`](python/examples/python_gateway/sync_demo.py)
+and [`python/examples/python_gateway/async_demo.py`](python/examples/python_gateway/async_demo.py).
 
 > The `event_handler=GatewayEventHandler()` constructor argument is currently
 > accepted but not invoked — the underlying async gateway server has no event
@@ -538,18 +540,19 @@ users do not need a Rust toolchain.
 ### Quick start (JavaScript)
 
 ```js
-import { AsyncTcpModbusClient } from 'modbus-rs';
+import { AsyncTcpTransport } from 'modbus-rs';
 
-const client = await AsyncTcpModbusClient.connect({
+const transport = await AsyncTcpTransport.connect({
   host: '192.168.1.10',
   port: 502,
-  unitId: 1,
   timeoutMs: 2000,
 });
 
+const client = transport.createClient({ unitId: 1 });
+
 const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
 await client.writeMultipleRegisters({ address: 10, values: [1, 2, 3, 4] });
-await client.close();
+await transport.close();
 ```
 
 📖 **[Full Node.js Binding Documentation →](../documentation/nodejs_bindings.md)**

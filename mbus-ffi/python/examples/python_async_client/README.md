@@ -1,6 +1,6 @@
 # python_async_client — Modbus Asyncio Client Example
 
-Demonstrates the fully-async `AsyncTcpClient` API including:
+Demonstrates the fully-async `AsyncTcpTransport` and `AsyncTcpModbusClient` API including:
 
 - Concurrent reads via `asyncio.gather` (read IR + HR + coils + DI + FIFO simultaneously)
 - All write operations (`write_register`, `write_registers`, `write_coil`, `mask_write_register`)
@@ -20,7 +20,7 @@ cd /path/to/modbus-rs
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 cd mbus-ffi
-maturin develop --features python,full
+maturin develop --features python-full
 ```
 
 ## Usage
@@ -77,7 +77,8 @@ All three requests are dispatched at the same time; results arrive in order.
 ### Context manager (auto-connect / auto-disconnect)
 
 ```python
-async with modbus_rs.AsyncTcpClient("192.168.1.10", port=502, unit_id=1) as client:
+async with await modbus_rs.AsyncTcpTransport.connect("192.168.1.10", port=502) as transport:
+    client = transport.create_client(unit_id=1)
     regs = await client.read_holding_registers(0, 10)
 ```
 

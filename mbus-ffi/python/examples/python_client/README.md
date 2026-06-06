@@ -31,7 +31,7 @@ cd /path/to/modbus-rs
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 cd mbus-ffi
-maturin develop --features python,full
+maturin develop --features python-full
 ```
 
 ## Usage

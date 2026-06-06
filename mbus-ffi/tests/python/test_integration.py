@@ -1,5 +1,5 @@
 """
-test_server.py — Tests for server-side Python bindings.
+test_integration.py — Integration tests for Python bindings.
 
 These tests do not require real hardware.  They spin up a local AsyncTcpServer
 on a loopback port and exercise it with a TcpClient.
@@ -214,10 +214,11 @@ def serial_server_ports(serial_loopback_ports):
     probe_err = None
     for _ in range(8):
         try:
-            probe = modbus_rs.SerialClient(
-                client_port, baud_rate=9600, unit_id=1, mode="rtu", timeout_ms=300
+            transport = modbus_rs.RtuTransport.open(
+                client_port, baud_rate=9600, timeout_ms=300
             )
-            probe.connect()
+            probe = transport.create_client(unit_id=1)
+            probe.read_holding_registers(0, 1)
             probe_err = None
             break
         except Exception as exc:  # noqa: BLE001 - we want exact skip reason below
@@ -236,50 +237,68 @@ def serial_server_ports(serial_loopback_ports):
 
 class TestTcpClientIntegration:
     def test_read_holding_registers_all_zeros(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             regs = client.read_holding_registers(0, 5)
         assert regs == [0, 0, 0, 0, 0]
 
     def test_write_then_read_register(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_register(10, 0xABCD)
             regs = client.read_holding_registers(10, 1)
         assert regs == [0xABCD]
 
     def test_read_input_registers(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             regs = client.read_input_registers(0, 4)
         assert regs == [0, 1, 2, 3]
 
     def test_write_coil_and_read_back(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_coil(5, True)
             coils = client.read_coils(5, 1)
         assert coils == [True]
 
     def test_write_multiple_coils(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_coils(0, [True, False, True])
             coils = client.read_coils(0, 3)
         assert coils == [True, False, True]
 
     def test_write_multiple_registers(self, server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_registers(20, [1, 2, 3])
             regs = client.read_holding_registers(20, 3)
         assert regs == [1, 2, 3]
 
     def test_connection_refused_raises(self):
         port = _free_port()  # nothing listening here
-        client = modbus_rs.TcpClient("127.0.0.1", port=port, unit_id=1)
         with pytest.raises(modbus_rs.ModbusError):
-            client.connect()
+            modbus_rs.TcpTransport.connect("127.0.0.1", port=port)
+
+    def test_multi_client_same_transport(self, server_port):
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client1 = transport.create_client(unit_id=1)
+            client2 = transport.create_client(unit_id=2)
+
+            client1.write_register(15, 99)
+            assert client1.read_holding_registers(15, 1) == [99]
+
+            # Set a low timeout so we don't block the tests
+            transport.set_request_timeout(200)
+            with pytest.raises(modbus_rs.ModbusError):
+                client2.read_holding_registers(15, 1)
+
+    def test_create_client_invalid_unit_id(self, server_port):
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            # Unit ID must be in valid Modbus range (1-247)
+            with pytest.raises(modbus_rs.ModbusError):
+                transport.create_client(unit_id=255)
 
 
 # ---------------------------------------------------------------------------
@@ -289,30 +308,42 @@ class TestTcpClientIntegration:
 @pytest.mark.asyncio
 class TestAsyncTcpClientIntegration:
     async def test_read_holding_registers(self, server_port):
-        client = modbus_rs.AsyncTcpClient("127.0.0.1", port=server_port, unit_id=1)
-        await client.connect()
-        regs = await client.read_holding_registers(0, 5)
+        async with await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
+            regs = await client.read_holding_registers(0, 5)
         assert regs == [0, 0, 0, 0, 0]
 
     async def test_write_then_read(self, server_port):
-        client = modbus_rs.AsyncTcpClient("127.0.0.1", port=server_port, unit_id=1)
-        await client.connect()
-        await client.write_register(7, 42)
-        regs = await client.read_holding_registers(7, 1)
+        async with await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client = transport.create_client(unit_id=1)
+            await client.write_register(7, 42)
+            regs = await client.read_holding_registers(7, 1)
         assert regs == [42]
 
     async def test_connection_refused_raises(self):
         port = _free_port()
-        client = modbus_rs.AsyncTcpClient("127.0.0.1", port=port, unit_id=1)
         with pytest.raises(modbus_rs.ModbusError):
-            await client.connect()
+            await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=port)
 
-    async def test_async_with_returns_client_instance(self, server_port):
-        outer = modbus_rs.AsyncTcpClient("127.0.0.1", port=server_port, unit_id=1)
-        async with outer as entered:
-            assert entered is outer
-            regs = await entered.read_holding_registers(0, 1)
+    async def test_async_with_returns_transport_instance(self, server_port):
+        transport = await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=server_port)
+        async with transport as entered:
+            assert entered is transport
+            client = entered.create_client(unit_id=1)
+            regs = await client.read_holding_registers(0, 1)
         assert regs == [0]
+
+    async def test_multi_client_same_transport(self, server_port):
+        async with await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=server_port) as transport:
+            client1 = transport.create_client(unit_id=1)
+            client2 = transport.create_client(unit_id=2)
+
+            await client1.write_register(15, 99)
+            assert await client1.read_holding_registers(15, 1) == [99]
+
+            transport.set_request_timeout(200)
+            with pytest.raises(modbus_rs.ModbusError):
+                await client2.read_holding_registers(15, 1)
 
 
 @pytest.mark.asyncio
@@ -332,8 +363,8 @@ class TestDispatcherExceptionMapping:
         port = _free_port()
         _start_async_tcp_server_in_thread(ValueErrorApp(), port)
 
-        with modbus_rs.TcpClient("127.0.0.1", port=port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=port) as transport:
+            client = transport.create_client(unit_id=1)
             with pytest.raises(modbus_rs.ModbusDeviceException) as exc:
                 client.read_holding_registers(0, 1)
 
@@ -396,21 +427,21 @@ def async_server_port():
 
 class TestAsyncHandlersIntegration:
     def test_async_read_holding_registers(self, async_server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=async_server_port) as transport:
+            client = transport.create_client(unit_id=1)
             regs = client.read_holding_registers(0, 5)
         assert regs == [0, 0, 0, 0, 0]
 
     def test_async_write_then_read_register(self, async_server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=async_server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_register(10, 0xABCD)
             regs = client.read_holding_registers(10, 1)
         assert regs == [0xABCD]
 
     def test_async_write_coil_and_read_back(self, async_server_port):
-        with modbus_rs.TcpClient("127.0.0.1", port=async_server_port, unit_id=1) as client:
-            client.connect()
+        with modbus_rs.TcpTransport.connect("127.0.0.1", port=async_server_port) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_coil(5, True)
             coils = client.read_coils(5, 1)
         assert coils == [True]
@@ -422,32 +453,61 @@ class TestAsyncHandlersIntegration:
 
 class TestSerialClientIntegration:
     def test_sync_serial_write_then_read_register(self, serial_server_ports):
-        with modbus_rs.SerialClient(
-            serial_server_ports, baud_rate=9600, unit_id=1, mode="rtu"
-        ) as client:
-            client.connect()
+        with modbus_rs.RtuTransport.open(
+            serial_server_ports, baud_rate=9600
+        ) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_register(10, 0x1234)
             regs = client.read_holding_registers(10, 1)
         assert regs == [0x1234]
 
     def test_sync_serial_write_then_read_coil(self, serial_server_ports):
-        with modbus_rs.SerialClient(
-            serial_server_ports, baud_rate=9600, unit_id=1, mode="rtu"
-        ) as client:
-            client.connect()
+        with modbus_rs.RtuTransport.open(
+            serial_server_ports, baud_rate=9600
+        ) as transport:
+            client = transport.create_client(unit_id=1)
             client.write_coil(3, True)
             coils = client.read_coils(3, 1)
         assert coils == [True]
+
+    def test_sync_serial_multi_client_same_transport(self, serial_server_ports):
+        with modbus_rs.RtuTransport.open(
+            serial_server_ports, baud_rate=9600
+        ) as transport:
+            client1 = transport.create_client(unit_id=1)
+            client2 = transport.create_client(unit_id=2)
+
+            client1.write_register(25, 123)
+            assert client1.read_holding_registers(25, 1) == [123]
+
+            transport.set_request_timeout(200)
+            with pytest.raises(modbus_rs.ModbusError):
+                client2.read_holding_registers(25, 1)
 
 
 @pytest.mark.asyncio
 class TestAsyncSerialClientIntegration:
     async def test_async_serial_write_then_read_register(self, serial_server_ports):
-        outer = modbus_rs.AsyncSerialClient(
-            serial_server_ports, baud_rate=9600, unit_id=1, mode="rtu"
+        transport = await modbus_rs.AsyncRtuTransport.open(
+            serial_server_ports, baud_rate=9600
         )
-        async with outer as client:
-            assert client is outer
+        async with transport:
+            client = transport.create_client(unit_id=1)
             await client.write_register(11, 77)
             regs = await client.read_holding_registers(11, 1)
         assert regs == [77]
+
+    async def test_async_serial_multi_client_same_transport(self, serial_server_ports):
+        transport = await modbus_rs.AsyncRtuTransport.open(
+            serial_server_ports, baud_rate=9600
+        )
+        async with transport:
+            client1 = transport.create_client(unit_id=1)
+            client2 = transport.create_client(unit_id=2)
+
+            await client1.write_register(25, 123)
+            assert await client1.read_holding_registers(25, 1) == [123]
+
+            transport.set_request_timeout(200)
+            with pytest.raises(modbus_rs.ModbusError):
+                await client2.read_holding_registers(25, 1)

@@ -1,7 +1,9 @@
+#[cfg(feature = "python-client")]
 pub mod client;
 pub mod errors;
 #[cfg(feature = "python-gateway")]
 pub mod gateway;
+#[cfg(feature = "python-server")]
 pub mod server;
 
 use mbus_core::transport::SerialMode as TransportSerialMode;
@@ -70,17 +72,29 @@ pub fn _modbus_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySerialMode>()?;
 
     // Client classes
-    m.add_class::<client::tcp::TcpClient>()?;
-    m.add_class::<client::tcp::AsyncTcpClient>()?;
-    m.add_class::<client::serial::SerialClient>()?;
-    m.add_class::<client::serial::AsyncSerialClient>()?;
+    #[cfg(feature = "python-client")]
+    {
+        m.add_class::<client::tcp::AsyncTcpTransport>()?;
+        m.add_class::<client::tcp::AsyncTcpModbusClient>()?;
+        m.add_class::<client::tcp::TcpTransport>()?;
+        m.add_class::<client::tcp::TcpModbusClient>()?;
+        m.add_class::<client::serial::AsyncRtuTransport>()?;
+        m.add_class::<client::serial::AsyncAsciiTransport>()?;
+        m.add_class::<client::serial::AsyncSerialModbusClient>()?;
+        m.add_class::<client::serial::RtuTransport>()?;
+        m.add_class::<client::serial::AsciiTransport>()?;
+        m.add_class::<client::serial::SerialModbusClient>()?;
+    }
 
     // Server classes
-    m.add_class::<server::app::ModbusApp>()?;
-    m.add_class::<server::tcp::AsyncTcpServer>()?;
-    m.add_class::<server::tcp::TcpServer>()?;
-    m.add_class::<server::serial::AsyncSerialServer>()?;
-    m.add_class::<server::serial::SerialServer>()?;
+    #[cfg(feature = "python-server")]
+    {
+        m.add_class::<server::app::ModbusApp>()?;
+        m.add_class::<server::tcp::AsyncTcpServer>()?;
+        m.add_class::<server::tcp::TcpServer>()?;
+        m.add_class::<server::serial::AsyncSerialServer>()?;
+        m.add_class::<server::serial::SerialServer>()?;
+    }
 
     // Gateway classes (feature = "python-gateway")
     #[cfg(feature = "python-gateway")]

@@ -1,23 +1,30 @@
-"""Async Modbus TCP gateway event handler demo.
+"""Async Modbus TCP gateway demo.
 
-This script demonstrates how to subclass `GatewayEventHandler` to receive 
-telemetry events from the underlying Rust async gateway server.
+Pipeline:
+
+    raw socket client ──▶ AsyncTcpGateway (127.0.0.1:5021) ──▶ AsyncTcpServer
+
+The downstream Modbus server runs on its own asyncio loop in a background
+thread to keep the test client free of cross-runtime interference.
 
 Run::
     # 1. Ensure you are using the virtual environment
     source .venv/bin/activate
 
-    # 2. Build the python extension natively (without the `full` feature)
+    # 2. Build the python extension natively
     cd mbus-ffi 
-    maturin develop --features python,python-gateway
+    maturin develop --features python-client,python-gateway
 
     # 3. Run the demo script
-    python examples/python_gateway/event_handler_demo.py
+    python examples/python_gateway/async_demo.py
 """
+
+from __future__ import annotations
 
 import asyncio
 import socket
 import struct
+import sys
 import threading
 import time
 from contextlib import closing
@@ -25,25 +32,8 @@ from contextlib import closing
 import modbus_rs
 
 
-GATEWAY_PORT = 5022
+GATEWAY_PORT = 5021
 UNIT_ID = 1
-
-
-class LoggingEventHandler(modbus_rs.GatewayEventHandler):
-    def on_forward(self, session_id: int, unit_id: int, channel_idx: int) -> None:
-        print(f"[EVENT] on_forward: session={session_id}, unit={unit_id}, channel={channel_idx}")
-
-    def on_response_returned(self, session_id: int, upstream_txn: int) -> None:
-        print(f"[EVENT] on_response_returned: session={session_id}, txn={upstream_txn}")
-
-    def on_routing_miss(self, session_id: int, unit_id: int) -> None:
-        print(f"[EVENT] on_routing_miss: session={session_id}, unit={unit_id}")
-
-    def on_downstream_timeout(self, session_id: int, internal_txn: int) -> None:
-        print(f"[EVENT] on_downstream_timeout: session={session_id}, internal_txn={internal_txn}")
-
-    def on_upstream_disconnect(self, session_id: int) -> None:
-        print(f"[EVENT] on_upstream_disconnect: session={session_id}")
 
 
 class EchoApp(modbus_rs.ModbusApp):
@@ -79,6 +69,8 @@ def start_downstream(port: int) -> tuple[asyncio.AbstractEventLoop, threading.Th
             await server.serve_forever()
         except asyncio.CancelledError:
             pass
+        except Exception as exc:  # noqa: BLE001 — demo logs and exits
+            print(f"[downstream] server stopped: {exc!r}", file=sys.stderr)
 
     def _thread() -> None:
         asyncio.set_event_loop(loop)
@@ -86,6 +78,8 @@ def start_downstream(port: int) -> tuple[asyncio.AbstractEventLoop, threading.Th
             loop.run_until_complete(_run())
         except RuntimeError:
             pass
+        except Exception as exc:  # noqa: BLE001
+            print(f"[downstream] event loop error: {exc!r}", file=sys.stderr)
 
     t = threading.Thread(target=_thread, daemon=True)
     t.start()
@@ -104,8 +98,6 @@ def send_read_holding_registers(host: str, port: int, unit: int, start: int, qty
         req = struct.pack(">HHHBBHH", 1, 0, 6, unit, 3, start, qty)
         s.sendall(req)
         hdr = s.recv(7)
-        if len(hdr) < 7:
-            return b""
         _txn, _proto, length, _unit = struct.unpack(">HHHB", hdr)
         body = b""
         while len(body) < length - 1:
@@ -123,12 +115,8 @@ async def amain() -> None:
         None, start_downstream, downstream_port
     )
 
-    print(f"Starting AsyncTcpGateway on 127.0.0.1:{GATEWAY_PORT} with LoggingEventHandler")
-    
-    # Pass our custom event handler instance to the gateway
-    handler = LoggingEventHandler()
-    gw = modbus_rs.AsyncTcpGateway(f"127.0.0.1:{GATEWAY_PORT}", event_handler=handler)
-    
+    print(f"Starting AsyncTcpGateway on 127.0.0.1:{GATEWAY_PORT}")
+    gw = modbus_rs.AsyncTcpGateway(f"127.0.0.1:{GATEWAY_PORT}")
     ch = gw.add_tcp_downstream("127.0.0.1", downstream_port)
     gw.add_unit_route(unit=UNIT_ID, channel=ch)
 
@@ -138,21 +126,11 @@ async def amain() -> None:
     )
 
     try:
-        # Send a valid request
-        print("\n--- Sending valid request (Unit 1) ---")
-        await asyncio.get_event_loop().run_in_executor(
+        body = await asyncio.get_event_loop().run_in_executor(
             None, send_read_holding_registers, "127.0.0.1", GATEWAY_PORT, UNIT_ID, 0, 5
         )
-        
-        # Send a request with a routing miss (Unit 99)
-        print("\n--- Sending request with routing miss (Unit 99) ---")
-        await asyncio.get_event_loop().run_in_executor(
-            None, send_read_holding_registers, "127.0.0.1", GATEWAY_PORT, 99, 0, 5
-        )
-        
-        # Give events a moment to print
-        await asyncio.sleep(0.5)
-        print("\nDemo complete. Shutting down...")
+        regs = struct.unpack(">HHHHH", body[2:12])
+        print(f"OK: gateway returned registers {list(regs)} (expected [0, 1, 2, 3, 4])")
     finally:
         gw.stop()
         try:
@@ -162,6 +140,7 @@ async def amain() -> None:
         await asyncio.get_event_loop().run_in_executor(
             None, stop_loop, server_loop, server_thread
         )
+
 
 if __name__ == "__main__":
     asyncio.run(amain())

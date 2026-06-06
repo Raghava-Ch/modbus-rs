@@ -52,17 +52,35 @@ class TestExceptionHierarchy:
 # ---------------------------------------------------------------------------
 
 class TestClassImports:
-    def test_tcp_client_class(self):
-        assert isinstance(modbus_rs.TcpClient, type)
+    def test_tcp_transport_class(self):
+        assert isinstance(modbus_rs.TcpTransport, type)
 
-    def test_async_tcp_client_class(self):
-        assert isinstance(modbus_rs.AsyncTcpClient, type)
+    def test_async_tcp_transport_class(self):
+        assert isinstance(modbus_rs.AsyncTcpTransport, type)
 
-    def test_serial_client_class(self):
-        assert isinstance(modbus_rs.SerialClient, type)
+    def test_rtu_transport_class(self):
+        assert isinstance(modbus_rs.RtuTransport, type)
 
-    def test_async_serial_client_class(self):
-        assert isinstance(modbus_rs.AsyncSerialClient, type)
+    def test_async_rtu_transport_class(self):
+        assert isinstance(modbus_rs.AsyncRtuTransport, type)
+
+    def test_ascii_transport_class(self):
+        assert isinstance(modbus_rs.AsciiTransport, type)
+
+    def test_async_ascii_transport_class(self):
+        assert isinstance(modbus_rs.AsyncAsciiTransport, type)
+
+    def test_tcp_modbus_client_class(self):
+        assert isinstance(modbus_rs.TcpModbusClient, type)
+
+    def test_async_tcp_modbus_client_class(self):
+        assert isinstance(modbus_rs.AsyncTcpModbusClient, type)
+
+    def test_serial_modbus_client_class(self):
+        assert isinstance(modbus_rs.SerialModbusClient, type)
+
+    def test_async_serial_modbus_client_class(self):
+        assert isinstance(modbus_rs.AsyncSerialModbusClient, type)
 
     def test_modbus_app_class(self):
         assert isinstance(modbus_rs.ModbusApp, type)
@@ -86,7 +104,11 @@ class TestClassImports:
 
 class TestAll:
     _EXPECTED = {
-        "TcpClient", "AsyncTcpClient", "SerialClient", "AsyncSerialClient",
+        "TcpTransport", "AsyncTcpTransport",
+        "RtuTransport", "AsyncRtuTransport",
+        "AsciiTransport", "AsyncAsciiTransport",
+        "TcpModbusClient", "AsyncTcpModbusClient",
+        "SerialModbusClient", "AsyncSerialModbusClient",
         "ModbusApp",
         "AsyncTcpServer", "TcpServer", "AsyncSerialServer", "SerialServer",
         "ModbusError", "ModbusTimeout", "ModbusConnectionError",
@@ -137,24 +159,24 @@ class TestModbusAppSubclass:
 # ---------------------------------------------------------------------------
 
 class TestConstructorValidation:
-    def test_tcp_client_bad_port_does_not_panic(self):
+    def test_tcp_transport_bad_port_does_not_panic(self):
         # port=0 is technically valid per TCP, but verify no panic
         try:
-            modbus_rs.TcpClient("127.0.0.1", port=0)
+            modbus_rs.TcpTransport.connect("127.0.0.1", port=0)
         except modbus_rs.ModbusError:
             pass
         except Exception:
             pass  # any exception is fine; the point is no panic/segfault
 
-    def test_serial_client_bad_mode_raises_config_error(self):
+    def test_rtu_transport_bad_parity_raises_config_error(self):
         import pytest
         with pytest.raises(modbus_rs.ModbusConfigError):
-            modbus_rs.SerialClient("/dev/ttyUSB0", mode="invalid_mode")
+            modbus_rs.RtuTransport.open("/dev/ttyUSB0", parity="invalid_parity")
 
-    def test_async_serial_client_bad_mode_raises_config_error(self):
+    def test_ascii_transport_bad_parity_raises_config_error(self):
         import pytest
         with pytest.raises(modbus_rs.ModbusConfigError):
-            modbus_rs.AsyncSerialClient("/dev/ttyUSB0", mode="invalid_mode")
+            modbus_rs.AsciiTransport.open("/dev/ttyUSB0", parity="invalid_parity")
 
     def test_serial_server_bad_mode_raises_config_error(self):
         import pytest

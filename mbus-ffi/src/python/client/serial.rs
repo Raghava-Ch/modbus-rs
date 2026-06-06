@@ -201,54 +201,49 @@ fn make_inner(
     Ok(client)
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Sync Serial client
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Sync RtuTransport ────────────────────────────────────────────────────────
 
-/// Synchronous (blocking) Modbus serial client (RTU or ASCII).
-///
-/// ```python
-/// with SerialClient("/dev/ttyUSB0", baud_rate=9600, unit_id=1) as client:
-///     regs = client.read_holding_registers(0, 5)
-/// ```
-#[pyclass(name = "SerialClient")]
-pub struct SerialClient {
-    inner: InnerAsyncSerialClient,
-    unit_id: u8,
+#[pyclass(name = "RtuTransport")]
+pub struct RtuTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncSerialClient>>>>,
+}
+
+impl RtuTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncSerialClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
 }
 
 #[pymethods]
-impl SerialClient {
+impl RtuTransport {
     /// Create a new sync serial client.
     ///
     /// :param port: Serial port path (e.g. ``"/dev/ttyUSB0"`` or ``"COM3"``).
     /// :param baud_rate: Baud rate in bits/s (default 9600).
-    /// :param unit_id: Modbus unit / slave ID (1–247, default 1).
-    /// :param mode: Framing mode as ``"rtu"``/``"ascii"`` or ``SerialMode.RTU``/``SerialMode.ASCII``.
     /// :param timeout_ms: Per-request timeout in milliseconds (default 1000).
     /// :param data_bits: Data bits per serial character (5/6/7/8, default 8).
     /// :param parity: Parity mode: ``"none"`` (default), ``"even"``, or ``"odd"``.
     /// :param stop_bits: Stop bit count (1 or 2, default 1).
     /// :param retry_attempts: Number of client retry attempts (default 3).
-    #[new]
-    #[pyo3(signature = (port, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[classmethod]
+    #[pyo3(signature = (port, baud_rate=9600, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    fn open(
+        _cls: &Bound<'_, pyo3::types::PyType>,
         py: Python<'_>,
         port: &str,
         baud_rate: u32,
-        unit_id: u8,
-        mode: Option<Py<PyAny>>,
         timeout_ms: u64,
         data_bits: u8,
         parity: &str,
         stop_bits: u8,
         retry_attempts: u8,
     ) -> PyResult<Self> {
-        let serial_mode = match mode {
-            Some(mode) => crate::python::parse_serial_mode_any(mode.bind(py))?,
-            None => SerialMode::Rtu,
-        };
         let data_bits = parse_data_bits(data_bits)?;
         let parity = parse_parity(parity)?;
         let stop_bits = parse_stop_bits(stop_bits)?;
@@ -256,30 +251,41 @@ impl SerialClient {
             port,
             baud_rate,
             timeout_ms,
-            serial_mode,
+            SerialMode::Rtu,
             data_bits,
             parity,
             stop_bits,
             retry_attempts,
         )?;
-        Ok(Self { inner, unit_id })
-    }
-
-    fn connect(&self, py: Python<'_>) -> PyResult<()> {
         let rt = get_runtime();
-        py.detach(|| rt.block_on(self.inner.connect()).map_err(async_error_to_py))
-    }
-
-    fn disconnect(&self, py: Python<'_>) -> PyResult<()> {
-        let rt = get_runtime();
-        py.detach(|| {
-            rt.block_on(self.inner.disconnect())
-                .map_err(async_error_to_py)
+        py.detach(|| rt.block_on(inner.connect()).map_err(async_error_to_py))?;
+        Ok(Self {
+            inner: Arc::new(std::sync::Mutex::new(Some(Arc::new(inner)))),
         })
     }
 
-    fn has_pending_requests(&self) -> bool {
-        self.inner.has_pending_requests()
+    fn create_client(&self, unit_id: u8) -> PyResult<SerialModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(SerialModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close(&self, py: Python<'_>) -> PyResult<()> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        if let Some(inner) = client {
+            let rt = get_runtime();
+            py.detach(|| rt.block_on(inner.disconnect()).map_err(async_error_to_py))?;
+        }
+        Ok(())
     }
 
     fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -293,10 +299,399 @@ impl SerialClient {
         _exc_val: Option<Bound<'_, PyAny>>,
         _exc_tb: Option<Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
-        self.disconnect(py)?;
+        self.close(py)?;
         Ok(false)
     }
 
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Sync AsciiTransport ──────────────────────────────────────────────────────
+
+#[pyclass(name = "AsciiTransport")]
+pub struct AsciiTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncSerialClient>>>>,
+}
+
+impl AsciiTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncSerialClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
+}
+
+#[pymethods]
+impl AsciiTransport {
+    #[classmethod]
+    #[pyo3(signature = (port, baud_rate=9600, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[allow(clippy::too_many_arguments)]
+    fn open(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python<'_>,
+        port: &str,
+        baud_rate: u32,
+        timeout_ms: u64,
+        data_bits: u8,
+        parity: &str,
+        stop_bits: u8,
+        retry_attempts: u8,
+    ) -> PyResult<Self> {
+        let data_bits = parse_data_bits(data_bits)?;
+        let parity = parse_parity(parity)?;
+        let stop_bits = parse_stop_bits(stop_bits)?;
+        let inner = make_inner(
+            port,
+            baud_rate,
+            timeout_ms,
+            SerialMode::Ascii,
+            data_bits,
+            parity,
+            stop_bits,
+            retry_attempts,
+        )?;
+        let rt = get_runtime();
+        py.detach(|| rt.block_on(inner.connect()).map_err(async_error_to_py))?;
+        Ok(Self {
+            inner: Arc::new(std::sync::Mutex::new(Some(Arc::new(inner)))),
+        })
+    }
+
+    fn create_client(&self, unit_id: u8) -> PyResult<SerialModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(SerialModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close(&self, py: Python<'_>) -> PyResult<()> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        if let Some(inner) = client {
+            let rt = get_runtime();
+            py.detach(|| rt.block_on(inner.disconnect()).map_err(async_error_to_py))?;
+        }
+        Ok(())
+    }
+
+    fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __exit__(
+        &self,
+        py: Python<'_>,
+        _exc_type: Option<Bound<'_, PyAny>>,
+        _exc_val: Option<Bound<'_, PyAny>>,
+        _exc_tb: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        self.close(py)?;
+        Ok(false)
+    }
+
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Async RtuTransport ───────────────────────────────────────────────────────
+
+#[pyclass(name = "AsyncRtuTransport")]
+pub struct AsyncRtuTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncSerialClient>>>>,
+}
+
+impl AsyncRtuTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncSerialClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
+}
+
+#[pymethods]
+impl AsyncRtuTransport {
+    #[classmethod]
+    #[pyo3(signature = (port, baud_rate=9600, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[allow(clippy::too_many_arguments)]
+    fn open<'py>(
+        _cls: &Bound<'py, pyo3::types::PyType>,
+        py: Python<'py>,
+        port: &str,
+        baud_rate: u32,
+        timeout_ms: u64,
+        data_bits: u8,
+        parity: &str,
+        stop_bits: u8,
+        retry_attempts: u8,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let data_bits = parse_data_bits(data_bits)?;
+        let parity = parse_parity(parity)?;
+        let stop_bits = parse_stop_bits(stop_bits)?;
+        let client = Arc::new(make_inner(
+            port,
+            baud_rate,
+            timeout_ms,
+            SerialMode::Rtu,
+            data_bits,
+            parity,
+            stop_bits,
+            retry_attempts,
+        )?);
+        let client_clone = client.clone();
+        future_into_py(py, async move {
+            client_clone.connect().await.map_err(async_error_to_py)?;
+            Ok(AsyncRtuTransport {
+                inner: Arc::new(std::sync::Mutex::new(Some(client))),
+            })
+        })
+    }
+
+    fn create_client(&self, unit_id: u8) -> PyResult<AsyncSerialModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(AsyncSerialModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok(())
+        })
+    }
+
+    fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let this = slf.into_pyobject(py)?.into_any().unbind();
+        future_into_py(py, async move { Ok::<Py<PyAny>, PyErr>(this) })
+    }
+
+    fn __aexit__<'py>(
+        &self,
+        py: Python<'py>,
+        _exc_type: Option<Bound<'py, PyAny>>,
+        _exc_val: Option<Bound<'py, PyAny>>,
+        _exc_tb: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok::<bool, PyErr>(false)
+        })
+    }
+
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Async AsciiTransport ─────────────────────────────────────────────────────
+
+#[pyclass(name = "AsyncAsciiTransport")]
+pub struct AsyncAsciiTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncSerialClient>>>>,
+}
+
+impl AsyncAsciiTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncSerialClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
+}
+
+#[pymethods]
+impl AsyncAsciiTransport {
+    #[classmethod]
+    #[pyo3(signature = (port, baud_rate=9600, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
+    #[allow(clippy::too_many_arguments)]
+    fn open<'py>(
+        _cls: &Bound<'py, pyo3::types::PyType>,
+        py: Python<'py>,
+        port: &str,
+        baud_rate: u32,
+        timeout_ms: u64,
+        data_bits: u8,
+        parity: &str,
+        stop_bits: u8,
+        retry_attempts: u8,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let data_bits = parse_data_bits(data_bits)?;
+        let parity = parse_parity(parity)?;
+        let stop_bits = parse_stop_bits(stop_bits)?;
+        let client = Arc::new(make_inner(
+            port,
+            baud_rate,
+            timeout_ms,
+            SerialMode::Ascii,
+            data_bits,
+            parity,
+            stop_bits,
+            retry_attempts,
+        )?);
+        let client_clone = client.clone();
+        future_into_py(py, async move {
+            client_clone.connect().await.map_err(async_error_to_py)?;
+            Ok(AsyncAsciiTransport {
+                inner: Arc::new(std::sync::Mutex::new(Some(client))),
+            })
+        })
+    }
+
+    fn create_client(&self, unit_id: u8) -> PyResult<AsyncSerialModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(AsyncSerialModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok(())
+        })
+    }
+
+    fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let this = slf.into_pyobject(py)?.into_any().unbind();
+        future_into_py(py, async move { Ok::<Py<PyAny>, PyErr>(this) })
+    }
+
+    fn __aexit__<'py>(
+        &self,
+        py: Python<'py>,
+        _exc_type: Option<Bound<'py, PyAny>>,
+        _exc_val: Option<Bound<'py, PyAny>>,
+        _exc_tb: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok::<bool, PyErr>(false)
+        })
+    }
+
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Sync SerialModbusClient ──────────────────────────────────────────────────
+
+#[pyclass(name = "SerialModbusClient")]
+pub struct SerialModbusClient {
+    inner: Arc<InnerAsyncSerialClient>,
+    unit_id: u8,
+}
+
+#[pymethods]
+impl SerialModbusClient {
     // ── Coils ────────────────────────────────────────────────────────────
 
     #[pyo3(signature = (address, quantity))]
@@ -606,100 +1001,16 @@ impl SerialClient {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Async Serial client
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Async SerialModbusClient ─────────────────────────────────────────────────
 
-/// Asyncio Modbus serial client (RTU or ASCII).
-///
-/// ```python
-/// async with AsyncSerialClient("/dev/ttyUSB0", baud_rate=9600, unit_id=1) as client:
-///     regs = await client.read_holding_registers(0, 5)
-/// ```
-#[pyclass(name = "AsyncSerialClient")]
-pub struct AsyncSerialClient {
+#[pyclass(name = "AsyncSerialModbusClient")]
+pub struct AsyncSerialModbusClient {
     inner: Arc<InnerAsyncSerialClient>,
     unit_id: u8,
 }
 
 #[pymethods]
-impl AsyncSerialClient {
-    #[new]
-    #[pyo3(signature = (port, baud_rate=9600, unit_id=1, mode=None, timeout_ms=1000, data_bits=8, parity="none", stop_bits=1, retry_attempts=3))]
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        py: Python<'_>,
-        port: &str,
-        baud_rate: u32,
-        unit_id: u8,
-        mode: Option<Py<PyAny>>,
-        timeout_ms: u64,
-        data_bits: u8,
-        parity: &str,
-        stop_bits: u8,
-        retry_attempts: u8,
-    ) -> PyResult<Self> {
-        let serial_mode = match mode {
-            Some(mode) => crate::python::parse_serial_mode_any(mode.bind(py))?,
-            None => SerialMode::Rtu,
-        };
-        let data_bits = parse_data_bits(data_bits)?;
-        let parity = parse_parity(parity)?;
-        let stop_bits = parse_stop_bits(stop_bits)?;
-        let inner = Arc::new(make_inner(
-            port,
-            baud_rate,
-            timeout_ms,
-            serial_mode,
-            data_bits,
-            parity,
-            stop_bits,
-            retry_attempts,
-        )?);
-        Ok(Self { inner, unit_id })
-    }
-
-    fn connect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            client.connect().await.map_err(async_error_to_py)
-        })
-    }
-
-    fn has_pending_requests(&self) -> bool {
-        self.inner.has_pending_requests()
-    }
-
-    fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = slf.inner.clone();
-        let this = slf.into_pyobject(py)?.into_any().unbind();
-        future_into_py(py, async move {
-            client.connect().await.map_err(async_error_to_py)?;
-            Ok::<Py<PyAny>, PyErr>(this)
-        })
-    }
-
-    fn disconnect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            client.disconnect().await.map_err(async_error_to_py)
-        })
-    }
-
-    fn __aexit__<'py>(
-        &self,
-        py: Python<'py>,
-        _exc_type: Option<Bound<'py, PyAny>>,
-        _exc_val: Option<Bound<'py, PyAny>>,
-        _exc_tb: Option<Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            let _ = client.disconnect().await;
-            Ok::<bool, PyErr>(false)
-        })
-    }
-
+impl AsyncSerialModbusClient {
     // ── Coils ────────────────────────────────────────────────────────────
 
     #[pyo3(signature = (address, quantity))]

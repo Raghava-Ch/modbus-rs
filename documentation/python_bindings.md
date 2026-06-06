@@ -16,9 +16,28 @@ pip install modbus-rs
 For local development from this repository:
 
 ```bash
+# 1. Set up a virtual environment at the repository root
+python3 -m venv .venv
+
+# 2. Activate the virtual environment
+# On macOS / Linux:
+source .venv/bin/activate
+# On Windows (Command Prompt):
+.venv\Scripts\activate.bat
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# (Optional: To deactivate the venv when finished, run: deactivate)
+
+# 3. Install build dependencies
+pip install --upgrade pip
+pip install maturin pytest pytest-asyncio
+
+# 4. Build/install bindings locally in development mode
 cd mbus-ffi
-maturin develop --features python,full
+maturin develop --features python-full
 ```
+
 
 ---
 
@@ -29,8 +48,8 @@ maturin develop --features python,full
 ```python
 import modbus_rs
 
-with modbus_rs.TcpClient("127.0.0.1", port=502, unit_id=1) as client:
-    client.connect()
+with modbus_rs.TcpTransport.connect("127.0.0.1", port=502) as transport:
+    client = transport.create_client(unit_id=1)
     regs = client.read_holding_registers(0, 5)
     print(regs)
 ```
@@ -42,7 +61,8 @@ import asyncio
 import modbus_rs
 
 async def main():
-    async with modbus_rs.AsyncTcpClient("127.0.0.1", port=502, unit_id=1) as client:
+    async with await modbus_rs.AsyncTcpTransport.connect("127.0.0.1", port=502) as transport:
+        client = transport.create_client(unit_id=1)
         regs = await client.read_holding_registers(0, 5)
         print(regs)
 
@@ -70,19 +90,23 @@ asyncio.run(main())
 
 ## Serial Usage
 
-Python bindings support RTU and ASCII serial transports.
+Python bindings support RTU and ASCII serial transports. The transports are opened via `open()` on `RtuTransport` or `AsciiTransport` (or their async counterparts `AsyncRtuTransport` and `AsyncAsciiTransport`), and client instances are then created using the `.create_client(unit_id)` factory method.
 
-Typical serial constructor parameters include:
+Typical serial transport `open()` parameters include:
 
-- port
-- baud_rate
-- unit_id
-- mode (rtu or ascii, or SerialMode enum)
-- timeout_ms
-- data_bits
-- parity
-- stop_bits
-- retry_attempts
+- `port` (str) — Port path (e.g. `/dev/ttyUSB0` or `COM3`)
+- `baud_rate` (int) — Baud rate (default `9600`)
+- `timeout_ms` (int) — Timeout in milliseconds (default `1000`)
+- `data_bits` (int) — Data bits per character (5/6/7/8, default `8`)
+- `parity` (str) — Parity mode (`none`, `even`, or `odd`, default `none`)
+- `stop_bits` (int) — Stop bits (1 or 2, default `1`)
+- `retry_attempts` (int) — Connection/read retry attempts (default `3`)
+
+Once a transport is created, invoke:
+```python
+client = transport.create_client(unit_id=1)
+```
+to get a `SerialModbusClient` for that specific slave device. This design allows multiplexing multiple logic client unit IDs on the same underlying serial transport connection.
 
 ---
 
@@ -106,50 +130,60 @@ Use ModbusDeviceException when handling device-returned Modbus exception codes.
 
 Complete runnable examples:
 
-- mbus-ffi/examples/python_client/python_client.py
-- mbus-ffi/examples/python_async_client/async_client.py
-- mbus-ffi/examples/python_server/python_server.py
+- mbus-ffi/python/examples/python_client/python_client.py
+- mbus-ffi/python/examples/python_async_client/async_client.py
+- mbus-ffi/python/examples/python_server/python_server.py
 
 Example guides:
 
-- mbus-ffi/examples/python_client/README.md
-- mbus-ffi/examples/python_async_client/README.md
-- mbus-ffi/examples/python_server/README.md
+- mbus-ffi/python/examples/python_client/README.md
+- mbus-ffi/python/examples/python_async_client/README.md
+- mbus-ffi/python/examples/python_server/README.md
 
 ### How to run the examples
 
-From repository root:
+Before running the examples, ensure your virtual environment is active:
 
 ```bash
-cd mbus-ffi
-maturin develop --features python,full
+source .venv/bin/activate
 ```
 
 Start the server in terminal 1:
 
 ```bash
-cd mbus-ffi/examples/python_server
+cd mbus-ffi/python/examples/python_server
 python3 python_server.py --host 127.0.0.1 --port 5020 --unit-id 1
 ```
 
 Run the sync client in terminal 2:
 
 ```bash
-cd mbus-ffi/examples/python_client
+source .venv/bin/activate
+cd mbus-ffi/python/examples/python_client
 python3 python_client.py --host 127.0.0.1 --port 5020 --unit-id 1
 ```
 
 Run the async client in terminal 2:
 
 ```bash
-cd mbus-ffi/examples/python_async_client
+source .venv/bin/activate
+cd mbus-ffi/python/examples/python_async_client
 python3 async_client.py --host 127.0.0.1 --port 5020 --unit-id 1
+```
+
+Or verify the multi-unit/transport split by running one of the multi-unit examples:
+
+```bash
+source .venv/bin/activate
+cd mbus-ffi/python/examples
+python3 11-tcp-transport-multi-unit.py --host 127.0.0.1 --port 5020
 ```
 
 Optional multi-server async demo:
 
 ```bash
-cd mbus-ffi/examples/python_async_client
+source .venv/bin/activate
+cd mbus-ffi/python/examples/python_async_client
 python3 async_client.py --host 127.0.0.1 --port 5020 --multi
 ```
 
@@ -157,15 +191,15 @@ python3 async_client.py --host 127.0.0.1 --port 5020 --multi
 
 ## Testing
 
-Run Python tests from repository root:
+Run Python tests from the `mbus-ffi` folder (with your virtual environment active):
 
 ```bash
-cd mbus-ffi && maturin develop --features python,full
-cd ..
-pytest mbus-ffi/tests/python/ -q
+source .venv/bin/activate
+cd mbus-ffi
+pytest tests/python/ -v
 ```
 
-Note: Running pytest without installing the extension first will fail collection with an import error for modbus_rs._modbus_rs.
+Note: Running pytest without installing the extension first will fail collection with an import error for `modbus_rs._modbus_rs`.
 
 ---
 

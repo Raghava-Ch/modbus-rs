@@ -100,61 +100,65 @@ fn file_record_read_to_py(py: Python<'_>, rows: Vec<SubRequestParams>) -> PyResu
     Ok(out.into_pyobject(py)?.into_any().unbind())
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Sync TCP client
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Sync TcpTransport ────────────────────────────────────────────────────────
 
-/// Synchronous (blocking) Modbus TCP client.
-///
-/// Each method blocks the calling thread until a response arrives, then
-/// returns the value directly. The GIL is released during network I/O so
-/// other Python threads are not starved.
-///
-/// Use as a context manager:
-///
-/// ```python
-/// with TcpClient("192.168.1.10", unit_id=1) as client:
-///     regs = client.read_holding_registers(0, 5)
-/// ```
-#[pyclass(name = "TcpClient")]
-pub struct TcpClient {
-    inner: InnerAsyncTcpClient,
-    unit_id: u8,
+#[pyclass(name = "TcpTransport")]
+pub struct TcpTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncTcpClient>>>>,
+}
+
+impl TcpTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncTcpClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
 }
 
 #[pymethods]
-impl TcpClient {
-    /// Create a new sync TCP client.
-    ///
-    /// :param host: Hostname or IP address of the Modbus TCP server.
-    /// :param port: TCP port (default 502).
-    /// :param unit_id: Modbus unit / slave ID (1–247, default 1).
-    /// :param timeout_ms: Per-request timeout in milliseconds (0 = disabled, default 1000).
-    #[new]
-    #[pyo3(signature = (host, port=502, unit_id=1, timeout_ms=1000))]
-    fn new(host: &str, port: u16, unit_id: u8, timeout_ms: u64) -> PyResult<Self> {
+impl TcpTransport {
+    #[classmethod]
+    #[pyo3(signature = (host, port=502, timeout_ms=1000))]
+    fn connect(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python<'_>,
+        host: &str,
+        port: u16,
+        timeout_ms: u64,
+    ) -> PyResult<Self> {
         let inner = make_inner(host, port, timeout_ms)?;
-        Ok(Self { inner, unit_id })
-    }
-
-    /// Establish the TCP connection. Must be called before any request.
-    fn connect(&self, py: Python<'_>) -> PyResult<()> {
         let rt = get_runtime();
-        py.detach(|| rt.block_on(self.inner.connect()).map_err(async_error_to_py))
-    }
-
-    /// Disconnect from the server.
-    fn disconnect(&self, py: Python<'_>) -> PyResult<()> {
-        let rt = get_runtime();
-        py.detach(|| {
-            rt.block_on(self.inner.disconnect())
-                .map_err(async_error_to_py)
+        py.detach(|| rt.block_on(inner.connect()).map_err(async_error_to_py))?;
+        Ok(Self {
+            inner: Arc::new(std::sync::Mutex::new(Some(Arc::new(inner)))),
         })
     }
 
-    /// Returns ``True`` if there are requests currently in-flight.
-    fn has_pending_requests(&self) -> bool {
-        self.inner.has_pending_requests()
+    fn create_client(&self, unit_id: u8) -> PyResult<TcpModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(TcpModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close(&self, py: Python<'_>) -> PyResult<()> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        if let Some(inner) = client {
+            let rt = get_runtime();
+            py.detach(|| rt.block_on(inner.disconnect()).map_err(async_error_to_py))?;
+        }
+        Ok(())
     }
 
     fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -168,10 +172,146 @@ impl TcpClient {
         _exc_val: Option<Bound<'_, PyAny>>,
         _exc_tb: Option<Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
-        self.disconnect(py)?;
+        self.close(py)?;
         Ok(false)
     }
 
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Async TcpTransport ───────────────────────────────────────────────────────
+
+#[pyclass(name = "AsyncTcpTransport")]
+pub struct AsyncTcpTransport {
+    inner: Arc<std::sync::Mutex<Option<Arc<InnerAsyncTcpClient>>>>,
+}
+
+impl AsyncTcpTransport {
+    fn get_client(&self) -> PyResult<Arc<InnerAsyncTcpClient>> {
+        let guard = self.inner.lock().map_err(|_| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+        })?;
+        guard.clone().ok_or_else(|| {
+            crate::python::errors::ModbusInvalidArgument::new_err("Transport is closed")
+        })
+    }
+}
+
+#[pymethods]
+impl AsyncTcpTransport {
+    #[classmethod]
+    #[pyo3(signature = (host, port=502, timeout_ms=1000))]
+    fn connect<'py>(
+        _cls: &Bound<'py, pyo3::types::PyType>,
+        py: Python<'py>,
+        host: &str,
+        port: u16,
+        timeout_ms: u64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = Arc::new(make_inner(host, port, timeout_ms)?);
+        let client_clone = client.clone();
+        future_into_py(py, async move {
+            client_clone.connect().await.map_err(async_error_to_py)?;
+            Ok(AsyncTcpTransport {
+                inner: Arc::new(std::sync::Mutex::new(Some(client))),
+            })
+        })
+    }
+
+    fn create_client(&self, unit_id: u8) -> PyResult<AsyncTcpModbusClient> {
+        let client = self.get_client()?;
+        let _ = mbus_core::transport::UnitIdOrSlaveAddr::new(unit_id)
+            .map_err(crate::python::errors::mbus_error_to_py)?;
+        Ok(AsyncTcpModbusClient {
+            inner: client,
+            unit_id,
+        })
+    }
+
+    fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok(())
+        })
+    }
+
+    fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let this = slf.into_pyobject(py)?.into_any().unbind();
+        future_into_py(py, async move { Ok::<Py<PyAny>, PyErr>(this) })
+    }
+
+    fn __aexit__<'py>(
+        &self,
+        py: Python<'py>,
+        _exc_type: Option<Bound<'py, PyAny>>,
+        _exc_val: Option<Bound<'py, PyAny>>,
+        _exc_tb: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = {
+            let mut guard = self.inner.lock().map_err(|_| {
+                crate::python::errors::ModbusInvalidArgument::new_err("Failed to acquire lock")
+            })?;
+            guard.take()
+        };
+        future_into_py(py, async move {
+            if let Some(inner) = client {
+                let _ = inner.disconnect().await;
+            }
+            Ok::<bool, PyErr>(false)
+        })
+    }
+
+    fn set_request_timeout(&self, timeout_ms: u32) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        Ok(())
+    }
+
+    fn clear_request_timeout(&self) -> PyResult<()> {
+        let client = self.get_client()?;
+        client.clear_request_timeout();
+        Ok(())
+    }
+
+    fn has_pending_requests(&self) -> PyResult<bool> {
+        let client = self.get_client()?;
+        Ok(client.has_pending_requests())
+    }
+}
+
+// ── Sync TcpModbusClient ─────────────────────────────────────────────────────
+
+#[pyclass(name = "TcpModbusClient")]
+pub struct TcpModbusClient {
+    inner: Arc<InnerAsyncTcpClient>,
+    unit_id: u8,
+}
+
+#[pymethods]
+impl TcpModbusClient {
     // ── Coils ────────────────────────────────────────────────────────────
 
     /// Read coils (FC 01). Returns ``list[bool]``.
@@ -497,74 +637,16 @@ impl TcpClient {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Async TCP client
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Async TcpModbusClient ────────────────────────────────────────────────────
 
-/// Asyncio Modbus TCP client.
-///
-/// All methods return awaitables; use with ``await`` or ``asyncio.gather``:
-///
-/// ```python
-/// async with AsyncTcpClient("192.168.1.10", unit_id=1) as client:
-///     regs = await client.read_holding_registers(0, 5)
-/// ```
-#[pyclass(name = "AsyncTcpClient")]
-pub struct AsyncTcpClient {
+#[pyclass(name = "AsyncTcpModbusClient")]
+pub struct AsyncTcpModbusClient {
     inner: Arc<InnerAsyncTcpClient>,
     unit_id: u8,
 }
 
 #[pymethods]
-impl AsyncTcpClient {
-    #[new]
-    #[pyo3(signature = (host, port=502, unit_id=1, timeout_ms=1000))]
-    fn new(host: &str, port: u16, unit_id: u8, timeout_ms: u64) -> PyResult<Self> {
-        let inner = Arc::new(make_inner(host, port, timeout_ms)?);
-        Ok(Self { inner, unit_id })
-    }
-
-    fn connect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            client.connect().await.map_err(async_error_to_py)
-        })
-    }
-
-    fn has_pending_requests(&self) -> bool {
-        self.inner.has_pending_requests()
-    }
-
-    fn __aenter__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = slf.inner.clone();
-        let this = slf.into_pyobject(py)?.into_any().unbind();
-        future_into_py(py, async move {
-            client.connect().await.map_err(async_error_to_py)?;
-            Ok::<Py<PyAny>, PyErr>(this)
-        })
-    }
-
-    fn disconnect<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            client.disconnect().await.map_err(async_error_to_py)
-        })
-    }
-
-    fn __aexit__<'py>(
-        &self,
-        py: Python<'py>,
-        _exc_type: Option<Bound<'py, PyAny>>,
-        _exc_val: Option<Bound<'py, PyAny>>,
-        _exc_tb: Option<Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let client = self.inner.clone();
-        future_into_py(py, async move {
-            let _ = client.disconnect().await;
-            Ok::<bool, PyErr>(false)
-        })
-    }
-
+impl AsyncTcpModbusClient {
     // ── Coils ────────────────────────────────────────────────────────────
 
     #[pyo3(signature = (address, quantity))]

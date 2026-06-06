@@ -20,6 +20,7 @@ Cargo.lock
 # Project specific
 .DS_Store
 **/.DS_Store
+.rustup
 
 # Server app dispatcher — generated at build time by build.rs via MBUS_SERVER_APP_CONFIG.
 # Lives in $OUT_DIR, not the source tree. This line is a safety net if it
@@ -47,6 +48,7 @@ mbus-ffi/include
 **/.venv/
 **/__pycache__/
 *.pyc
+.pytest_cache
 mbus-ffi/python/modbus_rs/_modbus_rs.cpython-*.so
 
 # Safety net: Node napi build artifacts belong under mbus-ffi/nodejs/.

@@ -23,20 +23,18 @@ Implemented:
 
 | Class | Purpose | Notes |
 |---|---|---|
-| `AsyncTcpModbusClient` | Async Modbus TCP client (FC01–FC24, FC43/14) | Fully functional |
-| `AsyncSerialModbusClient` | Async Modbus RTU & ASCII client over a serial port | Fully functional |
-| `AsyncTcpModbusServer` | Async Modbus TCP server | **v0.8:** lifecycle + write-request echo only; JS handler-callback dispatch is not yet wired up (planned for v0.9). |
+| `AsyncTcpTransport` | Manage physical TCP connections | Factory for client handles |
+| `AsyncRtuTransport` | Manage physical RTU serial port connections | Factory for client handles |
+| `AsyncAsciiTransport` | Manage physical ASCII serial port connections | Factory for client handles |
+| `AsyncTcpModbusClient` | Lightweight logical TCP client handle | Extracted from transport via `createClient()` |
+| `AsyncSerialModbusClient` | Lightweight logical Serial RTU/ASCII client handle | Extracted from transport via `createClient()` |
+| `AsyncTcpModbusServer` | Async Modbus TCP server | Drives request handling via JS handler callback dispatch |
 | `AsyncTcpGateway` | Async Modbus TCP gateway with unit-ID routing | Routing table implemented |
 
 Planned:
 
-* **Server JS handler dispatch** via napi `ThreadsafeFunction` so the
-  `handlers` argument to `AsyncTcpModbusServer.bind()` actually drives
-  request handling.
 * `AsyncSerialModbusServer` (RTU/ASCII server) — see Example 10.
-* `AbortSignal`-based per-request cancellation.
-* Browser/WASM npm package (the Rust `wasm` feature already exists; a
-  separate npm wrapper will follow).
+* Browser/WASM npm package (the Rust `wasm` feature already exists; a separate npm wrapper will follow).
 
 ## Building
 
@@ -61,29 +59,31 @@ npm test
 ## Quick start
 
 ```js
-import { AsyncTcpModbusClient, AsyncTcpModbusServer } from 'modbus-rs';
+import { AsyncTcpTransport, AsyncTcpModbusServer } from 'modbus-rs';
 
-// Server
-const server = await AsyncTcpModbusServer.bind(
-  { host: '0.0.0.0', port: 5502 },
+// Server (bind is synchronous, requires unitId)
+const server = AsyncTcpModbusServer.bind(
+  { host: '0.0.0.0', port: 5502, unitId: 1 },
   {
     onReadHoldingRegisters: ({ address, quantity }) =>
       Array.from({ length: quantity }, (_, i) => address + i),
   },
 );
 
-// Client
-const client = await AsyncTcpModbusClient.connect({
+// Client transport connection
+const transport = await AsyncTcpTransport.connect({
   host: '127.0.0.1',
   port: 5502,
-  unitId: 1,
   timeoutMs: 2000,
 });
+
+// Create logical client from transport
+const client = transport.createClient({ unitId: 1 });
 
 const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
 console.log(regs); // [0, 1, 2, 3]
 
-await client.close();
+await transport.close();
 await server.shutdown();
 ```
 

@@ -221,6 +221,55 @@ int main(void) {
 
 See [`mbus-ffi/`](mbus-ffi/) for the full C binding reference, build instructions, and server demo.
 
+### Python Bindings (via `mbus-ffi`)
+
+Idiomatic Python asyncio and blocking API, powered by Maturin.
+
+```sh
+# 👉 Option 1
+# Install from PyPI:
+pip install modbus-rs
+
+# 👉 Option 2
+# Or build locally from source:
+# 1. Set up a virtual environment
+python3 -m venv .venv
+
+# 2. Activate the virtual environment
+# On macOS / Linux:
+source .venv/bin/activate
+# On Windows (Command Prompt):
+.venv\Scripts\activate.bat
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# (Optional: To deactivate the venv when finished, run: deactivate)
+
+# 3. Install build/test dependencies
+pip install --upgrade pip
+pip install maturin pytest pytest-asyncio
+
+# 4. Build and install locally in development mode
+cd mbus-ffi
+maturin develop --features python-full
+
+# 5. Run Python tests
+pytest tests/python/ -v
+```
+
+
+```python
+import modbus_rs
+
+# Sync TCP transport connection
+with modbus_rs.TcpTransport.connect("192.168.1.10", port=502) as transport:
+    # Create client for unit/slave ID 1
+    client = transport.create_client(unit_id=1)
+    regs = client.read_holding_registers(0, 4)
+```
+
+📖 **[Full Python Binding Documentation →](documentation/python_bindings.md)**
+
 ### WASM Browser Bindings (via `mbus-ffi`)
 
 Build the WASM package and serve locally:

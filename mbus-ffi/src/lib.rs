@@ -65,13 +65,12 @@ pub use wasm::{
     feature = "c-client",
     feature = "c-server",
     feature = "dotnet",
-    feature = "python",
     feature = "go",
     feature = "nodejs"
 ))]
 pub mod c;
 
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python-client", feature = "python-server"))]
 #[allow(missing_docs)]
 pub mod python;
 

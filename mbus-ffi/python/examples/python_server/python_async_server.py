@@ -24,9 +24,9 @@ Simulated I/O:
     # 1. Ensure you are using the virtual environment
     source .venv/bin/activate
 
-    # 2. Build the python extension natively (without the `full` feature)
+    # 2. Build the python extension natively
     cd mbus-ffi 
-    maturin develop --features python,python-gateway
+    maturin develop --features python-server
 
     # 3. Run the demo script
 Run with TCP (default):

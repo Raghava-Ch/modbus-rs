@@ -23,7 +23,7 @@ pip install maturin pytest pytest-asyncio
 
 # 4. Build and install the python extension natively
 cd mbus-ffi 
-maturin develop --features python,python-gateway 
+maturin develop --features python-client,python-gateway
 ```
 
 ## Files
@@ -40,9 +40,9 @@ Run::
     # 1. Ensure you are using the virtual environment
     source .venv/bin/activate
 
-    # 2. Build the python extension natively (without the `full` feature)
+    # 2. Build the python extension natively
     cd mbus-ffi 
-    maturin develop --features python,python-gateway
+    maturin develop --features python-client,python-gateway
 
     # 3. Run the demo script
     python examples/python_gateway/sync_demo.py

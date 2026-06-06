@@ -158,24 +158,22 @@ go-full = [
     "serial-ascii",
 ]
 
-## Enables Python bindings for the gateway. Requires `python` to be enabled too;
-## build with `--features python,python-gateway,full`.
+## Enables Python bindings for the gateway. Requires `python-client` to be enabled;
+## build with `--features python-client,python-gateway`.
 python-gateway = [
-    "python",
+    "python-client",
     "dep:mbus-gateway",
     "dep:mbus-network",
     "mbus-gateway/async",
     "mbus-network/async",
 ]
 
-## Enables Python bindings (PyO3 / Maturin) for the Modbus client + server stack.
-## Requires the `full` feature set; build with `--features python-full`.
-python = [
+## Enables Python bindings (PyO3 / Maturin) for the Modbus client stack.
+python-client = [
     "dep:pyo3",
     "dep:pyo3-async-runtimes",
     "dep:tokio",
     "dep:mbus-client-async",
-    "dep:mbus-server-async",
     "coils",
     "registers",
     "discrete-inputs",
@@ -184,17 +182,32 @@ python = [
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "internal-lock-stubs",
+]
+
+## Enables Python bindings (PyO3 / Maturin) for the Modbus server stack.
+python-server = [
+    "dep:pyo3",
+    "dep:pyo3-async-runtimes",
+    "dep:tokio",
+    "dep:mbus-server-async",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
     "mbus-server-async/server-serial",
     "internal-lock-stubs",
 ]
 
-## Convenience alias for Python bindings — enables client/gateway/server features
+## Convenience alias for Python bindings — enables client, server, and gateway features
 ## Note: Does NOT include c-server (YAML-based application server)
 ## Python uses its own server interface
 python-full = [
-    "python",
-    "c-client",
-    "c-gateway",
+    "python-client",
+    "python-server",
+    "python-gateway",
     "coils",
     "registers",
     "discrete-inputs",

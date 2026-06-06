@@ -18,9 +18,9 @@ localhost:5020.
     # 1. Ensure you are using the virtual environment
     source .venv/bin/activate
 
-    # 2. Build the python extension natively (without the `full` feature)
+    # 2. Build the python extension natively
     cd mbus-ffi 
-    maturin develop --features python,python-gateway
+    maturin develop --features python-client
 
     # 3. Run the demo script
 Run against the bundled server:
@@ -88,7 +88,7 @@ def _bool_list(values: list[bool]) -> str:
 
 # ─── demo routine (sync) ─────────────────────────────────────────────────────
 
-def run_demo_sync(client: modbus_rs.TcpClient | modbus_rs.SerialClient, iteration: int):
+def run_demo_sync(client: modbus_rs.TcpModbusClient | modbus_rs.SerialModbusClient, iteration: int):
     """One pass of the demo — called in a polling loop."""
     sep = "─" * 60
 
@@ -155,61 +155,57 @@ def run_demo_sync(client: modbus_rs.TcpClient | modbus_rs.SerialClient, iteratio
         log.info("mask_write holding[2]  AND=0xFFF0  OR=0x0100")
 
 
-# ─── connection factory ───────────────────────────────────────────────────────
-
-def make_tcp_client(host: str, port: int, unit_id: int) -> modbus_rs.TcpClient:
-    return modbus_rs.TcpClient(host, port=port, unit_id=unit_id, timeout_ms=2000)
-
-
-def make_serial_client(
-    port: str, baud: int, unit_id: int, mode: str
-) -> modbus_rs.SerialClient:
-    return modbus_rs.SerialClient(port, baud_rate=baud, unit_id=unit_id,
-                                  mode=mode, timeout_ms=2000)
-
-
 # ─── polling loop ─────────────────────────────────────────────────────────────
 
-def poll_loop(client_factory, interval: float, max_errors: int = 5):
-    """Open the client, poll in a loop, reconnect on transient errors."""
+def poll_loop(args):
+    """Open the client transport, poll in a loop, reconnect on transient errors."""
     consecutive_errors = 0
     iteration = 0
 
     while True:
         log.info("Connecting …")
         try:
-            client = client_factory()
-            client.connect()
-            log.info("Connected.")
-            consecutive_errors = 0
+            # Create the transport context manager based on mode
+            if args.mode == "tcp":
+                tcp_port = int(args.port) if args.port else 5020
+                transport_cm = modbus_rs.TcpTransport.connect(args.host, port=tcp_port, timeout_ms=2000)
+            else:
+                serial_port = args.port or "/dev/ttyUSB0"
+                TransportClass = modbus_rs.RtuTransport if args.serial_mode == "rtu" else modbus_rs.AsciiTransport
+                transport_cm = TransportClass.open(serial_port, baud_rate=args.baud, timeout_ms=2000)
 
-            while True:
-                iteration += 1
-                try:
-                    run_demo_sync(client, iteration)
-                    consecutive_errors = 0
-                except modbus_rs.ModbusTimeout:
-                    log.warning("Request timed out (iteration %d)", iteration)
-                    consecutive_errors += 1
-                except modbus_rs.ModbusDeviceException as exc:
-                    code = exc.args[1] if len(exc.args) > 1 else None
-                    if code == 0x01:
-                        log.warning(
-                            "Device exception: %s (expected in demo when FC22 mask-write is not implemented by the server app)",
-                            exc,
-                        )
-                    else:
-                        log.error("Device exception: %s", exc)
-                    consecutive_errors += 1
-                except modbus_rs.ModbusConnectionError:
-                    log.warning("Connection lost — reconnecting")
-                    break
+            with transport_cm as transport:
+                log.info("Connected / Transport opened.")
+                client = transport.create_client(unit_id=args.unit_id)
+                consecutive_errors = 0
 
-                if consecutive_errors >= max_errors:
-                    log.error("Too many consecutive errors; reconnecting")
-                    break
+                while True:
+                    iteration += 1
+                    try:
+                        run_demo_sync(client, iteration)
+                        consecutive_errors = 0
+                    except modbus_rs.ModbusTimeout:
+                        log.warning("Request timed out (iteration %d)", iteration)
+                        consecutive_errors += 1
+                    except modbus_rs.ModbusDeviceException as exc:
+                        code = exc.args[1] if len(exc.args) > 1 else None
+                        if code == 0x01:
+                            log.warning(
+                                "Device exception: %s (expected in demo when FC22 mask-write is not implemented by the server app)",
+                                exc,
+                            )
+                        else:
+                            log.error("Device exception: %s", exc)
+                        consecutive_errors += 1
+                    except modbus_rs.ModbusConnectionError:
+                        log.warning("Connection lost — reconnecting")
+                        break
 
-                time.sleep(interval)
+                    if consecutive_errors >= 5:
+                        log.error("Too many consecutive errors; reconnecting")
+                        break
+
+                    time.sleep(args.interval)
 
         except modbus_rs.ModbusConnectionError as exc:
             log.error("Cannot connect: %s", exc)
@@ -245,16 +241,7 @@ def main():
                         help="Polling interval in seconds (default: 2.0)")
     args = parser.parse_args()
 
-    if args.mode == "tcp":
-        tcp_port = int(args.port) if args.port else 5020
-        factory = lambda: make_tcp_client(args.host, tcp_port, args.unit_id)
-    else:
-        serial_port = args.port or "/dev/ttyUSB0"
-        factory = lambda: make_serial_client(
-            serial_port, args.baud, args.unit_id, args.serial_mode
-        )
-
-    poll_loop(factory, interval=args.interval)
+    poll_loop(args)
 
 
 if __name__ == "__main__":

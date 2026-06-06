@@ -4,12 +4,18 @@ modbus_rs — Python bindings for the modbus-rs library.
 PyPI package: modbus-rs
 Import name : modbus_rs
 
-Client classes
---------------
-TcpClient       — synchronous (blocking, GIL-releasing) Modbus TCP client
-AsyncTcpClient  — asyncio Modbus TCP client
-SerialClient    — synchronous Modbus serial client (RTU / ASCII)
-AsyncSerialClient — asyncio Modbus serial client
+Transports and clients
+----------------------
+TcpTransport            - Sync Modbus TCP transport
+AsyncTcpTransport       - Asyncio Modbus TCP transport
+RtuTransport            - Sync Modbus serial RTU transport
+AsyncRtuTransport       - Asyncio Modbus serial RTU transport
+AsciiTransport          - Sync Modbus serial ASCII transport
+AsyncAsciiTransport     - Asyncio Modbus serial ASCII transport
+TcpModbusClient         - Thin sync Modbus TCP client
+AsyncTcpModbusClient    - Thin asyncio Modbus TCP client
+SerialModbusClient      - Thin sync Modbus serial client
+AsyncSerialModbusClient - Thin asyncio Modbus serial client
 
 Server classes
 --------------
@@ -33,11 +39,17 @@ ModbusInvalidArgument — invalid argument passed to a Modbus call
 from importlib.metadata import version, PackageNotFoundError
 
 from ._modbus_rs import (
-    # clients
-    TcpClient,
-    AsyncTcpClient,
-    SerialClient,
-    AsyncSerialClient,
+    # clients/transports
+    TcpTransport,
+    AsyncTcpTransport,
+    RtuTransport,
+    AsyncRtuTransport,
+    AsciiTransport,
+    AsyncAsciiTransport,
+    TcpModbusClient,
+    AsyncTcpModbusClient,
+    SerialModbusClient,
+    AsyncSerialModbusClient,
     # server
     ModbusApp,
     AsyncTcpServer,
@@ -57,7 +69,7 @@ from ._modbus_rs import (
 # Gateway classes are only available when the extension is built with the
 # `python-gateway` feature.
 try:
-    from ._modbus_rs import (  # type: ignore[attr-defined]
+    from ._modbus_rs import (
         AsyncTcpGateway,
         GatewayEventHandler,
         TcpGateway,
@@ -72,11 +84,17 @@ except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
 __all__ = [
-    # clients
-    "TcpClient",
-    "AsyncTcpClient",
-    "SerialClient",
-    "AsyncSerialClient",
+    # clients/transports
+    "TcpTransport",
+    "AsyncTcpTransport",
+    "RtuTransport",
+    "AsyncRtuTransport",
+    "AsciiTransport",
+    "AsyncAsciiTransport",
+    "TcpModbusClient",
+    "AsyncTcpModbusClient",
+    "SerialModbusClient",
+    "AsyncSerialModbusClient",
     # server
     "ModbusApp",
     "AsyncTcpServer",

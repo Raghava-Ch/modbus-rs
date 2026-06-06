@@ -58,7 +58,7 @@ log = logging.getLogger("async-client")
 
 # ─── single poll ─────────────────────────────────────────────────────────────
 
-async def poll_once(client: modbus_rs.AsyncTcpClient, label: str = ""):
+async def poll_once(client: modbus_rs.AsyncTcpModbusClient, label: str = ""):
     """Fire several requests concurrently and pretty-print the results."""
     # Launch all reads at the same time — the async client queues them
     results = await asyncio.gather(
@@ -102,7 +102,7 @@ async def poll_once(client: modbus_rs.AsyncTcpClient, label: str = ""):
 
 # ─── write demo ──────────────────────────────────────────────────────────────
 
-async def write_demo(client: modbus_rs.AsyncTcpClient):
+async def write_demo(client: modbus_rs.AsyncTcpModbusClient):
     """Demonstrate various write operations."""
     # Read current setpoint
     hr = await client.read_holding_registers(0, 1)
@@ -131,13 +131,14 @@ async def write_demo(client: modbus_rs.AsyncTcpClient):
 async def run_concurrent(hosts: list[tuple[str, int]], unit_id: int, count: int):
     """
     Connect to multiple servers and poll them concurrently.
-    Each host gets its own AsyncTcpClient task.
+    Each host gets its own transport task.
     """
     async def per_server(host: str, port: int, label: str):
         try:
-            async with modbus_rs.AsyncTcpClient(
-                host, port=port, unit_id=unit_id, timeout_ms=2000
-            ) as client:
+            async with await modbus_rs.AsyncTcpTransport.connect(
+                host, port=port, timeout_ms=2000
+            ) as transport:
+                client = transport.create_client(unit_id=unit_id)
                 for i in range(count):
                     ok = await poll_once(client, label=label)
                     if not ok:
@@ -167,9 +168,10 @@ async def poll_with_reconnect(
     while iteration < count:
         try:
             log.info("Connecting to %s:%d …", host, port)
-            async with modbus_rs.AsyncTcpClient(
-                host, port=port, unit_id=unit_id, timeout_ms=2000
-            ) as client:
+            async with await modbus_rs.AsyncTcpTransport.connect(
+                host, port=port, timeout_ms=2000
+            ) as transport:
+                client = transport.create_client(unit_id=unit_id)
                 log.info("Connected.")
                 while iteration < count:
                     ok = await poll_once(client, label=f"#{iteration + 1}")
