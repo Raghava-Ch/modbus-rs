@@ -2,13 +2,36 @@
 
 Browser-native WebAssembly bindings for [modbus-rs](https://github.com/Raghava-Ch/modbus-rs), enabling Modbus TCP (via WebSockets) and Modbus RTU/ASCII (via Web Serial) directly in the browser.
 
-> **Note:** If you are building a Node.js backend application, use the native [`modbus-rs`](https://www.npmjs.com/package/modbus-rs) package instead.
+> **Note:** This package is designed for browser-native environments (using WebSockets and Web Serial). If you are building a Node.js backend application, use the native [`modbus-rs`](https://www.npmjs.com/package/modbus-rs) package instead. Running this package in pure Node.js requires `--experimental-wasm-modules` and is not officially supported.
 
 ## Installation
 
 ```bash
 npm install modbus-rs-wasm
 ```
+
+## Integration & Frameworks (Vite, Svelte, React, etc.)
+
+No custom resolver aliases or configuration workarounds are required starting in `v0.14.0`. Standard package entry points are resolved automatically based on your builder/bundler targets.
+
+### Web (Direct / HTML / Vanilla JS)
+When loading the package in browser environments without a bundler, import the web entry point and await the initialization promise:
+
+```javascript
+import init, { WasmModbusClient } from 'modbus-rs-wasm/dist/web/modbus-rs.js';
+
+await init();
+const client = new WasmModbusClient('ws://localhost:8502', 1, 5000, 3, 20);
+```
+
+### Bundlers & Frameworks (Vite, SvelteKit, Next.js, etc.)
+When using modern bundlers, the root import automatically maps to the bundler target:
+
+```javascript
+import { WasmModbusClient } from 'modbus-rs-wasm';
+```
+*(Make sure your bundler is configured to load WebAssembly, e.g., using `vite-plugin-wasm` and `vite-plugin-top-level-await` in Vite).*
+
 
 ## Quick Start (Modbus TCP via WebSocket Gateway)
 

@@ -30,7 +30,9 @@ jobs:
 
       - name: Build WASM package
         working-directory: mbus-ffi/wasm
-        run: npm run build
+        run: |
+          npm run build
+          npm run verify
 
       - name: Run WASM tests (headless Chrome)
         working-directory: mbus-ffi/wasm
