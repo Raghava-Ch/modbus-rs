@@ -69,7 +69,7 @@ from ._modbus_rs import (
 # Gateway classes are only available when the extension is built with the
 # `python-gateway` feature.
 try:
-    from ._modbus_rs import (  # type: ignore[attr-defined]
+    from ._modbus_rs import (
         AsyncTcpGateway,
         GatewayEventHandler,
         TcpGateway,
