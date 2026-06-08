@@ -8,8 +8,8 @@
     ".": "./index.js"
   },
   "scripts": {
-    "build": "napi build --platform --release --features nodejs,full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
-    "build:debug": "napi build --platform --features nodejs,full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
+    "build": "napi build --platform --release --features nodejs-full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
+    "build:debug": "napi build --platform --features nodejs-full --js index.js --dts index.d.ts --output-dir . --manifest-path ../Cargo.toml",
     "test": "node --test __test__/*.test.mjs",
     "prepublishOnly": "napi prepublish -t npm",
     "artifacts": "napi artifacts",

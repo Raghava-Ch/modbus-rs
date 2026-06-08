@@ -278,13 +278,13 @@ pub struct JsHandlerAdapter {
     pub on_write_multiple_coils: Option<Arc<JsHandler<WriteMultipleCoilsRequest>>>,
     #[cfg(feature = "discrete-inputs")]
     pub on_read_discrete_inputs: Option<Arc<JsHandler<ReadDiscreteInputsRequest>>>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_read_holding_registers: Option<Arc<JsHandler<ReadHoldingRegistersRequest>>>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     pub on_read_input_registers: Option<Arc<JsHandler<ReadInputRegistersRequest>>>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_write_single_register: Option<Arc<JsHandler<WriteSingleRegisterRequest>>>,
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub on_write_multiple_registers: Option<Arc<JsHandler<WriteMultipleRegistersRequest>>>,
     #[cfg(feature = "fifo")]
     pub on_read_fifo_queue: Option<Arc<JsHandler<ReadFifoQueueRequest>>>,
@@ -515,7 +515,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     )
                 }
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadHoldingRegisters {
                 address,
                 count,
@@ -569,7 +569,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     )
                 }
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             ModbusRequest::ReadInputRegisters {
                 address,
                 count,
@@ -623,7 +623,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     )
                 }
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteSingleRegister {
                 address,
                 value,
@@ -658,7 +658,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     ModbusResponse::echo_register(address, value)
                 }
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteMultipleRegisters {
                 address,
                 count,
@@ -710,12 +710,12 @@ impl AsyncAppHandler for JsHandlerAdapter {
                     )
                 }
             }
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::MaskWriteRegister { .. } => ModbusResponse::exception(
                 FunctionCode::MaskWriteRegister,
                 ExceptionCode::IllegalFunction,
             ),
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ModbusRequest::ReadWriteMultipleRegisters { .. } => ModbusResponse::exception(
                 FunctionCode::ReadWriteMultipleRegisters,
                 ExceptionCode::IllegalFunction,
@@ -877,16 +877,16 @@ pub fn build_adapter(env: &Env, handlers: &Object) -> Result<JsHandlerAdapter> {
         on_write_multiple_coils: get_handler!("onWriteMultipleCoils", WriteMultipleCoilsRequest),
         #[cfg(feature = "discrete-inputs")]
         on_read_discrete_inputs: get_handler!("onReadDiscreteInputs", ReadDiscreteInputsRequest),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_read_holding_registers: get_handler!(
             "onReadHoldingRegisters",
             ReadHoldingRegistersRequest
         ),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         on_read_input_registers: get_handler!("onReadInputRegisters", ReadInputRegistersRequest),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_write_single_register: get_handler!("onWriteSingleRegister", WriteSingleRegisterRequest),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_write_multiple_registers: get_handler!(
             "onWriteMultipleRegisters",
             WriteMultipleRegistersRequest

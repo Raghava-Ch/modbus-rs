@@ -175,7 +175,7 @@ static STEPS: &[Step] = &[
             "mbus-client",
             "--no-default-features",
             "--features",
-            "coils,registers,traffic",
+            "coils,holding-registers,input-registers,traffic",
         ],
     ),
     Step::clippy(
@@ -195,7 +195,7 @@ static STEPS: &[Step] = &[
             "mbus-client",
             "--no-default-features",
             "--features",
-            "registers",
+            "input-registers",
         ],
     ),
     Step::clippy(
@@ -205,7 +205,7 @@ static STEPS: &[Step] = &[
             "mbus-client",
             "--no-default-features",
             "--features",
-            "coils,registers",
+            "coils,holding-registers,input-registers",
         ],
     ),
     Step::build(
@@ -215,7 +215,7 @@ static STEPS: &[Step] = &[
             "mbus-client",
             "--no-default-features",
             "--features",
-            "coils,registers",
+            "coils,holding-registers,input-registers",
         ],
     ),
     // ── mbus-server ──────────────────────────────────────────────────────────
@@ -607,7 +607,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,registers",
+            "network-tcp,input-registers",
         ],
     ),
     Step::check(
@@ -617,7 +617,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,coils,registers",
+            "network-tcp,coils,holding-registers",
         ],
     ),
     Step::check(
@@ -637,7 +637,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,registers,traffic",
+            "network-tcp,input-registers,traffic",
         ],
     ),
     Step::clippy(
@@ -657,7 +657,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,registers",
+            "network-tcp,holding-registers",
         ],
     ),
     Step::clippy(
@@ -667,7 +667,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,coils,registers",
+            "network-tcp,coils,holding-registers",
         ],
     ),
     Step::build(
@@ -677,7 +677,7 @@ static STEPS: &[Step] = &[
             "mbus-async",
             "--no-default-features",
             "--features",
-            "network-tcp,coils,registers",
+            "network-tcp,coils,input-registers",
         ],
     ),
     // ── mbus-gateway ─────────────────────────────────────────────────────────
@@ -763,7 +763,7 @@ static STEPS: &[Step] = &[
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c-client,coils,registers",
+            "c-client,coils,input-registers",
         ],
     ),
     Step::check(
@@ -773,7 +773,7 @@ static STEPS: &[Step] = &[
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c-client,coils,registers,serial-rtu",
+            "c-client,coils,holding-registers,serial-rtu",
         ],
     ),
     Step::check(
@@ -783,7 +783,7 @@ static STEPS: &[Step] = &[
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c-client,coils,registers,serial-ascii",
+            "c-client,coils,holding-registers,serial-ascii",
         ],
     ),
     Step::check(
@@ -793,7 +793,7 @@ static STEPS: &[Step] = &[
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c-client,coils,registers,network-tcp",
+            "c-client,coils,input-registers,network-tcp",
         ],
     ),
     Step::check(
@@ -803,7 +803,7 @@ static STEPS: &[Step] = &[
             "mbus-ffi",
             "--no-default-features",
             "--features",
-            "c-client,coils,registers,serial-rtu,serial-ascii",
+            "c-client,coils,holding-registers,serial-rtu,serial-ascii",
         ],
     ),
     Step::check(

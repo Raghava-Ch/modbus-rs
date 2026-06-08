@@ -18,12 +18,14 @@ const discreteInputs = new Array(1000).fill(false);
 const holdingRegisters = new Array(1000).fill(0);
 const inputRegisters = new Array(1000).fill(0);
 
+const PORT = Number(process.env.MODBUS_PORT ?? 5502);
+
 async function main() {
   // Create and bind the server
   const server = await AsyncTcpModbusServer.bind(
     {
       host: '0.0.0.0',
-      port: 5502,
+      port: PORT,
       unitId: 1,
     },
     {
@@ -96,7 +98,7 @@ async function main() {
   });
 
   // Keep the process alive
-  await new Promise(() => {});
+  await new Promise(() => { });
 }
 
 main().catch(console.error);

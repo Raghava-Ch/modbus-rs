@@ -17,7 +17,7 @@ Issues and discussions are always welcome.
 
 ## Scope
 
-This workspace contains multiple crates for the Modbus core, sync client, async facade, transport implementations, examples, integration tests, and FFI bindings. Keep changes focused to the smallest set of crates necessary.
+This workspace contains multiple crates for the Modbus core, sync client/server/gateway, async client/server/gateway, transport implementations, examples, integration tests, and FFI bindings. Keep changes focused to the smallest set of crates necessary.
 
 ## Development Setup
 
@@ -62,12 +62,21 @@ cargo run -p xtask -- build-c-smoke
 - Prefer targeted crate tests during development, for example:
 
 ```bash
-cargo test -p mbus-client --lib
-cargo test -p mbus-async
-cargo test -p mbus-ffi
+ cargo clippy -p mbus-client --no-default-features --features input-registers -- -D warnings
+ cargo test --workspace --all-features
+
 ```
 
-- Use full workspace tests before merging.
+- Before submitting a pull request, run the comprehensive `xtask` commands to validate all feature subsets and combinations. This prevents accidental breakage of `no_std` or feature-gated code:
+
+```bash
+cargo run -p xtask -- check-feature-subsets
+cargo run -p xtask -- check-feature-matrix
+cargo run -p xtask -- validate-docs --all-rust
+cargo run -p xtask -- check-doc-links
+cargo run -p xtask -- build-c-demo --demo c_client_demo --features c-client,coils,registers,network-tcp,serial-rtu
+```
+
 - If you change example code or top-level docs, verify the examples still compile.
 
 ## Pull Requests

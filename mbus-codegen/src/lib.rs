@@ -1292,7 +1292,7 @@ fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
             "        on_read_holding_registers: Some(mbus_gen_on_read_holding_registers),\n",
         );
     } else {
-        out.push_str("        #[cfg(feature = \"registers\")]\n");
+        out.push_str("        #[cfg(feature = \"holding-registers\")]\n");
         out.push_str("        on_read_holding_registers: None,\n");
     }
     if !holding_write_entries.is_empty() {
@@ -1303,19 +1303,19 @@ fn render_model_init_and_default_handlers(config: &ServerAppConfig) -> String {
             "        on_write_multiple_registers: Some(mbus_gen_on_write_multiple_registers),\n",
         );
     } else {
-        out.push_str("        #[cfg(feature = \"registers\")]\n");
+        out.push_str("        #[cfg(feature = \"holding-registers\")]\n");
         out.push_str("        on_write_single_register: None,\n");
-        out.push_str("        #[cfg(feature = \"registers\")]\n");
+        out.push_str("        #[cfg(feature = \"holding-registers\")]\n");
         out.push_str("        on_write_multiple_registers: None,\n");
     }
-    out.push_str("        #[cfg(feature = \"registers\")]\n");
+    out.push_str("        #[cfg(feature = \"holding-registers\")]\n");
     out.push_str("        on_mask_write_register: None,\n");
-    out.push_str("        #[cfg(feature = \"registers\")]\n");
+    out.push_str("        #[cfg(feature = \"holding-registers\")]\n");
     out.push_str("        on_read_write_multiple_registers: None,\n");
     if has_input {
         out.push_str("        on_read_input_registers: Some(mbus_gen_on_read_input_registers),\n");
     } else {
-        out.push_str("        #[cfg(feature = \"registers\")]\n");
+        out.push_str("        #[cfg(feature = \"input-registers\")]\n");
         out.push_str("        on_read_input_registers: None,\n");
     }
     out.push_str("        #[cfg(feature = \"fifo\")]\n");

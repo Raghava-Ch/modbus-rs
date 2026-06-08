@@ -88,28 +88,28 @@ typedef struct MbusGoServerVtable {
 #endif
 
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Maximum number of downstream channels per gateway instance.
  */
 #define MAX_DOWNSTREAM_CHANNELS 8
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Pipeline / transaction-map size for sync gateway poll cycles (always 1).
  */
 #define TXN_SIZE 1
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Maximum number of exact-unit routing entries per gateway instance.
  */
 #define MAX_UNIT_ROUTES 32
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Maximum number of unit-ID-range routing entries per gateway instance.
  */
@@ -144,7 +144,7 @@ typedef struct MbusGoServerVtable {
 #define VTABLE_BUF_WORDS 128
 #endif
 
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
 /**
  * C-compatible status code returned by every `mbus_*` function.
  *
@@ -152,289 +152,289 @@ typedef struct MbusGoServerVtable {
  * is delivered later via the callbacks in `MbusCallbacks`.
  */
 typedef enum MbusStatusCode {
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Success.
      */
     MbusOk = 0,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Frame parse error.
      */
     MbusErrParseError,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Basic parse error.
      */
     MbusErrBasicParseError,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Response timeout.
      */
     MbusErrTimeout,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Modbus exception response.
      */
     MbusErrModbusException,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * I/O error.
      */
     MbusErrIoError,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Unexpected error.
      */
     MbusErrUnexpected,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Connection lost.
      */
     MbusErrConnectionLost,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Unsupported function.
      */
     MbusErrUnsupportedFunction,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Reserved sub-function.
      */
     MbusErrReservedSubFunction,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid PDU length.
      */
     MbusErrInvalidPduLength,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid ADU length.
      */
     MbusErrInvalidAduLength,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Connection failed.
      */
     MbusErrConnectionFailed,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Connection closed.
      */
     MbusErrConnectionClosed,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Buffer too small.
      */
     MbusErrBufferTooSmall,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Buffer length mismatch.
      */
     MbusErrBufferLenMismatch,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Send failed.
      */
     MbusErrSendFailed,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid address.
      */
     MbusErrInvalidAddress,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid offset.
      */
     MbusErrInvalidOffset,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Too many in-flight requests.
      */
     MbusErrTooManyRequests,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid function code.
      */
     MbusErrInvalidFunctionCode,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * No retries left.
      */
     MbusErrNoRetriesLeft,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Too many file read sub-requests.
      */
     MbusErrTooManyFileReadSubRequests,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * File read PDU overflow.
      */
     MbusErrFileReadPduOverflow,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Unexpected response.
      */
     MbusErrUnexpectedResponse,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid transport.
      */
     MbusErrInvalidTransport,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid slave address.
      */
     MbusErrInvalidSlaveAddress,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Checksum error.
      */
     MbusErrChecksumError,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid configuration.
      */
     MbusErrInvalidConfiguration,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid number of expected responses.
      */
     MbusErrInvalidNumOfExpectedRsps,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid data length.
      */
     MbusErrInvalidDataLen,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid quantity.
      */
     MbusErrInvalidQuantity,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid value.
      */
     MbusErrInvalidValue,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid AND mask.
      */
     MbusErrInvalidAndMask,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid OR mask.
      */
     MbusErrInvalidOrMask,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid byte count.
      */
     MbusErrInvalidByteCount,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid device identification.
      */
     MbusErrInvalidDeviceIdentification,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid device ID code.
      */
     MbusErrInvalidDeviceIdCode,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid MEI type.
      */
     MbusErrInvalidMeiType,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid broadcast address.
      */
     MbusErrInvalidBroadcastAddress,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Broadcast not allowed.
      */
     MbusErrBroadcastNotAllowed,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Framing error (protocol timing violation).
      */
     MbusErrFramingError,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Null pointer passed.
      */
     MbusErrNullPointer,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid UTF-8 string.
      */
     MbusErrInvalidUtf8,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Invalid client ID (freed or never allocated).
      */
     MbusErrInvalidClientId,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Client pool is full — no free slots.
      */
     MbusErrPoolFull,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Client type mismatch (e.g. TCP call on serial ID).
      */
     MbusErrClientTypeMismatch,
 #endif
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
     /**
      * Client is busy (indicates an illegal re-entrant call from a callback).
      */
@@ -443,18 +443,18 @@ typedef enum MbusStatusCode {
 } MbusStatusCode;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Serial framing mode.
  */
 typedef enum MbusSerialMode {
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Modbus RTU binary framing with CRC-16.
      */
     MbusSerialRtu = 0,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Modbus ASCII framing with LRC.
      */
@@ -463,30 +463,30 @@ typedef enum MbusSerialMode {
 } MbusSerialMode;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Backoff strategy selector for retry logic.
  */
 typedef enum MbusBackoffStrategy {
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Retry immediately with no delay.
      */
     MbusBackoffImmediate = 0,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Retry after a fixed delay (`backoff_base_delay_ms`).
      */
     MbusBackoffFixed,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Retry with exponentially increasing delay, capped at `backoff_max_delay_ms`.
      */
     MbusBackoffExponential,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
     /**
      * Retry with linearly increasing delay, capped at `backoff_max_delay_ms`.
      */
@@ -495,7 +495,7 @@ typedef enum MbusBackoffStrategy {
 } MbusBackoffStrategy;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Exception code returned by every C server callback.
  *
@@ -523,31 +523,31 @@ typedef enum MbusBackoffStrategy {
  *   is a transport-level status only returned by the `recv` callback.
  */
 typedef enum MbusServerExceptionCode {
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
     /**
      * No exception — the callback handled the request successfully.
      */
     Ok = 0,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
     /**
      * FC is not supported / not implemented by this server.
      */
     IllegalFunction = 1,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
     /**
      * Address or offset is outside the server's valid range.
      */
     IllegalDataAddress = 2,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
     /**
      * A data value in the request is not acceptable.
      */
     IllegalDataValue = 3,
 #endif
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
     /**
      * The server could not complete the request due to an internal failure.
      */
@@ -628,7 +628,7 @@ typedef struct MbusGoTcpGateway MbusGoTcpGateway;
 typedef struct MbusGoTcpServer MbusGoTcpServer;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Client ID type: an opaque `u16` index into one of the three sub-pools.
  * Use `MBUS_INVALID_CLIENT_ID` (0xFFFF) as the sentinel "no client" value.
@@ -636,7 +636,7 @@ typedef struct MbusGoTcpServer MbusGoTcpServer;
 typedef uint16_t MbusClientId;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Configuration for a Modbus Serial (RTU or ASCII) client.
  *
@@ -682,7 +682,7 @@ typedef struct MbusSerialConfig {
 } MbusSerialConfig;
 #endif
 
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
 /**
  * C-provided transport callbacks — the only interface between C code and the Rust Modbus stack.
  *
@@ -906,7 +906,7 @@ typedef struct MbusTransportCallbacks {
 } MbusTransportCallbacks;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Context passed to the read-coils callback.
  */
@@ -930,7 +930,7 @@ typedef struct MbusReadCoilsCtx {
 } MbusReadCoilsCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Context passed to the write-single-coil callback.
  */
@@ -958,7 +958,7 @@ typedef struct MbusWriteSingleCoilCtx {
 } MbusWriteSingleCoilCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Context passed to the write-multiple-coils callback.
  */
@@ -986,7 +986,7 @@ typedef struct MbusWriteMultipleCoilsCtx {
 } MbusWriteMultipleCoilsCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Context passed to the read-holding-registers callback.
  */
@@ -1010,7 +1010,7 @@ typedef struct MbusReadHoldingRegistersCtx {
 } MbusReadHoldingRegistersCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Context passed to the read-input-registers callback.
  */
@@ -1034,7 +1034,7 @@ typedef struct MbusReadInputRegistersCtx {
 } MbusReadInputRegistersCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Context passed to the read-write-multiple-registers callback.
  */
@@ -1058,7 +1058,7 @@ typedef struct MbusReadWriteMultipleRegistersCtx {
 } MbusReadWriteMultipleRegistersCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Context passed to the write-single-register callback.
  */
@@ -1086,7 +1086,7 @@ typedef struct MbusWriteSingleRegisterCtx {
 } MbusWriteSingleRegisterCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Context passed to the write-multiple-registers callback.
  */
@@ -1114,7 +1114,7 @@ typedef struct MbusWriteMultipleRegistersCtx {
 } MbusWriteMultipleRegistersCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Context passed to the mask-write-register callback.
  */
@@ -1134,7 +1134,7 @@ typedef struct MbusMaskWriteRegisterCtx {
 } MbusMaskWriteRegisterCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Context passed to the read-discrete-inputs callback.
  */
@@ -1158,7 +1158,7 @@ typedef struct MbusReadDiscreteInputsCtx {
 } MbusReadDiscreteInputsCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
 /**
  * Context passed to the read-fifo-queue callback.
  */
@@ -1182,7 +1182,7 @@ typedef struct MbusReadFifoQueueCtx {
 } MbusReadFifoQueueCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * A single sub-request result returned in the `on_read_file_record` callback.
  *
@@ -1205,7 +1205,7 @@ typedef struct MbusFileRecordResult {
 } MbusFileRecordResult;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * Context passed to the read-file-record callback.
  */
@@ -1233,7 +1233,7 @@ typedef struct MbusReadFileRecordCtx {
 } MbusReadFileRecordCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * Context passed to the write-file-record callback.
  */
@@ -1253,7 +1253,7 @@ typedef struct MbusWriteFileRecordCtx {
 } MbusWriteFileRecordCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the read-exception-status callback.
  */
@@ -1277,7 +1277,7 @@ typedef struct MbusReadExceptionStatusCtx {
 } MbusReadExceptionStatusCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the diagnostics callback.
  */
@@ -1309,7 +1309,7 @@ typedef struct MbusDiagnosticsCtx {
 } MbusDiagnosticsCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the comm-event-counter callback.
  */
@@ -1337,7 +1337,7 @@ typedef struct MbusCommEventCounterCtx {
 } MbusCommEventCounterCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the comm-event-log callback.
  */
@@ -1377,7 +1377,7 @@ typedef struct MbusCommEventLogCtx {
 } MbusCommEventLogCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the report-server-id callback.
  */
@@ -1413,7 +1413,7 @@ typedef struct MbusReportServerIdCtx {
 } MbusReportServerIdCtx;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Context passed to the read-device-id callback.
  */
@@ -1453,7 +1453,7 @@ typedef struct MbusReadDeviceIdCtx {
 } MbusReadDeviceIdCtx;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Context passed to the request-failed callback.
  */
@@ -1477,7 +1477,7 @@ typedef struct MbusRequestFailedCtx {
 } MbusRequestFailedCtx;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Table of C function-pointer callbacks.
  *
@@ -1639,7 +1639,7 @@ typedef struct MbusCallbacks {
 } MbusCallbacks;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Configuration for a Modbus TCP client.
  *
@@ -1688,7 +1688,7 @@ typedef struct MbusTcpConfig {
 } MbusTcpConfig;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * A single sub-request passed to [`mbus_tcp_read_file_record`] /
  * [`mbus_tcp_write_file_record`] (and their serial equivalents).
@@ -1724,14 +1724,14 @@ typedef struct MbusSubRequest {
 } MbusSubRequest;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Server ID type: an opaque `u16` index into one of the server sub-pools.
  */
 typedef uint16_t MbusServerId;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * Request context for FC 0x01 — Read Coils.
  *
@@ -1770,7 +1770,7 @@ typedef struct MbusServerReadCoilsReq {
 } MbusServerReadCoilsReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * C callback type for FC 0x01.
  */
@@ -1778,7 +1778,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadCoilsFn)(struct MbusServerR
                                                               void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * Request context for FC 0x05 — Write Single Coil.
  */
@@ -1793,7 +1793,7 @@ typedef struct MbusServerWriteSingleCoilReq {
 } MbusServerWriteSingleCoilReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * C callback type for FC 0x05.
  */
@@ -1801,7 +1801,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteSingleCoilFn)(const struct
                                                                     void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * Request context for FC 0x0F — Write Multiple Coils.
  *
@@ -1824,7 +1824,7 @@ typedef struct MbusServerWriteMultipleCoilsReq {
 } MbusServerWriteMultipleCoilsReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_COILS))
 /**
  * C callback type for FC 0x0F.
  */
@@ -1832,7 +1832,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleCoilsFn)(const str
                                                                        void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Request context for FC 0x02 — Read Discrete Inputs.
  */
@@ -1847,7 +1847,7 @@ typedef struct MbusServerReadDiscreteInputsReq {
 } MbusServerReadDiscreteInputsReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * C callback type for FC 0x02.
  */
@@ -1855,7 +1855,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadDiscreteInputsFn)(struct Mb
                                                                        void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x03 — Read Holding Registers.
  *
@@ -1873,7 +1873,7 @@ typedef struct MbusServerReadHoldingRegistersReq {
 } MbusServerReadHoldingRegistersReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x03.
  */
@@ -1881,7 +1881,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadHoldingRegistersFn)(struct 
                                                                          void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x06 — Write Single Register.
  */
@@ -1893,7 +1893,7 @@ typedef struct MbusServerWriteSingleRegisterReq {
 } MbusServerWriteSingleRegisterReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x06.
  */
@@ -1901,7 +1901,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteSingleRegisterFn)(const st
                                                                         void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x10 — Write Multiple Registers.
  *
@@ -1923,7 +1923,7 @@ typedef struct MbusServerWriteMultipleRegistersReq {
 } MbusServerWriteMultipleRegistersReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x10.
  */
@@ -1931,7 +1931,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteMultipleRegistersFn)(const
                                                                            void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x16 — Mask Write Register.
  */
@@ -1944,7 +1944,7 @@ typedef struct MbusServerMaskWriteRegisterReq {
 } MbusServerMaskWriteRegisterReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x16.
  */
@@ -1952,7 +1952,7 @@ typedef enum MbusServerExceptionCode (*MbusServerMaskWriteRegisterFn)(const stru
                                                                       void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Request context for FC 0x17 — Read/Write Multiple Registers.
  *
@@ -1979,7 +1979,7 @@ typedef struct MbusServerReadWriteMultipleRegistersReq {
 } MbusServerReadWriteMultipleRegistersReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * C callback type for FC 0x17.
  */
@@ -1987,7 +1987,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadWriteMultipleRegistersFn)(s
                                                                                void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Request context for FC 0x04 — Read Input Registers.
  */
@@ -2002,7 +2002,7 @@ typedef struct MbusServerReadInputRegistersReq {
 } MbusServerReadInputRegistersReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * C callback type for FC 0x04.
  */
@@ -2010,7 +2010,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadInputRegistersFn)(struct Mb
                                                                        void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FIFO))
 /**
  * Request context for FC 0x18 — Read FIFO Queue.
  */
@@ -2027,7 +2027,7 @@ typedef struct MbusServerReadFifoQueueReq {
 } MbusServerReadFifoQueueReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FIFO))
 /**
  * C callback type for FC 0x18.
  */
@@ -2035,7 +2035,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadFifoQueueFn)(struct MbusSer
                                                                   void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * Request context for FC 0x14 — Read File Record (one sub-request at a time).
  *
@@ -2056,7 +2056,7 @@ typedef struct MbusServerReadFileRecordReq {
 } MbusServerReadFileRecordReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * C callback type for FC 0x14.
  */
@@ -2064,7 +2064,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadFileRecordFn)(struct MbusSe
                                                                    void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * Request context for FC 0x15 — Write File Record (one sub-request at a time).
  *
@@ -2084,7 +2084,7 @@ typedef struct MbusServerWriteFileRecordReq {
 } MbusServerWriteFileRecordReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_FILE_RECORD))
 /**
  * C callback type for FC 0x15.
  */
@@ -2092,7 +2092,7 @@ typedef enum MbusServerExceptionCode (*MbusServerWriteFileRecordFn)(const struct
                                                                     void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x07 — Read Exception Status.
  *
@@ -2108,7 +2108,7 @@ typedef struct MbusServerReadExceptionStatusReq {
 } MbusServerReadExceptionStatusReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x07.
  */
@@ -2116,7 +2116,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadExceptionStatusFn)(struct M
                                                                         void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x08 — Diagnostics.
  *
@@ -2141,7 +2141,7 @@ typedef struct MbusServerDiagnosticsReq {
 } MbusServerDiagnosticsReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x08.
  */
@@ -2149,7 +2149,7 @@ typedef enum MbusServerExceptionCode (*MbusServerDiagnosticsFn)(struct MbusServe
                                                                 void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x0B — Get Comm Event Counter.
  *
@@ -2169,7 +2169,7 @@ typedef struct MbusServerGetCommEventCounterReq {
 } MbusServerGetCommEventCounterReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x0B.
  */
@@ -2177,7 +2177,7 @@ typedef enum MbusServerExceptionCode (*MbusServerGetCommEventCounterFn)(struct M
                                                                         void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x0C — Get Comm Event Log.
  *
@@ -2214,7 +2214,7 @@ typedef struct MbusServerGetCommEventLogReq {
 } MbusServerGetCommEventLogReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x0C.
  */
@@ -2222,7 +2222,7 @@ typedef enum MbusServerExceptionCode (*MbusServerGetCommEventLogFn)(struct MbusS
                                                                     void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x11 — Report Server ID.
  *
@@ -2251,7 +2251,7 @@ typedef struct MbusServerReportServerIdReq {
 } MbusServerReportServerIdReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x11.
  */
@@ -2259,7 +2259,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReportServerIdFn)(struct MbusSe
                                                                    void *userdata);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * Request context for FC 0x2B / MEI 0x0E — Read Device Identification.
  *
@@ -2295,7 +2295,7 @@ typedef struct MbusServerReadDeviceIdentificationReq {
 } MbusServerReadDeviceIdentificationReq;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_DIAGNOSTICS))
 /**
  * C callback type for FC 0x2B / MEI 0x0E.
  */
@@ -2303,7 +2303,7 @@ typedef enum MbusServerExceptionCode (*MbusServerReadDeviceIdentificationFn)(str
                                                                              void *userdata);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Master callback table for a C Modbus server application.
  *
@@ -2434,7 +2434,7 @@ typedef struct MbusServerHandlers {
 } MbusServerHandlers;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Common server configuration shared by TCP and Serial server types.
  *
@@ -2457,7 +2457,7 @@ typedef struct MbusServerConfig {
 } MbusServerConfig;
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Observability callbacks delivered by the gateway.
  *
@@ -2492,7 +2492,7 @@ typedef struct MbusGatewayCallbacks {
 } MbusGatewayCallbacks;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Opaque gateway handle. `MBUS_INVALID_GATEWAY_ID` (0xFF) is the sentinel.
  */
@@ -2620,26 +2620,42 @@ typedef struct MbusDnServerVtable {
     int32_t (*read_discrete_inputs)(void*, uint16_t, uint16_t, uint8_t*, uint16_t*)
 #endif
     ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
     /**
      * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
      */
-    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_holding_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*)
+#endif
+    ;
+#if defined(MBUS_FEATURE_INPUT_REGISTERS)
     /**
      * `fn(ctx, address, count, out_u16_values, out_count) -> i32`
      */
-    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*);
+    int32_t (*read_input_registers)(void*, uint16_t, uint16_t, uint16_t*, uint16_t*)
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
     /**
      * `fn(ctx, address, value) -> i32`
      */
-    int32_t (*write_single_register)(void*, uint16_t, uint16_t);
+    int32_t (*write_single_register)(void*, uint16_t, uint16_t)
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
     /**
      * `fn(ctx, address, values_be_bytes, count) -> i32`
      */
-    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t);
+    int32_t (*write_multiple_registers)(void*, uint16_t, const uint8_t*, uint16_t)
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
     /**
      * `fn(ctx, address, and_mask, or_mask) -> i32`
      */
-    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t);
+    int32_t (*mask_write_register)(void*, uint16_t, uint16_t, uint16_t)
+#endif
+    ;
+#if defined(MBUS_FEATURE_HOLDING_REGISTERS)
     /**
      * `fn(ctx, read_addr, read_count, write_addr, write_values_be_bytes,
      *    write_count, out_u16_values, out_count) -> i32`
@@ -2651,7 +2667,9 @@ typedef struct MbusDnServerVtable {
                                              const uint8_t*,
                                              uint16_t,
                                              uint16_t*,
-                                             uint16_t*);
+                                             uint16_t*)
+#endif
+    ;
 #if defined(MBUS_FEATURE_FIFO)
     /**
      * `fn(ctx, pointer_address, out_u16_values, out_count) -> i32`
@@ -2776,28 +2794,28 @@ typedef struct MbusGoSubRequest {
 } MbusGoSubRequest;
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * Sentinel value meaning "no valid client".
  */
 #define MBUS_INVALID_CLIENT_ID 65535
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Sentinel value meaning "no valid server" / creation failed.
  */
 #define MBUS_INVALID_SERVER_ID 65535
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Sentinel "no valid gateway" value.
  */
 #define MBUS_INVALID_GATEWAY_ID 255
 #endif
 
-#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
+#if (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO))
 /**
  * Returns a static null-terminated C string describing the status code.
  *
@@ -2807,63 +2825,63 @@ typedef struct MbusGoSubRequest {
 const char *mbus_status_str(enum MbusStatusCode code);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY)))
 /**
  * No-op stub for pool lock (used when no external C caller provides it).
  */
 void mbus_pool_lock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY)))
 /**
  * No-op stub for pool unlock.
  */
 void mbus_pool_unlock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * No-op stub for client lock.
  */
 void mbus_client_lock(uint16_t _id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT))
 /**
  * No-op stub for client unlock.
  */
 void mbus_client_unlock(uint16_t _id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_SERVER))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_SERVER))
 /**
  * No-op stub for server lock.
  */
 void mbus_server_lock(uint16_t _id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_SERVER))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_SERVER))
 /**
  * No-op stub for server unlock.
  */
 void mbus_server_unlock(uint16_t _id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * No-op stub for gateway lock.
  */
 void mbus_gateway_lock(uint8_t _id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * No-op stub for gateway unlock.
  */
 void mbus_gateway_unlock(uint8_t _id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Returns the starting address of the coils range.
  *
@@ -2873,7 +2891,7 @@ void mbus_gateway_unlock(uint8_t _id);
 uint16_t mbus_coils_from_address(const MbusCoils *coils);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Returns the number of coils.
  *
@@ -2883,7 +2901,7 @@ uint16_t mbus_coils_from_address(const MbusCoils *coils);
 uint16_t mbus_coils_quantity(const MbusCoils *coils);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Reads a single coil value by address into `out_value`.
  *
@@ -2896,7 +2914,7 @@ enum MbusStatusCode mbus_coils_value(const MbusCoils *coils,
                                      bool *out_value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Reads a single coil value by 0-based index into `out_value`.
  *
@@ -2913,7 +2931,7 @@ enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
                                               bool *out_value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_COILS))
 /**
  * Returns a raw pointer to the packed coil bit-values. Valid during callback only.
  *
@@ -2923,7 +2941,7 @@ enum MbusStatusCode mbus_coils_value_at_index(const MbusCoils *coils,
 const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Returns the starting address of the discrete inputs range.
  *
@@ -2933,7 +2951,7 @@ const uint8_t *mbus_coils_values_ptr(const MbusCoils *coils);
 uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_inputs);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Returns the number of discrete inputs.
  *
@@ -2943,7 +2961,7 @@ uint16_t mbus_discrete_inputs_from_address(const MbusDiscreteInputs *discrete_in
 uint16_t mbus_discrete_inputs_quantity(const MbusDiscreteInputs *discrete_inputs);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Reads a single discrete input value by address into `out_value`.
  *
@@ -2956,7 +2974,7 @@ enum MbusStatusCode mbus_discrete_inputs_value(const MbusDiscreteInputs *discret
                                                bool *out_value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Reads a single discrete input value by 0-based index into `out_value`.
  *
@@ -2973,7 +2991,7 @@ enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs
                                                         bool *out_value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_DISCRETE_INPUTS))
 /**
  * Returns a raw pointer to the discrete input bit-values. Valid during callback only.
  *
@@ -2984,7 +3002,7 @@ enum MbusStatusCode mbus_discrete_inputs_value_at_index(const MbusDiscreteInputs
 const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discrete_inputs);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
 /**
  * Returns the FIFO pointer address.
  *
@@ -2994,7 +3012,7 @@ const uint8_t *mbus_discrete_inputs_values_ptr(const MbusDiscreteInputs *discret
 uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
 /**
  * Returns the number of values in the FIFO queue.
  *
@@ -3004,7 +3022,7 @@ uint16_t mbus_fifo_queue_ptr_address(const MbusFifoQueue *fifo_queue);
 uint16_t mbus_fifo_queue_count(const MbusFifoQueue *fifo_queue);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
 /**
  * Reads a FIFO value by index.
  *
@@ -3017,7 +3035,7 @@ enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
                                           uint16_t *out_value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && defined(MBUS_FEATURE_FIFO))
 /**
  * Returns a raw pointer to the FIFO values. Valid during callback only.
  *
@@ -3027,35 +3045,35 @@ enum MbusStatusCode mbus_fifo_queue_value(const MbusFifoQueue *fifo_queue,
 const uint16_t *mbus_fifo_queue_values_ptr(const MbusFifoQueue *fifo_queue);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Lock the global pool (used only during client creation/destruction).
  */
 extern void mbus_pool_lock(void);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Unlock the global pool.
  */
 extern void mbus_pool_unlock(void);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Lock a specific client instance (used continuously during polling and requests).
  */
 extern void mbus_client_lock(MbusClientId id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT)) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Unlock a specific client instance.
  */
 extern void mbus_client_unlock(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Create a new Modbus Serial client.
  *
@@ -3071,7 +3089,7 @@ MbusClientId mbus_serial_client_new(const struct MbusSerialConfig *config,
                                     const struct MbusCallbacks *callbacks);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Free a Modbus Serial client created by [`mbus_serial_client_new`].
  *
@@ -3081,14 +3099,14 @@ MbusClientId mbus_serial_client_new(const struct MbusSerialConfig *config,
 void mbus_serial_client_free(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Open the serial port with the configured parameters.
  */
 enum MbusStatusCode mbus_serial_connect(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Close the serial port.
  *
@@ -3098,14 +3116,14 @@ enum MbusStatusCode mbus_serial_connect(MbusClientId id);
 enum MbusStatusCode mbus_serial_disconnect(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Returns `1` if the serial port is currently open, `0` otherwise.
  */
 uint8_t mbus_serial_is_connected(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Drive the serial Modbus state machine once.
  *
@@ -3115,7 +3133,7 @@ uint8_t mbus_serial_is_connected(MbusClientId id);
 void mbus_serial_poll(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Returns `1` if the client has in-flight requests awaiting response/timeout,
  * `0` otherwise.
@@ -3123,14 +3141,14 @@ void mbus_serial_poll(MbusClientId id);
 uint8_t mbus_serial_has_pending_requests(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))
 /**
  * Disconnect then reconnect the serial port.
  */
 enum MbusStatusCode mbus_serial_reconnect(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Create a new Modbus TCP client.
  *
@@ -3150,7 +3168,7 @@ MbusClientId mbus_tcp_client_new(const struct MbusTcpConfig *config,
                                  const struct MbusCallbacks *callbacks);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Free a Modbus TCP client created by [`mbus_tcp_client_new`].
  *
@@ -3160,7 +3178,7 @@ MbusClientId mbus_tcp_client_new(const struct MbusTcpConfig *config,
 void mbus_tcp_client_free(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Open the TCP connection to the configured host:port.
  *
@@ -3169,7 +3187,7 @@ void mbus_tcp_client_free(MbusClientId id);
 enum MbusStatusCode mbus_tcp_connect(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Close the TCP connection.
  *
@@ -3179,14 +3197,14 @@ enum MbusStatusCode mbus_tcp_connect(MbusClientId id);
 enum MbusStatusCode mbus_tcp_disconnect(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Returns `1` if the TCP connection is currently open, `0` otherwise.
  */
 uint8_t mbus_tcp_is_connected(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Drive the Modbus state machine: receive pending frames, match responses to
  * outstanding requests, fire any ready callbacks, and handle timeouts / retries.
@@ -3197,7 +3215,7 @@ uint8_t mbus_tcp_is_connected(MbusClientId id);
 void mbus_tcp_poll(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Returns `1` if the client has in-flight requests awaiting response/timeout,
  * `0` otherwise.
@@ -3205,14 +3223,14 @@ void mbus_tcp_poll(MbusClientId id);
 uint8_t mbus_tcp_has_pending_requests(MbusClientId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_NETWORK_TCP))
 /**
  * Disconnect then reconnect. Useful after a `MBUS_ERR_CONNECTION_LOST` callback.
  */
 enum MbusStatusCode mbus_tcp_reconnect(MbusClientId id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read Coils (FC 0x01) request.
  *
@@ -3225,7 +3243,7 @@ enum MbusStatusCode mbus_tcp_read_coils(MbusClientId id,
                                         uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read Coils (FC 0x01) request.
  *
@@ -3238,7 +3256,7 @@ enum MbusStatusCode mbus_serial_read_coils(MbusClientId id,
                                            uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read Single Coil request (reads FC 0x01 with quantity=1).
  */
@@ -3248,7 +3266,7 @@ enum MbusStatusCode mbus_tcp_read_single_coil(MbusClientId id,
                                               uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read Single Coil request on a serial client.
  */
@@ -3258,7 +3276,7 @@ enum MbusStatusCode mbus_serial_read_single_coil(MbusClientId id,
                                                  uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Write Single Coil (FC 0x05) request. `value`: 1 = ON, 0 = OFF.
  */
@@ -3269,7 +3287,7 @@ enum MbusStatusCode mbus_tcp_write_single_coil(MbusClientId id,
                                                uint8_t value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Write Single Coil (FC 0x05) request on a serial client.
  */
@@ -3280,7 +3298,7 @@ enum MbusStatusCode mbus_serial_write_single_coil(MbusClientId id,
                                                   uint8_t value);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Write Multiple Coils (FC 0x0F) request.
  *
@@ -3298,7 +3316,7 @@ enum MbusStatusCode mbus_tcp_write_multiple_coils(MbusClientId id,
                                                   uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_COILS)) && (defined(MBUS_FEATURE_COILS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Write Multiple Coils (FC 0x0F) request on a serial client.
  *
@@ -3313,7 +3331,7 @@ enum MbusStatusCode mbus_serial_write_multiple_coils(MbusClientId id,
                                                      uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Diagnostics (FC 0x08) request.
  *
@@ -3328,7 +3346,7 @@ enum MbusStatusCode mbus_tcp_diagnostics(MbusClientId id,
                                          uint16_t data_len);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Diagnostics (FC 0x08) request on a serial client.
  *
@@ -3343,7 +3361,7 @@ enum MbusStatusCode mbus_serial_diagnostics(MbusClientId id,
                                             uint16_t data_len);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read Device Identification (FC 0x2B/0x0E) request.
  *
@@ -3357,7 +3375,7 @@ enum MbusStatusCode mbus_tcp_read_device_identification(MbusClientId id,
                                                         uint8_t object_id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DIAGNOSTICS)) && (defined(MBUS_FEATURE_DIAGNOSTICS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read Device Identification request on a serial client.
  */
@@ -3368,7 +3386,7 @@ enum MbusStatusCode mbus_serial_read_device_identification(MbusClientId id,
                                                            uint8_t object_id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read Discrete Inputs (FC 0x02) request.
  *
@@ -3381,7 +3399,7 @@ enum MbusStatusCode mbus_tcp_read_discrete_inputs(MbusClientId id,
                                                   uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read Discrete Inputs (FC 0x02) request on a serial client.
  */
@@ -3392,7 +3410,7 @@ enum MbusStatusCode mbus_serial_read_discrete_inputs(MbusClientId id,
                                                      uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read Single Discrete Input request (FC 0x02 with quantity=1).
  */
@@ -3402,7 +3420,7 @@ enum MbusStatusCode mbus_tcp_read_single_discrete_input(MbusClientId id,
                                                         uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_DISCRETE_INPUTS)) && (defined(MBUS_FEATURE_DISCRETE_INPUTS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read Single Discrete Input request on a serial client.
  */
@@ -3412,7 +3430,7 @@ enum MbusStatusCode mbus_serial_read_single_discrete_input(MbusClientId id,
                                                            uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FIFO)) && (defined(MBUS_FEATURE_FIFO) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FIFO)) && (defined(MBUS_FEATURE_FIFO) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read FIFO Queue (FC 0x18) request.
  *
@@ -3424,7 +3442,7 @@ enum MbusStatusCode mbus_tcp_read_fifo_queue(MbusClientId id,
                                              uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FIFO)) && (defined(MBUS_FEATURE_FIFO) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FIFO)) && (defined(MBUS_FEATURE_FIFO) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read FIFO Queue (FC 0x18) request on a serial client.
  */
@@ -3434,7 +3452,7 @@ enum MbusStatusCode mbus_serial_read_fifo_queue(MbusClientId id,
                                                 uint16_t address);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read File Record (FC 0x14) request.
  *
@@ -3448,7 +3466,7 @@ enum MbusStatusCode mbus_tcp_read_file_record(MbusClientId id,
                                               uint16_t count);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read File Record (FC 0x14) request on a serial client.
  *
@@ -3462,7 +3480,7 @@ enum MbusStatusCode mbus_serial_read_file_record(MbusClientId id,
                                                  uint16_t count);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Write File Record (FC 0x15) request.
  *
@@ -3477,7 +3495,7 @@ enum MbusStatusCode mbus_tcp_write_file_record(MbusClientId id,
                                                uint16_t count);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && defined(MBUS_FEATURE_FILE_RECORD)) && (defined(MBUS_FEATURE_FILE_RECORD) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Write File Record (FC 0x15) request on a serial client.
  *
@@ -3492,7 +3510,7 @@ enum MbusStatusCode mbus_serial_write_file_record(MbusClientId id,
                                                   uint16_t count);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Write Multiple Registers (FC 0x10) request.
  *
@@ -3509,7 +3527,7 @@ enum MbusStatusCode mbus_tcp_write_multiple_registers(MbusClientId id,
                                                       uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Write Multiple Registers (FC 0x10) request on a serial client.
  *
@@ -3524,7 +3542,7 @@ enum MbusStatusCode mbus_serial_write_multiple_registers(MbusClientId id,
                                                          uint16_t quantity);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Queue a Read/Write Multiple Registers (FC 0x17) request.
  *
@@ -3543,7 +3561,7 @@ enum MbusStatusCode mbus_tcp_read_write_multiple_registers(MbusClientId id,
                                                            uint16_t write_qty);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_CLIENT) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) || defined(MBUS_FEATURE_INPUT_REGISTERS))) && (defined(MBUS_FEATURE_HOLDING_REGISTERS) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Queue a Read/Write Multiple Registers (FC 0x17) request on a serial client.
  *
@@ -3560,35 +3578,35 @@ enum MbusStatusCode mbus_serial_read_write_multiple_registers(MbusClientId id,
                                                               uint16_t write_qty);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Lock the global server pool (used only during server creation/destruction).
  */
 extern void mbus_pool_lock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Unlock the global server pool.
  */
 extern void mbus_pool_unlock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Lock a specific server instance.
  */
 extern void mbus_server_lock(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Unlock a specific server instance.
  */
 extern void mbus_server_unlock(MbusServerId id);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_SERIAL_RTU))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_SERIAL_RTU))
 /**
  * Creates a new Modbus Serial RTU server and returns an opaque server ID.
  *
@@ -3620,7 +3638,7 @@ MbusServerId mbus_serial_rtu_server_new(const struct MbusTransportCallbacks *tra
                                         const struct MbusServerConfig *config);
 #endif
 
-#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_SERIAL_ASCII))
+#if (((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII)))) && defined(MBUS_FEATURE_SERIAL_ASCII))
 /**
  * Creates a new Modbus Serial ASCII server and returns an opaque server ID.
  *
@@ -3648,7 +3666,7 @@ MbusServerId mbus_serial_ascii_server_new(const struct MbusTransportCallbacks *t
                                           const struct MbusServerConfig *config);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Destroys a Serial server and releases its pool slot.
  *
@@ -3664,7 +3682,7 @@ MbusServerId mbus_serial_ascii_server_new(const struct MbusTransportCallbacks *t
 void mbus_serial_server_free(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Opens the serial server's transport (e.g. opens and configures the UART).
  *
@@ -3685,7 +3703,7 @@ void mbus_serial_server_free(MbusServerId id);
 enum MbusStatusCode mbus_serial_server_connect(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Closes the serial server's transport (e.g. releases the UART).
  *
@@ -3702,7 +3720,7 @@ enum MbusStatusCode mbus_serial_server_connect(MbusServerId id);
 enum MbusStatusCode mbus_serial_server_disconnect(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Drives the serial server state machine for one iteration.
  *
@@ -3745,7 +3763,7 @@ enum MbusStatusCode mbus_serial_server_disconnect(MbusServerId id);
 enum MbusStatusCode mbus_serial_server_poll(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Returns `true` if the serial server's transport is connected.
  *
@@ -3755,7 +3773,7 @@ enum MbusStatusCode mbus_serial_server_poll(MbusServerId id);
 bool mbus_serial_server_is_connected(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Returns the number of requests waiting in the priority queue.
  *
@@ -3766,7 +3784,7 @@ bool mbus_serial_server_is_connected(MbusServerId id);
 uintptr_t mbus_serial_server_pending_request_count(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))))
 /**
  * Returns the number of responses waiting for retry (failed sends).
  *
@@ -3777,7 +3795,7 @@ uintptr_t mbus_serial_server_pending_request_count(MbusServerId id);
 uintptr_t mbus_serial_server_pending_response_count(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Creates a new Modbus TCP server and returns an opaque server ID.
  *
@@ -3807,7 +3825,7 @@ MbusServerId mbus_tcp_server_new(const struct MbusTransportCallbacks *transport,
                                  const struct MbusServerConfig *config);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Destroys a TCP server and releases its pool slot.
  *
@@ -3827,7 +3845,7 @@ MbusServerId mbus_tcp_server_new(const struct MbusTransportCallbacks *transport,
 void mbus_tcp_server_free(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Opens the server's transport (e.g. begins accepting TCP connections).
  *
@@ -3847,7 +3865,7 @@ void mbus_tcp_server_free(MbusServerId id);
 enum MbusStatusCode mbus_tcp_server_connect(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Closes the server's transport.
  *
@@ -3864,7 +3882,7 @@ enum MbusStatusCode mbus_tcp_server_connect(MbusServerId id);
 enum MbusStatusCode mbus_tcp_server_disconnect(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Drives the server state machine for one iteration.
  *
@@ -3893,7 +3911,7 @@ enum MbusStatusCode mbus_tcp_server_disconnect(MbusServerId id);
 enum MbusStatusCode mbus_tcp_server_poll(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Returns `true` if the server's transport reports itself as connected.
  *
@@ -3903,7 +3921,7 @@ enum MbusStatusCode mbus_tcp_server_poll(MbusServerId id);
 bool mbus_tcp_server_is_connected(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Returns the number of requests currently waiting in the priority queue.
  *
@@ -3914,7 +3932,7 @@ bool mbus_tcp_server_is_connected(MbusServerId id);
 uintptr_t mbus_tcp_server_pending_request_count(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && (defined(MBUS_FEATURE_C_SERVER) && (defined(MBUS_FEATURE_NETWORK_TCP) || defined(MBUS_FEATURE_SERIAL_RTU) || defined(MBUS_FEATURE_SERIAL_ASCII))) && (defined(MBUS_FEATURE_C_SERVER) && defined(MBUS_FEATURE_NETWORK_TCP)))
 /**
  * Returns the number of responses waiting for retry (failed sends).
  *
@@ -3925,7 +3943,7 @@ uintptr_t mbus_tcp_server_pending_request_count(MbusServerId id);
 uintptr_t mbus_tcp_server_pending_response_count(MbusServerId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Create a new TCP↔TCP gateway.
  *
@@ -3947,7 +3965,7 @@ enum MbusStatusCode mbus_gateway_new(const struct MbusTransportCallbacks *upstre
                                      MbusGatewayId *out_id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Register a TCP downstream channel.
  *
@@ -3963,7 +3981,7 @@ enum MbusStatusCode mbus_gateway_add_downstream(MbusGatewayId id,
                                                 uint16_t *out_channel_idx);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Register an exact unit-ID → channel-index route.
  *
@@ -3976,7 +3994,7 @@ enum MbusStatusCode mbus_gateway_add_unit_route(MbusGatewayId id,
                                                 uint16_t channel_idx);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Register a contiguous unit-ID range → channel-index route. `unit_min`
  * and `unit_max` are inclusive.
@@ -3987,7 +4005,7 @@ enum MbusStatusCode mbus_gateway_add_range_route(MbusGatewayId id,
                                                  uint16_t channel_idx);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Drive one poll cycle of the gateway. See
  * [`GatewayServices::poll`](mbus_gateway::GatewayServices::poll) for the
@@ -3996,7 +4014,7 @@ enum MbusStatusCode mbus_gateway_add_range_route(MbusGatewayId id,
 enum MbusStatusCode mbus_gateway_poll(MbusGatewayId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Free the gateway at `id`. Returns [`MbusStatusCode::MbusOk`] on success
  * or [`MbusStatusCode::MbusErrInvalidClientId`] if the handle is invalid.
@@ -4004,7 +4022,7 @@ enum MbusStatusCode mbus_gateway_poll(MbusGatewayId id);
 enum MbusStatusCode mbus_gateway_free(MbusGatewayId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Global pool lock — held only during create/destroy operations. Reuses
  * the same symbol exported by the client pool.
@@ -4012,21 +4030,21 @@ enum MbusStatusCode mbus_gateway_free(MbusGatewayId id);
 extern void mbus_pool_lock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Release the global pool lock.
  */
 extern void mbus_pool_unlock(void);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Per-instance lock — held continuously during `mbus_gateway_poll`.
  */
 extern void mbus_gateway_lock(MbusGatewayId id);
 #endif
 
-#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
+#if ((defined(MBUS_FEATURE_C_CLIENT) || defined(MBUS_FEATURE_C_SERVER) || defined(MBUS_FEATURE_C_GATEWAY) || defined(MBUS_FEATURE_DOTNET) || defined(MBUS_FEATURE_GO)) && defined(MBUS_FEATURE_C_GATEWAY))
 /**
  * Release a per-instance gateway lock.
  */
@@ -4118,7 +4136,7 @@ void mbus_dn_serial_client_set_request_timeout_ms(struct MbusDnSerialClient *han
                                                   uint64_t timeout_ms);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads `quantity` holding registers (FC03).
  *
@@ -4135,7 +4153,7 @@ MbusDnStatus mbus_dn_serial_client_read_holding_registers(struct MbusDnSerialCli
                                                           uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes a single holding register (FC06).
  *
@@ -4151,7 +4169,7 @@ MbusDnStatus mbus_dn_serial_client_write_single_register(struct MbusDnSerialClie
                                                          uint16_t *out_value);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes multiple holding registers (FC16).
  *
@@ -4170,7 +4188,7 @@ MbusDnStatus mbus_dn_serial_client_write_multiple_registers(struct MbusDnSerialC
                                                             uint16_t *out_quantity);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Reads `quantity` input registers (FC04).
  *
@@ -4187,7 +4205,7 @@ MbusDnStatus mbus_dn_serial_client_read_input_registers(struct MbusDnSerialClien
                                                         uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -4202,7 +4220,7 @@ MbusDnStatus mbus_dn_serial_client_mask_write_register(struct MbusDnSerialClient
                                                        uint16_t or_mask);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *
@@ -4504,7 +4522,7 @@ MbusDnStatus mbus_dn_tcp_client_set_request_timeout_ms(struct MbusDnTcpClient *h
 uint8_t mbus_dn_tcp_client_has_pending_requests(struct MbusDnTcpClient *handle);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads `quantity` holding registers (FC03) starting at `address` from
  * the given `unit_id` and copies them, in declaration order, into the
@@ -4531,7 +4549,7 @@ MbusDnStatus mbus_dn_tcp_client_read_holding_registers(struct MbusDnTcpClient *h
                                                        uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes a single holding register (FC06).
  *
@@ -4552,7 +4570,7 @@ MbusDnStatus mbus_dn_tcp_client_write_single_register(struct MbusDnTcpClient *ha
                                                       uint16_t *out_value);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes `quantity` holding registers (FC16) starting at `address`.
  *
@@ -4656,7 +4674,7 @@ MbusDnStatus mbus_dn_tcp_client_read_discrete_inputs(struct MbusDnTcpClient *han
                                                      uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Reads `quantity` input registers (FC04) starting at `address` from `unit_id`.
  *
@@ -4673,7 +4691,7 @@ MbusDnStatus mbus_dn_tcp_client_read_input_registers(struct MbusDnTcpClient *han
                                                      uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -4688,7 +4706,7 @@ MbusDnStatus mbus_dn_tcp_client_mask_write_register(struct MbusDnTcpClient *hand
                                                     uint16_t or_mask);
 #endif
 
-#if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *
@@ -5130,7 +5148,7 @@ void mbus_go_serial_client_set_request_timeout_ms(struct MbusGoSerialClient *han
                                                   uint64_t timeout_ms);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads `quantity` holding registers (FC03).
  *
@@ -5147,7 +5165,7 @@ MbusGoStatus mbus_go_serial_client_read_holding_registers(struct MbusGoSerialCli
                                                           uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes a single holding register (FC06).
  *
@@ -5163,7 +5181,7 @@ MbusGoStatus mbus_go_serial_client_write_single_register(struct MbusGoSerialClie
                                                          uint16_t *out_value);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes multiple holding registers (FC16).
  *
@@ -5182,7 +5200,7 @@ MbusGoStatus mbus_go_serial_client_write_multiple_registers(struct MbusGoSerialC
                                                             uint16_t *out_quantity);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Reads `quantity` input registers (FC04).
  *
@@ -5199,7 +5217,7 @@ MbusGoStatus mbus_go_serial_client_read_input_registers(struct MbusGoSerialClien
                                                         uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -5214,7 +5232,7 @@ MbusGoStatus mbus_go_serial_client_mask_write_register(struct MbusGoSerialClient
                                                        uint16_t or_mask);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *
@@ -5516,7 +5534,7 @@ MbusGoStatus mbus_go_tcp_client_set_request_timeout_ms(struct MbusGoTcpClient *h
 uint8_t mbus_go_tcp_client_has_pending_requests(struct MbusGoTcpClient *handle);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads `quantity` holding registers (FC03) starting at `address` from
  * the given `unit_id` and copies them, in declaration order, into the
@@ -5543,7 +5561,7 @@ MbusGoStatus mbus_go_tcp_client_read_holding_registers(struct MbusGoTcpClient *h
                                                        uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes a single holding register (FC06).
  *
@@ -5564,7 +5582,7 @@ MbusGoStatus mbus_go_tcp_client_write_single_register(struct MbusGoTcpClient *ha
                                                       uint16_t *out_value);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Writes `quantity` holding registers (FC16) starting at `address`.
  *
@@ -5668,7 +5686,7 @@ MbusGoStatus mbus_go_tcp_client_read_discrete_inputs(struct MbusGoTcpClient *han
                                                      uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_INPUT_REGISTERS))
 /**
  * Reads `quantity` input registers (FC04) starting at `address` from `unit_id`.
  *
@@ -5685,7 +5703,7 @@ MbusGoStatus mbus_go_tcp_client_read_input_registers(struct MbusGoTcpClient *han
                                                      uint16_t *out_count);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Applies an AND/OR bitmask to a holding register (FC22).
  *
@@ -5700,7 +5718,7 @@ MbusGoStatus mbus_go_tcp_client_mask_write_register(struct MbusGoTcpClient *hand
                                                     uint16_t or_mask);
 #endif
 
-#if (defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32))
+#if ((defined(MBUS_FEATURE_GO) && !defined(MBUS_TARGET_WASM32)) && defined(MBUS_FEATURE_HOLDING_REGISTERS))
 /**
  * Reads and simultaneously writes multiple holding registers (FC23).
  *

@@ -1,7 +1,7 @@
 use crate::app::RegisterResponse;
-use crate::services::{
-    ClientCommon, ClientServices, Mask, Multiple, OperationMeta, Single, register,
-};
+#[cfg(feature = "holding-registers")]
+use crate::services::Mask;
+use crate::services::{ClientCommon, ClientServices, Multiple, OperationMeta, Single, register};
 use mbus_core::{
     errors::MbusError,
     transport::{Transport, UnitIdOrSlaveAddr},

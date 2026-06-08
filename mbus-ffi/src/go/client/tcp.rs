@@ -214,7 +214,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_has_pending_requests(
 /// * `out_buf` must point to writable storage for at least `out_buf_len`
 ///   `u16` values.
 /// * `out_count` must point to a writable `u16`.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_read_holding_registers(
     handle: *mut MbusGoTcpClient,
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_read_holding_registers(
 /// * `handle` must be a valid client pointer.
 /// * `out_address` and `out_value` may be null; if non-null they must
 ///   point to writable `u16` storage.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_write_single_register(
     handle: *mut MbusGoTcpClient,
@@ -304,7 +304,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_write_single_register(
 /// * `handle` must be a valid client pointer.
 /// * `values` must point to at least `quantity` readable `u16` values.
 /// * `out_address` and `out_quantity` may be null.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_write_multiple_registers(
     handle: *mut MbusGoTcpClient,
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_read_discrete_inputs(
 /// # Safety
 ///
 /// `handle`, `out_buf`, and `out_count` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_read_input_registers(
     handle: *mut MbusGoTcpClient,
@@ -567,7 +567,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_read_input_registers(
 /// # Safety
 ///
 /// `handle` must be a valid client pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_mask_write_register(
     handle: *mut MbusGoTcpClient,
@@ -592,7 +592,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_mask_write_register(
 /// # Safety
 ///
 /// `handle`, `write_values`, `out_buf`, and `out_count` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_tcp_client_read_write_multiple_registers(
     handle: *mut MbusGoTcpClient,

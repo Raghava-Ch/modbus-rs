@@ -354,7 +354,7 @@ impl AsyncTcpModbusClient {
 
     /// Reads holding registers (FC03).
     #[napi(ts_return_type = "Promise<number[]>")]
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub fn read_holding_registers(
         &self,
         env: Env,
@@ -385,7 +385,7 @@ impl AsyncTcpModbusClient {
 
     /// Reads input registers (FC04).
     #[napi(ts_return_type = "Promise<number[]>")]
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     pub fn read_input_registers(
         &self,
         env: Env,
@@ -416,7 +416,7 @@ impl AsyncTcpModbusClient {
 
     /// Writes a single register (FC06).
     #[napi(ts_return_type = "Promise<void>")]
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub fn write_single_register(
         &self,
         env: Env,
@@ -447,7 +447,7 @@ impl AsyncTcpModbusClient {
 
     /// Writes multiple registers (FC16).
     #[napi(ts_return_type = "Promise<void>")]
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub fn write_multiple_registers(
         &self,
         env: Env,
@@ -478,7 +478,7 @@ impl AsyncTcpModbusClient {
 
     /// Reads and writes multiple registers atomically (FC23).
     #[napi(ts_return_type = "Promise<number[]>")]
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub fn read_write_multiple_registers(
         &self,
         env: Env,

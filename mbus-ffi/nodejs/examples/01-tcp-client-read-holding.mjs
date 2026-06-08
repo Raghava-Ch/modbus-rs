@@ -11,11 +11,14 @@
 
 import { AsyncTcpTransport } from 'modbus-rs';
 
+const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
+const PORT = Number(process.env.MODBUS_PORT ?? 5502);
+
 async function main() {
   // Connect to a Modbus TCP server
   const transport = await AsyncTcpTransport.connect({
-    host: '127.0.0.1',
-    port: 502,
+    host: HOST,
+    port: PORT,
     timeoutMs: 5000,
   });
   const client = transport.createClient({ unitId: 1 });

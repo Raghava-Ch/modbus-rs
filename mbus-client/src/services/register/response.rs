@@ -32,6 +32,7 @@ impl ResponseParser {
     // --- Parsing Methods ---
 
     /// Parses the response PDU for a Read Holding Registers (FC 0x03) response.
+    #[cfg(feature = "holding-registers")]
     pub fn parse_read_holding_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -57,6 +58,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Write Single Register (FC 0x06) response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn parse_write_single_register_response(
         pdu: &Pdu,
         expected_address: u16,
@@ -80,6 +82,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Write Multiple Registers (FC 0x10) response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn parse_write_multiple_registers_response(
         pdu: &Pdu,
         expected_address: u16,
@@ -103,6 +106,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Read/Write Multiple Registers (FC 0x17) response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn parse_read_write_multiple_registers_response(
         pdu: &Pdu,
         expected_quantity: u16,
@@ -115,6 +119,7 @@ impl ResponseParser {
     }
 
     /// Parses the response PDU for a Mask Write Register (FC 0x16) response.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn parse_mask_write_register_response(
         pdu: &Pdu,
         expected_address: u16,

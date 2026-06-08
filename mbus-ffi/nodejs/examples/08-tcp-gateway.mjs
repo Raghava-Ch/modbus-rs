@@ -9,12 +9,14 @@
 
 import { AsyncTcpGateway } from 'modbus-rs';
 
+const PORT = Number(process.env.MODBUS_PORT ?? 5502);
+
 async function main() {
   // Create and bind the gateway
   const gateway = await AsyncTcpGateway.bind(
     {
       host: '0.0.0.0',
-      port: 5502,
+      port: PORT,
     },
     {
       // List of downstream Modbus servers
@@ -49,7 +51,7 @@ async function main() {
   });
 
   // Keep the process alive
-  await new Promise(() => {});
+  await new Promise(() => { });
 }
 
 main().catch(console.error);

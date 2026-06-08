@@ -17,9 +17,11 @@ import { AsyncTcpModbusServer } from 'modbus-rs';
 const counters = { reads: 0, writes: 0 };
 const registers = new Array(256).fill(0);
 
+const PORT = Number(process.env.MODBUS_PORT ?? 5502);
+
 async function main() {
   const server = await AsyncTcpModbusServer.bind(
-    { host: '0.0.0.0', port: 5502 },
+    { host: '0.0.0.0', port: PORT },
     {
       onReadHoldingRegisters: (req) => {
         counters.reads++;
@@ -53,7 +55,7 @@ async function main() {
     process.exit(0);
   });
 
-  await new Promise(() => {}); // run forever
+  await new Promise(() => { }); // run forever
 }
 
 main().catch((err) => {

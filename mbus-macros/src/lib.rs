@@ -3208,7 +3208,7 @@ fn generate_async_handler_impl(
 
     let read_holding_registers_arm = if !hr_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ::mbus_async::server::ModbusRequest::ReadHoldingRegisters { address, count, .. } => {
                 let total_bytes = count as usize * 2;
                 let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];
@@ -3245,7 +3245,7 @@ fn generate_async_handler_impl(
 
     let write_single_register_arm = if !hr_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ::mbus_async::server::ModbusRequest::WriteSingleRegister { address, value, .. } => {
                 let mut wrote = false;
                 #hr_write_single_route
@@ -3264,7 +3264,7 @@ fn generate_async_handler_impl(
 
     let write_multiple_registers_arm = if !hr_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ::mbus_async::server::ModbusRequest::WriteMultipleRegisters { address, count, ref data, .. } => {
                 // Decode raw BE bytes into u16 words.
                 let byte_count = count as usize * 2;
@@ -3298,7 +3298,7 @@ fn generate_async_handler_impl(
 
     let mask_write_register_arm = if !hr_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ::mbus_async::server::ModbusRequest::MaskWriteRegister { address, and_mask, or_mask, .. } => {
                 let mut found = false;
                 #hr_mask_write_route
@@ -3317,7 +3317,7 @@ fn generate_async_handler_impl(
 
     let read_write_multiple_registers_arm = if !hr_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "holding-registers")]
             ::mbus_async::server::ModbusRequest::ReadWriteMultipleRegisters {
                 read_address, read_count, write_address, write_count, ref data, ..
             } => {
@@ -3386,7 +3386,7 @@ fn generate_async_handler_impl(
 
     let read_input_registers_arm = if !ir_fields.is_empty() {
         quote! {
-            #[cfg(feature = "registers")]
+            #[cfg(feature = "input-registers")]
             ::mbus_async::server::ModbusRequest::ReadInputRegisters { address, count, .. } => {
                 let total_bytes = count as usize * 2;
                 let mut out = [0u8; ::mbus_core::data_unit::common::MAX_PDU_DATA_LEN];

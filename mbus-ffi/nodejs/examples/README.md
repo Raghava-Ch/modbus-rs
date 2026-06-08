@@ -44,6 +44,12 @@ bindings.
 
 ## Running examples 01-08 (TCP)
 
+Build the node bindings
+
+```bash
+npm run build
+```
+
 The TCP client examples (01-05) need a Modbus TCP server.  The simplest
 setup is to run the in-process server example in one terminal:
 
@@ -61,6 +67,8 @@ You can override the target with environment variables:
 
 ```bash
 MODBUS_HOST=192.168.1.50 MODBUS_PORT=502 node examples/01-tcp-client-read-holding.mjs
+
+MODBUS_PORT=COM2 node examples/09-serial-rtu-client.mjs
 ```
 
 ## Running serial examples (09-11)
@@ -111,6 +119,6 @@ node dist/examples/12-typescript-client.js
   This installs dependencies, builds the native addon, and creates the local
   package link used by the examples.
 * **Connection refused** — make sure a server is listening on the host/port.
-* **Serial port not found** — check the path with `ls /dev/tty*` (Linux/macOS)
+* **Serial port not found** — check the path with `ls /dev/***` (Linux/macOS)
   or `mode` (Windows), and confirm the user has access (Linux: add user to
   `dialout` group).

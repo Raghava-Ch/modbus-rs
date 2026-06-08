@@ -323,17 +323,19 @@ fn main() {
             );
             app_config.memory_map.discrete_inputs.clear();
         }
-        if std::env::var("CARGO_FEATURE_REGISTERS").is_err() {
+        if std::env::var("CARGO_FEATURE_HOLDING_REGISTERS").is_err() {
             if !app_config.memory_map.holding_registers.is_empty() {
                 println!(
-                    "cargo::warning=YAML defines {} holding register(s) but the `registers` feature is not enabled; holding-register handlers will NOT be compiled.",
+                    "cargo::warning=YAML defines {} holding register(s) but the `holding-registers` feature is not enabled; holding-register handlers will NOT be compiled.",
                     app_config.memory_map.holding_registers.len()
                 );
                 app_config.memory_map.holding_registers.clear();
             }
+        }
+        if std::env::var("CARGO_FEATURE_INPUT_REGISTERS").is_err() {
             if !app_config.memory_map.input_registers.is_empty() {
                 println!(
-                    "cargo::warning=YAML defines {} input register(s) but the `registers` feature is not enabled; input-register handlers will NOT be compiled.",
+                    "cargo::warning=YAML defines {} input register(s) but the `input-registers` feature is not enabled; input-register handlers will NOT be compiled.",
                     app_config.memory_map.input_registers.len()
                 );
                 app_config.memory_map.input_registers.clear();

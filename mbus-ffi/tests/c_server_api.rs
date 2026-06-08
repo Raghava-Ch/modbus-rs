@@ -35,7 +35,7 @@ pub unsafe extern "C" fn mbus_server_unlock(_id: u16) {}
 use mbus_ffi::c::error::MbusStatusCode;
 #[cfg(feature = "coils")]
 use mbus_ffi::c::server::callbacks::MbusServerReadCoilsReq;
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 use mbus_ffi::c::server::callbacks::MbusServerReadHoldingRegistersReq;
 #[cfg(feature = "coils")]
 use mbus_ffi::c::server::callbacks::MbusServerWriteSingleCoilReq;
@@ -181,7 +181,7 @@ unsafe extern "C" fn test_on_write_single_coil(
 }
 
 /// FC03 — Read Holding Registers: returns fixed 0xDEAD pattern.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 unsafe extern "C" fn test_on_read_holding_registers(
     req: *mut MbusServerReadHoldingRegistersReq,
     _userdata: *mut c_void,
@@ -213,17 +213,17 @@ fn make_all_null_handlers() -> MbusServerHandlers {
         on_write_multiple_coils: None,
         #[cfg(feature = "discrete-inputs")]
         on_read_discrete_inputs: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_read_holding_registers: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_write_single_register: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_write_multiple_registers: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_mask_write_register: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_read_write_multiple_registers: None,
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         on_read_input_registers: None,
         #[cfg(feature = "fifo")]
         on_read_fifo_queue: None,
@@ -252,7 +252,7 @@ fn make_test_handlers() -> MbusServerHandlers {
         on_read_coils: Some(test_on_read_coils),
         #[cfg(feature = "coils")]
         on_write_single_coil: Some(test_on_write_single_coil),
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         on_read_holding_registers: Some(test_on_read_holding_registers),
         ..make_all_null_handlers()
     }
@@ -477,7 +477,7 @@ fn fc01_read_coils_dispatches_callback_and_returns_success_response() {
     mbus_tcp_server_free(id);
 }
 
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[test]
 fn fc03_read_holding_registers_dispatches_callback() {
     let _guard = TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());

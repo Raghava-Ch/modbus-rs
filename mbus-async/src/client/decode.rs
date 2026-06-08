@@ -43,7 +43,7 @@ use mbus_core::models::file_record::{
 use mbus_core::models::register::HoldingRegisters;
 #[cfg(feature = "input-registers")]
 use mbus_core::models::register::InputRegisters;
-#[cfg(any(feature = "input-registers", feature = "holding-registers"))]
+#[cfg(feature = "input-registers")]
 use mbus_core::models::register::MAX_REGISTERS_PER_PDU;
 #[cfg(feature = "diagnostics")]
 use mbus_core::{

@@ -31,14 +31,9 @@ Implemented:
 | `AsyncTcpModbusServer` | Async Modbus TCP server | Drives request handling via JS handler callback dispatch |
 | `AsyncTcpGateway` | Async Modbus TCP gateway with unit-ID routing | Routing table implemented |
 
-Planned:
-
-* `AsyncSerialModbusServer` (RTU/ASCII server) — see Example 10.
-* Browser/WASM npm package (the Rust `wasm` feature already exists; a separate npm wrapper will follow).
-
 ## Building
 
-You need Node.js ≥ 20 LTS and a working Rust toolchain. On Linux you also
+You need Node.js ≥ 24.6 LTS and a working Rust toolchain. On Linux you also
 need `libudev-dev` (Debian/Ubuntu) or `libudev-devel` (Fedora/RHEL) for
 the serialport dependency.
 

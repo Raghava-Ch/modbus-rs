@@ -249,7 +249,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_set_request_timeout_ms(
 /// # Safety
 ///
 /// `handle`, `out_buf`, and `out_count` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_read_holding_registers(
     handle: *mut MbusGoSerialClient,
@@ -290,7 +290,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_read_holding_registers(
 /// # Safety
 ///
 /// `handle` must be a valid client pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_write_single_register(
     handle: *mut MbusGoSerialClient,
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_write_single_register(
 /// # Safety
 ///
 /// `handle` and `values` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_write_multiple_registers(
     handle: *mut MbusGoSerialClient,
@@ -365,7 +365,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_write_multiple_registers(
 /// # Safety
 ///
 /// `handle`, `out_buf`, and `out_count` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "input-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_read_input_registers(
     handle: *mut MbusGoSerialClient,
@@ -406,7 +406,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_read_input_registers(
 /// # Safety
 ///
 /// `handle` must be a valid client pointer.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_mask_write_register(
     handle: *mut MbusGoSerialClient,
@@ -431,7 +431,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_mask_write_register(
 /// # Safety
 ///
 /// `handle`, `write_values`, `out_buf`, and `out_count` must be valid non-null pointers.
-#[cfg(feature = "registers")]
+#[cfg(feature = "holding-registers")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mbus_go_serial_client_read_write_multiple_registers(
     handle: *mut MbusGoSerialClient,

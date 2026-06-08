@@ -1,0 +1,11 @@
+name: c_gateway_demo
+description: "Hand-written Modbus TCP server demo (no codegen)"
+binary: c_gateway_demo
+rust_features: "c-gateway,network-tcp,error-trait"
+
+run:
+  default_mode: self-test
+  modes:
+    self-test:
+      args: []
+      description: "In-process self-test (no network needed)"

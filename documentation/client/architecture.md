@@ -66,7 +66,7 @@ Understanding the internal design of the Modbus client stack.
 - `StdAsciiTransport` — Serial ASCII transport
 - Both use the `serialport` crate
 
-### `mbus-async`
+### `mbus-client-async` and `mbus-server-async` 
 
 - `AsyncTcpClient` — Tokio async wrapper
 - `AsyncSerialClient` — Tokio async wrapper

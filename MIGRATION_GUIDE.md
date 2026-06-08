@@ -7,7 +7,7 @@ This index redirects you to the specific versioned migration guides for `modbus-
 ## 1. Versioned Migration Guides
 
 ### [v0.14.0 Migration Guide (from v0.13.0)](./documentation/migrations/v0.13.0-to-v0.14.0.md)
-- **Target Platform**: Node.js Bindings
+- **Target Platform**: Node.js, Python, Wasm Bindings
 - **Topic**: Upgrading to the **Transport + Client Factory** API.
 - **Key Changes**:
   - Separation of physical socket/port management (`AsyncTcpTransport` / `AsyncRtuTransport`) from logical client endpoints.

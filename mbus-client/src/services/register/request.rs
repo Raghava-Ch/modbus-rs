@@ -29,6 +29,7 @@ pub(super) struct ReqPduCompiler {}
 /// Each method validates the input parameters and constructs a PDU with the appropriate function code and data payload for the specified operation.
 impl ReqPduCompiler {
     /// Creates a Modbus PDU for a Read Holding Registers (FC 0x03) request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn read_holding_registers_request(
         address: u16,
         quantity: u16,
@@ -52,6 +53,7 @@ impl ReqPduCompiler {
     }
 
     /// Creates a Modbus PDU for a Write Single Register (FC 0x06) request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn write_single_register_request(
         address: u16,
         value: u16,
@@ -60,6 +62,7 @@ impl ReqPduCompiler {
     }
 
     /// Creates a Modbus PDU for a Write Multiple Registers (FC 0x10) request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn write_multiple_registers_request(
         address: u16,
         quantity: u16,
@@ -88,6 +91,7 @@ impl ReqPduCompiler {
     }
 
     /// Creates a Modbus PDU for a Read/Write Multiple Registers (FC 0x17) request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn read_write_multiple_registers_request(
         read_address: u16,
         read_quantity: u16,
@@ -119,6 +123,7 @@ impl ReqPduCompiler {
     }
 
     /// Creates a Modbus PDU for a Mask Write Register (FC 0x16) request.
+    #[cfg(feature = "holding-registers")]
     pub(super) fn mask_write_register_request(
         address: u16,
         and_mask: u16,

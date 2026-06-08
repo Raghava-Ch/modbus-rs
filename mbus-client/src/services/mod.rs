@@ -597,7 +597,7 @@ pub(crate) struct Multiple {
     quantity: u16,
 }
 /// Internal tracking payload for a Masking operation.
-#[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+#[cfg(feature = "holding-registers")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Mask {
     address: u16,
@@ -617,20 +617,23 @@ pub(crate) struct Diag {
 pub(crate) enum OperationMeta {
     #[allow(dead_code)]
     Other,
+    #[allow(dead_code)]
     Single(Single),
+    #[allow(dead_code)]
     Multiple(Multiple),
-    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+    #[cfg(feature = "holding-registers")]
     Masking(Mask),
     #[cfg(feature = "diagnostics")]
     Diag(Diag),
 }
 
 impl OperationMeta {
+    #[allow(dead_code)]
     fn address(&self) -> u16 {
         match self {
             OperationMeta::Single(s) => s.address,
             OperationMeta::Multiple(m) => m.address,
-            #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+            #[cfg(feature = "holding-registers")]
             OperationMeta::Masking(m) => m.address,
             _ => 0,
         }
@@ -644,6 +647,7 @@ impl OperationMeta {
         }
     }
 
+    #[allow(dead_code)]
     fn quantity(&self) -> u16 {
         match self {
             OperationMeta::Single(_) => 1,
@@ -652,7 +656,7 @@ impl OperationMeta {
         }
     }
 
-    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+    #[cfg(feature = "holding-registers")]
     fn and_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.and_mask,
@@ -660,7 +664,7 @@ impl OperationMeta {
         }
     }
 
-    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+    #[cfg(feature = "holding-registers")]
     fn or_mask(&self) -> u16 {
         match self {
             OperationMeta::Masking(m) => m.or_mask,
@@ -668,11 +672,12 @@ impl OperationMeta {
         }
     }
 
+    #[allow(dead_code)]
     fn is_single(&self) -> bool {
         matches!(self, OperationMeta::Single(_))
     }
 
-    #[cfg(any(feature = "holding-registers", feature = "input-registers"))]
+    #[cfg(feature = "holding-registers")]
     fn single_value(&self) -> u16 {
         match self {
             OperationMeta::Single(s) => s.value,
@@ -730,6 +735,7 @@ pub(crate) struct ExpectedResponse<T, A, const N: usize> {
     pub handler: ResponseHandler<T, A, N>,
 
     /// Modbus memory context (address/quantity) needed to validate the response.
+    #[allow(dead_code)]
     pub operation_meta: OperationMeta,
 }
 
@@ -1399,6 +1405,7 @@ where
         LoopAction::Advance
     }
 
+    #[allow(dead_code)]
     fn add_an_expectation(
         &mut self,
         txn_id: u16,
@@ -1617,6 +1624,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
     }
 
     /// Returns the configured number of retries for outstanding requests.
+    #[allow(dead_code)]
     fn retry_attempts(&self) -> u8 {
         match &self.config {
             ModbusConfig::Tcp(config) => config.retry_attempts,
@@ -1700,6 +1708,7 @@ impl<TRANSPORT: Transport, APP: ClientCommon, const N: usize> ClientServices<TRA
         Ok(expected_length)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn dispatch_request_frame(
         &mut self,
         txn_id: u16,

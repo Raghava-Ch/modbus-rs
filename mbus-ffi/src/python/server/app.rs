@@ -441,7 +441,7 @@ async fn dispatch_request(
         }
 
         // FC03 — Read Holding Registers
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::ReadHoldingRegisters { address, count, .. } => {
             let result = eval_python_call!(|py| {
                 app.bind(py)
@@ -463,7 +463,7 @@ async fn dispatch_request(
         }
 
         // FC04 — Read Input Registers
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         ModbusRequest::ReadInputRegisters { address, count, .. } => {
             let result = eval_python_call!(|py| {
                 app.bind(py)
@@ -485,7 +485,7 @@ async fn dispatch_request(
         }
 
         // FC06 — Write Single Register
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::WriteSingleRegister { address, value, .. } => {
             let result = eval_python_call!(|py| {
                 app.bind(py)
@@ -499,7 +499,7 @@ async fn dispatch_request(
         }
 
         // FC10 — Write Multiple Registers
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::WriteMultipleRegisters {
             address,
             count,
@@ -528,7 +528,7 @@ async fn dispatch_request(
         }
 
         // FC16 — Mask Write Register
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::MaskWriteRegister {
             address,
             and_mask,
@@ -547,7 +547,7 @@ async fn dispatch_request(
         }
 
         // FC17 — Read/Write Multiple Registers
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::ReadWriteMultipleRegisters {
             read_address,
             read_count,

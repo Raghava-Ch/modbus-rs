@@ -77,36 +77,36 @@ pub struct MbusDnServerVtable {
 
     // ── FC03 — Read Holding Registers ────────────────────────────────────────
     /// `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub read_holding_registers:
         Option<unsafe extern "C" fn(*mut c_void, u16, u16, *mut u16, *mut u16) -> i32>,
 
     // ── FC04 — Read Input Registers ──────────────────────────────────────────
     /// `fn(ctx, address, count, out_u16_values, out_count) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "input-registers")]
     pub read_input_registers:
         Option<unsafe extern "C" fn(*mut c_void, u16, u16, *mut u16, *mut u16) -> i32>,
 
     // ── FC06 — Write Single Register ─────────────────────────────────────────
     /// `fn(ctx, address, value) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub write_single_register: Option<unsafe extern "C" fn(*mut c_void, u16, u16) -> i32>,
 
     // ── FC10 — Write Multiple Registers ─────────────────────────────────────
     /// `fn(ctx, address, values_be_bytes, count) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub write_multiple_registers:
         Option<unsafe extern "C" fn(*mut c_void, u16, *const u8, u16) -> i32>,
 
     // ── FC22 — Mask Write Register ───────────────────────────────────────────
     /// `fn(ctx, address, and_mask, or_mask) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub mask_write_register: Option<unsafe extern "C" fn(*mut c_void, u16, u16, u16) -> i32>,
 
     // ── FC23 — Read/Write Multiple Registers ─────────────────────────────────
     /// `fn(ctx, read_addr, read_count, write_addr, write_values_be_bytes,
     ///    write_count, out_u16_values, out_count) -> i32`
-    #[cfg(feature = "registers")]
+    #[cfg(feature = "holding-registers")]
     pub read_write_multiple_registers: Option<
         unsafe extern "C" fn(*mut c_void, u16, u16, u16, *const u8, u16, *mut u16, *mut u16) -> i32,
     >,
@@ -282,7 +282,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC03 — Read Holding Registers ────────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::ReadHoldingRegisters { address, count, .. } => {
             let Some(f) = vt.read_holding_registers else {
                 return ModbusResponse::exception(
@@ -300,7 +300,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC04 — Read Input Registers ──────────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "input-registers")]
         ModbusRequest::ReadInputRegisters { address, count, .. } => {
             let Some(f) = vt.read_input_registers else {
                 return ModbusResponse::exception(
@@ -318,7 +318,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC06 — Write Single Register ─────────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::WriteSingleRegister { address, value, .. } => {
             let Some(f) = vt.write_single_register else {
                 return ModbusResponse::exception(
@@ -334,7 +334,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC10 — Write Multiple Registers ──────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::WriteMultipleRegisters {
             address,
             count,
@@ -355,7 +355,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC22 — Mask Write Register ───────────────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::MaskWriteRegister {
             address,
             and_mask,
@@ -376,7 +376,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
         }
 
         // ── FC23 — Read/Write Multiple Registers ──────────────────────────────
-        #[cfg(feature = "registers")]
+        #[cfg(feature = "holding-registers")]
         ModbusRequest::ReadWriteMultipleRegisters {
             read_address,
             read_count,

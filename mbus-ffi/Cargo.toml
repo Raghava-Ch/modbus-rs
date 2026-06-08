@@ -51,7 +51,8 @@ wasm-full = [
     "wasm-client",
     "wasm-server",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -64,6 +65,7 @@ c-client = ["dep:mbus-client"]
 c-server = ["dep:mbus-server"]
 ## Enables native C FFI bindings for the Modbus gateway stack.
 c-gateway = ["dep:mbus-gateway"]
+c-full = ["c-client", "c-server", "c-gateway", "server-traffic", "full"]
 ## Enables traffic notification callbacks on the C server (mbus-server `traffic` feature).
 server-traffic = ["c-server", "mbus-server/traffic"]
 
@@ -115,11 +117,9 @@ serial-ascii = [
 ]
 ## Convenience alias — enables every Modbus client + server FC feature at once
 full = [
-    "c-client",
-    "c-server",
-    "c-gateway",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -134,7 +134,6 @@ full = [
 server-full = [
     "c-server",
     "coils",
-    "registers",
     "holding-registers",
     "input-registers",
     "discrete-inputs",
@@ -150,7 +149,6 @@ server-full = [
 client-full = [
     "c-client",
     "coils",
-    "registers",
     "holding-registers",
     "input-registers",
     "discrete-inputs",
@@ -170,7 +168,8 @@ go-full = [
     "c-client",
     "c-gateway",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -199,7 +198,8 @@ python-client = [
     "dep:tokio",
     "dep:mbus-client-async",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -216,7 +216,8 @@ python-server = [
     "dep:tokio",
     "dep:mbus-server-async",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -233,7 +234,8 @@ python-full = [
     "python-server",
     "python-gateway",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -260,7 +262,8 @@ go = [
     "dep:mbus-gateway",
     "dep:mbus-network",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "diagnostics",
@@ -274,37 +277,62 @@ go = [
 ## Enables traffic notification callbacks on the Go server (mbus-server-async `traffic` feature).
 go-traffic = ["go", "mbus-server-async/traffic", "mbus-client-async/traffic"]
 
-## Enables Node.js bindings (napi-rs) for the Modbus client/server/gateway stack.
+## Enables Node.js bindings (napi-rs) for the Modbus gateway stack.
+## Requires `nodejs-client` to be enabled.
+nodejs-gateway = [
+    "nodejs-client",
+    "dep:mbus-gateway",
+    "dep:mbus-network",
+    "mbus-gateway/async",
+    "mbus-network/async",
+]
+
+## Enables Node.js bindings (napi-rs) for the Modbus client stack.
 ##
 ## Build with `cargo build --release -p mbus-ffi --features nodejs-full`.
 ## The npm package resides in `mbus-ffi/nodejs/` and uses `napi build` to
 ## produce the native addon.
-nodejs = [
+nodejs-client = [
     "dep:napi",
     "dep:napi-derive",
     "dep:serde_json",
     "dep:serde",
     "dep:tokio",
     "dep:mbus-client-async",
-    "dep:mbus-server-async",
-    "dep:mbus-gateway",
-    "dep:mbus-network",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
     "diagnostics",
     "mbus-client-async/serial-rtu",
     "mbus-client-async/serial-ascii",
+    "internal-lock-stubs",
+]
+
+## Enables Node.js bindings (napi-rs) for the Modbus server stack.
+nodejs-server = [
+    "dep:napi",
+    "dep:napi-derive",
+    "dep:serde_json",
+    "dep:serde",
+    "dep:tokio",
+    "dep:mbus-server-async",
+    "coils",
+    "holding-registers",
+    "input-registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
     "mbus-server-async/server-serial",
-    "mbus-gateway/async",
-    "mbus-network/async",
     "internal-lock-stubs",
 ]
 ## Enables traffic notification callbacks on the Node.js server/client.
 nodejs-traffic = [
-    "nodejs",
+    "nodejs-client",
+    "nodejs-server",
     "mbus-server-async/traffic",
     "mbus-client-async/traffic",
 ]
@@ -313,11 +341,14 @@ nodejs-traffic = [
 ## Note: Does NOT include c-server (YAML-based application server)
 ## Node.js uses its own server interface
 nodejs-full = [
-    "nodejs",
+    "nodejs-client",
+    "nodejs-server",
+    "nodejs-gateway",
     "c-client",
     "c-gateway",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -340,7 +371,8 @@ dotnet = [
     "dep:mbus-gateway",
     "dep:mbus-network",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "diagnostics",
@@ -360,7 +392,8 @@ dotnet-full = [
     "c-client",
     "c-gateway",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -393,7 +426,8 @@ pyo3-async-runtimes = { version = "0.28.0", features = [
 tokio = { version = "1", features = ["full"], optional = true }
 mbus-client-async = { workspace = true, features = [
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -401,7 +435,8 @@ mbus-client-async = { workspace = true, features = [
 ], optional = true }
 mbus-server-async = { workspace = true, features = [
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
     "discrete-inputs",
     "fifo",
     "file-record",
@@ -453,10 +488,11 @@ web-sys = { version = "0.3", features = ["Window"] }
 ## In-process AsyncTcpServer used by the .NET binding integration test.
 mbus-async = { version = "0.14.0", path = "../mbus-async", features = [
     "server-tcp",
-    "registers",
+    "holding-registers",
+    "input-registers",
 ] }
 anyhow = "1"
 
 [[example]]
 name = "dotnet_test_server"
-required-features = ["registers"]
+required-features = ["holding-registers", "input-registers"]

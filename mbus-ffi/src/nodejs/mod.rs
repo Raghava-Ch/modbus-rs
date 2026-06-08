@@ -31,16 +31,26 @@
 //! await transport.close();
 //! ```
 
+#[cfg(feature = "nodejs-client")]
 pub mod client_serial;
+#[cfg(feature = "nodejs-client")]
 pub mod client_tcp;
 pub mod errors;
+#[cfg(feature = "nodejs-gateway")]
 pub mod gateway;
 pub mod runtime;
+#[cfg(feature = "nodejs-server")]
 pub mod server_serial;
+#[cfg(feature = "nodejs-server")]
 pub mod server_tcp;
 
+#[cfg(feature = "nodejs-client")]
 pub use client_serial::*;
+#[cfg(feature = "nodejs-client")]
 pub use client_tcp::*;
+#[cfg(feature = "nodejs-gateway")]
 pub use gateway::*;
+#[cfg(feature = "nodejs-server")]
 pub use server_serial::*;
+#[cfg(feature = "nodejs-server")]
 pub use server_tcp::*;

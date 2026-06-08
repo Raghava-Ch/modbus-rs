@@ -14,7 +14,8 @@ Control binary size and functionality by enabling only what you need.
 | `serial-ascii` | ❌ | ❌ | ✅ | Serial ASCII transport (`StdAsciiTransport`) |
 | `async` | ❌ | ❌ | ✅ | Tokio async facade (`AsyncTcpClient`, `AsyncSerialClient`) |
 | `coils` | ✅ | ✅ | — | FC01, FC05, FC0F |
-| `registers` | ✅ | ✅ | — | FC03, FC04, FC06, FC10 |
+| `holding-registers` | ✅ | ✅ | — | FC03, FC06, FC10 |
+| `input-registers` | ✅ | ✅ | — | FC04 |
 | `discrete-inputs` | ✅ | ✅ | — | FC02 |
 | `fifo` | ✅ | ✅ | — | FC18 |
 | `file-record` | ✅ | ✅ | — | FC14, FC15 |
@@ -51,7 +52,7 @@ For targets without std (bare-metal MCUs, RTOS). You bring your own `Transport` 
 modbus-rs = { version = "0.14.0", default-features = false, features = ["no-std"] }
 ```
 
-Includes: `client` state machine + all function code models (`coils`, `registers`, `discrete-inputs`, `fifo`, `file-record`, `diagnostics`). No transport, no OS.
+Includes: `client` state machine + all function code models (`coils`, `holding-registers`,`input-registers` `discrete-inputs`, `fifo`, `file-record`, `diagnostics`). No transport, no OS.
 
 Pickup only the FC models you need to keep code size minimal:
 
@@ -60,7 +61,8 @@ Pickup only the FC models you need to keep code size minimal:
 modbus-rs = { version = "0.14.0", default-features = false, features = [
     "client",
     "coils",
-    "registers",
+    "holding-registers",
+    "input-registers",
 ] }
 ```
 
@@ -88,7 +90,8 @@ Binary size: ~50% smaller than full default.
 modbus-rs = { version = "0.14.0", default-features = false, features = [
     "client",
     "serial-rtu",
-    "registers"
+    "holding-registers",
+    "input-registers",
 ] }
 ```
 
@@ -103,7 +106,8 @@ modbus-rs = { version = "0.14.0", default-features = false, features = [
     "network-tcp",
     "serial-rtu",
     "coils",
-    "registers"
+    "holding-registers",
+    "input-registers",
 ] }
 ```
 
@@ -117,7 +121,8 @@ modbus-rs = { version = "0.14.0", default-features = false, features = [
     "async",
     "network-tcp",
     "coils",
-    "registers"
+    "holding-registers",
+    "input-registers",
 ] }
 tokio = { version = "1", features = ["full"] }
 ```
@@ -182,12 +187,15 @@ Enables `StdAsciiTransport` for Modbus ASCII over serial.
 - FC05: Write Single Coil
 - FC0F: Write Multiple Coils
 
-#### `registers`
+#### `holding-registers`
 
 - FC03: Read Holding Registers
-- FC04: Read Input Registers
 - FC06: Write Single Register
 - FC10: Write Multiple Registers
+
+### `input-registers`
+
+- FC04: Read Input Registers
 
 #### `discrete-inputs`
 

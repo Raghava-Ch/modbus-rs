@@ -249,13 +249,13 @@ pub struct MbusTransportCallbacks {
 ))]
 pub(crate) use c_impl::validate_transport_callbacks;
 
-#[cfg(feature = "serial-rtu")]
+#[cfg(all(feature = "serial-rtu", any(feature = "c-client", feature = "c-server", feature = "c-gateway")))]
 pub(crate) use c_impl::CRtuTransport;
 
-#[cfg(feature = "serial-ascii")]
+#[cfg(all(feature = "serial-ascii", any(feature = "c-client", feature = "c-server", feature = "c-gateway")))]
 pub(crate) use c_impl::CAsciiTransport;
 
-#[cfg(feature = "network-tcp")]
+#[cfg(all(feature = "network-tcp", any(feature = "c-client", feature = "c-server", feature = "c-gateway")))]
 pub(crate) use c_impl::CTcpTransport;
 
 #[cfg(any(feature = "c-client", feature = "c-server", feature = "c-gateway"))]
