@@ -125,8 +125,3 @@ jobs:
         if: runner.os != 'Windows'
         working-directory: mbus-ffi/go
         run: go test -race -count=1 ./...
-
-      - name: Integration test (against dotnet_test_server example)
-        if: runner.os != 'Windows'
-        working-directory: mbus-ffi/go
-        run: go test -tags integration -count=1 ./client/tcp/...

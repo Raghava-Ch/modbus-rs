@@ -184,7 +184,6 @@ dependencies: The specified module could not be found. (0x8007007E)
 ```bash
 # Build both Rust artefacts first.
 cargo build -p mbus-ffi --features dotnet,full
-cargo build -p mbus-ffi --example dotnet_test_server --features dotnet,full
 
 # Run the C# test suite.
 dotnet test mbus-ffi/dotnet/ModbusRs.Tests/ModbusRs.Tests.csproj

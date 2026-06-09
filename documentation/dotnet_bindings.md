@@ -473,7 +473,6 @@ end-to-end round-trip tests that spin up the Rust example server in-process.
 ```bash
 # Build native artefacts first
 cargo build -p mbus-ffi --features dotnet,full
-cargo build -p mbus-ffi --example dotnet_test_server --features dotnet,full
 
 # Run the managed test suite
 dotnet test mbus-ffi/dotnet/ModbusRs.Tests/ModbusRs.Tests.csproj
