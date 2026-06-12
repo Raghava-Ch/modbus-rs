@@ -26,7 +26,7 @@ const MBAP_PREFIX_LEN: usize = 6;
 pub struct TokioTcpTransport {
     stream: TcpStream,
     connected: bool,
-    rx_buf: Vec<u8, { 2 * MAX_ADU_FRAME_LEN }>,
+    rx_buf: std::vec::Vec<u8>,
 }
 
 impl TokioTcpTransport {
@@ -35,7 +35,7 @@ impl TokioTcpTransport {
         Self {
             stream,
             connected: true,
-            rx_buf: Vec::new(),
+            rx_buf: std::vec::Vec::with_capacity(2 * MAX_ADU_FRAME_LEN),
         }
     }
 
@@ -51,7 +51,7 @@ impl TokioTcpTransport {
         Ok(Self {
             stream,
             connected: true,
-            rx_buf: Vec::new(),
+            rx_buf: std::vec::Vec::with_capacity(2 * MAX_ADU_FRAME_LEN),
         })
     }
 
@@ -123,9 +123,7 @@ impl AsyncTransport for TokioTcpTransport {
                     let leftover = self.rx_buf.len() - total_len;
                     if leftover > 0 {
                         // Shift remaining bytes to the front
-                        for i in 0..leftover {
-                            self.rx_buf[i] = self.rx_buf[total_len + i];
-                        }
+                        self.rx_buf.copy_within(total_len.., 0);
                     }
                     self.rx_buf.truncate(leftover);
 
@@ -142,11 +140,11 @@ impl AsyncTransport for TokioTcpTransport {
                 }
                 Ok(n) => {
                     // Append read bytes to rx_buf. If it doesn't fit, it's an error.
-                    if self.rx_buf.len() + n > self.rx_buf.capacity() {
+                    if self.rx_buf.len() + n > 2 * MAX_ADU_FRAME_LEN {
                         self.rx_buf.clear();
                         return Err(MbusError::BufferTooSmall);
                     }
-                    self.rx_buf.extend_from_slice(&chunk[..n]).unwrap();
+                    self.rx_buf.extend_from_slice(&chunk[..n]);
                 }
                 Err(e) => {
                     let err = Self::map_io_error(e);

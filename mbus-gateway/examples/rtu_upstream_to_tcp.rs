@@ -31,12 +31,10 @@
 fn main() {
     use std::sync::{Arc, RwLock};
 
-    use mbus_core::transport::{
-        BaudRate, DataBits, Parity, SerialMode, UnitIdOrSlaveAddr,
-    };
+    use mbus_core::transport::{BaudRate, DataBits, Parity, SerialMode, UnitIdOrSlaveAddr};
     use mbus_gateway::{
-        AsyncSerialGatewayServer, GatewayShutdown, NoopEventHandler,
-        UnitRouteTable, SerialGatewayConfig, GatewayTransport, GatewayEventHandler,
+        AsyncSerialGatewayServer, GatewayEventHandler, GatewayShutdown, GatewayTransport,
+        NoopEventHandler, SerialGatewayConfig, UnitRouteTable,
     };
     use mbus_network::TokioTcpTransport;
     use tokio::sync::Mutex;
@@ -84,7 +82,8 @@ fn main() {
                 SERIAL_PORT, DOWNSTREAM_ADDR
             );
 
-            let handler: Arc<Mutex<dyn GatewayEventHandler + Send>> = Arc::new(Mutex::new(NoopEventHandler));
+            let handler: Arc<Mutex<dyn GatewayEventHandler + Send>> =
+                Arc::new(Mutex::new(NoopEventHandler));
             let cfg = SerialGatewayConfig {
                 port: SERIAL_PORT.to_string(),
                 mode: SerialMode::Rtu,
