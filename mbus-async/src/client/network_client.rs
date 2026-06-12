@@ -29,8 +29,8 @@ use crate::client::task::{ClientTask, ConnectFactory};
 /// [`AsyncClientCore`].
 ///
 /// The constant generic parameter `N` is the compile-time pipeline depth
-/// (default `9`).
-pub struct AsyncTcpClient<const N: usize = 9> {
+/// (default `1000`).
+pub struct AsyncTcpClient<const N: usize = 1000> {
     core: AsyncClientCore,
 }
 
@@ -42,9 +42,9 @@ impl<const N: usize> Deref for AsyncTcpClient<N> {
     }
 }
 
-// ── Default-pipeline constructors (N = 9) ───────────────────────────────────
+// ── Default-pipeline constructors (N = 1000) ───────────────────────────────────
 
-impl AsyncTcpClient<9> {
+impl AsyncTcpClient<1000> {
     /// Deprecated constructor alias.
     ///
     /// Use [`AsyncTcpClient::new`] and then call `client.connect().await?`.
@@ -186,7 +186,7 @@ impl<const N: usize> AsyncTcpClient<N> {
     #[cfg(feature = "network-tcp")]
     fn from_connect_fn(connect_fn: ConnectFactory<TokioTcpTransport>) -> Result<Self, AsyncError> {
         let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
-        let (cmd_tx, cmd_rx) = mpsc::channel(64);
+        let (cmd_tx, cmd_rx) = mpsc::channel(N.max(10000));
         let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
 
         #[cfg(feature = "traffic")]

@@ -26,6 +26,7 @@ const MBAP_PREFIX_LEN: usize = 6;
 pub struct TokioTcpTransport {
     stream: TcpStream,
     connected: bool,
+    rx_buf: Vec<u8, { 2 * MAX_ADU_FRAME_LEN }>,
 }
 
 impl TokioTcpTransport {
@@ -34,6 +35,7 @@ impl TokioTcpTransport {
         Self {
             stream,
             connected: true,
+            rx_buf: Vec::new(),
         }
     }
 
@@ -49,6 +51,7 @@ impl TokioTcpTransport {
         Ok(Self {
             stream,
             connected: true,
+            rx_buf: Vec::new(),
         })
     }
 
@@ -92,62 +95,67 @@ impl AsyncTransport for TokioTcpTransport {
             return Err(MbusError::ConnectionClosed);
         }
 
-        // Step 1: read the 6-byte MBAP prefix (TxnID[2] + ProtocolID[2] + Length[2])
-        let mut prefix = [0u8; MBAP_PREFIX_LEN];
-        match self.stream.read_exact(&mut prefix).await {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                self.connected = false;
-                return Err(MbusError::ConnectionClosed);
-            }
-            Err(e) => {
-                let err = Self::map_io_error(e);
-                if err == MbusError::ConnectionClosed {
-                    self.connected = false;
+        loop {
+            // Step 1: check if we already have a complete frame in rx_buf
+            if self.rx_buf.len() >= MBAP_PREFIX_LEN {
+                let remaining_len = u16::from_be_bytes([
+                    self.rx_buf[MBAP_LENGTH_OFFSET_1B],
+                    self.rx_buf[MBAP_LENGTH_OFFSET_2B],
+                ]) as usize;
+
+                if remaining_len == 0 {
+                    self.rx_buf.clear();
+                    return Err(MbusError::InvalidDataLen);
                 }
-                return Err(err);
-            }
-        }
 
-        // Step 2: parse the Length field — number of bytes that follow (unit_id + PDU)
-        let remaining_len =
-            u16::from_be_bytes([prefix[MBAP_LENGTH_OFFSET_1B], prefix[MBAP_LENGTH_OFFSET_2B]])
-                as usize;
-
-        // Guard against malformed or oversized frames
-        if MBAP_PREFIX_LEN + remaining_len > MAX_ADU_FRAME_LEN {
-            return Err(MbusError::BufferTooSmall);
-        }
-        if remaining_len == 0 {
-            return Err(MbusError::InvalidDataLen);
-        }
-
-        // Step 3: read the rest of the frame (unit_id + PDU)
-        let mut body = [0u8; MAX_ADU_FRAME_LEN];
-        match self.stream.read_exact(&mut body[..remaining_len]).await {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                self.connected = false;
-                return Err(MbusError::ConnectionClosed);
-            }
-            Err(e) => {
-                let err = Self::map_io_error(e);
-                if err == MbusError::ConnectionClosed {
-                    self.connected = false;
+                let total_len = MBAP_PREFIX_LEN + remaining_len;
+                if total_len > MAX_ADU_FRAME_LEN {
+                    self.rx_buf.clear();
+                    return Err(MbusError::BufferTooSmall);
                 }
-                return Err(err);
+
+                if self.rx_buf.len() >= total_len {
+                    // We have a complete frame! Extract it.
+                    let mut frame = Vec::new();
+                    frame.extend_from_slice(&self.rx_buf[..total_len]).unwrap();
+
+                    // Remove the extracted bytes from rx_buf
+                    let leftover = self.rx_buf.len() - total_len;
+                    if leftover > 0 {
+                        // Shift remaining bytes to the front
+                        for i in 0..leftover {
+                            self.rx_buf[i] = self.rx_buf[total_len + i];
+                        }
+                    }
+                    self.rx_buf.truncate(leftover);
+
+                    return Ok(frame);
+                }
+            }
+
+            // Step 2: read more bytes from the stream
+            let mut chunk = [0u8; 128];
+            match self.stream.read(&mut chunk).await {
+                Ok(0) => {
+                    self.connected = false;
+                    return Err(MbusError::ConnectionClosed);
+                }
+                Ok(n) => {
+                    // Append read bytes to rx_buf. If it doesn't fit, it's an error.
+                    if self.rx_buf.len() + n > self.rx_buf.capacity() {
+                        self.rx_buf.clear();
+                        return Err(MbusError::BufferTooSmall);
+                    }
+                    self.rx_buf.extend_from_slice(&chunk[..n]).unwrap();
+                }
+                Err(e) => {
+                    let err = Self::map_io_error(e);
+                    if err == MbusError::ConnectionClosed {
+                        self.connected = false;
+                    }
+                    return Err(err);
+                }
             }
         }
-
-        // Step 4: assemble prefix + body into a heapless Vec
-        let mut frame: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-        frame
-            .extend_from_slice(&prefix)
-            .map_err(|_| MbusError::BufferTooSmall)?;
-        frame
-            .extend_from_slice(&body[..remaining_len])
-            .map_err(|_| MbusError::BufferTooSmall)?;
-
-        Ok(frame)
     }
 }

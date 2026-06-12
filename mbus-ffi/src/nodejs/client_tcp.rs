@@ -6,7 +6,7 @@ use std::time::Duration;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use mbus_client_async::AsyncTcpClient;
+type TcpClient = mbus_client_async::AsyncTcpClient<10000>;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 #[cfg(feature = "file-record")]
@@ -247,7 +247,7 @@ pub struct DeviceIdentificationResponse {
 /// Physical TCP socket connection to a Modbus device or gateway.
 #[napi]
 pub struct AsyncTcpTransport {
-    inner: Mutex<Option<Arc<AsyncTcpClient>>>,
+    inner: Mutex<Option<Arc<TcpClient>>>,
 }
 
 #[napi]
@@ -255,7 +255,7 @@ impl AsyncTcpTransport {
     /// Connects to a Modbus TCP device or gateway.
     #[napi(factory)]
     pub async fn connect(opts: TcpTransportOptions) -> Result<AsyncTcpTransport> {
-        let client = AsyncTcpClient::new(&opts.host, opts.port)
+        let client = TcpClient::new_with_pipeline(&opts.host, opts.port)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         client.connect().await.map_err(from_async_error)?;
@@ -269,7 +269,7 @@ impl AsyncTcpTransport {
         })
     }
 
-    fn get_client(&self) -> Result<Arc<AsyncTcpClient>> {
+    fn get_client(&self) -> Result<Arc<TcpClient>> {
         let guard = self
             .inner
             .lock()
@@ -284,8 +284,7 @@ impl AsyncTcpTransport {
     pub fn create_client(&self, opts: Option<CreateClientOptions>) -> Result<AsyncTcpModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.and_then(|o| o.unit_id).unwrap_or(1);
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncTcpModbusClient {
             inner: client,
             unit_id,
@@ -344,7 +343,7 @@ impl AsyncTcpTransport {
 /// Lightweight device client sharing the TCP transport.
 #[napi]
 pub struct AsyncTcpModbusClient {
-    inner: Arc<AsyncTcpClient>,
+    inner: Arc<TcpClient>,
     unit_id: u8,
 }
 

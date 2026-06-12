@@ -63,7 +63,9 @@ impl AsyncTcpServer {
             let app_instance = app.clone();
             tokio::spawn(async move {
                 let mut app_instance = app_instance;
-                let _ = session.run(&mut app_instance).await;
+                if let Err(e) = session.run(&mut app_instance).await {
+                    eprintln!("Session error: {:?}", e);
+                }
             });
         }
     }

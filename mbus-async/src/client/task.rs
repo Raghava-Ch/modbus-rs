@@ -15,7 +15,7 @@
 //! # Pipelining
 //!
 //! The `N` parameter controls how many requests may be in-flight simultaneously
-//! over the same connection.  For TCP, `N = 9` is a sensible default; for serial
+//! over the same connection.  For TCP, `N = 1000` is a sensible default; for serial
 //! connections `N` should be `1` (each request waits for its response before the
 //! next is sent).
 //!
@@ -389,9 +389,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 recv_result = recv_if_active(&mut self.transport, self.in_flight) => {
                     match recv_result {
                         Ok(frame) => self.process_frame(&frame),
-                        Err(_) => {
-                            // Transport error — mark as disconnected, drain pending.
-                            // The user can issue a new Connect command to reconnect.
+                        Err(e) => {
+                            eprintln!("Client transport recv error: {:?}", e);
                             self.transport = None;
                             self.drain_all();
                         }
@@ -401,9 +400,21 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 // Receive a command from the public API.
                 maybe_cmd = self.cmd_rx.recv() => {
                     match maybe_cmd {
+                        Some(cmd) => {
+                            self.handle_command(cmd).await;
+                            let mut count = 1;
+                            while self.in_flight < N && count < 16 {
+                                match self.cmd_rx.try_recv() {
+                                    Ok(next_cmd) => {
+                                        self.handle_command(next_cmd).await;
+                                        count += 1;
+                                    }
+                                    _ => break,
+                                }
+                            }
+                        }
                         // Channel closed — all API handles dropped.
                         None => return,
-                        Some(cmd) => self.handle_command(cmd).await,
                     }
                 }
             }
