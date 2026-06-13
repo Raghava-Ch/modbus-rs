@@ -5,10 +5,13 @@ High-performance Modbus TCP/RTU/ASCII client, server, and gateway for Node.js, p
 ## Features
 
 - **Async/Promise-based API** - All operations return Promises
-- **TCP Client** - Full Modbus TCP/IP client implementation
+- **TCP Client** - Full Modbus TCP/IP client implementation (supports communicating with multiple unit IDs behind a single IP address and port)
 - **Serial Client** - Modbus RTU and ASCII over serial port
-- **TCP Server** - Build Modbus TCP servers with JavaScript handlers
-- **TCP Gateway** - Route requests to multiple downstream servers based on unit ID
+- **TCP & Serial Servers** - Build Modbus TCP servers, or Serial RTU and ASCII servers, using custom JavaScript handlers to respond to incoming requests
+- **Modbus Gateway** - Deploy high-performance gateways supporting WebSockets, TCP, and Serial (RTU/ASCII) as both upstream and downstream channels, dynamically routing requests based on unit ID mapping tables
+- **Thread Safety & Concurrency** - Rust-backed concurrent architecture ensures safe access across multiple async execution contexts
+- **Safety Locks** - Integrated bus locking to prevent command collisions and state corruption
+- **Multi-drop Serial Support** - Manage and communicate with multiple device unit IDs on a single physical RTU/ASCII bus
 - **High Performance** - Native Rust core with napi-rs bindings
 - **Type Safe** - Full TypeScript definitions included
 - **Cross Platform** - Pre-built binaries for Linux, macOS, and Windows

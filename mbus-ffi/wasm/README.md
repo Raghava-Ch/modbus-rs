@@ -12,13 +12,13 @@ npm install modbus-rs-wasm
 
 ## Integration & Frameworks (Vite, Svelte, React, etc.)
 
-No custom resolver aliases or configuration workarounds are required starting in `v0.14.0`. Standard package entry points are resolved automatically based on your builder/bundler targets.
+No custom resolver aliases are required. Standard package entry points are resolved automatically based on your builder/bundler targets.
 
 ### Web (Direct / HTML / Vanilla JS)
-When loading the package in browser environments without a bundler, import the web entry point and await the initialization promise:
+When loading the package in browser environments without a bundler (e.g. from CDNs like unpkg or jsDelivr), import the web entry point and await the initialization promise:
 
 ```javascript
-import init, { WasmTcpTransport } from 'modbus-rs-wasm/dist/web/modbus-rs.js';
+import init, { WasmTcpTransport } from 'modbus-rs-wasm/web';
 
 await init();
 const transport = new WasmTcpTransport('ws://localhost:8502', { 
@@ -29,27 +29,86 @@ const transport = new WasmTcpTransport('ws://localhost:8502', {
 const client = transport.create_client({ unitId: 1 });
 ```
 
-### Bundlers & Frameworks (Vite, SvelteKit, Next.js, etc.)
-When using modern bundlers, the root import automatically maps to the bundler target:
+### Bundlers & Modern Frameworks
+
+When using modern bundlers (Vite, Webpack, Next.js, etc.), the root import maps to the bundler target where WebAssembly is loaded automatically:
 
 ```javascript
 import { WasmTcpTransport } from 'modbus-rs-wasm';
 ```
-*(Make sure your bundler is configured to load WebAssembly, e.g., using `vite-plugin-wasm` and `vite-plugin-top-level-await` in Vite).*
+
+Because WASM is an asynchronous module dependency, you must configure your bundler to support WASM loader options:
+
+#### 1. Vite (React, Svelte, Vue, SolidJS, etc. via Vite)
+Vite requires helper plugins to support WebAssembly. Install `vite-plugin-wasm` and `vite-plugin-top-level-await`:
+
+```bash
+npm install -D vite-plugin-wasm vite-plugin-top-level-await
+```
+
+In your `vite.config.ts`, register the plugins and **exclude** `modbus-rs-wasm` from dependency pre-bundling (to prevent Esbuild from trying to optimize the WASM module):
+
+```typescript
+import { defineConfig } from 'vite';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+
+export default defineConfig({
+  plugins: [wasm(), topLevelAwait()],
+  optimizeDeps: {
+    exclude: ['modbus-rs-wasm']
+  }
+});
+```
+
+#### 2. Webpack 5 (React, Angular, or custom Webpack setups)
+Webpack 5 supports WebAssembly natively but it is disabled by default. You need to enable the `asyncWebAssembly` experiment in your `webpack.config.js`:
+
+```javascript
+module.exports = {
+  // ...
+  experiments: {
+    asyncWebAssembly: true,
+  },
+};
+```
+
+#### 3. Next.js (Webpack mode)
+Configure `next.config.js` to enable WebAssembly support inside Next.js's internal Webpack runner:
+
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  webpack(config) {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+    };
+    return config;
+  },
+};
+
+module.exports = nextConfig;
+```
 
 ## Quick Start
 
 ### Examples
 Ready-to-run HTML examples demonstrating both Modbus client and server functionality in the browser:
 
-- **[wasm_client/network_smoke.html](./examples/wasm_client/network_smoke.html)**: WebSocket Modbus TCP client example.
-- **[wasm_client/serial_smoke.html](./examples/wasm_client/serial_smoke.html)**: Web Serial Modbus RTU client example.
-- **[wasm_server/network_smoke.html](./examples/wasm_server/network_smoke.html)**: WebSocket Modbus TCP server example.
-- **[wasm_server/serial_smoke.html](./examples/wasm_server/serial_smoke.html)**: Web Serial Modbus RTU server example.
+- **[wasm_client/network_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_client/network_smoke.html)**: WebSocket Modbus TCP client example.
+- **[wasm_client/serial_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_client/serial_smoke.html)**: Web Serial Modbus RTU client example.
+- **[wasm_server/network_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_server/network_smoke.html)**: WebSocket Modbus TCP server example.
+- **[wasm_server/serial_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_server/serial_smoke.html)**: Web Serial Modbus RTU server example.
+- **[real world example](https://github.com/Raghava-Ch/modbus-lab)**: Comes with demo web client and tauri based desktop client and server simulators with source code.
 
 To run the examples locally:
 ```bash
-npx serve examples/
+# clone the repo
+cd modbus-rs/mbus-ffi/wasm
+npx serve ./
+# Navigate to example folder with chromium based web browser run the examples.
+# you can also use the tauri desktop client and server simulator.
 ```
 
 ### Modbus RTU via Web Serial
