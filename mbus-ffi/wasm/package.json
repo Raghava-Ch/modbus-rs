@@ -1,15 +1,18 @@
 {
   "name": "modbus-rs-wasm",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Modbus TCP/RTU/ASCII client & server for the browser, powered by Rust + WebAssembly",
   "type": "module",
   "exports": {
     ".": {
-      "browser": "./dist/web/modbus-rs.js",
       "node": "./dist/bundler/modbus-rs.js",
       "import": "./dist/bundler/modbus-rs.js",
       "require": "./dist/bundler/modbus-rs.js",
       "types": "./dist/bundler/modbus-rs.d.ts"
+    },
+    "./web": {
+      "import": "./dist/web/modbus-rs.js",
+      "types": "./dist/web/modbus-rs.d.ts"
     },
     "./dist/bundler/*": "./dist/bundler/*",
     "./dist/web/*": "./dist/web/*"
@@ -45,6 +48,7 @@
     "web-serial",
     "modbus-tcp",
     "modbus-rtu",
+    "modbus-ascii",
     "scada",
     "plc",
     "industrial",
