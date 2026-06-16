@@ -4,8 +4,8 @@
 //! They implement [`GatewayRoutingPolicy`] and allow adding routes dynamically at runtime
 //! without compile-time generic array size constraints.
 
-use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
 use crate::common::router::{GatewayRoutingPolicy, UnitRangeRoute, UnitRouteEntry};
+use mbus_core::{errors::MbusError, transport::UnitIdOrSlaveAddr};
 
 /// Exact unit-ID → channel mapping backed by a dynamically-allocated, extendable `std::vec::Vec`.
 ///
@@ -104,9 +104,7 @@ pub struct DynamicRangeRouteTable {
 impl DynamicRangeRouteTable {
     /// Create an empty dynamic range routing table.
     pub fn new() -> Self {
-        Self {
-            ranges: Vec::new(),
-        }
+        Self { ranges: Vec::new() }
     }
 
     /// Add a range `[min, max]` → `channel` mapping.

@@ -72,10 +72,8 @@ export declare class AsyncSerialModbusClient {
 
 /** Async Modbus Serial server supporting RTU and ASCII transports. */
 export declare class AsyncSerialModbusServer {
-  /** Binds and starts a new Serial RTU server. */
-  static bindRtu(opts: SerialServerOptions, handlers: object): AsyncSerialModbusServer
-  /** Binds and starts a new Serial ASCII server. */
-  static bindAscii(opts: SerialServerOptions, handlers: object): AsyncSerialModbusServer
+  static bindRtu(opts: SerialServerOptions, handlers: ServerHandlers): Promise<AsyncSerialModbusServer>
+  static bindAscii(opts: SerialServerOptions, handlers: ServerHandlers): Promise<AsyncSerialModbusServer>
   /** Stops the server. */
   shutdown(): Promise<void>
 }
@@ -145,7 +143,7 @@ export declare class AsyncTcpModbusServer {
    * @param handlers - Object containing handler functions for each Modbus operation.
    * @returns A running server instance.
    */
-  static bind(opts: TcpServerOptions, handlers: object): AsyncTcpModbusServer
+  static bind(opts: TcpServerOptions, handlers: ServerHandlers): Promise<AsyncTcpModbusServer>
   /** Stops the server. */
   shutdown(): Promise<void>
 }
@@ -155,7 +153,7 @@ export declare class AsyncTcpTransport {
   /** Connects to a Modbus TCP device or gateway. */
   static connect(opts: TcpTransportOptions): Promise<AsyncTcpTransport>
   /** Creates a device client bound to the specified unit ID. */
-  createClient(opts?: CreateClientOptions | undefined | null): AsyncTcpModbusClient
+  createClient(opts: CreateClientOptions): AsyncTcpModbusClient
   /** Sets the per-request timeout in milliseconds. */
   setRequestTimeout(timeoutMs: number): void
   /** Clears the per-request timeout. */
@@ -184,12 +182,16 @@ export interface AsciiTransportOptions {
   responseTimeoutMs?: number
   /** Per-request timeout in milliseconds. */
   requestTimeoutMs?: number
+  /** Number of retry attempts on failure (0 = none). Default: 0. */
+  retryAttempts?: number
+  /** Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate". */
+  retryBackoffStrategy?: string
 }
 
 /** Options for creating a device client. */
 export interface CreateClientOptions {
   /** Modbus unit ID (1-247). */
-  unitId?: number
+  unitId: number
 }
 
 /** Device identification object. */
@@ -219,7 +221,7 @@ export interface DiagnosticsOptions {
   /** Data words for the request. */
   data: Array<number>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for diagnostics. */
@@ -247,8 +249,6 @@ export interface DownstreamConfig {
 
 /** Response from reading FIFO queue. */
 export interface FifoQueueResponse {
-  /** Number of values in the queue. */
-  count: number
   /** Queue values. */
   values: Array<number>
 }
@@ -263,6 +263,13 @@ export interface FileRecordReadRequest {
   recordLength: number
 }
 
+/** A single file record read sub-request on the server side. */
+export interface FileRecordReadServerSubRequest {
+  fileNumber: number
+  recordNumber: number
+  recordLength: number
+}
+
 /** A single file record write sub-request. */
 export interface FileRecordWriteRequest {
   /** File number (1-65535). */
@@ -270,6 +277,13 @@ export interface FileRecordWriteRequest {
   /** Starting record number. */
   recordNumber: number
   /** Record data to write. */
+  recordData: Array<number>
+}
+
+/** A single file record write sub-request on the server side. */
+export interface FileRecordWriteSubRequest {
+  fileNumber: number
+  recordNumber: number
   recordData: Array<number>
 }
 
@@ -289,6 +303,24 @@ export interface GatewayConfig {
   routes: Array<RouteEntry>
 }
 
+/** Stable error code: The connection was closed. */
+export const MODBUS_ERROR_CODE_CONNECTION_CLOSED: string
+
+/** Stable error code: Modbus protocol exception received. */
+export const MODBUS_ERROR_CODE_EXCEPTION: string
+
+/** Stable error code: Internal library error. */
+export const MODBUS_ERROR_CODE_INTERNAL: string
+
+/** Stable error code: Invalid argument passed to the API. */
+export const MODBUS_ERROR_CODE_INVALID_ARGUMENT: string
+
+/** Stable error code: Request timed out. */
+export const MODBUS_ERROR_CODE_TIMEOUT: string
+
+/** Stable error code: Transport/framing error. */
+export const MODBUS_ERROR_CODE_TRANSPORT: string
+
 /** Options for reading coils or discrete inputs. */
 export interface ReadBitsOptions {
   /** Starting address. */
@@ -296,7 +328,7 @@ export interface ReadBitsOptions {
   /** Number of bits to read. */
   quantity: number
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for reading coils. */
@@ -313,7 +345,7 @@ export interface ReadDeviceIdentificationOptions {
   /** Starting object ID. */
   objectId: number
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for reading discrete inputs. */
@@ -323,12 +355,17 @@ export interface ReadDiscreteInputsRequest {
   quantity: number
 }
 
+/** Handler request for reading exception status. */
+export interface ReadExceptionStatusRequest {
+  unitId: number
+}
+
 /** Options for reading FIFO queue. */
 export interface ReadFifoQueueOptions {
   /** FIFO pointer address. */
   address: number
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for reading FIFO queue. */
@@ -342,7 +379,13 @@ export interface ReadFileRecordOptions {
   /** Array of sub-requests. */
   requests: Array<FileRecordReadRequest>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
+}
+
+/** Handler request for reading file records. */
+export interface ReadFileRecordRequest {
+  unitId: number
+  requests: Array<FileRecordReadServerSubRequest>
 }
 
 /** Handler request for reading holding registers. */
@@ -366,7 +409,7 @@ export interface ReadRegistersOptions {
   /** Number of registers to read. */
   quantity: number
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Options for read/write multiple registers (FC23). */
@@ -380,7 +423,16 @@ export interface ReadWriteMultipleRegistersOptions {
   /** Values to write. */
   writeValues: Array<number>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
+}
+
+/** Handler request for read/write multiple registers (FC23). */
+export interface ReadWriteMultipleRegistersRequest {
+  unitId: number
+  readAddress: number
+  readQuantity: number
+  writeAddress: number
+  writeValues: Array<number>
 }
 
 /** Route entry mapping unit ID to a downstream channel. */
@@ -407,6 +459,10 @@ export interface RtuTransportOptions {
   responseTimeoutMs?: number
   /** Per-request timeout in milliseconds. */
   requestTimeoutMs?: number
+  /** Number of retry attempts on failure (0 = none). Default: 0. */
+  retryAttempts?: number
+  /** Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate". */
+  retryBackoffStrategy?: string
 }
 
 /** Server bind options for serial port. */
@@ -456,7 +512,11 @@ export interface TcpTransportOptions {
   /** Target TCP port (typically 502). */
   port: number
   /** Per-request timeout in milliseconds (optional). */
-  timeoutMs?: number
+  requestTimeoutMs?: number
+  /** Number of retry attempts on failure (0 = none). Default: 0. */
+  retryAttempts?: number
+  /** Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate". */
+  retryBackoffStrategy?: string
 }
 
 /** Options for writing file records. */
@@ -464,7 +524,13 @@ export interface WriteFileRecordOptions {
   /** Array of sub-requests. */
   requests: Array<FileRecordWriteRequest>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
+}
+
+/** Handler request for writing file records. */
+export interface WriteFileRecordRequest {
+  unitId: number
+  requests: Array<FileRecordWriteSubRequest>
 }
 
 /** Options for writing multiple coils. */
@@ -474,7 +540,7 @@ export interface WriteMultipleCoilsOptions {
   /** Values to write. */
   values: Array<boolean>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for writing multiple coils. */
@@ -491,7 +557,7 @@ export interface WriteMultipleRegistersOptions {
   /** Values to write. */
   values: Array<number>
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for writing multiple registers. */
@@ -508,7 +574,7 @@ export interface WriteSingleCoilOptions {
   /** Value to write. */
   value: boolean
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for writing a single coil. */
@@ -525,7 +591,7 @@ export interface WriteSingleRegisterOptions {
   /** Value to write. */
   value: number
   /** Optional abort signal to cancel the request. */
-  signal?: object
+  signal?: AbortSignal
 }
 
 /** Handler request for writing a single register. */
@@ -534,3 +600,35 @@ export interface WriteSingleRegisterRequest {
   address: number
   value: number
 }
+
+export interface ModbusException {
+  exception: number;
+}
+
+export interface ServerHandlers {
+  onReadCoils?: (req: ReadCoilsRequest) => boolean[] | ModbusException | Promise<boolean[] | ModbusException>;
+  onReadDiscreteInputs?: (req: ReadDiscreteInputsRequest) => boolean[] | ModbusException | Promise<boolean[] | ModbusException>;
+  onReadHoldingRegisters?: (req: ReadHoldingRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onReadInputRegisters?: (req: ReadInputRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onWriteSingleCoil?: (req: WriteSingleCoilRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onWriteSingleRegister?: (req: WriteSingleRegisterRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadExceptionStatus?: (req: ReadExceptionStatusRequest) => number | ModbusException | Promise<number | ModbusException>;
+  onDiagnostics?: (req: DiagnosticsRequest) => ServerDiagnosticsResponse | ModbusException | Promise<ServerDiagnosticsResponse | ModbusException>;
+  onWriteMultipleCoils?: (req: WriteMultipleCoilsRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onWriteMultipleRegisters?: (req: WriteMultipleRegistersRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadFileRecord?: (req: ReadFileRecordRequest) => number[][] | ModbusException | Promise<number[][] | ModbusException>;
+  onWriteFileRecord?: (req: WriteFileRecordRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadWriteMultipleRegisters?: (req: ReadWriteMultipleRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onReadFifoQueue?: (req: ReadFifoQueueRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+}
+
+export declare const ModbusErrorCode: {
+  readonly EXCEPTION: 'MODBUS_EXCEPTION';
+  readonly TIMEOUT: 'MODBUS_TIMEOUT';
+  readonly TRANSPORT: 'MODBUS_TRANSPORT';
+  readonly INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT';
+  readonly CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED';
+  readonly INTERNAL: 'MODBUS_INTERNAL';
+};
+
+export declare function getModbusErrorCode(err: Error): string | undefined;

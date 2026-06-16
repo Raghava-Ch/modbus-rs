@@ -36,7 +36,7 @@ async function main() {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: 502,
-    timeoutMs: 5000,
+    requestTimeoutMs: 5000,
   });
 
   const client = transport.createClient({ unitId: 1 });
@@ -99,8 +99,8 @@ const { AsyncTcpModbusServer } = require('modbus-rs');
 
 const holdingRegisters = new Array(1000).fill(0);
 
-function main() {
-  const server = AsyncTcpModbusServer.bind(
+async function main() {
+  const server = await AsyncTcpModbusServer.bind(
     { host: '0.0.0.0', port: 502, unitId: 1 },
     {
       onReadHoldingRegisters: (req) => {
@@ -120,11 +120,7 @@ function main() {
   });
 }
 
-try {
-  main();
-} catch (err) {
-  console.error(err);
-}
+main().catch(console.error);
 ```
 
 ### TCP Gateway
@@ -158,6 +154,66 @@ async function main() {
 main().catch(console.error);
 ```
 
+## Migration Guide
+
+### v0.15 Breaking Changes
+
+#### `TcpTransportOptions.timeoutMs` renamed to `requestTimeoutMs`
+
+```js
+// v0.14 (old)
+const transport = await AsyncTcpTransport.connect({
+  host: '127.0.0.1',
+  port: 502,
+  timeoutMs: 5000,   // ← old name
+});
+
+// v0.15+ (new)
+const transport = await AsyncTcpTransport.connect({
+  host: '127.0.0.1',
+  port: 502,
+  requestTimeoutMs: 5000,   // ← consistent with all other transports
+});
+```
+
+#### Server `bind()` / `bindRtu()` / `bindAscii()` are now async
+
+```js
+// v0.14 (old)
+const server = AsyncTcpModbusServer.bind(opts, handlers);  // sync
+
+// v0.15+ (new)
+const server = await AsyncTcpModbusServer.bind(opts, handlers);  // async, throws on bind failure
+```
+
+This change allows bind errors (port already in use, invalid address, etc.) to propagate to your code instead of being silently swallowed.
+
+## Error Handling with Code Constants
+
+Error code constants are now exported:
+
+```js
+const { getModbusErrorCode, ModbusErrorCode } = require('modbus-rs');
+
+try {
+  await client.readHoldingRegisters({ address: 0, quantity: 10 });
+} catch (err) {
+  const code = getModbusErrorCode(err);
+  switch (code) {
+    case ModbusErrorCode.EXCEPTION:      console.error('Modbus exception'); break;
+    case ModbusErrorCode.TIMEOUT:        console.error('Request timed out'); break;
+    case ModbusErrorCode.CONNECTION_CLOSED: console.error('Disconnected'); break;
+    default:                             console.error('Unknown error:', err.message);
+  }
+}
+```
+
+## Known Limitations
+
+- **AbortSignal**: Uses `signal.onabort` instead of `signal.addEventListener`. Only one abort handler per signal object is supported.
+- **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **16 routing entries**. Attempting to add more will throw at `bind()` time.
+- **Server file record handlers (FC20/FC21)**: The server-side handler receives a simplified request structure. Complex multi-sub-request scenarios are supported.
+
 ## API Reference
 
 ### AsyncTcpTransport
@@ -165,7 +221,7 @@ main().catch(console.error);
 - `static connect(opts: TcpTransportOptions): Promise<AsyncTcpTransport>` - Connect to a Modbus TCP server
 - `close(): Promise<void>` - Close the connection
 - `reconnect(): Promise<void>` - Re-establish the connection
-- `createClient(opts?: CreateClientOptions): AsyncTcpModbusClient` - Create a logical client instance bound to a specific unit ID (defaults to `1`)
+- `createClient(opts: CreateClientOptions): AsyncTcpModbusClient` - Create a logical client instance bound to a specific unit ID (required)
 - `setRequestTimeout(ms: number): void` - Set a global request timeout (in milliseconds)
 - `clearRequestTimeout(): void` - Clear the global request timeout
 - `pendingRequests: boolean` - (Getter) Returns whether there are requests currently in flight
@@ -202,31 +258,19 @@ These logical clients contain all the Modbus function code methods:
 
 ### AsyncTcpModbusServer
 
-- `bind(opts, handlers)` - Create and start a TCP server
-- `shutdown()` - Stop the server
+- `static bind(opts, handlers): Promise<AsyncTcpModbusServer>` - Create and start a TCP server
+- `shutdown(): Promise<void>` - Stop the server
+
+### AsyncSerialModbusServer
+
+- `static bindRtu(opts, handlers): Promise<AsyncSerialModbusServer>` - Create and start a Serial RTU server
+- `static bindAscii(opts, handlers): Promise<AsyncSerialModbusServer>` - Create and start a Serial ASCII server
+- `shutdown(): Promise<void>` - Stop the server
 
 ### AsyncTcpGateway
 
-- `bind(opts, config)` - Create and start a gateway
-- `shutdown()` - Stop the gateway
-
-## Error Handling
-
-All errors are thrown as JavaScript Error objects with descriptive messages:
-
-```javascript
-try {
-  await client.readHoldingRegisters({ address: 0, quantity: 10 });
-} catch (err) {
-  if (err.message.includes('MODBUS_EXCEPTION')) {
-    console.error('Modbus exception:', err.message);
-  } else if (err.message.includes('MODBUS_TIMEOUT')) {
-    console.error('Request timed out');
-  } else {
-    console.error('Error:', err.message);
-  }
-}
-```
+- `static bind(opts, config): Promise<AsyncTcpGateway>` - Create and start a gateway
+- `shutdown(): Promise<void>` - Stop the gateway
 
 ## Supported platforms
 

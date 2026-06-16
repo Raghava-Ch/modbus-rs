@@ -234,4 +234,3 @@ async fn test_async_raw_gateway_server_routing_miss() {
     assert_eq!(missed_units.len(), 1);
     assert_eq!(missed_units[0].get(), 42);
 }
-

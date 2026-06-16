@@ -32,7 +32,7 @@ use mbus_serial::{WasmAsciiTransport, WasmRtuTransport};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
-use super::app::{PendingHandle, PendingMap, WasmAppRouter, get_u8, get_u32, get_string};
+use super::app::{PendingHandle, PendingMap, WasmAppRouter, get_string, get_u8, get_u32};
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_SERIAL: &str = r#"
@@ -337,12 +337,14 @@ impl WasmSerialTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[wasm_bindgen(js_name = "createClient")]
-    pub fn create_client(&self, options: Option<CreateClientOpts>) -> Result<WasmSerialModbusClient, JsValue> {
+    pub fn create_client(
+        &self,
+        options: Option<CreateClientOpts>,
+    ) -> Result<WasmSerialModbusClient, JsValue> {
         let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
         let unit_id = get_u8(&options_val, "unitId", 1);
 
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         Ok(WasmSerialModbusClient {
             inner: self.inner.clone(),

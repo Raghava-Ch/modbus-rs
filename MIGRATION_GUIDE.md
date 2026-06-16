@@ -6,6 +6,16 @@ This index redirects you to the specific versioned migration guides for `modbus-
 
 ## 1. Versioned Migration Guides
 
+### [v0.15.0 Migration Guide (from v0.14.0)](./documentation/migrations/v0.14.0-to-v0.15.0.md)
+- **Target Platform**: Node.js FFI Bindings
+- **Topic**: Consistent naming, async server bind, retry configurations, error code constants, and expanded server request handlers.
+- **Key Changes**:
+  - `timeoutMs` renamed to `requestTimeoutMs`.
+  - Server `bind()`, `bindRtu()`, and `bindAscii()` methods are now asynchronous.
+  - Stable error code constants and `getModbusErrorCode()` helper.
+  - Support for FC07, FC20, FC21, and FC23 server-side handlers.
+  - Redundant `count` property removed from FIFO queue responses.
+
 ### [v0.14.0 Migration Guide (from v0.13.0)](./documentation/migrations/v0.13.0-to-v0.14.0.md)
 - **Target Platform**: Node.js, Python, Wasm Bindings
 - **Topic**: Upgrading to the **Transport + Client Factory** API.

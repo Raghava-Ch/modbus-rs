@@ -11,13 +11,13 @@
 import { AsyncTcpTransport } from 'modbus-rs';
 
 const HOST = process.env.MODBUS_HOST ?? '127.0.0.1';
-const PORT = Number(process.env.MODBUS_PORT ?? 502);
+const PORT = Number(process.env.MODBUS_PORT ?? 5502);
 
 async function main() {
   const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   const client = transport.createClient({ unitId: 1 });
 
@@ -41,7 +41,7 @@ async function main() {
     // FC18 — Read FIFO Queue
     try {
       const fifo = await client.readFifoQueue({ address: 0 });
-      console.log(`FC18 FIFO @ 0 (count=${fifo.count}):`, fifo.values);
+      console.log(`FC18 FIFO @ 0 (count=${fifo.values.length}):`, fifo.values);
     } catch (err) {
       console.log('FC18 not supported by this server:', err.message);
     }

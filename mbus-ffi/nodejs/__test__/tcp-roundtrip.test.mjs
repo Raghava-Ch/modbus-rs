@@ -24,7 +24,7 @@ const { AsyncTcpTransport, AsyncTcpModbusServer, AsyncTcpGateway } = modbus;
 const PORT = 25502;
 
 test('server lifecycle: bind / shutdown', async () => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT, unitId: 1 },
     {}, // empty handler bag
   );
@@ -33,7 +33,7 @@ test('server lifecycle: bind / shutdown', async () => {
 });
 
 test('client lifecycle: connect / close against stub server', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 1, unitId: 1 },
     {},
   );
@@ -45,7 +45,7 @@ test('client lifecycle: connect / close against stub server', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 1,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   assert.ok(transport, 'connect() should return a transport instance');
 
@@ -63,7 +63,7 @@ test('client lifecycle: connect / close against stub server', async (t) => {
 });
 
 test('client surface: all expected methods exist', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 2, unitId: 1 },
     {},
   );
@@ -75,7 +75,7 @@ test('client surface: all expected methods exist', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 2,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -106,7 +106,7 @@ test('round-trip reads/writes with JS server handlers', async (t) => {
   const holdingRegisters = new Uint16Array(100);
   const coils = new Uint8Array(100);
 
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 3, unitId: 1 },
     {
       onReadHoldingRegisters: async (req) => {
@@ -143,7 +143,7 @@ test('round-trip reads/writes with JS server handlers', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 3,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -167,7 +167,7 @@ test('round-trip reads/writes with JS server handlers', async (t) => {
 });
 
 test('server exception handling: returning custom error exceptions', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 4, unitId: 1 },
     {
       onReadHoldingRegisters: async (req) => {
@@ -187,7 +187,7 @@ test('server exception handling: returning custom error exceptions', async (t) =
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 4,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -212,7 +212,7 @@ test('server exception handling: returning custom error exceptions', async (t) =
 });
 
 test('per-request client AbortSignal cancellation', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 5, unitId: 1 },
     {}
   );
@@ -224,7 +224,7 @@ test('per-request client AbortSignal cancellation', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 5,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -254,7 +254,7 @@ test('per-request client AbortSignal cancellation', async (t) => {
 test('round-trip with sync (non-async) handlers', async (t) => {
   const holdingRegisters = new Array(100).fill(0);
 
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 6, unitId: 1 },
     {
       // Intentionally NOT async
@@ -270,7 +270,7 @@ test('round-trip with sync (non-async) handlers', async (t) => {
   await new Promise((r) => setTimeout(r, 100));
 
   const transport = await AsyncTcpTransport.connect({
-    host: '127.0.0.1', port: PORT + 6, timeoutMs: 2000,
+    host: '127.0.0.1', port: PORT + 6, requestTimeoutMs: 2000,
   });
   t.after(async () => { await transport.close(); });
 
@@ -282,7 +282,7 @@ test('round-trip with sync (non-async) handlers', async (t) => {
 });
 
 test('multi-drop TCP client sharing (same unit ID)', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 7, unitId: 1 },
     {
       onReadHoldingRegisters: async (req) => {
@@ -298,7 +298,7 @@ test('multi-drop TCP client sharing (same unit ID)', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 7,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -315,7 +315,7 @@ test('multi-drop TCP client sharing (same unit ID)', async (t) => {
 });
 
 test('logical client lifecycle on transport close', async (t) => {
-  const server = AsyncTcpModbusServer.bind(
+  const server = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 8, unitId: 1 },
     {}
   );
@@ -327,7 +327,7 @@ test('logical client lifecycle on transport close', async (t) => {
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 8,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   const client = transport.createClient({ unitId: 1 });
 
@@ -346,7 +346,7 @@ test('logical client lifecycle on transport close', async (t) => {
 
 test('gateway routing (different unit IDs) over single transport', async (t) => {
   // Bind backend server for unit 10
-  const server10 = AsyncTcpModbusServer.bind(
+  const server10 = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 9, unitId: 10 },
     {
       onReadHoldingRegisters: async (req) => {
@@ -359,7 +359,7 @@ test('gateway routing (different unit IDs) over single transport', async (t) => 
   });
 
   // Bind backend server for unit 20
-  const server20 = AsyncTcpModbusServer.bind(
+  const server20 = await AsyncTcpModbusServer.bind(
     { host: '127.0.0.1', port: PORT + 10, unitId: 20 },
     {
       onReadHoldingRegisters: async (req) => {
@@ -397,7 +397,7 @@ test('gateway routing (different unit IDs) over single transport', async (t) => 
   const transport = await AsyncTcpTransport.connect({
     host: '127.0.0.1',
     port: PORT + 11,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   t.after(async () => {
     await transport.close();
@@ -413,5 +413,193 @@ test('gateway routing (different unit IDs) over single transport', async (t) => 
 
   assert.deepEqual(res10, [1005]);
   assert.deepEqual(res20, [2005]);
+});
+
+test('ModbusErrorCode constants exist and are strings', () => {
+  assert.equal(typeof modbus.ModbusErrorCode.EXCEPTION, 'string');
+  assert.equal(modbus.ModbusErrorCode.EXCEPTION, 'MODBUS_EXCEPTION');
+  assert.equal(modbus.ModbusErrorCode.TIMEOUT, 'MODBUS_TIMEOUT');
+});
+
+test('getModbusErrorCode extracts correct code', () => {
+  const err = new Error('[MODBUS_EXCEPTION:3] Modbus exception code: 3');
+  assert.equal(modbus.getModbusErrorCode(err), 'MODBUS_EXCEPTION');
+  assert.equal(modbus.getModbusErrorCode(new Error('some random error')), undefined);
+});
+
+test('client requestTimeoutMs works', async (t) => {
+  // Bind server that delays response to trigger timeout
+  const server = await AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 12, unitId: 1 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        await new Promise((r) => setTimeout(r, 1000));
+        return [1, 2, 3];
+      }
+    }
+  );
+  t.after(async () => {
+    await server.shutdown();
+  });
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 12,
+    requestTimeoutMs: 200, // short timeout
+  });
+  t.after(async () => {
+    await transport.close();
+  });
+
+  const client = transport.createClient({ unitId: 1 });
+  await assert.rejects(
+    async () => {
+      await client.readHoldingRegisters({ address: 0, quantity: 3 });
+    },
+    (err) => {
+      const code = modbus.getModbusErrorCode(err);
+      assert.equal(code, modbus.ModbusErrorCode.TIMEOUT);
+      return true;
+    }
+  );
+});
+
+test('round-trip reads/writes for remaining Modbus services (discrete inputs, input registers, read/write multiple registers, FIFO queue, diagnostics, file records, exception status)', async (t) => {
+  const fileRecords = {
+    // fileNumber -> recordNumber -> recordData
+    4: { 1: [10, 20, 30] }
+  };
+
+  const server = await AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 13, unitId: 1 },
+    {
+      onReadDiscreteInputs: async (req) => {
+        const { address, quantity } = req;
+        const result = [];
+        for (let i = 0; i < quantity; i++) {
+          result.push((address + i) % 2 === 0);
+        }
+        return result;
+      },
+      onReadInputRegisters: async (req) => {
+        const { address, quantity } = req;
+        const result = [];
+        for (let i = 0; i < quantity; i++) {
+          result.push(address + i + 100);
+        }
+        return result;
+      },
+      onReadWriteMultipleRegisters: async (req) => {
+        const { readAddress, readQuantity, writeAddress, writeValues } = req;
+        // Just echo back values based on readAddress for this test
+        const result = [];
+        for (let i = 0; i < readQuantity; i++) {
+          result.push(readAddress + i + writeValues[0]);
+        }
+        return result;
+      },
+      onReadFifoQueue: async (req) => {
+        const { address } = req;
+        return [address, address + 1, address + 2];
+      },
+      onReadExceptionStatus: async () => {
+        return 0x5A;
+      },
+      onDiagnostics: async (req) => {
+        const { subFunction, data } = req;
+        return {
+          subFunction: subFunction,
+          data: data.map(v => v + 1)
+        };
+      },
+      onReadFileRecord: async (req) => {
+        const { requests } = req;
+        const responses = [];
+        for (const sub of requests) {
+          const file = fileRecords[sub.fileNumber];
+          const rec = file ? file[sub.recordNumber] : undefined;
+          if (rec) {
+            responses.push(rec.slice(0, sub.recordLength));
+          } else {
+            responses.push(new Array(sub.recordLength).fill(0));
+          }
+        }
+        return responses;
+      },
+      onWriteFileRecord: async (req) => {
+        const { requests } = req;
+        for (const sub of requests) {
+          if (!fileRecords[sub.fileNumber]) {
+            fileRecords[sub.fileNumber] = {};
+          }
+          fileRecords[sub.fileNumber][sub.recordNumber] = sub.recordData;
+        }
+      }
+    }
+  );
+  t.after(async () => {
+    await server.shutdown();
+  });
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 13,
+    requestTimeoutMs: 2000,
+  });
+  t.after(async () => {
+    await transport.close();
+  });
+
+  const client = transport.createClient({ unitId: 1 });
+
+  // 1. Read Discrete Inputs
+  const discreteRes = await client.readDiscreteInputs({ address: 10, quantity: 4 });
+  assert.deepEqual(discreteRes, [true, false, true, false]);
+
+  // 2. Read Input Registers
+  const inputRegsRes = await client.readInputRegisters({ address: 20, quantity: 2 });
+  assert.deepEqual(inputRegsRes, [120, 121]);
+
+  // 3. Read/Write Multiple Registers
+  const rwRegsRes = await client.readWriteMultipleRegisters({
+    readAddress: 30,
+    readQuantity: 2,
+    writeAddress: 40,
+    writeValues: [10]
+  });
+  assert.deepEqual(rwRegsRes, [40, 41]);
+
+  // 4. Read FIFO Queue
+  const fifoRes = await client.readFifoQueue({ address: 50 });
+  assert.deepEqual(fifoRes.values, [50, 51, 52]);
+
+  // 5. Read Exception Status
+  const excStatus = await client.readExceptionStatus();
+  assert.equal(excStatus, 0x5A);
+
+  // 6. Diagnostics
+  const diagRes = await client.diagnostics({ subFunction: 3, data: [100] });
+  assert.equal(diagRes.subFunction, 3);
+  assert.deepEqual(diagRes.data, [101]);
+
+  // 7. Write File Record & Read File Record
+  await client.writeFileRecord({
+    requests: [
+      { fileNumber: 4, recordNumber: 2, recordData: [90, 80] }
+    ]
+  });
+
+  const fileRes = await client.readFileRecord({
+    requests: [
+      { fileNumber: 4, recordNumber: 1, recordLength: 3 },
+      { fileNumber: 4, recordNumber: 2, recordLength: 2 }
+    ]
+  });
+  assert.deepEqual(fileRes, [
+    [10, 20, 30],
+    [90, 80]
+  ]);
 });
 

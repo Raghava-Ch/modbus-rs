@@ -16,7 +16,7 @@ async function main() {
   const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    timeoutMs: 2000,
+    requestTimeoutMs: 2000,
   });
   const client = transport.createClient({ unitId: 1 });
 

@@ -21,7 +21,7 @@ const PORT = Number(process.env.MODBUS_PORT ?? 5502);
 
 async function main() {
   const server = await AsyncTcpModbusServer.bind(
-    { host: '0.0.0.0', port: PORT },
+    { host: '0.0.0.0', port: PORT, unitId: 1 },
     {
       onReadHoldingRegisters: (req) => {
         counters.reads++;

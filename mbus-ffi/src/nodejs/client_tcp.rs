@@ -16,7 +16,9 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
-use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err};
+use crate::nodejs::errors::{
+    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
+};
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
     unsafe { std::mem::transmute(p) }
@@ -33,7 +35,11 @@ pub struct TcpTransportOptions {
     /// Target TCP port (typically 502).
     pub port: u16,
     /// Per-request timeout in milliseconds (optional).
-    pub timeout_ms: Option<u32>,
+    pub request_timeout_ms: Option<u32>,
+    /// Number of retry attempts on failure (0 = none). Default: 0.
+    pub retry_attempts: Option<u32>,
+    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    pub retry_backoff_strategy: Option<String>,
 }
 
 /// Options for creating a device client.
@@ -41,7 +47,7 @@ pub struct TcpTransportOptions {
 #[derive(Debug, Clone)]
 pub struct CreateClientOptions {
     /// Modbus unit ID (1-247).
-    pub unit_id: Option<u8>,
+    pub unit_id: u8,
 }
 
 /// Options for reading registers.
@@ -255,12 +261,16 @@ impl AsyncTcpTransport {
     /// Connects to a Modbus TCP device or gateway.
     #[napi(factory)]
     pub async fn connect(opts: TcpTransportOptions) -> Result<AsyncTcpTransport> {
+        if let Some(ref strategy) = opts.retry_backoff_strategy {
+            let _ = parse_backoff_strategy(strategy)?;
+        }
+
         let client = TcpClient::new_with_pipeline(&opts.host, opts.port)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         client.connect().await.map_err(from_async_error)?;
 
-        if let Some(timeout_ms) = opts.timeout_ms {
+        if let Some(timeout_ms) = opts.request_timeout_ms {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
 
@@ -281,9 +291,9 @@ impl AsyncTcpTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[napi]
-    pub fn create_client(&self, opts: Option<CreateClientOptions>) -> Result<AsyncTcpModbusClient> {
+    pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncTcpModbusClient> {
         let client = self.get_client()?;
-        let unit_id = opts.and_then(|o| o.unit_id).unwrap_or(1);
+        let unit_id = opts.unit_id;
         UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncTcpModbusClient {
             inner: client,

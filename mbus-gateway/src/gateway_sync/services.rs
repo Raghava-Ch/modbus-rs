@@ -235,7 +235,9 @@ where
                     if connection_error.is_none() {
                         let ds_type = DownstreamT::TRANSPORT_TYPE;
                         if derive_length_from_bytes(&self.downstreams[ds_idx].rxbuf, ds_type)
-                            .is_some_and(|expected_len| self.downstreams[ds_idx].rxbuf.len() >= expected_len)
+                            .is_some_and(|expected_len| {
+                                self.downstreams[ds_idx].rxbuf.len() >= expected_len
+                            })
                         {
                             completed = true;
                         }
@@ -270,7 +272,9 @@ where
                         .rxbuf
                         .truncate(buf_len - expected_len);
 
-                    if let (Ok(response_msg), Some(entry)) = (response_msg_result, self.txn_map.remove(internal_txn)) {
+                    if let (Ok(response_msg), Some(entry)) =
+                        (response_msg_result, self.txn_map.remove(internal_txn))
+                    {
                         let adu_result = compile_adu_frame(
                             entry.upstream_txn,
                             unit.get(),
@@ -292,10 +296,8 @@ where
                                     entry.upstream_txn,
                                     unit.get()
                                 );
-                                self.event_handler.on_response_returned(
-                                    entry.session_id,
-                                    entry.upstream_txn,
-                                );
+                                self.event_handler
+                                    .on_response_returned(entry.session_id, entry.upstream_txn);
                                 outcome = PollOutcome::Active;
                             }
                         }

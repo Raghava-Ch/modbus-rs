@@ -23,16 +23,16 @@ pub use mbus_core::transport::{
 pub use mbus_network::TokioTcpTransport;
 #[cfg(feature = "network-tcp")]
 pub use mbus_network::{StdTcpServerTransport, StdTcpTransport};
-#[cfg(all(feature = "serial-rtu", feature = "async"))]
-pub use mbus_serial::TokioRtuTransport;
-#[cfg(all(feature = "serial-ascii", feature = "async"))]
-pub use mbus_serial::TokioAsciiTransport;
 #[cfg(feature = "serial-ascii")]
 pub use mbus_serial::StdAsciiTransport;
 #[cfg(feature = "serial-rtu")]
 pub use mbus_serial::StdRtuTransport;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use mbus_serial::StdSerialTransport;
+#[cfg(all(feature = "serial-ascii", feature = "async"))]
+pub use mbus_serial::TokioAsciiTransport;
+#[cfg(all(feature = "serial-rtu", feature = "async"))]
+pub use mbus_serial::TokioRtuTransport;
 
 #[cfg(feature = "server")]
 pub use mbus_server::modbus_app;

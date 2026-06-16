@@ -20,13 +20,16 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
 use crate::nodejs::client_tcp::{
-    CreateClientOptions, DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
-    DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions, ReadDeviceIdentificationOptions,
-    ReadFifoQueueOptions, ReadFileRecordOptions, ReadRegistersOptions,
-    ReadWriteMultipleRegistersOptions, WriteFileRecordOptions, WriteMultipleCoilsOptions,
-    WriteMultipleRegistersOptions, WriteSingleCoilOptions, WriteSingleRegisterOptions,
+    CreateClientOptions, DeviceIdentificationObject, DeviceIdentificationResponse,
+    DiagnosticsOptions, DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions,
+    ReadDeviceIdentificationOptions, ReadFifoQueueOptions, ReadFileRecordOptions,
+    ReadRegistersOptions, ReadWriteMultipleRegistersOptions, WriteFileRecordOptions,
+    WriteMultipleCoilsOptions, WriteMultipleRegistersOptions, WriteSingleCoilOptions,
+    WriteSingleRegisterOptions,
 };
-use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err};
+use crate::nodejs::errors::{
+    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
+};
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
     unsafe { std::mem::transmute(p) }
@@ -52,6 +55,10 @@ pub struct RtuTransportOptions {
     pub response_timeout_ms: Option<u32>,
     /// Per-request timeout in milliseconds.
     pub request_timeout_ms: Option<u32>,
+    /// Number of retry attempts on failure (0 = none). Default: 0.
+    pub retry_attempts: Option<u32>,
+    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    pub retry_backoff_strategy: Option<String>,
 }
 
 /// Connection options for the serial ASCII transport.
@@ -72,6 +79,10 @@ pub struct AsciiTransportOptions {
     pub response_timeout_ms: Option<u32>,
     /// Per-request timeout in milliseconds.
     pub request_timeout_ms: Option<u32>,
+    /// Number of retry attempts on failure (0 = none). Default: 0.
+    pub retry_attempts: Option<u32>,
+    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    pub retry_backoff_strategy: Option<String>,
 }
 
 /// Converts a string parity value to the Parity enum.
@@ -145,6 +156,14 @@ fn build_rtu_config(opts: &RtuTransportOptions) -> Result<ModbusSerialConfig> {
         .unwrap_or(1);
     let response_timeout_ms = opts.response_timeout_ms.unwrap_or(1000);
 
+    let retry_attempts = opts.retry_attempts.unwrap_or(0) as u8;
+    let retry_backoff_strategy = opts
+        .retry_backoff_strategy
+        .as_ref()
+        .map(|s| parse_backoff_strategy(s))
+        .transpose()?
+        .unwrap_or(BackoffStrategy::Immediate);
+
     let port_path = heapless::String::try_from(opts.port_path.as_str())
         .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
 
@@ -156,8 +175,8 @@ fn build_rtu_config(opts: &RtuTransportOptions) -> Result<ModbusSerialConfig> {
         stop_bits,
         parity,
         response_timeout_ms,
-        retry_attempts: 0,
-        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_attempts,
+        retry_backoff_strategy,
         retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     })
@@ -184,6 +203,14 @@ fn build_ascii_config(opts: &AsciiTransportOptions) -> Result<ModbusSerialConfig
         .unwrap_or(1);
     let response_timeout_ms = opts.response_timeout_ms.unwrap_or(1000);
 
+    let retry_attempts = opts.retry_attempts.unwrap_or(0) as u8;
+    let retry_backoff_strategy = opts
+        .retry_backoff_strategy
+        .as_ref()
+        .map(|s| parse_backoff_strategy(s))
+        .transpose()?
+        .unwrap_or(BackoffStrategy::Immediate);
+
     let port_path = heapless::String::try_from(opts.port_path.as_str())
         .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
 
@@ -195,8 +222,8 @@ fn build_ascii_config(opts: &AsciiTransportOptions) -> Result<ModbusSerialConfig
         stop_bits,
         parity,
         response_timeout_ms,
-        retry_attempts: 0,
-        retry_backoff_strategy: BackoffStrategy::Immediate,
+        retry_attempts,
+        retry_backoff_strategy,
         retry_jitter_strategy: JitterStrategy::None,
         retry_random_fn: None,
     })
@@ -245,11 +272,8 @@ impl AsyncRtuTransport {
     #[napi]
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
-        let unit_id = opts.unit_id.ok_or_else(|| {
-            napi::Error::new(Status::InvalidArg, "unitId is required for serial client")
-        })?;
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        let unit_id = opts.unit_id;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncSerialModbusClient {
             inner: client,
             unit_id,
@@ -346,11 +370,8 @@ impl AsyncAsciiTransport {
     #[napi]
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
-        let unit_id = opts.unit_id.ok_or_else(|| {
-            napi::Error::new(Status::InvalidArg, "unitId is required for serial client")
-        })?;
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        let unit_id = opts.unit_id;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncSerialModbusClient {
             inner: client,
             unit_id,

@@ -584,3 +584,26 @@ module.exports.AsyncTcpGateway = nativeBinding.AsyncTcpGateway
 module.exports.AsyncTcpModbusClient = nativeBinding.AsyncTcpModbusClient
 module.exports.AsyncTcpModbusServer = nativeBinding.AsyncTcpModbusServer
 module.exports.AsyncTcpTransport = nativeBinding.AsyncTcpTransport
+module.exports.MODBUS_ERROR_CODE_CONNECTION_CLOSED = nativeBinding.MODBUS_ERROR_CODE_CONNECTION_CLOSED
+module.exports.MODBUS_ERROR_CODE_EXCEPTION = nativeBinding.MODBUS_ERROR_CODE_EXCEPTION
+module.exports.MODBUS_ERROR_CODE_INTERNAL = nativeBinding.MODBUS_ERROR_CODE_INTERNAL
+module.exports.MODBUS_ERROR_CODE_INVALID_ARGUMENT = nativeBinding.MODBUS_ERROR_CODE_INVALID_ARGUMENT
+module.exports.MODBUS_ERROR_CODE_TIMEOUT = nativeBinding.MODBUS_ERROR_CODE_TIMEOUT
+module.exports.MODBUS_ERROR_CODE_TRANSPORT = nativeBinding.MODBUS_ERROR_CODE_TRANSPORT
+
+// Error code constants
+module.exports.ModbusErrorCode = {
+  EXCEPTION: 'MODBUS_EXCEPTION',
+  TIMEOUT: 'MODBUS_TIMEOUT',
+  TRANSPORT: 'MODBUS_TRANSPORT',
+  INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT',
+  CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED',
+  INTERNAL: 'MODBUS_INTERNAL',
+}
+
+// Helper to extract the code from a Modbus error message
+module.exports.getModbusErrorCode = function getModbusErrorCode(err) {
+  if (!err || typeof err.message !== 'string') return undefined
+  const m = err.message.match(/^\[([A-Z_]+)(?::[^\]]*)?\]/)
+  return m ? m[1] : undefined
+}

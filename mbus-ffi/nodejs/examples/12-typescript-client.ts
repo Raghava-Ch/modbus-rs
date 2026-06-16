@@ -21,7 +21,7 @@ import {
 const opts: TcpTransportOptions = {
   host: process.env.MODBUS_HOST ?? '127.0.0.1',
   port: Number(process.env.MODBUS_PORT ?? 5502),
-  timeoutMs: 2000,
+  requestTimeoutMs: 2000,
 };
 
 async function main(): Promise<void> {

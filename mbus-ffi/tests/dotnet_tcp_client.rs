@@ -6,7 +6,11 @@
 //! values.  No managed runtime is involved here — the equivalent C# test
 //! lives under `mbus-ffi/dotnet/ModbusRs.Tests/`.
 
-#![cfg(all(feature = "dotnet", feature = "holding-registers", not(target_arch = "wasm32")))]
+#![cfg(all(
+    feature = "dotnet",
+    feature = "holding-registers",
+    not(target_arch = "wasm32")
+))]
 
 use std::ffi::CString;
 use std::future::Future;

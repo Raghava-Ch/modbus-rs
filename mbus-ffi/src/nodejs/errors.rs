@@ -107,3 +107,22 @@ pub fn setup_abort_listener(
         Ok(None)
     }
 }
+
+/// Helper to parse a string into a BackoffStrategy.
+pub fn parse_backoff_strategy(s: &str) -> napi::Result<mbus_core::transport::BackoffStrategy> {
+    match s.to_lowercase().as_str() {
+        "immediate" => Ok(mbus_core::transport::BackoffStrategy::Immediate),
+        "fixed" => Ok(mbus_core::transport::BackoffStrategy::Fixed { delay_ms: 1000 }),
+        "exponential" => Ok(mbus_core::transport::BackoffStrategy::Exponential {
+            base_delay_ms: 1000,
+            max_delay_ms: 10000,
+        }),
+        _ => Err(napi::Error::new(
+            Status::InvalidArg,
+            format!(
+                "Invalid backoff strategy: '{}'. Expected 'immediate', 'fixed', or 'exponential'",
+                s
+            ),
+        )),
+    }
+}

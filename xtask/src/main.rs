@@ -323,15 +323,17 @@ fn build_one_demo(
         .codegen
         .as_ref()
         .map(|cg| root.join(&cg.config).to_string_lossy().into_owned());
-    
+
     if let Some(v) = config_abs.as_deref() {
         unsafe { std::env::set_var("MBUS_SERVER_APP_CONFIG", v) };
     }
 
     let ffi_out_dir = demo.dir.join("build").join("ffi");
     let gen_args = vec![
-        "--features".to_string(), features.to_string(),
-        "--out-dir".to_string(), ffi_out_dir.to_string_lossy().into_owned(),
+        "--features".to_string(),
+        features.to_string(),
+        "--out-dir".to_string(),
+        ffi_out_dir.to_string_lossy().into_owned(),
     ];
     cmd_gen_client_header(root, &gen_args)?;
 

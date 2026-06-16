@@ -1,12 +1,11 @@
 /**
  * Example 05 — TCP client: per-request timeout
  *
- * Demonstrates `timeoutMs` at connect time.  If the server doesn't reply
+ * Demonstrates `requestTimeoutMs` at connect time.  If the server doesn't reply
  * within the timeout, the request rejects with a timeout error.
  *
- * Note: AbortSignal-based per-call cancellation is on the roadmap but not
- * yet implemented in the v0.8 Node.js bindings.  Use `timeoutMs` in the
- * constructor for now.
+ * Note: AbortSignal-based per-call cancellation is fully supported in the
+ * v0.15+ bindings.
  *
  * Run:    node examples/05-tcp-client-abort-and-timeout.mjs
  */
@@ -22,7 +21,7 @@ async function main() {
   const transport = await AsyncTcpTransport.connect({
     host: HOST,
     port: PORT,
-    timeoutMs: 50,
+    requestTimeoutMs: 50,
   });
   const client = transport.createClient({ unitId: 1 });
 

@@ -134,13 +134,13 @@ pub struct AsyncSerialModbusServer {
 
 #[napi]
 impl AsyncSerialModbusServer {
-    /// Binds and starts a new Serial RTU server.
-    #[napi(factory)]
+    #[napi]
+    #[allow(clippy::missing_transmute_annotations)]
     pub fn bind_rtu(
         env: Env,
         opts: SerialServerOptions,
-        handlers: Object,
-    ) -> Result<AsyncSerialModbusServer> {
+        handlers: Object<'_>,
+    ) -> Result<PromiseRaw<'static, AsyncSerialModbusServer>> {
         let unit = UnitIdOrSlaveAddr::new(opts.unit_id)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
@@ -153,34 +153,37 @@ impl AsyncSerialModbusServer {
         // Build the handler adapter
         let adapter = crate::nodejs::server_tcp::build_adapter(&env, &handlers)?;
 
-        // Spawn the server task
-        let rt = runtime::get();
-        let join_handle = rt.spawn(async move {
-            let mut server = match mbus_server_async::AsyncRtuServer::new_rtu(&config, unit) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to create Serial RTU Server: {:?}", e);
-                    return;
-                }
-            };
-            let _ = server
-                .run_with_shutdown(adapter, stop_signal_clone.notified())
-                .await;
-        });
+        let promise = env.spawn_future(async move {
+            // Try creating/binding the server first so we catch serial port errors
+            let mut server =
+                mbus_server_async::AsyncRtuServer::new_rtu(&config, unit).map_err(|e| {
+                    napi::Error::new(Status::GenericFailure, format!("Bind RTU failed: {:?}", e))
+                })?;
 
-        Ok(AsyncSerialModbusServer {
-            stop_signal,
-            join_handle: Mutex::new(Some(join_handle)),
-        })
+            // Spawn the server task
+            let rt = runtime::get();
+            let join_handle = rt.spawn(async move {
+                let _ = server
+                    .run_with_shutdown(adapter, stop_signal_clone.notified())
+                    .await;
+            });
+
+            Ok(AsyncSerialModbusServer {
+                stop_signal,
+                join_handle: Mutex::new(Some(join_handle)),
+            })
+        })?;
+
+        Ok(unsafe { std::mem::transmute(promise) })
     }
 
-    /// Binds and starts a new Serial ASCII server.
-    #[napi(factory)]
+    #[napi]
+    #[allow(clippy::missing_transmute_annotations)]
     pub fn bind_ascii(
         env: Env,
         opts: SerialServerOptions,
-        handlers: Object,
-    ) -> Result<AsyncSerialModbusServer> {
+        handlers: Object<'_>,
+    ) -> Result<PromiseRaw<'static, AsyncSerialModbusServer>> {
         let unit = UnitIdOrSlaveAddr::new(opts.unit_id)
             .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
@@ -193,25 +196,31 @@ impl AsyncSerialModbusServer {
         // Build the handler adapter
         let adapter = crate::nodejs::server_tcp::build_adapter(&env, &handlers)?;
 
-        // Spawn the server task
-        let rt = runtime::get();
-        let join_handle = rt.spawn(async move {
-            let mut server = match mbus_server_async::AsyncAsciiServer::new_ascii(&config, unit) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to create Serial ASCII Server: {:?}", e);
-                    return;
-                }
-            };
-            let _ = server
-                .run_with_shutdown(adapter, stop_signal_clone.notified())
-                .await;
-        });
+        let promise = env.spawn_future(async move {
+            // Try creating/binding the server first so we catch serial port errors
+            let mut server = mbus_server_async::AsyncAsciiServer::new_ascii(&config, unit)
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("Bind ASCII failed: {:?}", e),
+                    )
+                })?;
 
-        Ok(AsyncSerialModbusServer {
-            stop_signal,
-            join_handle: Mutex::new(Some(join_handle)),
-        })
+            // Spawn the server task
+            let rt = runtime::get();
+            let join_handle = rt.spawn(async move {
+                let _ = server
+                    .run_with_shutdown(adapter, stop_signal_clone.notified())
+                    .await;
+            });
+
+            Ok(AsyncSerialModbusServer {
+                stop_signal,
+                join_handle: Mutex::new(Some(join_handle)),
+            })
+        })?;
+
+        Ok(unsafe { std::mem::transmute(promise) })
     }
 
     /// Stops the server.
