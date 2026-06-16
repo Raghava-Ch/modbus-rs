@@ -79,4 +79,3 @@ pub const MODBUS_ERROR_CODE_CONNECTION_CLOSED: &str = "MODBUS_CONNECTION_CLOSED"
 /// Stable error code: Internal library error.
 #[napi]
 pub const MODBUS_ERROR_CODE_INTERNAL: &str = "MODBUS_INTERNAL";
-

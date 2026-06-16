@@ -471,10 +471,7 @@ impl JsHandlerAdapter {
                 ),
             }
         } else {
-            ModbusResponse::exception(
-                FunctionCode::ReadCoils,
-                ExceptionCode::IllegalFunction,
-            )
+            ModbusResponse::exception(FunctionCode::ReadCoils, ExceptionCode::IllegalFunction)
         }
     }
 
@@ -561,11 +558,7 @@ impl JsHandlerAdapter {
                 ),
             }
         } else {
-            ModbusResponse::echo_multi_write(
-                FunctionCode::WriteMultipleCoils,
-                address,
-                count,
-            )
+            ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleCoils, address, count)
         }
     }
 
@@ -645,10 +638,7 @@ impl JsHandlerAdapter {
                         }
                         HandlerReturn::Data(regs) => {
                             if regs.len() == count as usize {
-                                ModbusResponse::registers(
-                                    FunctionCode::ReadHoldingRegisters,
-                                    &regs,
-                                )
+                                ModbusResponse::registers(FunctionCode::ReadHoldingRegisters, &regs)
                             } else {
                                 ModbusResponse::exception(
                                     FunctionCode::ReadHoldingRegisters,
@@ -700,10 +690,7 @@ impl JsHandlerAdapter {
                         }
                         HandlerReturn::Data(regs) => {
                             if regs.len() == count as usize {
-                                ModbusResponse::registers(
-                                    FunctionCode::ReadInputRegisters,
-                                    &regs,
-                                )
+                                ModbusResponse::registers(FunctionCode::ReadInputRegisters, &regs)
                             } else {
                                 ModbusResponse::exception(
                                     FunctionCode::ReadInputRegisters,
@@ -794,10 +781,9 @@ impl JsHandlerAdapter {
             match handler.call_async(js_req).await {
                 Ok(promise) => match promise.await {
                     Ok(val) => match parse_write_return(val) {
-                        HandlerReturn::Exception(e) => ModbusResponse::exception(
-                            FunctionCode::WriteMultipleRegisters,
-                            e,
-                        ),
+                        HandlerReturn::Exception(e) => {
+                            ModbusResponse::exception(FunctionCode::WriteMultipleRegisters, e)
+                        }
                         _ => ModbusResponse::echo_multi_write(
                             FunctionCode::WriteMultipleRegisters,
                             address,
@@ -815,11 +801,7 @@ impl JsHandlerAdapter {
                 ),
             }
         } else {
-            ModbusResponse::echo_multi_write(
-                FunctionCode::WriteMultipleRegisters,
-                address,
-                count,
-            )
+            ModbusResponse::echo_multi_write(FunctionCode::WriteMultipleRegisters, address, count)
         }
     }
 
@@ -852,10 +834,7 @@ impl JsHandlerAdapter {
                 Ok(promise) => match promise.await {
                     Ok(val) => match parse_u16_vec_return(val) {
                         HandlerReturn::Exception(e) => {
-                            ModbusResponse::exception(
-                                FunctionCode::ReadWriteMultipleRegisters,
-                                e,
-                            )
+                            ModbusResponse::exception(FunctionCode::ReadWriteMultipleRegisters, e)
                         }
                         HandlerReturn::Data(regs) => {
                             if regs.len() == read_count as usize {
@@ -917,8 +896,7 @@ impl JsHandlerAdapter {
                                     u8,
                                     { mbus_core::data_unit::common::MAX_PDU_DATA_LEN },
                                 >::new();
-                                let _ =
-                                    payload.extend_from_slice(&fifo_count.to_be_bytes());
+                                let _ = payload.extend_from_slice(&fifo_count.to_be_bytes());
                                 for v in &values {
                                     let _ = payload.extend_from_slice(&v.to_be_bytes());
                                 }
@@ -946,18 +924,12 @@ impl JsHandlerAdapter {
                 ),
             }
         } else {
-            ModbusResponse::exception(
-                FunctionCode::ReadFifoQueue,
-                ExceptionCode::IllegalFunction,
-            )
+            ModbusResponse::exception(FunctionCode::ReadFifoQueue, ExceptionCode::IllegalFunction)
         }
     }
 
     #[cfg(feature = "diagnostics")]
-    async fn handle_read_exception_status(
-        &self,
-        unit: UnitIdOrSlaveAddr,
-    ) -> ModbusResponse {
+    async fn handle_read_exception_status(&self, unit: UnitIdOrSlaveAddr) -> ModbusResponse {
         if let Some(handler) = &self.on_read_exception_status {
             let js_req = ReadExceptionStatusRequest {
                 unit_id: u8::from(unit),
@@ -971,9 +943,7 @@ impl JsHandlerAdapter {
                         HandlerReturn::Data(status_byte) => {
                             ModbusResponse::read_exception_status(status_byte)
                         }
-                        HandlerReturn::Void => {
-                            ModbusResponse::read_exception_status(0)
-                        }
+                        HandlerReturn::Void => ModbusResponse::read_exception_status(0),
                     },
                     Err(_) => ModbusResponse::exception(
                         FunctionCode::ReadExceptionStatus,
@@ -1013,9 +983,7 @@ impl JsHandlerAdapter {
                             let resp_data = res.data.first().copied().unwrap_or(0);
                             ModbusResponse::diagnostics_echo(res.sub_function, resp_data)
                         }
-                        HandlerReturn::Void => {
-                            ModbusResponse::diagnostics_echo(sub_function, data)
-                        }
+                        HandlerReturn::Void => ModbusResponse::diagnostics_echo(sub_function, data),
                     },
                     Err(_) => ModbusResponse::exception(
                         FunctionCode::Diagnostics,
@@ -1085,10 +1053,7 @@ impl JsHandlerAdapter {
                 ),
             }
         } else {
-            ModbusResponse::exception(
-                FunctionCode::ReadFileRecord,
-                ExceptionCode::IllegalFunction,
-            )
+            ModbusResponse::exception(FunctionCode::ReadFileRecord, ExceptionCode::IllegalFunction)
         }
     }
 
@@ -1106,7 +1071,10 @@ impl JsHandlerAdapter {
                 for i in 0..sub.record_length {
                     let idx = (i * 2) as usize;
                     if idx + 1 < sub.record_data.len() {
-                        record_data.push(u16::from_be_bytes([sub.record_data[idx], sub.record_data[idx + 1]]));
+                        record_data.push(u16::from_be_bytes([
+                            sub.record_data[idx],
+                            sub.record_data[idx + 1],
+                        ]));
                     }
                 }
                 requests.push(FileRecordWriteSubRequest {
@@ -1167,7 +1135,10 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 data,
                 unit,
                 ..
-            } => self.handle_write_multiple_coils(unit, address, count, &data).await,
+            } => {
+                self.handle_write_multiple_coils(unit, address, count, &data)
+                    .await
+            }
             #[cfg(feature = "discrete-inputs")]
             ModbusRequest::ReadDiscreteInputs {
                 address,
@@ -1181,7 +1152,10 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 count,
                 unit,
                 ..
-            } => self.handle_read_holding_registers(unit, address, count).await,
+            } => {
+                self.handle_read_holding_registers(unit, address, count)
+                    .await
+            }
             #[cfg(feature = "input-registers")]
             ModbusRequest::ReadInputRegisters {
                 address,
@@ -1195,7 +1169,10 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 value,
                 unit,
                 ..
-            } => self.handle_write_single_register(unit, address, value).await,
+            } => {
+                self.handle_write_single_register(unit, address, value)
+                    .await
+            }
             #[cfg(feature = "holding-registers")]
             ModbusRequest::WriteMultipleRegisters {
                 address,
@@ -1203,7 +1180,10 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 data,
                 unit,
                 ..
-            } => self.handle_write_multiple_registers(unit, address, count, &data).await,
+            } => {
+                self.handle_write_multiple_registers(unit, address, count, &data)
+                    .await
+            }
             #[cfg(feature = "holding-registers")]
             ModbusRequest::MaskWriteRegister { .. } => ModbusResponse::exception(
                 FunctionCode::MaskWriteRegister,
@@ -1218,7 +1198,17 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 write_count,
                 data,
                 ..
-            } => self.handle_read_write_multiple_registers(unit, read_address, read_count, write_address, write_count, &data).await,
+            } => {
+                self.handle_read_write_multiple_registers(
+                    unit,
+                    read_address,
+                    read_count,
+                    write_address,
+                    write_count,
+                    &data,
+                )
+                .await
+            }
             #[cfg(feature = "fifo")]
             ModbusRequest::ReadFifoQueue {
                 pointer_address,
@@ -1226,10 +1216,9 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 ..
             } => self.handle_read_fifo_queue(unit, pointer_address).await,
             #[cfg(feature = "diagnostics")]
-            ModbusRequest::ReadExceptionStatus {
-                unit,
-                ..
-            } => self.handle_read_exception_status(unit).await,
+            ModbusRequest::ReadExceptionStatus { unit, .. } => {
+                self.handle_read_exception_status(unit).await
+            }
             #[cfg(feature = "diagnostics")]
             ModbusRequest::Diagnostics {
                 sub_function,
@@ -1251,9 +1240,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
             ),
             #[cfg(feature = "file-record")]
             ModbusRequest::ReadFileRecord {
-                unit,
-                sub_requests,
-                ..
+                unit, sub_requests, ..
             } => self.handle_read_file_record(unit, &sub_requests).await,
             #[cfg(feature = "file-record")]
             ModbusRequest::WriteFileRecord {
@@ -1261,7 +1248,10 @@ impl AsyncAppHandler for JsHandlerAdapter {
                 sub_requests,
                 raw_pdu_data,
                 ..
-            } => self.handle_write_file_record(unit, &sub_requests, raw_pdu_data).await,
+            } => {
+                self.handle_write_file_record(unit, &sub_requests, raw_pdu_data)
+                    .await
+            }
             #[cfg(feature = "diagnostics")]
             ModbusRequest::EncapsulatedInterfaceTransport { .. } => {
                 ModbusResponse::exception_raw(0x2B, ExceptionCode::IllegalFunction)
@@ -1377,6 +1367,7 @@ impl AsyncTcpModbusServer {
     /// @param handlers - Object containing handler functions for each Modbus operation.
     /// @returns A running server instance.
     #[napi]
+    #[allow(clippy::missing_transmute_annotations)]
     pub fn bind(
         env: Env,
         opts: TcpServerOptions,
@@ -1394,9 +1385,9 @@ impl AsyncTcpModbusServer {
 
         let promise = env.spawn_future(async move {
             // Bind first to capture error
-            let server = AsyncTcpServer::bind(&bind_addr, unit)
-                .await
-                .map_err(|e| napi::Error::new(Status::GenericFailure, format!("Bind failed: {:?}", e)))?;
+            let server = AsyncTcpServer::bind(&bind_addr, unit).await.map_err(|e| {
+                napi::Error::new(Status::GenericFailure, format!("Bind failed: {:?}", e))
+            })?;
 
             // Spawn the server task
             let rt = runtime::get();

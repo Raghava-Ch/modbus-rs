@@ -98,16 +98,16 @@
 //! ```
 
 use std::future::Future;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use std::str::FromStr;
 
+use mbus_core::data_unit::common::{compile_adu_frame, decompile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::transport::{
     AsyncTransport, BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig,
     ModbusSerialConfig, Parity, SerialMode, TransportType,
 };
-use mbus_core::data_unit::common::{decompile_adu_frame, compile_adu_frame};
 use tokio::sync::Mutex;
 
 use crate::common::event::GatewayEventHandler;
@@ -166,7 +166,10 @@ impl AsyncSerialGatewayServer {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        gateway_log_debug!("serial upstream gateway session started with config: {:?}", cfg);
+        gateway_log_debug!(
+            "serial upstream gateway session started with config: {:?}",
+            cfg
+        );
 
         // 1. Open the specified serial port asynchronously via `tokio-serial` / Tokio transports.
         let port_path = heapless::String::<64>::from_str(&cfg.port)
@@ -190,8 +193,8 @@ impl AsyncSerialGatewayServer {
 
         match cfg.mode {
             SerialMode::Rtu => {
-                let mut upstream = TokioRtuTransport::new(&modbus_cfg)
-                    .map_err(AsyncGatewayError::Modbus)?;
+                let mut upstream =
+                    TokioRtuTransport::new(&modbus_cfg).map_err(AsyncGatewayError::Modbus)?;
                 Self::run_loop(
                     &mut upstream,
                     true,
@@ -204,8 +207,8 @@ impl AsyncSerialGatewayServer {
                 .await
             }
             SerialMode::Ascii => {
-                let mut upstream = TokioAsciiTransport::new(&modbus_cfg)
-                    .map_err(AsyncGatewayError::Modbus)?;
+                let mut upstream =
+                    TokioAsciiTransport::new(&modbus_cfg).map_err(AsyncGatewayError::Modbus)?;
                 Self::run_loop(
                     &mut upstream,
                     false,

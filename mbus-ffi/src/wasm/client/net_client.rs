@@ -182,12 +182,14 @@ impl WasmTcpTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[wasm_bindgen(js_name = "createClient")]
-    pub fn create_client(&self, options: Option<CreateClientOpts>) -> Result<WasmModbusClient, JsValue> {
+    pub fn create_client(
+        &self,
+        options: Option<CreateClientOpts>,
+    ) -> Result<WasmModbusClient, JsValue> {
         let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
         let unit_id = get_u8(&options_val, "unitId", 1);
 
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         Ok(WasmModbusClient {
             inner: self.inner.clone(),

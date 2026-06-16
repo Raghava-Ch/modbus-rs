@@ -20,14 +20,15 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
 use crate::nodejs::client_tcp::{
-    CreateClientOptions, DeviceIdentificationObject, DeviceIdentificationResponse, DiagnosticsOptions,
-    DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions, ReadDeviceIdentificationOptions,
-    ReadFifoQueueOptions, ReadFileRecordOptions, ReadRegistersOptions,
-    ReadWriteMultipleRegistersOptions, WriteFileRecordOptions, WriteMultipleCoilsOptions,
-    WriteMultipleRegistersOptions, WriteSingleCoilOptions, WriteSingleRegisterOptions,
+    CreateClientOptions, DeviceIdentificationObject, DeviceIdentificationResponse,
+    DiagnosticsOptions, DiagnosticsResponse, FifoQueueResponse, ReadBitsOptions,
+    ReadDeviceIdentificationOptions, ReadFifoQueueOptions, ReadFileRecordOptions,
+    ReadRegistersOptions, ReadWriteMultipleRegistersOptions, WriteFileRecordOptions,
+    WriteMultipleCoilsOptions, WriteMultipleRegistersOptions, WriteSingleCoilOptions,
+    WriteSingleRegisterOptions,
 };
 use crate::nodejs::errors::{
-    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err, parse_backoff_strategy,
+    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
 };
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
@@ -83,7 +84,6 @@ pub struct AsciiTransportOptions {
     /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
     pub retry_backoff_strategy: Option<String>,
 }
-
 
 /// Converts a string parity value to the Parity enum.
 fn parse_parity(s: &str) -> Result<Parity> {
@@ -273,8 +273,7 @@ impl AsyncRtuTransport {
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.unit_id;
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncSerialModbusClient {
             inner: client,
             unit_id,
@@ -372,8 +371,7 @@ impl AsyncAsciiTransport {
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.unit_id;
-        UnitIdOrSlaveAddr::new(unit_id)
-            .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
+        UnitIdOrSlaveAddr::new(unit_id).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         Ok(AsyncSerialModbusClient {
             inner: client,
             unit_id,

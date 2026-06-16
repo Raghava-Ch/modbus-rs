@@ -3,8 +3,8 @@
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, Uint16Array};
 use mbus_ffi::{
     WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, WasmSerialServer,
-    WasmSerialServerConfig, WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
-    WasmTcpTransport, WasmSerialTransport,
+    WasmSerialServerConfig, WasmSerialTransport, WasmServerTransportKind, WasmTcpGatewayConfig,
+    WasmTcpServer, WasmTcpTransport,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -13,7 +13,13 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-fn new_tcp_client(url: &str, unit_id: u8, response_timeout_ms: u32, retry_attempts: u8, tick_interval_ms: u32) -> Result<WasmModbusClient, JsValue> {
+fn new_tcp_client(
+    url: &str,
+    unit_id: u8,
+    response_timeout_ms: u32,
+    retry_attempts: u8,
+    tick_interval_ms: u32,
+) -> Result<WasmModbusClient, JsValue> {
     let opts = js_sys::eval(&format!(
         "({{ responseTimeoutMs: {}, retryAttempts: {}, tickIntervalMs: {} }})",
         response_timeout_ms, retry_attempts, tick_interval_ms
@@ -23,10 +29,28 @@ fn new_tcp_client(url: &str, unit_id: u8, response_timeout_ms: u32, retry_attemp
     transport.create_client(Some(client_opts.into()))
 }
 
-fn new_serial_client(port_handle: &WasmSerialPortHandle, unit_id: u8, mode: &str, baud_rate: u32, data_bits: u8, stop_bits: u8, parity: &str, response_timeout_ms: u32, retry_attempts: u8, tick_interval_ms: u32) -> Result<WasmSerialModbusClient, JsValue> {
+fn new_serial_client(
+    port_handle: &WasmSerialPortHandle,
+    unit_id: u8,
+    mode: &str,
+    baud_rate: u32,
+    data_bits: u8,
+    stop_bits: u8,
+    parity: &str,
+    response_timeout_ms: u32,
+    retry_attempts: u8,
+    tick_interval_ms: u32,
+) -> Result<WasmSerialModbusClient, JsValue> {
     let opts = js_sys::eval(&format!(
         "({{ mode: '{}', baudRate: {}, dataBits: {}, stopBits: {}, parity: '{}', responseTimeoutMs: {}, retryAttempts: {}, tickIntervalMs: {} }})",
-        mode, baud_rate, data_bits, stop_bits, parity, response_timeout_ms, retry_attempts, tick_interval_ms
+        mode,
+        baud_rate,
+        data_bits,
+        stop_bits,
+        parity,
+        response_timeout_ms,
+        retry_attempts,
+        tick_interval_ms
     ))?;
     let transport = WasmSerialTransport::new(port_handle, Some(opts.into()))?;
     let client_opts = js_sys::eval(&format!("({{ unitId: {} }})", unit_id))?;
@@ -274,10 +298,14 @@ async fn e2e_reconnect_rejects_inflight_requests() {
     install_fake_websocket();
     let url = "ws://e2e-reconnect";
 
-    let opts = js_sys::eval("({ responseTimeoutMs: 1000, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let mut transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let opts =
+        js_sys::eval("({ responseTimeoutMs: 1000, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let mut transport =
+        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
     let client_opts = js_sys::eval("({ unitId: 1 })").unwrap();
-    let mut client = transport.create_client(Some(client_opts.into())).expect("client creation failed");
+    let mut client = transport
+        .create_client(Some(client_opts.into()))
+        .expect("client creation failed");
     open_fake_ws(url);
 
     let promise = client.read_holding_registers(0x0000, 1);
@@ -1425,14 +1453,20 @@ async fn e2e_tcp_transport_multi_unit_sharing() {
     install_fake_websocket();
     let url = "ws://e2e-tcp-multi-unit";
 
-    let opts = js_sys::eval("({ responseTimeoutMs: 100, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let opts =
+        js_sys::eval("({ responseTimeoutMs: 100, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let transport =
+        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
 
-    let mut client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
-    let mut client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+    let mut client1 = transport
+        .create_client(Some(client1_opts.into()))
+        .expect("client1 creation failed");
+    let mut client2 = transport
+        .create_client(Some(client2_opts.into()))
+        .expect("client2 creation failed");
 
     open_fake_ws(url);
     assert!(client1.is_connected());
@@ -1460,14 +1494,20 @@ async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
     install_fake_websocket();
     let url = "ws://e2e-tcp-multi-unit-concurrent";
 
-    let opts = js_sys::eval("({ responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let transport = WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let opts =
+        js_sys::eval("({ responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
+    let transport =
+        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
 
-    let mut client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
-    let mut client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+    let mut client1 = transport
+        .create_client(Some(client1_opts.into()))
+        .expect("client1 creation failed");
+    let mut client2 = transport
+        .create_client(Some(client2_opts.into()))
+        .expect("client2 creation failed");
 
     open_fake_ws(url);
     assert!(client1.is_connected());
@@ -1481,7 +1521,7 @@ async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
     let sent1 = get_sent_frame(url, 0).to_vec();
     let txn1_hi = sent1[0];
     let txn1_lo = sent1[1];
-    
+
     let sent2 = get_sent_frame(url, 1).to_vec();
     let txn2_hi = sent2[0];
     let txn2_lo = sent2[1];
@@ -1512,11 +1552,15 @@ async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
 
     // Both should resolve to the correct values without mixing up
     let val2 = JsFuture::from(p2).await.expect("p2 should resolve");
-    let regs2 = val2.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    let regs2 = val2
+        .dyn_into::<Uint16Array>()
+        .expect("should be Uint16Array");
     assert_eq!(regs2.get_index(0), 0xAABB);
 
     let val1 = JsFuture::from(p1).await.expect("p1 should resolve");
-    let regs1 = val1.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    let regs1 = val1
+        .dyn_into::<Uint16Array>()
+        .expect("should be Uint16Array");
     assert_eq!(regs1.get_index(0), 0xCCDD);
 }
 
@@ -1526,13 +1570,18 @@ fn e2e_serial_transport_multi_unit_sharing() {
     let handle = WasmSerialPortHandle::new_for_testing(port);
 
     let opts = js_sys::eval("({ mode: 'rtu', baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 5 })").unwrap();
-    let transport = WasmSerialTransport::new(&handle, Some(opts.into())).expect("transport creation failed");
+    let transport =
+        WasmSerialTransport::new(&handle, Some(opts.into())).expect("transport creation failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 42 })").unwrap();
 
-    let client1 = transport.create_client(Some(client1_opts.into())).expect("client1 creation failed");
-    let client2 = transport.create_client(Some(client2_opts.into())).expect("client2 creation failed");
+    let client1 = transport
+        .create_client(Some(client1_opts.into()))
+        .expect("client1 creation failed");
+    let client2 = transport
+        .create_client(Some(client2_opts.into()))
+        .expect("client2 creation failed");
 
     assert!(client1.is_connected());
     assert!(client2.is_connected());

@@ -135,6 +135,7 @@ pub struct AsyncSerialModbusServer {
 #[napi]
 impl AsyncSerialModbusServer {
     #[napi]
+    #[allow(clippy::missing_transmute_annotations)]
     pub fn bind_rtu(
         env: Env,
         opts: SerialServerOptions,
@@ -154,8 +155,10 @@ impl AsyncSerialModbusServer {
 
         let promise = env.spawn_future(async move {
             // Try creating/binding the server first so we catch serial port errors
-            let mut server = mbus_server_async::AsyncRtuServer::new_rtu(&config, unit)
-                .map_err(|e| napi::Error::new(Status::GenericFailure, format!("Bind RTU failed: {:?}", e)))?;
+            let mut server =
+                mbus_server_async::AsyncRtuServer::new_rtu(&config, unit).map_err(|e| {
+                    napi::Error::new(Status::GenericFailure, format!("Bind RTU failed: {:?}", e))
+                })?;
 
             // Spawn the server task
             let rt = runtime::get();
@@ -175,6 +178,7 @@ impl AsyncSerialModbusServer {
     }
 
     #[napi]
+    #[allow(clippy::missing_transmute_annotations)]
     pub fn bind_ascii(
         env: Env,
         opts: SerialServerOptions,
@@ -195,7 +199,12 @@ impl AsyncSerialModbusServer {
         let promise = env.spawn_future(async move {
             // Try creating/binding the server first so we catch serial port errors
             let mut server = mbus_server_async::AsyncAsciiServer::new_ascii(&config, unit)
-                .map_err(|e| napi::Error::new(Status::GenericFailure, format!("Bind ASCII failed: {:?}", e)))?;
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("Bind ASCII failed: {:?}", e),
+                    )
+                })?;
 
             // Spawn the server task
             let rt = runtime::get();

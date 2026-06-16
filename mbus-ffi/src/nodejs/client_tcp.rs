@@ -17,7 +17,7 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
 use crate::nodejs::errors::{
-    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, to_napi_err, parse_backoff_strategy,
+    ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
 };
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
@@ -41,7 +41,6 @@ pub struct TcpTransportOptions {
     /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
     pub retry_backoff_strategy: Option<String>,
 }
-
 
 /// Options for creating a device client.
 #[napi(object)]

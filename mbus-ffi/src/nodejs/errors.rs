@@ -119,8 +119,10 @@ pub fn parse_backoff_strategy(s: &str) -> napi::Result<mbus_core::transport::Bac
         }),
         _ => Err(napi::Error::new(
             Status::InvalidArg,
-            format!("Invalid backoff strategy: '{}'. Expected 'immediate', 'fixed', or 'exponential'", s),
+            format!(
+                "Invalid backoff strategy: '{}'. Expected 'immediate', 'fixed', or 'exponential'",
+                s
+            ),
         )),
     }
 }
-
