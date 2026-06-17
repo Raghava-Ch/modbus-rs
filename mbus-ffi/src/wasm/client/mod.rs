@@ -10,7 +10,10 @@
 //! Both public client types use the same internal app/router layer so JS-facing
 //! response shapes stay consistent across transports.
 
-mod app;
+mod command;
+mod response;
+mod task;
+mod helpers;
 mod net_client;
 mod serial_client;
 

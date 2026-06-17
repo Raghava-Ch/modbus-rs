@@ -63,7 +63,7 @@ use mbus_core::{
 ///
 /// On an exception response the returned `Err` is wrapped in `Ok((txn_id, unit, Err(...)))`
 /// so the caller can still route the error to the correct pending entry.
-pub(crate) fn decode_response(
+pub fn decode_response(
     frame: &[u8],
     transport_type: TransportType,
 ) -> Result<(u16, UnitIdOrSlaveAddr, Result<ClientResponse, MbusError>), MbusError> {

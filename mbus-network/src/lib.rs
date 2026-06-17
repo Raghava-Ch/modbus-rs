@@ -12,6 +12,10 @@ pub use management::async_transport::TokioTcpTransport;
 #[cfg(all(feature = "ws-client", target_arch = "wasm32"))]
 pub use management::wasm_transport::WasmWsTransport;
 
+#[cfg(all(feature = "ws-client", target_arch = "wasm32"))]
+pub use management::wasm_async_transport::WasmAsyncTransport;
+
+
 /// Server-side WebSocket upstream transport (enabled by the `ws-server` feature).
 ///
 /// `WsUpstreamTransport` wraps an accepted `tokio-tungstenite` stream and

@@ -11,6 +11,7 @@ use mbus_core::transport::{
 };
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
+use mbus_core::errors::MbusError;
 
 #[derive(Debug)]
 struct SerialShared {
@@ -20,6 +21,7 @@ struct SerialShared {
     opening: bool,
     reader_running: bool,
     writer_running: bool,
+    rx_tx: Option<futures_channel::mpsc::UnboundedSender<std::vec::Vec<u8>>>,
 }
 
 /// Browser Web Serial transport for wasm32 targets.
@@ -37,6 +39,7 @@ struct SerialShared {
 pub struct WasmSerialTransport<const ASCII: bool = false> {
     port: Option<JsValue>,
     shared: Rc<RefCell<SerialShared>>,
+    rx_rx: Option<futures_channel::mpsc::UnboundedReceiver<std::vec::Vec<u8>>>,
 }
 
 /// Modbus RTU browser serial transport.
@@ -63,7 +66,9 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                 opening: false,
                 reader_running: false,
                 writer_running: false,
+                rx_tx: None,
             })),
+            rx_rx: None,
         }
     }
 
@@ -230,7 +235,13 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                         _ => continue,
                     };
                     let bytes = Uint8Array::new(&value).to_vec();
-                    shared.borrow_mut().rx_buf.extend(bytes);
+                    {
+                        let mut state = shared.borrow_mut();
+                        state.rx_buf.extend(bytes.clone());
+                        if let Some(tx) = &state.rx_tx {
+                            let _ = tx.unbounded_send(bytes);
+                        }
+                    }
                 }
 
                 let _ = WasmSerialTransport::<ASCII>::call_method0(&reader, "releaseLock");
@@ -311,6 +322,90 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
     }
 }
 
+impl<const ASCII: bool> WasmSerialTransport<ASCII> {
+    /// Sends a frame over the serial transport.
+    pub fn send_frame(&mut self, adu: &[u8]) -> Result<(), MbusError> {
+        if self.port.is_none() {
+            return Err(MbusError::ConnectionClosed);
+        }
+        let mut state = self.shared.borrow_mut();
+        if !state.connected && !state.opening {
+            return Err(MbusError::ConnectionClosed);
+        }
+        state.tx_queue.push_back(adu.to_vec());
+        Ok(())
+    }
+
+    /// Receives a frame asynchronously using RTU or ASCII framing.
+    pub async fn recv_frame(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        if ASCII {
+            self.recv_ascii().await
+        } else {
+            self.recv_rtu().await
+        }
+    }
+
+    async fn recv_rtu(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let rx = self.rx_rx.as_mut().ok_or(MbusError::ConnectionClosed)?;
+        let mut buf: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+
+        use futures_util::stream::StreamExt;
+        let chunk = match rx.next().await {
+            Some(c) => c,
+            None => return Err(MbusError::ConnectionClosed),
+        };
+        if buf.len() + chunk.len() > MAX_ADU_FRAME_LEN {
+            return Err(MbusError::BufferTooSmall);
+        }
+        buf.extend(chunk);
+
+        let inter_frame_ms = 35;
+        loop {
+            use futures_util::FutureExt;
+            let mut timeout_fut = gloo_timers::future::TimeoutFuture::new(inter_frame_ms).fuse();
+            let mut next_fut = rx.next().fuse();
+
+            futures_util::select! {
+                res = next_fut => {
+                    match res {
+                        Some(chunk) => {
+                            if buf.len() + chunk.len() > MAX_ADU_FRAME_LEN {
+                                return Err(MbusError::BufferTooSmall);
+                            }
+                            buf.extend(chunk);
+                        }
+                        None => return Err(MbusError::ConnectionClosed),
+                    }
+                }
+                _ = timeout_fut => {
+                    return Ok(buf);
+                }
+            }
+        }
+    }
+
+    async fn recv_ascii(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let rx = self.rx_rx.as_mut().ok_or(MbusError::ConnectionClosed)?;
+        let mut buf: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+
+        use futures_util::stream::StreamExt;
+        loop {
+            let chunk = match rx.next().await {
+                Some(c) => c,
+                None => return Err(MbusError::ConnectionClosed),
+            };
+            if buf.len() + chunk.len() > MAX_ADU_FRAME_LEN {
+                return Err(MbusError::BufferTooSmall);
+            }
+            buf.extend(chunk);
+            let len = buf.len();
+            if len >= 2 && buf[len - 2] == b'\r' && buf[len - 1] == b'\n' {
+                return Ok(buf);
+            }
+        }
+    }
+}
+
 impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
     type Error = TransportError;
     const SUPPORTS_BROADCAST_WRITES: bool = true;
@@ -328,6 +423,9 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
 
         let port = self.port.clone().ok_or(TransportError::ConnectionFailed)?;
 
+        let (tx, rx) = futures_channel::mpsc::unbounded::<std::vec::Vec<u8>>();
+        self.rx_rx = Some(rx);
+
         {
             let mut state = self.shared.borrow_mut();
             if state.connected || state.opening {
@@ -336,6 +434,7 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
             state.opening = true;
             state.rx_buf.clear();
             state.tx_queue.clear();
+            state.rx_tx = Some(tx);
         }
 
         let shared = self.shared.clone();
@@ -362,7 +461,10 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
     }
 
     fn disconnect(&mut self) -> Result<(), Self::Error> {
-        self.shared.borrow_mut().connected = false;
+        self.rx_rx = None;
+        let mut state = self.shared.borrow_mut();
+        state.connected = false;
+        state.rx_tx = None;
         if let Some(port) = self.port.clone() {
             if let Ok(close_result) = Self::call_method0(&port, "close") {
                 if let Ok(close_promise) = Self::promise_from(close_result) {

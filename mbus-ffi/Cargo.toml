@@ -463,7 +463,11 @@ mbus-network = { workspace = true }
 mbus-serial = { workspace = true }
 
 # WASM-only dependencies — not pulled in for native builds.
+mbus-async = { path = "../mbus-async", default-features = false, features = ["coils", "registers", "discrete-inputs", "fifo", "file-record", "diagnostics"] }
+futures-channel = "0.3"
+futures-util = "0.3"
 # Note: web-sys is pulled in transitively through mbus-network/wasm.
+
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }

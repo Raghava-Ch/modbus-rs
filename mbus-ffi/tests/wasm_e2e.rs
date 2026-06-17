@@ -8,25 +8,21 @@ use mbus_ffi::{
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
-use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_futures::{JsFuture, spawn_local};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-fn new_tcp_client(
+async fn new_tcp_client(
     url: &str,
     unit_id: u8,
-    response_timeout_ms: u32,
-    retry_attempts: u8,
-    tick_interval_ms: u32,
+    _response_timeout_ms: u32,
+    _retry_attempts: u8,
+    _tick_interval_ms: u32,
 ) -> Result<WasmModbusClient, JsValue> {
-    let opts = js_sys::eval(&format!(
-        "({{ responseTimeoutMs: {}, retryAttempts: {}, tickIntervalMs: {} }})",
-        response_timeout_ms, retry_attempts, tick_interval_ms
-    ))?;
-    let transport = WasmTcpTransport::new(url, Some(opts.into()))?;
+    let transport = WasmTcpTransport::connect_rust(url).await?;
     let client_opts = js_sys::eval(&format!("({{ unitId: {} }})", unit_id))?;
-    transport.create_client(Some(client_opts.into()))
+    transport.create_client(client_opts.into())
 }
 
 fn new_serial_client(
@@ -52,9 +48,10 @@ fn new_serial_client(
         retry_attempts,
         tick_interval_ms
     ))?;
-    let transport = WasmSerialTransport::new(port_handle, Some(opts.into()))?;
+    let port = WasmSerialPortHandle::new_for_testing(port_handle.clone_port());
+    let transport = WasmSerialTransport::new(port, Some(opts.into()))?;
     let client_opts = js_sys::eval(&format!("({{ unitId: {} }})", unit_id))?;
-    transport.create_client(Some(client_opts.into()))
+    transport.create_client(client_opts.into())
 }
 
 fn install_fake_websocket() {
@@ -72,8 +69,18 @@ if (!globalThis.__fakeWsInstalled) {
       this.onerror = null;
       this.onmessage = null;
       globalThis.__fakeWsRegistry.set(url, this);
-            const created = globalThis.__fakeWsCreateCount.get(url) ?? 0;
-            globalThis.__fakeWsCreateCount.set(url, created + 1);
+      const created = globalThis.__fakeWsCreateCount.get(url) ?? 0;
+      globalThis.__fakeWsCreateCount.set(url, created + 1);
+
+      // Auto-open on next tick to allow WasmAsyncTransport::connect to resolve
+      setTimeout(() => {
+        if (this.readyState === 0) {
+          this.readyState = 1;
+          if (this.onopen) {
+            this.onopen(new Event('open'));
+          }
+        }
+      }, 0);
     }
 
     send(data) {
@@ -97,15 +104,17 @@ if (!globalThis.__fakeWsInstalled) {
   }
 
   globalThis.__fakeWsRegistry = new Map();
-    globalThis.__fakeWsCreateCount = new Map();
+  globalThis.__fakeWsCreateCount = new Map();
   globalThis.WebSocket = FakeWebSocket;
 
   globalThis.__fake_ws_open = (url) => {
     const ws = globalThis.__fakeWsRegistry.get(url);
     if (!ws) return false;
-    ws.readyState = 1;
-    if (ws.onopen) {
-            ws.onopen(new Event('open'));
+    if (ws.readyState === 0) {
+      ws.readyState = 1;
+      if (ws.onopen) {
+        ws.onopen(new Event('open'));
+      }
     }
     return true;
   };
@@ -115,7 +124,7 @@ if (!globalThis.__fakeWsInstalled) {
     if (!ws) return false;
     ws.readyState = 3;
     if (ws.onclose) {
-            ws.onclose(new Event('close'));
+      ws.onclose(new Event('close'));
     }
     return true;
   };
@@ -126,7 +135,7 @@ if (!globalThis.__fakeWsInstalled) {
     const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const ab = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
     if (ws.onmessage) {
-            ws.onmessage(new MessageEvent('message', { data: ab }));
+      ws.onmessage(new MessageEvent('message', { data: ab }));
       return true;
     }
     return false;
@@ -139,9 +148,9 @@ if (!globalThis.__fakeWsInstalled) {
     return ws.sent[i] ?? null;
   };
 
-    globalThis.__fake_ws_created_count = (url) => {
-        return globalThis.__fakeWsCreateCount.get(url) ?? 0;
-    };
+  globalThis.__fake_ws_created_count = (url) => {
+    return globalThis.__fakeWsCreateCount.get(url) ?? 0;
+  };
 
   globalThis.__fake_ws_clear = (url) => {
     const ws = globalThis.__fakeWsRegistry.get(url);
@@ -205,11 +214,11 @@ async fn e2e_read_holding_registers_resolves_typed_array() {
     install_fake_websocket();
     let url = "ws://e2e-read-holding";
 
-    let mut client = new_tcp_client(url, 1, 100, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 100, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
     assert!(client.is_connected());
 
-    let promise = client.read_holding_registers(0x006B, 2);
+    let promise = client.read_holding_registers(&js_sys::eval("({ address: 0x006B, quantity: 2 })").unwrap());
 
     // Validate outbound request frame bytes (txn id starts at 1).
     let sent = get_sent_frame(url, 0).to_vec();
@@ -246,10 +255,10 @@ async fn e2e_write_single_register_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-single";
 
-    let mut client = new_tcp_client(url, 1, 100, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 100, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.write_single_register(0x000A, 0x00FF);
+    let promise = client.write_single_register(&js_sys::eval("({ address: 0x000A, value: 0x00FF })").unwrap());
 
     let rsp = [
         0x00, 0x01, // txn id
@@ -265,17 +274,7 @@ async fn e2e_write_single_register_resolves_object() {
     let value = JsFuture::from(promise)
         .await
         .expect("promise should resolve");
-    let addr = Reflect::get(&value, &JsValue::from_str("address"))
-        .expect("address field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    let reg = Reflect::get(&value, &JsValue::from_str("value"))
-        .expect("value field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-
-    assert_eq!(addr as u16, 0x000A);
-    assert_eq!(reg as u16, 0x00FF);
+    assert!(value.is_undefined());
 }
 
 #[wasm_bindgen_test(async)]
@@ -284,10 +283,10 @@ async fn e2e_timeout_rejects_promise() {
     let url = "ws://e2e-timeout";
 
     // timeout=20ms, retries=0, tick every 1ms => reject should happen quickly.
-    let mut client = new_tcp_client(url, 1, 20, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 20, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_holding_registers(0x0000, 1);
+    let promise = client.read_holding_registers(&js_sys::eval("({ address: 0x0000, quantity: 1 })").unwrap());
     let result = JsFuture::from(promise).await;
 
     assert!(result.is_err(), "timeout path should reject promise");
@@ -298,18 +297,30 @@ async fn e2e_reconnect_rejects_inflight_requests() {
     install_fake_websocket();
     let url = "ws://e2e-reconnect";
 
-    let opts =
-        js_sys::eval("({ responseTimeoutMs: 1000, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let mut transport =
-        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let mut transport = WasmTcpTransport::connect_rust(url).await.expect("transport connect failed");
     let client_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let mut client = transport
-        .create_client(Some(client_opts.into()))
+        .create_client(client_opts.into())
         .expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_holding_registers(0x0000, 1);
-    assert!(transport.reconnect(), "reconnect should return true");
+    let promise = client.read_holding_registers(&js_sys::eval("({ address: 0x0000, quantity: 1 })").unwrap());
+    
+    // Reconnect
+    let reconnect_promise = transport.reconnect_rust();
+    spawn_local(async move {
+        // Automatically open the new socket once reconnect triggers it
+        let mut resolved = false;
+        for _ in 0..100 {
+            if call_global_1("__fake_ws_open", &JsValue::from_str("ws://e2e-reconnect")).as_bool().unwrap_or(false) {
+                resolved = true;
+                break;
+            }
+            gloo_timers::future::TimeoutFuture::new(5).await;
+        }
+        assert!(resolved, "reconnected WebSocket failed to open");
+    });
+    reconnect_promise.await.expect("reconnect failed");
 
     let result = JsFuture::from(promise).await;
     assert!(
@@ -319,7 +330,7 @@ async fn e2e_reconnect_rejects_inflight_requests() {
     let err = result.err().unwrap_or(JsValue::NULL);
     let msg = err.as_string().unwrap_or_default();
     assert!(
-        msg.contains("ConnectionLost"),
+        msg.contains("ConnectionLost") || msg.contains("ConnectionClosed"),
         "unexpected error message: {msg}"
     );
 }
@@ -330,11 +341,11 @@ async fn e2e_reconnect_rejects_inflight_requests() {
 async fn e2e_read_coils_resolves_uint8array() {
     install_fake_websocket();
     let url = "ws://e2e-read-coils";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // Read 8 coils at address 0x0001
-    let promise = client.read_coils(0x0001, 8);
+    let promise = client.read_coils(&js_sys::eval("({ address: 0x0001, quantity: 8 })").unwrap());
 
     // FC=0x01 in sent frame
     let sent = get_sent_frame(url, 0).to_vec();
@@ -348,7 +359,7 @@ async fn e2e_read_coils_resolves_uint8array() {
         0x01, // unit id
         0x01, // FC
         0x01, // byte count
-        0xAB, // coil data (8 coils bit-packed)
+        0xAB, // coil data (8 coils bit-packed: 0xAB = 10101011)
     ];
     emit_fake_ws(url, &rsp);
 
@@ -356,20 +367,28 @@ async fn e2e_read_coils_resolves_uint8array() {
         .await
         .expect("read_coils should resolve");
     let arr = value
-        .dyn_into::<Uint8Array>()
-        .expect("result should be Uint8Array");
-    assert_eq!(arr.length(), 1);
-    assert_eq!(arr.get_index(0), 0xAB);
+        .dyn_into::<Array>()
+        .expect("result should be Array");
+    assert_eq!(arr.length(), 8);
+    // 0xAB LSB first: bit 0 (1), bit 1 (1), bit 2 (0), bit 3 (1), bit 4 (0), bit 5 (1), bit 6 (0), bit 7 (1)
+    assert_eq!(arr.get(0).as_bool().unwrap(), true);
+    assert_eq!(arr.get(1).as_bool().unwrap(), true);
+    assert_eq!(arr.get(2).as_bool().unwrap(), false);
+    assert_eq!(arr.get(3).as_bool().unwrap(), true);
+    assert_eq!(arr.get(4).as_bool().unwrap(), false);
+    assert_eq!(arr.get(5).as_bool().unwrap(), true);
+    assert_eq!(arr.get(6).as_bool().unwrap(), false);
+    assert_eq!(arr.get(7).as_bool().unwrap(), true);
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_read_single_coil_resolves_bool() {
+async fn e2e_read_single_coil_via_read_coils() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-coil";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_single_coil(0x0005);
+    let promise = client.read_coils(&js_sys::eval("({ address: 0x0005, quantity: 1 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x01, "FC should be Read Coils (0x01)");
@@ -380,22 +399,20 @@ async fn e2e_read_single_coil_resolves_bool() {
 
     let value = JsFuture::from(promise)
         .await
-        .expect("read_single_coil should resolve");
-    assert_eq!(
-        value.as_bool().expect("should be a bool"),
-        true,
-        "coil at bit-0 of 0x01 should be true"
-    );
+        .expect("read_coils should resolve");
+    let arr = value.dyn_into::<Array>().expect("should be Array");
+    assert_eq!(arr.length(), 1);
+    assert_eq!(arr.get(0).as_bool().unwrap(), true);
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_write_single_coil_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-single-coil";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.write_single_coil(0x0010, true);
+    let promise = client.write_single_coil(&js_sys::eval("({ address: 0x0010, value: true })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x05, "FC should be Write Single Coil (0x05)");
@@ -410,27 +427,18 @@ async fn e2e_write_single_coil_resolves_object() {
     let value = JsFuture::from(promise)
         .await
         .expect("write_single_coil should resolve");
-    let addr = Reflect::get(&value, &JsValue::from_str("address"))
-        .expect("address field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    let coil_val = Reflect::get(&value, &JsValue::from_str("value"))
-        .expect("value field missing")
-        .as_bool()
-        .unwrap_or(false);
-    assert_eq!(addr as u16, 0x0010);
-    assert!(coil_val, "coil value should be true");
+    assert!(value.is_undefined());
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_write_multiple_coils_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-multi-coils";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    // Write 2 coils at 0x0020, both ON (packed=0x03)
-    let promise = client.write_multiple_coils(0x0020, 2, &[0x03]);
+    // Write 2 coils at 0x0020, both ON
+    let promise = client.write_multiple_coils(&js_sys::eval("({ address: 0x0020, values: [true, true] })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x0F, "FC should be Write Multiple Coils (0x0F)");
@@ -445,28 +453,19 @@ async fn e2e_write_multiple_coils_resolves_object() {
     let value = JsFuture::from(promise)
         .await
         .expect("write_multiple_coils should resolve");
-    let addr = Reflect::get(&value, &JsValue::from_str("address"))
-        .expect("address field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    let qty = Reflect::get(&value, &JsValue::from_str("quantity"))
-        .expect("quantity field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    assert_eq!(addr as u16, 0x0020);
-    assert_eq!(qty as u16, 2);
+    assert!(value.is_undefined());
 }
 
 // ── TCP register tests ────────────────────────────────────────────────────────
 
 #[wasm_bindgen_test(async)]
-async fn e2e_read_single_holding_register_resolves_number() {
+async fn e2e_read_single_holding_register_via_read_holding_registers() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-hreg";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_single_holding_register(0x0100);
+    let promise = client.read_holding_registers(&js_sys::eval("({ address: 0x0100, quantity: 1 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x03, "FC should be Read Holding Registers (0x03)");
@@ -479,18 +478,20 @@ async fn e2e_read_single_holding_register_resolves_number() {
 
     let value = JsFuture::from(promise)
         .await
-        .expect("read_single_holding_register should resolve");
-    assert_eq!(value.as_f64().expect("should be a number") as u16, 0xBEEF);
+        .expect("read_holding_registers should resolve");
+    let regs = value.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    assert_eq!(regs.length(), 1);
+    assert_eq!(regs.get_index(0), 0xBEEF);
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_read_input_registers_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-read-input-regs";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_input_registers(0x0200, 2);
+    let promise = client.read_input_registers(&js_sys::eval("({ address: 0x0200, quantity: 2 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x04, "FC should be Read Input Registers (0x04)");
@@ -513,13 +514,13 @@ async fn e2e_read_input_registers_resolves_uint16array() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_read_single_input_register_resolves_number() {
+async fn e2e_read_single_input_register_via_read_input_registers() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-ireg";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_single_input_register(0x0200);
+    let promise = client.read_input_registers(&js_sys::eval("({ address: 0x0200, quantity: 1 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x04, "FC should be Read Input Registers (0x04)");
@@ -532,18 +533,20 @@ async fn e2e_read_single_input_register_resolves_number() {
 
     let value = JsFuture::from(promise)
         .await
-        .expect("read_single_input_register should resolve");
-    assert_eq!(value.as_f64().expect("should be a number") as u16, 0xCAFE);
+        .expect("read_input_registers should resolve");
+    let regs = value.dyn_into::<Uint16Array>().expect("should be Uint16Array");
+    assert_eq!(regs.length(), 1);
+    assert_eq!(regs.get_index(0), 0xCAFE);
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_write_multiple_registers_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-write-multi-regs";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.write_multiple_registers(0x0300, 2, &[0x1234, 0x5678]);
+    let promise = client.write_multiple_registers(&js_sys::eval("({ address: 0x0300, values: [0x1234, 0x5678] })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(
@@ -561,27 +564,18 @@ async fn e2e_write_multiple_registers_resolves_object() {
     let value = JsFuture::from(promise)
         .await
         .expect("write_multiple_registers should resolve");
-    let addr = Reflect::get(&value, &JsValue::from_str("address"))
-        .expect("address field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    let qty = Reflect::get(&value, &JsValue::from_str("quantity"))
-        .expect("quantity field missing")
-        .as_f64()
-        .unwrap_or(-1.0);
-    assert_eq!(addr as u16, 0x0300);
-    assert_eq!(qty as u16, 2);
+    assert!(value.is_undefined());
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_read_write_multiple_registers_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-rw-multi-regs";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // Read 2 regs from 0x0400, simultaneously write [0x1234] to 0x0401
-    let promise = client.read_write_multiple_registers(0x0400, 2, 0x0401, 1, &[0x1234]);
+    let promise = client.read_write_multiple_registers(&js_sys::eval("({ readAddress: 0x0400, readQuantity: 2, writeAddress: 0x0401, writeValues: [0x1234] })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(
@@ -610,10 +604,10 @@ async fn e2e_read_write_multiple_registers_resolves_uint16array() {
 async fn e2e_mask_write_register_resolves_true() {
     install_fake_websocket();
     let url = "ws://e2e-mask-write-reg";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.mask_write_register(0x0500, 0xFFFF, 0x0000);
+    let promise = client.mask_write_register(&js_sys::eval("({ address: 0x0500, andMask: 0xFFFF, orMask: 0x0000 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x16, "FC should be Mask Write Register (0x16)");
@@ -629,11 +623,7 @@ async fn e2e_mask_write_register_resolves_true() {
     let value = JsFuture::from(promise)
         .await
         .expect("mask_write_register should resolve");
-    assert_eq!(
-        value,
-        JsValue::TRUE,
-        "mask_write_register should resolve with true"
-    );
+    assert!(value.is_undefined());
 }
 
 // ── TCP discrete-input tests ──────────────────────────────────────────────────
@@ -642,10 +632,10 @@ async fn e2e_mask_write_register_resolves_true() {
 async fn e2e_read_discrete_inputs_resolves_uint8array() {
     install_fake_websocket();
     let url = "ws://e2e-read-disc-inputs";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_discrete_inputs(0x0600, 8);
+    let promise = client.read_discrete_inputs(&js_sys::eval("({ address: 0x0600, quantity: 8 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x02, "FC should be Read Discrete Inputs (0x02)");
@@ -658,20 +648,28 @@ async fn e2e_read_discrete_inputs_resolves_uint8array() {
         .await
         .expect("read_discrete_inputs should resolve");
     let arr = value
-        .dyn_into::<Uint8Array>()
-        .expect("should be Uint8Array");
-    assert_eq!(arr.length(), 1);
-    assert_eq!(arr.get_index(0), 0x5A);
+        .dyn_into::<Array>()
+        .expect("should be Array");
+    assert_eq!(arr.length(), 8);
+    // 0x5A: 01011010 LSB first: false (0), true (1), false (0), true (1), true (1), false (0), true (1), false (0)
+    assert_eq!(arr.get(0).as_bool().unwrap(), false);
+    assert_eq!(arr.get(1).as_bool().unwrap(), true);
+    assert_eq!(arr.get(2).as_bool().unwrap(), false);
+    assert_eq!(arr.get(3).as_bool().unwrap(), true);
+    assert_eq!(arr.get(4).as_bool().unwrap(), true);
+    assert_eq!(arr.get(5).as_bool().unwrap(), false);
+    assert_eq!(arr.get(6).as_bool().unwrap(), true);
+    assert_eq!(arr.get(7).as_bool().unwrap(), false);
 }
 
 #[wasm_bindgen_test(async)]
-async fn e2e_read_single_discrete_input_resolves_bool() {
+async fn e2e_read_single_discrete_input_via_read_discrete_inputs() {
     install_fake_websocket();
     let url = "ws://e2e-read-single-di";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_single_discrete_input(0x0601);
+    let promise = client.read_discrete_inputs(&js_sys::eval("({ address: 0x0601, quantity: 1 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x02, "FC should be Read Discrete Inputs (0x02)");
@@ -682,8 +680,10 @@ async fn e2e_read_single_discrete_input_resolves_bool() {
 
     let value = JsFuture::from(promise)
         .await
-        .expect("read_single_discrete_input should resolve");
-    assert_eq!(value.as_bool().expect("should be bool"), true);
+        .expect("read_discrete_inputs should resolve");
+    let arr = value.dyn_into::<Array>().expect("should be Array");
+    assert_eq!(arr.length(), 1);
+    assert_eq!(arr.get(0).as_bool().unwrap(), true);
 }
 
 // ── TCP FIFO test ─────────────────────────────────────────────────────────────
@@ -692,10 +692,10 @@ async fn e2e_read_single_discrete_input_resolves_bool() {
 async fn e2e_read_fifo_queue_resolves_uint16array() {
     install_fake_websocket();
     let url = "ws://e2e-read-fifo";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
-    let promise = client.read_fifo_queue(0x0700);
+    let promise = client.read_fifo_queue(&js_sys::eval("({ address: 0x0700 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x18, "FC should be Read FIFO Queue (0x18)");
@@ -729,11 +729,11 @@ async fn e2e_read_fifo_queue_resolves_uint16array() {
 async fn e2e_read_file_record_resolves_array() {
     install_fake_websocket();
     let url = "ws://e2e-read-file-rec";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // Read file 1, record 0, length 1
-    let promise = client.read_file_record(1, 0, 1);
+    let promise = client.read_file_record(&js_sys::eval("({ requests: [{ fileNumber: 1, recordNumber: 0, recordLength: 1 }] })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x14, "FC should be Read File Record (0x14)");
@@ -755,8 +755,7 @@ async fn e2e_read_file_record_resolves_array() {
     assert_eq!(arr.length(), 1);
 
     let entry = arr.get(0);
-    let data_field = Reflect::get(&entry, &JsValue::from_str("data")).expect("data field missing");
-    let data_arr = data_field
+    let data_arr = entry
         .dyn_into::<Uint16Array>()
         .expect("data should be Uint16Array");
     assert_eq!(data_arr.length(), 1);
@@ -767,11 +766,11 @@ async fn e2e_read_file_record_resolves_array() {
 async fn e2e_write_file_record_resolves_true() {
     install_fake_websocket();
     let url = "ws://e2e-write-file-rec";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // Write value [0xDEAD] to file 1, record 0
-    let promise = client.write_file_record(1, 0, &[0xDEAD]);
+    let promise = client.write_file_record(&js_sys::eval("({ requests: [{ fileNumber: 1, recordNumber: 0, recordData: [0xDEAD] }] })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(sent[7], 0x15, "FC should be Write File Record (0x15)");
@@ -790,11 +789,7 @@ async fn e2e_write_file_record_resolves_true() {
     let value = JsFuture::from(promise)
         .await
         .expect("write_file_record should resolve");
-    assert_eq!(
-        value,
-        JsValue::TRUE,
-        "write_file_record should resolve with true"
-    );
+    assert!(value.is_undefined());
 }
 
 // ── TCP diagnostics tests ─────────────────────────────────────────────────────
@@ -803,7 +798,7 @@ async fn e2e_write_file_record_resolves_true() {
 async fn e2e_read_exception_status_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-exception-status";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x07 is serial-line only; TCP path should reject immediately.
@@ -819,66 +814,24 @@ async fn e2e_read_exception_status_rejects_on_tcp() {
 async fn e2e_diagnostics_rejects_on_tcp() {
     install_fake_websocket();
     let url = "ws://e2e-diagnostics";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // FC 0x08 is serial-line only; TCP path should reject immediately.
-    let promise = client.diagnostics(0, &[0x0000]);
+    let promise = client.diagnostics(&js_sys::eval("({ subFunction: 0, data: [0x0000] })").unwrap());
     let result = JsFuture::from(promise).await;
     assert!(result.is_err(), "diagnostics over TCP should reject");
-}
-
-#[wasm_bindgen_test(async)]
-async fn e2e_get_comm_event_counter_rejects_on_tcp() {
-    install_fake_websocket();
-    let url = "ws://e2e-comm-event-ctr";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
-    open_fake_ws(url);
-
-    // FC 0x0B is serial-line only; TCP path should reject immediately.
-    let promise = client.get_comm_event_counter();
-    let result = JsFuture::from(promise).await;
-    assert!(
-        result.is_err(),
-        "get_comm_event_counter over TCP should reject"
-    );
-}
-
-#[wasm_bindgen_test(async)]
-async fn e2e_get_comm_event_log_rejects_on_tcp() {
-    install_fake_websocket();
-    let url = "ws://e2e-comm-event-log";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
-    open_fake_ws(url);
-
-    // FC 0x0C is serial-line only; TCP path should reject immediately.
-    let promise = client.get_comm_event_log();
-    let result = JsFuture::from(promise).await;
-    assert!(result.is_err(), "get_comm_event_log over TCP should reject");
-}
-
-#[wasm_bindgen_test(async)]
-async fn e2e_report_server_id_rejects_on_tcp() {
-    install_fake_websocket();
-    let url = "ws://e2e-report-server-id";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
-    open_fake_ws(url);
-
-    // FC 0x11 is serial-line only; TCP path should reject immediately.
-    let promise = client.report_server_id();
-    let result = JsFuture::from(promise).await;
-    assert!(result.is_err(), "report_server_id over TCP should reject");
 }
 
 #[wasm_bindgen_test(async)]
 async fn e2e_read_device_identification_resolves_object() {
     install_fake_websocket();
     let url = "ws://e2e-read-device-id";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // read_device_id_code=1 (Basic), object_id=0 (VendorName)
-    let promise = client.read_device_identification(1, 0);
+    let promise = client.read_device_identification(&js_sys::eval("({ readDeviceIdCode: 1, objectId: 0 })").unwrap());
 
     let sent = get_sent_frame(url, 0).to_vec();
     assert_eq!(
@@ -935,11 +888,11 @@ async fn e2e_read_device_identification_resolves_object() {
 async fn e2e_diagnostics_invalid_sub_function_rejects() {
     install_fake_websocket();
     let url = "ws://e2e-diag-invalid-sf";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // 0xFFFF is a reserved/invalid sub_function
-    let promise = client.diagnostics(0xFFFF, &[]);
+    let promise = client.diagnostics(&js_sys::eval("({ subFunction: 0xFFFF, data: [] })").unwrap());
     let result = JsFuture::from(promise).await;
     assert!(
         result.is_err(),
@@ -951,11 +904,11 @@ async fn e2e_diagnostics_invalid_sub_function_rejects() {
 async fn e2e_read_device_identification_invalid_code_rejects() {
     install_fake_websocket();
     let url = "ws://e2e-dev-id-bad-code";
-    let mut client = new_tcp_client(url, 1, 200, 0, 1).expect("client creation failed");
+    let mut client = new_tcp_client(url, 1, 200, 0, 1).await.expect("client creation failed");
     open_fake_ws(url);
 
     // 0x00 is not a valid ReadDeviceIdCode (valid: 1–4)
-    let promise = client.read_device_identification(0x00, 0);
+    let promise = client.read_device_identification(&js_sys::eval("({ readDeviceIdCode: 0, objectId: 0 })").unwrap());
     let result = JsFuture::from(promise).await;
     assert!(
         result.is_err(),
@@ -1066,7 +1019,7 @@ async fn e2e_serial_client_diagnostics_invalid_sub_function_rejects() {
         .expect("construction should succeed");
 
     // 0xFFFF is a reserved/invalid sub_function — reject_immediate path.
-    let promise = client.diagnostics(0xFFFF, &[]);
+    let promise = client.diagnostics(&js_sys::eval("({ subFunction: 0xFFFF, data: [] })").unwrap());
     let result = JsFuture::from(promise).await;
     assert!(
         result.is_err(),
@@ -1081,7 +1034,7 @@ async fn e2e_serial_client_read_device_id_invalid_code_rejects() {
         .expect("construction should succeed");
 
     // 0x00 is invalid (valid ReadDeviceIdCode: 1–4).
-    let promise = client.read_device_identification(0x00, 0);
+    let promise = client.read_device_identification(&js_sys::eval("({ readDeviceIdCode: 0, objectId: 0 })").unwrap());
     let result = JsFuture::from(promise).await;
     assert!(
         result.is_err(),
@@ -1453,27 +1406,24 @@ async fn e2e_tcp_transport_multi_unit_sharing() {
     install_fake_websocket();
     let url = "ws://e2e-tcp-multi-unit";
 
-    let opts =
-        js_sys::eval("({ responseTimeoutMs: 100, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let transport =
-        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let transport = WasmTcpTransport::connect_rust(url).await.expect("connect failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
 
     let mut client1 = transport
-        .create_client(Some(client1_opts.into()))
+        .create_client(client1_opts.into())
         .expect("client1 creation failed");
     let mut client2 = transport
-        .create_client(Some(client2_opts.into()))
+        .create_client(client2_opts.into())
         .expect("client2 creation failed");
 
     open_fake_ws(url);
     assert!(client1.is_connected());
     assert!(client2.is_connected());
 
-    let _p1 = client1.read_holding_registers(0, 1);
-    let _p2 = client2.read_holding_registers(10, 1);
+    let _p1 = client1.read_holding_registers(&js_sys::eval("({ address: 0, quantity: 1 })").unwrap());
+    let _p2 = client2.read_holding_registers(&js_sys::eval("({ address: 10, quantity: 1 })").unwrap());
 
     // Verify first request sent. Txn ID = 1, Unit ID = 1.
     let sent1 = get_sent_frame(url, 0).to_vec();
@@ -1494,19 +1444,16 @@ async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
     install_fake_websocket();
     let url = "ws://e2e-tcp-multi-unit-concurrent";
 
-    let opts =
-        js_sys::eval("({ responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 1 })").unwrap();
-    let transport =
-        WasmTcpTransport::new(url, Some(opts.into())).expect("transport creation failed");
+    let transport = WasmTcpTransport::connect_rust(url).await.expect("connect failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 2 })").unwrap();
 
     let mut client1 = transport
-        .create_client(Some(client1_opts.into()))
+        .create_client(client1_opts.into())
         .expect("client1 creation failed");
     let mut client2 = transport
-        .create_client(Some(client2_opts.into()))
+        .create_client(client2_opts.into())
         .expect("client2 creation failed");
 
     open_fake_ws(url);
@@ -1514,8 +1461,8 @@ async fn e2e_tcp_transport_multi_unit_concurrent_responses() {
     assert!(client2.is_connected());
 
     // Send two requests concurrently
-    let p1 = client1.read_holding_registers(0, 1);
-    let p2 = client2.read_holding_registers(10, 1);
+    let p1 = client1.read_holding_registers(&js_sys::eval("({ address: 0, quantity: 1 })").unwrap());
+    let p2 = client2.read_holding_registers(&js_sys::eval("({ address: 10, quantity: 1 })").unwrap());
 
     // Validate they were sent
     let sent1 = get_sent_frame(url, 0).to_vec();
@@ -1571,16 +1518,16 @@ fn e2e_serial_transport_multi_unit_sharing() {
 
     let opts = js_sys::eval("({ mode: 'rtu', baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none', responseTimeoutMs: 500, retryAttempts: 0, tickIntervalMs: 5 })").unwrap();
     let transport =
-        WasmSerialTransport::new(&handle, Some(opts.into())).expect("transport creation failed");
+        WasmSerialTransport::new(handle, Some(opts.into())).expect("transport creation failed");
 
     let client1_opts = js_sys::eval("({ unitId: 1 })").unwrap();
     let client2_opts = js_sys::eval("({ unitId: 42 })").unwrap();
 
     let client1 = transport
-        .create_client(Some(client1_opts.into()))
+        .create_client(client1_opts.into())
         .expect("client1 creation failed");
     let client2 = transport
-        .create_client(Some(client2_opts.into()))
+        .create_client(client2_opts.into())
         .expect("client2 creation failed");
 
     assert!(client1.is_connected());

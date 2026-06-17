@@ -361,7 +361,7 @@ pub(crate) fn encode_report_server_id(
 /// passed through but the serial ADU format does not include it on the wire.
 ///
 /// [`ClientRequest`]: crate::client::command::ClientRequest
-pub(crate) fn encode_request(
+pub fn encode_request(
     txn_id: u16,
     req: &ClientRequest,
     transport_type: TransportType,

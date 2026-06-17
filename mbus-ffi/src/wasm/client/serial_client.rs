@@ -1,63 +1,33 @@
 //! Browser Web Serial support for WASM.
-//!
-//! This module exposes:
-//! - `request_serial_port()` (must be called from a user gesture in JS)
-//! - `WasmSerialPortHandle` to hold the granted browser `SerialPort`
-//! - `WasmSerialModbusClient` that uses `mbus_serial::WasmSerialTransport`
 
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::Duration;
 
-use gloo_timers::future::sleep;
-use js_sys::{Function, Promise, Reflect};
-use mbus_client::services::ClientServices;
-use mbus_client::services::coil::Coils;
-#[cfg(feature = "file-record")]
-use mbus_client::services::file_record::SubRequest;
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-#[cfg(feature = "file-record")]
-use mbus_core::data_unit::common::MAX_PDU_DATA_LEN;
-use mbus_core::errors::MbusError;
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::DiagnosticSubFunction;
-#[cfg(feature = "diagnostics")]
-use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
+use js_sys::{Function, Promise, Reflect, Array};
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
-    SerialMode, UnitIdOrSlaveAddr,
+    SerialMode, TransportType, UnitIdOrSlaveAddr,
 };
 use mbus_serial::{WasmAsciiTransport, WasmRtuTransport};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
-use super::app::{PendingHandle, PendingMap, WasmAppRouter, get_string, get_u8, get_u32};
+use super::command::WasmCommand;
+use super::response::WasmResponse;
+use super::task::{WasmClientTask, WasmAsyncTransportTrait};
+use super::helpers::*;
+use super::net_client::CreateClientOptions;
 
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_SERIAL: &str = r#"
-export interface WasmSerialTransportOptions {
-    mode?: "rtu" | "ascii";
-    baudRate: number;
-    dataBits?: 5 | 6 | 7 | 8;
-    stopBits?: 1 | 2;
-    parity?: "none" | "even" | "odd";
-    responseTimeoutMs?: number;
-    retryAttempts?: number;
-    tickIntervalMs?: number;
-}
-"#;
+#[cfg(feature = "file-record")]
+use mbus_client::services::file_record::SubRequestParams;
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "WasmSerialTransportOptions")]
-    pub type SerialOptions;
-
-    #[wasm_bindgen(typescript_type = "WasmCreateClientOptions")]
-    pub type CreateClientOpts;
+    pub type WasmSerialTransportOptions;
 }
 
-const PIPELINE: usize = 1;
+// ── WasmRuntimeSerialTransport ───────────────────────────────────────────────
 
 enum WasmRuntimeSerialTransport {
     Rtu(WasmRtuTransport),
@@ -78,51 +48,40 @@ impl WasmRuntimeSerialTransport {
             Self::Ascii(transport) => transport.attach_port(port),
         }
     }
-}
-
-impl mbus_core::transport::Transport for WasmRuntimeSerialTransport {
-    type Error = mbus_core::transport::TransportError;
-    const SUPPORTS_BROADCAST_WRITES: bool = true;
-    const TRANSPORT_TYPE: mbus_core::transport::TransportType =
-        mbus_core::transport::TransportType::CustomSerial(SerialMode::Rtu);
-
-    fn connect(&mut self, config: &ModbusConfig) -> Result<(), Self::Error> {
+    fn connect(&mut self, config: &ModbusConfig) -> Result<(), mbus_core::transport::TransportError> {
+        use mbus_core::transport::Transport;
         match self {
-            Self::Rtu(transport) => transport.connect(config),
-            Self::Ascii(transport) => transport.connect(config),
+            Self::Rtu(t) => t.connect(config),
+            Self::Ascii(t) => t.connect(config),
         }
     }
 
-    fn disconnect(&mut self) -> Result<(), Self::Error> {
+    fn disconnect(&mut self) -> Result<(), mbus_core::transport::TransportError> {
+        use mbus_core::transport::Transport;
         match self {
-            Self::Rtu(transport) => transport.disconnect(),
-            Self::Ascii(transport) => transport.disconnect(),
-        }
-    }
-
-    fn send(&mut self, adu: &[u8]) -> Result<(), Self::Error> {
-        match self {
-            Self::Rtu(transport) => transport.send(adu),
-            Self::Ascii(transport) => transport.send(adu),
-        }
-    }
-
-    fn recv(&mut self) -> Result<heapless::Vec<u8, MAX_ADU_FRAME_LEN>, Self::Error> {
-        match self {
-            Self::Rtu(transport) => transport.recv(),
-            Self::Ascii(transport) => transport.recv(),
-        }
-    }
-
-    fn is_connected(&self) -> bool {
-        match self {
-            Self::Rtu(transport) => transport.is_connected(),
-            Self::Ascii(transport) => transport.is_connected(),
+            Self::Rtu(t) => t.disconnect(),
+            Self::Ascii(t) => t.disconnect(),
         }
     }
 }
 
-type Inner = ClientServices<WasmRuntimeSerialTransport, WasmAppRouter, PIPELINE>;
+impl WasmAsyncTransportTrait for WasmRuntimeSerialTransport {
+    async fn recv_frame(&mut self) -> Result<heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>, mbus_core::errors::MbusError> {
+        match self {
+            Self::Rtu(t) => t.recv_frame().await,
+            Self::Ascii(t) => t.recv_frame().await,
+        }
+    }
+
+    fn send_frame(&mut self, adu: &[u8]) -> Result<(), mbus_core::errors::MbusError> {
+        match self {
+            Self::Rtu(t) => t.send_frame(adu),
+            Self::Ascii(t) => t.send_frame(adu),
+        }
+    }
+}
+
+// ── WasmSerialPortHandle ─────────────────────────────────────────────────────
 
 #[wasm_bindgen]
 /// Opaque handle around a browser `SerialPort` object granted by Web Serial.
@@ -139,16 +98,14 @@ impl WasmSerialPortHandle {
 }
 
 impl WasmSerialPortHandle {
-    fn clone_port(&self) -> JsValue {
+    /// Clone the internal port handle value.
+    pub fn clone_port(&self) -> JsValue {
         self.port.clone()
     }
 }
 
 impl WasmSerialPortHandle {
     /// Construct a handle wrapping any JS value.
-    ///
-    /// This is only intended for test code where calling `request_serial_port()` is
-    /// not possible (no user gesture). In production JS, use `request_serial_port()`.
     #[doc(hidden)]
     pub fn new_for_testing(port: JsValue) -> Self {
         WasmSerialPortHandle { port }
@@ -156,8 +113,6 @@ impl WasmSerialPortHandle {
 }
 
 /// Requests a browser serial port from `navigator.serial.requestPort()`.
-///
-/// Must be invoked from a user-gesture context (e.g. click handler).
 #[wasm_bindgen]
 pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
     let global = js_sys::global();
@@ -186,77 +141,60 @@ pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
 // ── WasmSerialTransport ──────────────────────────────────────────────────────
 
 #[wasm_bindgen]
-/// Connection and polling manager for browser Modbus Serial clients.
+/// Connection manager for browser Modbus Serial clients.
 pub struct WasmSerialTransport {
-    inner: Rc<RefCell<Inner>>,
-    pending: PendingMap,
-    next_txn: Rc<RefCell<u16>>,
+    _port_handle: WasmSerialPortHandle,
+    cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
+    pending_count: Rc<Cell<usize>>,
+    active_transport: Rc<RefCell<Option<WasmRuntimeSerialTransport>>>,
 }
 
 #[wasm_bindgen]
 impl WasmSerialTransport {
-    /// Creates a new Serial (RTU) transport using the provided `port_handle`.
-    ///
-    /// The transport claims the underlying serial stream and manages the
-    /// read/write loop, allowing multiple clients to multiplex requests over it.
+    /// Creates a new Serial transport using the provided `port_handle` and option parameters.
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        port_handle: &WasmSerialPortHandle,
-        options: Option<SerialOptions>,
-    ) -> Result<WasmSerialTransport, JsValue> {
+    pub fn new(port_handle: WasmSerialPortHandle, options: Option<WasmSerialTransportOptions>) -> Result<WasmSerialTransport, JsValue> {
         let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
         let mode_str = get_string(&options_val, "mode", "rtu");
-        let serial_mode = match mode_str.to_ascii_lowercase().as_str() {
-            "rtu" => SerialMode::Rtu,
-            "ascii" => SerialMode::Ascii,
-            _ => return Err(JsValue::from_str("mode must be 'rtu' or 'ascii'")),
-        };
-
-        let parity_str = get_string(&options_val, "parity", "none");
-        let parity_cfg = match parity_str.to_ascii_lowercase().as_str() {
-            "none" => Parity::None,
-            "even" => Parity::Even,
-            "odd" => Parity::Odd,
-            _ => return Err(JsValue::from_str("parity must be 'none', 'even', or 'odd'")),
-        };
-
+        let baud_rate = get_u32(&options_val, "baudRate", 9600);
         let data_bits = get_u8(&options_val, "dataBits", 8);
-        let data_bits_cfg = match data_bits {
+        let stop_bits = get_u8(&options_val, "stopBits", 1);
+        let parity_str = get_string(&options_val, "parity", "none");
+        let response_timeout_ms = get_u32(&options_val, "responseTimeoutMs", 1000);
+        let retry_attempts = get_u8(&options_val, "retryAttempts", 0);
+
+        let mode = if mode_str == "ascii" {
+            SerialMode::Ascii
+        } else {
+            SerialMode::Rtu
+        };
+
+        let baud = match baud_rate {
+            19200 => BaudRate::Baud19200,
+            r => BaudRate::Custom(r),
+        };
+
+        let db = match data_bits {
             5 => DataBits::Five,
             6 => DataBits::Six,
             7 => DataBits::Seven,
-            8 => DataBits::Eight,
-            _ => return Err(JsValue::from_str("data_bits must be one of 5, 6, 7, or 8")),
+            _ => DataBits::Eight,
         };
 
-        let stop_bits = get_u8(&options_val, "stopBits", 1);
-        let baud_rate = get_u32(&options_val, "baudRate", 9600);
-        let response_timeout_ms = get_u32(&options_val, "responseTimeoutMs", 1000);
-        let retry_attempts = get_u8(&options_val, "retryAttempts", 3);
-        let tick_interval_ms = get_u32(&options_val, "tickIntervalMs", 20);
-
-        let mut transport = WasmRuntimeSerialTransport::new(serial_mode);
-        transport.attach_port(port_handle.clone_port());
-
-        let pending: PendingMap = Rc::new(RefCell::new(HashMap::new()));
-        let app = WasmAppRouter::new(pending.clone());
-
-        let mut port_path = heapless::String::new();
-        port_path
-            .push_str("web-serial")
-            .map_err(|_| JsValue::from_str("failed to build serial port_path"))?;
+        let pr = match parity_str.as_str() {
+            "even" => Parity::Even,
+            "odd" => Parity::Odd,
+            _ => Parity::None,
+        };
 
         let config = ModbusConfig::Serial(ModbusSerialConfig {
-            port_path,
-            mode: serial_mode,
-            baud_rate: match baud_rate {
-                9600 => BaudRate::Baud9600,
-                19200 => BaudRate::Baud19200,
-                _ => BaudRate::Custom(baud_rate),
-            },
-            data_bits: data_bits_cfg,
+            port_path: heapless::String::try_from("wasm")
+                .map_err(|_| JsValue::from_str("port path overflow"))?,
+            baud_rate: baud,
+            data_bits: db,
             stop_bits,
-            parity: parity_cfg,
+            parity: pr,
+            mode,
             response_timeout_ms,
             retry_attempts,
             retry_backoff_strategy: BackoffStrategy::Immediate,
@@ -264,93 +202,71 @@ impl WasmSerialTransport {
             retry_random_fn: None,
         });
 
-        let mut inner_client = ClientServices::new(transport, app, config)
-            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        let mut transport = WasmRuntimeSerialTransport::new(mode);
+        transport.attach_port(port_handle.clone_port());
 
-        let _ = inner_client.connect();
+        // Sync connect
+        transport.connect(&config).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
-        let inner = Rc::new(RefCell::new(inner_client));
-        let next_txn = Rc::new(RefCell::new(1));
+        let (cmd_tx, cmd_rx) = futures_channel::mpsc::unbounded::<WasmCommand>();
+        let pending_count = Rc::new(Cell::new(0));
+        let active_transport = Rc::new(RefCell::new(Some(transport)));
 
-        let weak = Rc::downgrade(&inner);
-        let tick_ms = tick_interval_ms as u64;
-        let idle_ms = core::cmp::max(50, tick_ms.saturating_mul(5));
-
+        // Spawn loop
+        let active_transport_clone = active_transport.clone();
+        let ttype = TransportType::CustomSerial(mode);
         spawn_local(async move {
-            loop {
-                match weak.upgrade() {
-                    Some(rc) => {
-                        let should_poll = {
-                            let client = rc.borrow();
-                            client.is_connected() && client.has_pending_requests()
-                        };
-
-                        if should_poll {
-                            rc.borrow_mut().poll();
-                            sleep(Duration::from_millis(tick_ms)).await;
-                        } else {
-                            sleep(Duration::from_millis(idle_ms)).await;
-                        }
-                        continue;
-                    }
-                    None => break,
-                }
+            let transport_opt = active_transport_clone.borrow_mut().take();
+            if let Some(t) = transport_opt {
+                let task = WasmClientTask::new(t, cmd_rx, ttype);
+                task.run().await;
             }
         });
 
         Ok(WasmSerialTransport {
-            inner,
-            pending,
-            next_txn,
+            _port_handle: port_handle,
+            cmd_tx: Rc::new(RefCell::new(cmd_tx)),
+            pending_count,
+            active_transport,
         })
     }
 
-    /// Returns `true` when the serial port is open and connected.
-    pub fn is_connected(&self) -> bool {
-        self.inner.borrow().is_connected()
-    }
-
     /// Returns `true` if there are in-flight Modbus requests.
-    pub fn has_pending_requests(&self) -> bool {
-        self.inner.borrow().has_pending_requests()
+    #[wasm_bindgen(getter, js_name = "pendingRequests")]
+    pub fn pending_requests(&self) -> bool {
+        self.pending_count.get() > 0
     }
 
-    /// Drop all pending in-flight requests and attempt to reopen the serial port.
-    pub fn reconnect(&mut self) -> bool {
-        for (_, handle) in self.pending.borrow_mut().drain() {
-            let _ = handle
-                .reject
-                .call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
-        }
-        self.inner.borrow_mut().reconnect().is_ok()
-    }
-
-    /// Closes the serial port connection and rejects all pending requests.
+    /// Closes the connection.
     pub fn close(&mut self) {
-        for (_, handle) in self.pending.borrow_mut().drain() {
-            let _ = handle
-                .reject
-                .call1(&JsValue::NULL, &JsValue::from_str("TransportClosed"));
+        *self.cmd_tx.borrow_mut() = futures_channel::mpsc::unbounded::<WasmCommand>().0;
+        self.pending_count.set(0);
+        if let Some(t) = self.active_transport.borrow_mut().as_mut() {
+            let _ = t.disconnect();
         }
-        let _ = self.inner.borrow_mut().disconnect();
+        *self.active_transport.borrow_mut() = None;
     }
 
     /// Creates a device client bound to the specified unit ID.
     #[wasm_bindgen(js_name = "createClient")]
-    pub fn create_client(
-        &self,
-        options: Option<CreateClientOpts>,
-    ) -> Result<WasmSerialModbusClient, JsValue> {
-        let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
-        let unit_id = get_u8(&options_val, "unitId", 1);
+    pub fn create_client(&self, options: CreateClientOptions) -> Result<WasmSerialModbusClient, JsValue> {
+        let options_val = JsValue::from(options);
+        if options_val.is_null() || options_val.is_undefined() {
+            return Err(JsValue::from_str("Missing options object. unitId is required."));
+        }
+        let unit_id_val = Reflect::get(&options_val, &JsValue::from_str("unitId"))
+            .map_err(|_| JsValue::from_str("Missing property 'unitId'"))?;
+        if unit_id_val.is_null() || unit_id_val.is_undefined() {
+            return Err(JsValue::from_str("Property 'unitId' is required"));
+        }
+        let unit_id = unit_id_val.as_f64().ok_or_else(|| JsValue::from_str("unitId must be a number"))? as u8;
 
         UnitIdOrSlaveAddr::new(unit_id).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         Ok(WasmSerialModbusClient {
-            inner: self.inner.clone(),
-            pending: self.pending.clone(),
+            cmd_tx: self.cmd_tx.clone(),
             unit_id,
-            next_txn: self.next_txn.clone(),
+            pending_count: self.pending_count.clone(),
         })
     }
 }
@@ -358,664 +274,354 @@ impl WasmSerialTransport {
 // ── WasmSerialModbusClient ───────────────────────────────────────────────────
 
 #[wasm_bindgen]
-/// Browser-facing Modbus client bound to a specific serial unit ID.
+/// Browser-facing Modbus serial client bound to a specific unit ID.
 pub struct WasmSerialModbusClient {
-    inner: Rc<RefCell<Inner>>,
-    pending: PendingMap,
+    cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
     unit_id: u8,
-    next_txn: Rc<RefCell<u16>>,
+    pending_count: Rc<Cell<usize>>,
 }
 
 #[wasm_bindgen]
 impl WasmSerialModbusClient {
-    // ── Status ───────────────────────────────────────────────────────────────
-
-    /// Returns `true` when the serial port is open.
-    pub fn is_connected(&self) -> bool {
-        self.inner.borrow().is_connected()
-    }
-
     /// Returns `true` if there are in-flight Modbus requests.
-    pub fn has_pending_requests(&self) -> bool {
-        self.inner.borrow().has_pending_requests()
+    #[wasm_bindgen(getter, js_name = "pendingRequests")]
+    pub fn pending_requests(&self) -> bool {
+        self.pending_count.get() > 0
     }
 
-    /// Read `quantity` coils starting at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `Uint8Array` (bit-packed coil bytes) or rejects on error.
-    pub fn read_coils(&mut self, address: u16, quantity: u16) -> Promise {
-        let txn_id = self.alloc_txn();
+    /// Returns `true` if the client is connected.
+    #[wasm_bindgen(js_name = "isConnected")]
+    pub fn is_connected(&self) -> bool {
+        !self.cmd_tx.borrow().is_closed()
+    }
+
+    // Helper to dispatch a command and return a Promise
+    fn dispatch(&self, cmd: WasmCommand, rx: futures_channel::oneshot::Receiver<Result<WasmResponse, String>>) -> Promise {
         let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
+        let pending_count = self.pending_count.clone();
+        pending_count.set(pending_count.get() + 1);
 
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .coils()
-            .read_multiple_coils(txn_id, unit_addr, address, quantity);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
+        if self.cmd_tx.borrow().unbounded_send(cmd).is_err() {
+            pending_count.set(pending_count.get() - 1);
+            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("ConnectionClosed"));
+            return promise;
         }
+
+        spawn_local(async move {
+            match rx.await {
+                Ok(Ok(resp)) => {
+                    pending_count.set(pending_count.get() - 1);
+                    let _ = resolve.call1(&JsValue::NULL, &resp.to_js_value());
+                }
+                Ok(Err(err)) => {
+                    pending_count.set(pending_count.get() - 1);
+                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&err));
+                }
+                Err(_) => {
+                    pending_count.set(pending_count.get() - 1);
+                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
+                }
+            }
+        });
+
         promise
     }
 
-    /// Read `quantity` holding registers starting at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `Uint16Array` (register values) or rejects on error.
-    pub fn read_holding_registers(&mut self, address: u16, quantity: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
+    // ── Coil operations ──────────────────────────────────────────────────────
 
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .read_holding_registers(txn_id, unit_addr, address, quantity);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+    /// Read coils (FC 01).
+    #[wasm_bindgen(js_name = "readCoils")]
+    pub fn read_coils(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let quantity = get_u16(options, "quantity", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadCoils { unit_id, address, quantity, resp: tx };
+        self.dispatch(cmd, rx)
     }
 
-    /// Read `quantity` input registers starting at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `Uint16Array` or rejects on error.
-    pub fn read_input_registers(&mut self, address: u16, quantity: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .read_input_registers(txn_id, unit_addr, address, quantity);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+    /// Write a single coil (FC 05).
+    #[wasm_bindgen(js_name = "writeSingleCoil")]
+    pub fn write_single_coil(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let value = get_bool(options, "value", false);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::WriteSingleCoil { unit_id, address, value, resp: tx };
+        self.dispatch(cmd, rx)
     }
 
-    /// Write `value` to a single holding register at `address`.
-    ///
-    /// Returns a `Promise` resolving with `{ address, value }` or rejects on error.
-    pub fn write_single_register(&mut self, address: u16, value: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .write_single_register(txn_id, unit_addr, address, value);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Write a single coil at `address` to `value` (true = ON, false = OFF).
-    ///
-    /// Returns a `Promise` resolving with `{ address, value }` or rejects on error.
-    pub fn write_single_coil(&mut self, address: u16, value: bool) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .coils()
-            .write_single_coil(txn_id, unit_addr, address, value);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Write `values` to multiple consecutive holding registers starting at `address`.
-    ///
-    /// Returns a `Promise` resolving with `{ address, quantity }` or rejects on error.
-    pub fn write_multiple_registers(
-        &mut self,
-        address: u16,
-        quantity: u16,
-        values: &[u16],
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .write_multiple_registers(txn_id, unit_addr, address, quantity, values);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read `quantity` discrete inputs starting at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `Uint8Array` (bit-packed) or rejects on error.
-    pub fn read_discrete_inputs(&mut self, address: u16, quantity: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .discrete_inputs()
-            .read_discrete_inputs(txn_id, unit_addr, address, quantity);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-}
-
-#[wasm_bindgen]
-impl WasmSerialModbusClient {
-    /// Read a single coil at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `boolean` or rejects on error.
-    pub fn read_single_coil(&mut self, address: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .coils()
-            .read_single_coil(txn_id, unit_addr, address);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Write multiple coils starting at `address`.
-    ///
-    /// `packed_bytes` is a bit-packed `Uint8Array` (LSB of byte 0 = coil at `address`).
-    /// Returns a `Promise` resolving with `{ address, quantity }` or rejects on error.
-    pub fn write_multiple_coils(
-        &mut self,
-        address: u16,
-        quantity: u16,
-        packed_bytes: &[u8],
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let coils_result =
-            Coils::new(address, quantity).and_then(|c| c.with_values(packed_bytes, quantity));
-        let result = match coils_result {
-            Ok(coils) => self
-                .inner
-                .borrow_mut()
-                .coils()
-                .write_multiple_coils(txn_id, unit_addr, address, &coils),
-            Err(e) => Err(e),
-        };
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read a single holding register at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `number` or rejects on error.
-    pub fn read_single_holding_register(&mut self, address: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .read_single_holding_register(txn_id, unit_addr, address);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read a single input register at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `number` or rejects on error.
-    pub fn read_single_input_register(&mut self, address: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .read_single_input_register(txn_id, unit_addr, address);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Perform an atomic read-then-write on holding registers.
-    ///
-    /// Reads `read_quantity` registers from `read_address`, then writes `values` to `write_address`.
-    /// `write_quantity` is ignored — the quantity written is derived from `values.length`.
-    /// Returns a `Promise` resolving with a `Uint16Array` (the values read) or rejects on error.
-    pub fn read_write_multiple_registers(
-        &mut self,
-        read_address: u16,
-        read_quantity: u16,
-        write_address: u16,
-        _write_quantity: u16,
-        values: &[u16],
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .read_write_multiple_registers(
-                txn_id,
-                unit_addr,
-                read_address,
-                read_quantity,
-                write_address,
-                values,
-            );
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Apply an AND/OR mask to a holding register at `address` (FC 22).
-    ///
-    /// Result register = (current & and_mask) | (or_mask & !and_mask).
-    /// Returns a `Promise` resolving with `true` or rejects on error.
-    pub fn mask_write_register(&mut self, address: u16, and_mask: u16, or_mask: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .registers()
-            .mask_write_register(txn_id, unit_addr, address, and_mask, or_mask);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read a single discrete input at `address`.
-    ///
-    /// Returns a `Promise` resolving with a `boolean` or rejects on error.
-    pub fn read_single_discrete_input(&mut self, address: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .discrete_inputs()
-            .read_single_discrete_input(txn_id, unit_addr, address);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read the FIFO queue pointed to by `address` (FC 24).
-    ///
-    /// Returns a `Promise` resolving with a `Uint16Array` or rejects on error.
-    #[cfg(feature = "fifo")]
-    pub fn read_fifo_queue(&mut self, address: u16) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .fifo()
-            .read_fifo_queue(txn_id, unit_addr, address);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read a file record (FC 20).
-    ///
-    /// Returns a `Promise` resolving with `Array<{ fileNumber, recordNumber, data: Uint16Array }>`
-    /// or rejects on error.
-    #[cfg(feature = "file-record")]
-    pub fn read_file_record(
-        &mut self,
-        file_number: u16,
-        record_number: u16,
-        record_length: u16,
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let mut sub_req = SubRequest::new();
-        let result = sub_req
-            .add_read_sub_request(file_number, record_number, record_length)
-            .and_then(|_| {
-                self.inner
-                    .borrow_mut()
-                    .file_records()
-                    .read_file_record(txn_id, unit_addr, &sub_req)
-            });
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Write a file record (FC 21).
-    ///
-    /// `values` is a `Uint16Array` of register values to write.
-    /// Returns a `Promise` resolving with `true` or rejects on error.
-    #[cfg(feature = "file-record")]
-    pub fn write_file_record(
-        &mut self,
-        file_number: u16,
-        record_number: u16,
-        values: &[u16],
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let record_length = values.len() as u16;
-
-        let mut hv = heapless::Vec::<u16, MAX_PDU_DATA_LEN>::new();
-        for &v in values {
-            if hv.push(v).is_err() {
-                self.reject_immediate(txn_id, MbusError::BufferTooSmall);
+    /// Write multiple coils (FC 15).
+    #[wasm_bindgen(js_name = "writeMultipleCoils")]
+    pub fn write_multiple_coils(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let values = match get_bool_array(options, "values") {
+            Ok(v) => v,
+            Err(e) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&e));
                 return promise;
             }
-        }
-
-        let mut sub_req = SubRequest::new();
-        let result = sub_req
-            .add_write_sub_request(file_number, record_number, record_length, hv)
-            .and_then(|_| {
-                self.inner
-                    .borrow_mut()
-                    .file_records()
-                    .write_file_record(txn_id, unit_addr, &sub_req)
-            });
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+        };
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::WriteMultipleCoils { unit_id, address, values, resp: tx };
+        self.dispatch(cmd, rx)
     }
 
-    /// Read the exception status (FC 7).
-    ///
-    /// Returns a `Promise` resolving with a status `number` or rejects on error.
+    /// Read discrete inputs (FC 02).
+    #[wasm_bindgen(js_name = "readDiscreteInputs")]
+    pub fn read_discrete_inputs(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let quantity = get_u16(options, "quantity", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadDiscreteInputs { unit_id, address, quantity, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    // ── Register operations ───────────────────────────────────────────────────
+
+    /// Read holding registers (FC 03).
+    #[wasm_bindgen(js_name = "readHoldingRegisters")]
+    pub fn read_holding_registers(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let quantity = get_u16(options, "quantity", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadHoldingRegisters { unit_id, address, quantity, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Read input registers (FC 04).
+    #[wasm_bindgen(js_name = "readInputRegisters")]
+    pub fn read_input_registers(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let quantity = get_u16(options, "quantity", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadInputRegisters { unit_id, address, quantity, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Write a single register (FC 06).
+    #[wasm_bindgen(js_name = "writeSingleRegister")]
+    pub fn write_single_register(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let value = get_u16(options, "value", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::WriteSingleRegister { unit_id, address, value, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Write multiple registers (FC 16).
+    #[wasm_bindgen(js_name = "writeMultipleRegisters")]
+    pub fn write_multiple_registers(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let values = match get_u16_array(options, "values") {
+            Ok(v) => v,
+            Err(e) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&e));
+                return promise;
+            }
+        };
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::WriteMultipleRegisters { unit_id, address, values, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Read and write multiple registers (FC 23).
+    #[wasm_bindgen(js_name = "readWriteMultipleRegisters")]
+    pub fn read_write_multiple_registers(&mut self, options: &JsValue) -> Promise {
+        let read_address = get_u16(options, "readAddress", 0);
+        let read_quantity = get_u16(options, "readQuantity", 0);
+        let write_address = get_u16(options, "writeAddress", 0);
+        let write_values = match get_u16_array(options, "writeValues") {
+            Ok(v) => v,
+            Err(e) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&e));
+                return promise;
+            }
+        };
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadWriteMultipleRegisters {
+            unit_id,
+            read_address,
+            read_quantity,
+            write_address,
+            write_values,
+            resp: tx,
+        };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Mask write register (FC 22).
+    #[wasm_bindgen(js_name = "maskWriteRegister")]
+    pub fn mask_write_register(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let and_mask = get_u16(options, "andMask", 0xFFFF);
+        let or_mask = get_u16(options, "orMask", 0x0000);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::MaskWriteRegister { unit_id, address, and_mask, or_mask, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    // ── FIFO queue operations ─────────────────────────────────────────────────
+
+    /// Read FIFO queue (FC 18).
+    #[wasm_bindgen(js_name = "readFifoQueue")]
+    #[cfg(feature = "fifo")]
+    pub fn read_fifo_queue(&mut self, options: &JsValue) -> Promise {
+        let address = get_u16(options, "address", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadFifoQueue { unit_id, address, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    // ── File record operations ────────────────────────────────────────────────
+
+    /// Read file record (FC 14).
+    #[wasm_bindgen(js_name = "readFileRecord")]
+    #[cfg(feature = "file-record")]
+    pub fn read_file_record(&mut self, options: &JsValue) -> Promise {
+        let reqs_val = match Reflect::get(options, &JsValue::from_str("requests")) {
+            Ok(v) => v,
+            Err(_) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Missing property 'requests'"));
+                return promise;
+            }
+        };
+        if !Array::is_array(&reqs_val) {
+            let (promise, _, reject) = make_promise();
+            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Property 'requests' must be an array"));
+            return promise;
+        }
+        let arr = Array::from(&reqs_val);
+        let mut requests = Vec::new();
+        for i in 0..arr.length() {
+            let item = arr.get(i);
+            let file_number = get_u16(&item, "fileNumber", 0);
+            let record_number = get_u16(&item, "recordNumber", 0);
+            let record_length = get_u16(&item, "recordLength", 0);
+            requests.push(SubRequestParams {
+                file_number,
+                record_number,
+                record_length,
+                record_data: None,
+            });
+        }
+
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadFileRecord { unit_id, requests, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    /// Write file record (FC 15).
+    #[wasm_bindgen(js_name = "writeFileRecord")]
+    #[cfg(feature = "file-record")]
+    pub fn write_file_record(&mut self, options: &JsValue) -> Promise {
+        let reqs_val = match Reflect::get(options, &JsValue::from_str("requests")) {
+            Ok(v) => v,
+            Err(_) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Missing property 'requests'"));
+                return promise;
+            }
+        };
+        if !Array::is_array(&reqs_val) {
+            let (promise, _, reject) = make_promise();
+            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Property 'requests' must be an array"));
+            return promise;
+        }
+        let arr = Array::from(&reqs_val);
+        let mut requests = Vec::new();
+        for i in 0..arr.length() {
+            let item = arr.get(i);
+            let file_number = get_u16(&item, "fileNumber", 0);
+            let record_number = get_u16(&item, "recordNumber", 0);
+            let record_length = get_u16(&item, "recordLength", 0);
+            let record_data_val = match get_u16_array(&item, "recordData") {
+                Ok(d) => d,
+                Err(e) => {
+                    let (promise, _, reject) = make_promise();
+                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&e));
+                    return promise;
+                }
+            };
+            let mut hv_data = heapless::Vec::new();
+            if hv_data.extend_from_slice(&record_data_val).is_err() {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Too many registers in recordData"));
+                return promise;
+            }
+            requests.push(SubRequestParams {
+                file_number,
+                record_number,
+                record_length,
+                record_data: Some(hv_data),
+            });
+        }
+
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::WriteFileRecord { unit_id, requests, resp: tx };
+        self.dispatch(cmd, rx)
+    }
+
+    // ── Diagnostics operations ────────────────────────────────────────────────
+
+    /// Read exception status (FC 07).
+    #[wasm_bindgen(js_name = "readExceptionStatus")]
     #[cfg(feature = "diagnostics")]
     pub fn read_exception_status(&mut self) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .diagnostic()
-            .read_exception_status(txn_id, unit_addr);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadExceptionStatus { unit_id, resp: tx };
+        self.dispatch(cmd, rx)
     }
 
-    /// Send a Diagnostics request (FC 8).
-    ///
-    /// `sub_function` is one of the `DiagnosticSubFunction` u16 codes.
-    /// Returns a `Promise` resolving with `{ subFunction, data: Uint16Array }` or rejects on error.
+    /// Diagnostics operations (FC 08).
+    #[wasm_bindgen(js_name = "diagnostics")]
     #[cfg(feature = "diagnostics")]
-    pub fn diagnostics(&mut self, sub_function: u16, data: &[u16]) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = DiagnosticSubFunction::try_from(sub_function)
-            .map_err(|_| MbusError::ReservedSubFunction(sub_function))
-            .and_then(|sf| {
-                self.inner
-                    .borrow_mut()
-                    .diagnostic()
-                    .diagnostics(txn_id, unit_addr, sf, data)
-            });
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+    pub fn diagnostics(&mut self, options: &JsValue) -> Promise {
+        let sub_function = get_u16(options, "subFunction", 0);
+        let data = match get_u16_array(options, "data") {
+            Ok(d) => d,
+            Err(e) => {
+                let (promise, _, reject) = make_promise();
+                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&e));
+                return promise;
+            }
+        };
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::Diagnostics { unit_id, sub_function, data, resp: tx };
+        self.dispatch(cmd, rx)
     }
 
-    /// Read the communication event counter (FC 11).
-    ///
-    /// Returns a `Promise` resolving with `{ status, eventCount }` or rejects on error.
+    /// Read device identification (FC 43/14).
+    #[wasm_bindgen(js_name = "readDeviceIdentification")]
     #[cfg(feature = "diagnostics")]
-    pub fn get_comm_event_counter(&mut self) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .diagnostic()
-            .get_comm_event_counter(txn_id, unit_addr);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read the communication event log (FC 12).
-    ///
-    /// Returns a `Promise` resolving with `{ status, eventCount, messageCount, events: Uint8Array }`
-    /// or rejects on error.
-    #[cfg(feature = "diagnostics")]
-    pub fn get_comm_event_log(&mut self) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .diagnostic()
-            .get_comm_event_log(txn_id, unit_addr);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Report Server ID (FC 17).
-    ///
-    /// Returns a `Promise` resolving with a `Uint8Array` (raw server ID data) or rejects on error.
-    #[cfg(feature = "diagnostics")]
-    pub fn report_server_id(&mut self) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = self
-            .inner
-            .borrow_mut()
-            .diagnostic()
-            .report_server_id(txn_id, unit_addr);
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
-    }
-
-    /// Read Device Identification (FC 43 / MEI 0x0E).
-    ///
-    /// `read_device_id_code`: 1=Basic, 2=Regular, 3=Extended, 4=Specific.
-    /// `object_id`: 0x00=VendorName, 0x01=ProductCode, 0x02=Revision, etc.
-    /// Returns a `Promise` resolving with `{ readDeviceIdCode, conformityLevel, moreFollows, objects }`
-    /// or rejects on error.
-    #[cfg(feature = "diagnostics")]
-    pub fn read_device_identification(
-        &mut self,
-        read_device_id_code: u8,
-        object_id: u8,
-    ) -> Promise {
-        let txn_id = self.alloc_txn();
-        let (promise, resolve, reject) = make_promise();
-        self.pending
-            .borrow_mut()
-            .insert(txn_id, PendingHandle { resolve, reject });
-
-        let unit_addr = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let result = ReadDeviceIdCode::try_from(read_device_id_code)
-            .map_err(|_| MbusError::InvalidDeviceIdCode)
-            .and_then(|code| {
-                self.inner
-                    .borrow_mut()
-                    .diagnostic()
-                    .read_device_identification(txn_id, unit_addr, code, ObjectId::from(object_id))
-            });
-
-        if let Err(e) = result {
-            self.reject_immediate(txn_id, e);
-        }
-        promise
+    pub fn read_device_identification(&mut self, options: &JsValue) -> Promise {
+        let read_device_id_code = get_u8(options, "readDeviceIdCode", 1);
+        let object_id = get_u8(options, "objectId", 0);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
+        let cmd = WasmCommand::ReadDeviceIdentification { unit_id, read_device_id_code, object_id, resp: tx };
+        self.dispatch(cmd, rx)
     }
 }
 
-impl WasmSerialModbusClient {
-    fn alloc_txn(&self) -> u16 {
-        let mut next = self.next_txn.borrow_mut();
-        let id = *next;
-        *next = next.wrapping_add(1).max(1);
-        id
-    }
-
-    fn reject_immediate(&self, txn_id: u16, error: MbusError) {
-        if let Some(handle) = self.pending.borrow_mut().remove(&txn_id) {
-            let _ = handle
-                .reject
-                .call1(&JsValue::NULL, &JsValue::from_str(&format!("{:?}", error)));
-        }
-    }
-}
+// ── Promise constructor helper ────────────────────────────────────────────────
 
 fn make_promise() -> (Promise, Function, Function) {
     let resolve_holder: Rc<RefCell<Option<Function>>> = Rc::new(RefCell::new(None));

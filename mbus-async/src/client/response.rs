@@ -46,7 +46,7 @@ use mbus_core::models::file_record::MAX_SUB_REQUESTS_PER_PDU;
 // values sent over a oneshot channel; boxing would add heap overhead for no gain.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
-pub(crate) enum ClientResponse {
+pub enum ClientResponse {
     // ── Coils ────────────────────────────────────────────────────────────
     /// Read Coils (FC 01), Write Single Coil (FC 05), Write Multiple Coils (FC 0F).
     #[cfg(feature = "coils")]
@@ -57,6 +57,7 @@ pub(crate) enum ClientResponse {
     /// Write Multiple Registers (FC 10), Read/Write Multiple Registers (FC 17).
     #[cfg(feature = "holding-registers")]
     HoldingRegisters(HoldingRegisters),
+    /// Read Input Registers (FC 04).
     #[cfg(feature = "input-registers")]
     InputRegisters(InputRegisters),
     /// Write Single Register (FC 06) echo-back confirmation.

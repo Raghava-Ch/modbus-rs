@@ -83,7 +83,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmTcpTransport, WasmModbusClient } from "../../dist/web/modbus-rs.js";
+    import init, { WasmTcpTransport } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
     const log = (msg) => {
@@ -159,8 +159,8 @@
         const text = String(err);
         if (retries > 0 && text.includes("NoRetriesLeft")) {
           if (transport) {
-            const restarted = transport.reconnect();
-            log(`RETRY ${name}: ${text} -> reconnect=${restarted}, retrying once`);
+            log(`RETRY ${name}: ${text} -> reconnecting...`);
+            await transport.reconnect();
           }
           await sleep(500);
           return withTransportRecovery(name, run, retries - 1);
@@ -178,22 +178,20 @@
     await init();
     log("WASM initialized.");
 
-    document.getElementById("btnConnect").addEventListener("click", () => {
+    document.getElementById("btnConnect").addEventListener("click", async () => {
       try {
         const ws = document.getElementById("ws").value.trim();
         const unitId = Number(document.getElementById("unitId").value);
         const timeout = Number(document.getElementById("timeout").value);
         const retries = Number(document.getElementById("retries").value);
-        const tick = Number(document.getElementById("tick").value);
 
-        transport = new WasmTcpTransport(ws, {
+        log(`Connecting to ${ws}...`);
+        transport = await WasmTcpTransport.connect(ws, {
           responseTimeoutMs: timeout,
           retryAttempts: retries,
-          tickIntervalMs: tick
         });
         client = transport.createClient({ unitId });
-        const reconnectStarted = transport.reconnect();
-        log(`Client created for ${ws}, unit=${unitId}. reconnect=${reconnectStarted}`);
+        log(`Client created and connected for ${ws}, unit=${unitId}.`);
       } catch (err) {
         log(`Connect setup error: ${String(err)}`);
       }
@@ -204,7 +202,7 @@
         log("Client not initialized. Click Connect first.");
         return;
       }
-      log(`is_connected = ${client.is_connected()}, has_pending_requests = ${client.has_pending_requests()}`);
+      log(`is_connected = ${client.is_connected()}, pendingRequests = ${transport.pendingRequests}`);
     });
 
     // ── Raw WebSocket connectivity test (bypasses WASM entirely) ──────────
@@ -228,8 +226,7 @@
 
       const steps = [
         ["is_connected", async () => client.is_connected()],
-        ["read_input_registers", async () => runRobust("read_input_registers", () => client.read_input_registers(addr, qty))],
-        ["read_single_input_register", async () => runRobust("read_single_input_register", () => client.read_single_input_register(addr))],
+        ["readInputRegisters", async () => runRobust("readInputRegisters", () => client.readInputRegisters({ address: addr, quantity: qty }))],
       ];
 
       log(`Running isolated FC04 checks from address ${addr}, qty ${qty}...`);
@@ -254,29 +251,22 @@
 
       const steps = [
         ["is_connected", async () => client.is_connected()],
-        ["read_coils", async () => runRobust("read_coils", () => client.read_coils(0, 8))],
-        ["read_single_coil", async () => runRobust("read_single_coil", () => client.read_single_coil(0))],
-        ["write_single_coil", async () => runRobust("write_single_coil", () => client.write_single_coil(0, true))],
-        ["write_multiple_coils", async () => runRobust("write_multiple_coils", () => client.write_multiple_coils(0, 8, new Uint8Array([0x0F])))],
-        ["read_discrete_inputs", async () => runRobust("read_discrete_inputs", () => client.read_discrete_inputs(0, 8))],
-        ["read_single_discrete_input", async () => runRobust("read_single_discrete_input", () => client.read_single_discrete_input(0))],
-        ["read_holding_registers", async () => runRobust("read_holding_registers", () => client.read_holding_registers(0, 2))],
-        ["read_single_holding_register", async () => runRobust("read_single_holding_register", () => client.read_single_holding_register(0))],
-        ["write_single_register", async () => runRobust("write_single_register", () => client.write_single_register(0, 1))],
-        ["write_multiple_registers", async () => runRobust("write_multiple_registers", () => client.write_multiple_registers(0, 2, new Uint16Array([1, 2])))],
-        ["read_write_multiple_registers", async () => runRobust("read_write_multiple_registers", () => client.read_write_multiple_registers(0, 1, 0, 2, new Uint16Array([3, 4])))],
-        ["mask_write_register", async () => runRobust("mask_write_register", () => client.mask_write_register(0, 0xFFFF, 0x0001))],
-        ["read_input_registers", async () => runRobust("read_input_registers", () => client.read_input_registers(0, 10))],
-        ["read_single_input_register", async () => runRobust("read_single_input_register", () => client.read_single_input_register(0))],
-        ["read_fifo_queue", async () => runRobust("read_fifo_queue", () => client.read_fifo_queue(0))],
-        ["read_file_record", async () => runRobust("read_file_record", () => client.read_file_record(1, 0, 1))],
-        ["write_file_record", async () => runRobust("write_file_record", () => client.write_file_record(1, 0, new Uint16Array([1])))],
-        ["read_exception_status", async () => runRobust("read_exception_status", () => client.read_exception_status())],
-        ["diagnostics", async () => runRobust("diagnostics", () => client.diagnostics(0, new Uint16Array([0])))],
-        ["get_comm_event_counter", async () => runRobust("get_comm_event_counter", () => client.get_comm_event_counter())],
-        ["get_comm_event_log", async () => runRobust("get_comm_event_log", () => client.get_comm_event_log())],
-        ["report_server_id", async () => runRobust("report_server_id", () => client.report_server_id())],
-        ["read_device_identification", async () => runRobust("read_device_identification", () => client.read_device_identification(1, 0))],
+        ["readCoils", async () => runRobust("readCoils", () => client.readCoils({ address: 0, quantity: 8 }))],
+        ["writeSingleCoil", async () => runRobust("writeSingleCoil", () => client.writeSingleCoil({ address: 0, value: true }))],
+        ["writeMultipleCoils", async () => runRobust("writeMultipleCoils", () => client.writeMultipleCoils({ address: 0, values: [true, true, true, true, false, false, false, false] }))],
+        ["readDiscreteInputs", async () => runRobust("readDiscreteInputs", () => client.readDiscreteInputs({ address: 0, quantity: 8 }))],
+        ["readHoldingRegisters", async () => runRobust("readHoldingRegisters", () => client.readHoldingRegisters({ address: 0, quantity: 2 }))],
+        ["writeSingleRegister", async () => runRobust("writeSingleRegister", () => client.writeSingleRegister({ address: 0, value: 1 }))],
+        ["writeMultipleRegisters", async () => runRobust("writeMultipleRegisters", () => client.writeMultipleRegisters({ address: 0, values: [1, 2] }))],
+        ["readWriteMultipleRegisters", async () => runRobust("readWriteMultipleRegisters", () => client.readWriteMultipleRegisters({ readAddress: 0, readQuantity: 1, writeAddress: 0, writeValues: [3, 4] }))],
+        ["maskWriteRegister", async () => runRobust("maskWriteRegister", () => client.maskWriteRegister({ address: 0, andMask: 0xFFFF, orMask: 0x0001 }))],
+        ["readInputRegisters", async () => runRobust("readInputRegisters", () => client.readInputRegisters({ address: 0, quantity: 10 }))],
+        ["readFifoQueue", async () => runRobust("readFifoQueue", () => client.readFifoQueue({ address: 0 }))],
+        ["readFileRecord", async () => runRobust("readFileRecord", () => client.readFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordLength: 1 }] }))],
+        ["writeFileRecord", async () => runRobust("writeFileRecord", () => client.writeFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordData: [1] }] }))],
+        ["readExceptionStatus", async () => runRobust("readExceptionStatus", () => client.readExceptionStatus())],
+        ["diagnostics", async () => runRobust("diagnostics", () => client.diagnostics({ subFunction: 0, data: [0] }))],
+        ["readDeviceIdentification", async () => runRobust("readDeviceIdentification", () => client.readDeviceIdentification({ readDeviceIdCode: 1, objectId: 0 }))],
       ];
 
       log("Running minimal full smoke from address 0...");
