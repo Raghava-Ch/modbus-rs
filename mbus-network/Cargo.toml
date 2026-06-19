@@ -53,8 +53,19 @@ ws-server = ["dep:tokio-tungstenite", "dep:futures-util", "dep:tokio", "dep:byte
 
 # Backward-Compatibility / Legacy Aliases
 async = ["tcp-async"]
-wasm = ["ws-client"]
+wasm = ["ws-client", "mbus-core/async"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 futures-channel = "0.3"
-futures-util = "0.3"
+futures-util = { version = "0.3", features = ["sink"] }
+gloo-net = { version = "0.6.0", features = ["websocket"] }
+wasm-bindgen-futures = "0.4"
+gloo-console = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Event"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
+

@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -6,12 +8,12 @@ use gloo_timers::future::TimeoutFuture;
 use heapless::Vec;
 use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+use mbus_core::errors::MbusError;
 use mbus_core::transport::{
     BaudRate, DataBits, ModbusConfig, Parity, SerialMode, Transport, TransportError, TransportType,
 };
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
-use mbus_core::errors::MbusError;
 
 #[derive(Debug)]
 struct SerialShared {
@@ -40,6 +42,7 @@ pub struct WasmSerialTransport<const ASCII: bool = false> {
     port: Option<JsValue>,
     shared: Rc<RefCell<SerialShared>>,
     rx_rx: Option<futures_channel::mpsc::UnboundedReceiver<std::vec::Vec<u8>>>,
+    inter_frame_ms: u32,
 }
 
 /// Modbus RTU browser serial transport.
@@ -69,6 +72,7 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                 rx_tx: None,
             })),
             rx_rx: None,
+            inter_frame_ms: 35,
         }
     }
 
@@ -237,6 +241,11 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                     let bytes = Uint8Array::new(&value).to_vec();
                     {
                         let mut state = shared.borrow_mut();
+                        // NOTE: Split-brain buffer risk. Bytes are extended into rx_buf
+                        // (used by sync Transport::recv) and unbounded_send to rx_tx
+                        // (used by async recv_frame). Consuming from one path does not
+                        // drain the other.
+                        // TODO(async): This is solved by WasmAsyncSerialTransport which uses a single path.
                         state.rx_buf.extend(bytes.clone());
                         if let Some(tx) = &state.rx_tx {
                             let _ = tx.unbounded_send(bytes);
@@ -359,7 +368,15 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
         }
         buf.extend(chunk);
 
-        let inter_frame_ms = 35;
+        if let Some(expected) =
+            mbus_core::data_unit::common::derive_length_from_bytes(&buf, Self::TRANSPORT_TYPE)
+        {
+            if buf.len() >= expected {
+                return Ok(buf);
+            }
+        }
+
+        let inter_frame_ms = self.inter_frame_ms;
         loop {
             use futures_util::FutureExt;
             let mut timeout_fut = gloo_timers::future::TimeoutFuture::new(inter_frame_ms).fuse();
@@ -373,6 +390,11 @@ impl<const ASCII: bool> WasmSerialTransport<ASCII> {
                                 return Err(MbusError::BufferTooSmall);
                             }
                             buf.extend(chunk);
+                            if let Some(expected) = mbus_core::data_unit::common::derive_length_from_bytes(&buf, Self::TRANSPORT_TYPE) {
+                                if buf.len() >= expected {
+                                    return Ok(buf);
+                                }
+                            }
                         }
                         None => return Err(MbusError::ConnectionClosed),
                     }
@@ -426,8 +448,20 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
         let (tx, rx) = futures_channel::mpsc::unbounded::<std::vec::Vec<u8>>();
         self.rx_rx = Some(rx);
 
+        let baud = match serial_config.baud_rate {
+            BaudRate::Baud9600 => 9600,
+            BaudRate::Baud19200 => 19200,
+            BaudRate::Custom(rate) => rate,
+        }
+        .max(1) as u64;
+        let char_time_us = (11 * 1_000_000) / baud;
+        let silence_us = ((char_time_us * 7) / 2).max(1750).max(100_000);
+        self.inter_frame_ms = (silence_us / 1000) as u32;
+
         {
             let mut state = self.shared.borrow_mut();
+            // NOTE: Reconnecting an already connected or opening transport is a silent no-op.
+            // This does not update configuration options or recreate the reader/writer tasks.
             if state.connected || state.opening {
                 return Ok(());
             }
@@ -460,6 +494,12 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
         Ok(())
     }
 
+    /// Disconnects the serial port.
+    ///
+    /// NOTE: This function is fire-and-forget; it returns success before the
+    /// underlying promise for `SerialPort.close()` resolves. A subsequent connect call
+    /// immediately after this may race with the closing operation.
+    /// TODO(async): Use WasmAsyncSerialTransport for a fully awaited async disconnect.
     fn disconnect(&mut self) -> Result<(), Self::Error> {
         self.rx_rx = None;
         let mut state = self.shared.borrow_mut();
@@ -506,5 +546,67 @@ impl<const ASCII: bool> Transport for WasmSerialTransport<ASCII> {
     fn is_connected(&self) -> bool {
         let state = self.shared.borrow();
         state.connected || state.opening
+    }
+}
+
+// SAFETY: WasmSerialTransport is compiled for the WASM target which is single-threaded.
+// TODO(wasm-threads): Switch WasmSerialTransport to Arc/Mutex or remove these unsafe impls
+// when multi-threaded WASM is used, as Rc/RefCell are not thread-safe.
+#[cfg(target_arch = "wasm32")]
+unsafe impl<const ASCII: bool> Send for WasmSerialTransport<ASCII> {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl<const ASCII: bool> Sync for WasmSerialTransport<ASCII> {}
+
+impl<const ASCII: bool> mbus_core::transport::AsyncTransport for WasmSerialTransport<ASCII> {
+    const SUPPORTS_BROADCAST_WRITES: bool = true;
+    const TRANSPORT_TYPE: TransportType = TransportType::CustomSerial(Self::MODE);
+
+    fn send<'a>(
+        &'a mut self,
+        adu: &'a [u8],
+    ) -> impl std::future::Future<Output = Result<(), MbusError>> + Send + 'a {
+        async move { self.send_frame(adu) }
+    }
+
+    fn recv(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError>> + Send + '_
+    {
+        UnsafeSendFuture::new(async move { self.recv_frame().await })
+    }
+
+    fn is_connected(&self) -> bool {
+        Transport::is_connected(self)
+    }
+}
+
+// TODO(wasm-threads): Remove UnsafeSendFuture once WasmAsyncSerialTransport is wired up.
+#[cfg(target_arch = "wasm32")]
+struct UnsafeSendFuture<F> {
+    inner: F,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl<F> UnsafeSendFuture<F> {
+    fn new(inner: F) -> Self {
+        Self { inner }
+    }
+}
+
+// Safety: This is compiled for the WASM target which is single-threaded.
+#[cfg(target_arch = "wasm32")]
+unsafe impl<F> Send for UnsafeSendFuture<F> {}
+
+#[cfg(target_arch = "wasm32")]
+impl<F: std::future::Future> std::future::Future for UnsafeSendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let unsafe_self = unsafe { self.get_unchecked_mut() };
+        let inner_pin = unsafe { std::pin::Pin::new_unchecked(&mut unsafe_self.inner) };
+        inner_pin.poll(cx)
     }
 }

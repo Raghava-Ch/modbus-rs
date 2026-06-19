@@ -3,18 +3,18 @@
 //! Receives `WasmCommand` requests over a channel, executes them over the transport,
 //! and maps the resulting responses back to the oneshot caller.
 
-use std::collections::HashMap;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_channel::oneshot::Sender as OneshotSender;
-use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
+use futures_util::stream::StreamExt;
+use std::collections::HashMap;
 
-use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
-use mbus_core::errors::MbusError;
-use mbus_core::transport::TransportType;
 use mbus_async::client::command::ClientRequest;
 use mbus_async::client::decode::decode_response;
 use mbus_async::client::encode::encode_request;
+use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+use mbus_core::errors::MbusError;
+use mbus_core::transport::TransportType;
 
 use super::command::WasmCommand;
 use super::response::WasmResponse;
@@ -114,25 +114,90 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
 
     async fn handle_command(&mut self, cmd: WasmCommand) {
         let (req, resp_tx) = match cmd {
-            WasmCommand::ReadCoils { unit_id, address, quantity, resp } => {
-                (ClientRequest::ReadMultipleCoils { unit: unit_id, address, quantity }, resp)
-            }
-            WasmCommand::ReadDiscreteInputs { unit_id, address, quantity, resp } => {
-                (ClientRequest::ReadDiscreteInputs { unit: unit_id, address, quantity }, resp)
-            }
-            WasmCommand::ReadHoldingRegisters { unit_id, address, quantity, resp } => {
-                (ClientRequest::ReadHoldingRegisters { unit: unit_id, address, quantity }, resp)
-            }
-            WasmCommand::ReadInputRegisters { unit_id, address, quantity, resp } => {
-                (ClientRequest::ReadInputRegisters { unit: unit_id, address, quantity }, resp)
-            }
-            WasmCommand::WriteSingleCoil { unit_id, address, value, resp } => {
-                (ClientRequest::WriteSingleCoil { unit: unit_id, address, value }, resp)
-            }
-            WasmCommand::WriteSingleRegister { unit_id, address, value, resp } => {
-                (ClientRequest::WriteSingleRegister { unit: unit_id, address, value }, resp)
-            }
-            WasmCommand::WriteMultipleCoils { unit_id, address, values, resp } => {
+            WasmCommand::ReadCoils {
+                unit_id,
+                address,
+                quantity,
+                resp,
+            } => (
+                ClientRequest::ReadMultipleCoils {
+                    unit: unit_id,
+                    address,
+                    quantity,
+                },
+                resp,
+            ),
+            WasmCommand::ReadDiscreteInputs {
+                unit_id,
+                address,
+                quantity,
+                resp,
+            } => (
+                ClientRequest::ReadDiscreteInputs {
+                    unit: unit_id,
+                    address,
+                    quantity,
+                },
+                resp,
+            ),
+            WasmCommand::ReadHoldingRegisters {
+                unit_id,
+                address,
+                quantity,
+                resp,
+            } => (
+                ClientRequest::ReadHoldingRegisters {
+                    unit: unit_id,
+                    address,
+                    quantity,
+                },
+                resp,
+            ),
+            WasmCommand::ReadInputRegisters {
+                unit_id,
+                address,
+                quantity,
+                resp,
+            } => (
+                ClientRequest::ReadInputRegisters {
+                    unit: unit_id,
+                    address,
+                    quantity,
+                },
+                resp,
+            ),
+            WasmCommand::WriteSingleCoil {
+                unit_id,
+                address,
+                value,
+                resp,
+            } => (
+                ClientRequest::WriteSingleCoil {
+                    unit: unit_id,
+                    address,
+                    value,
+                },
+                resp,
+            ),
+            WasmCommand::WriteSingleRegister {
+                unit_id,
+                address,
+                value,
+                resp,
+            } => (
+                ClientRequest::WriteSingleRegister {
+                    unit: unit_id,
+                    address,
+                    value,
+                },
+                resp,
+            ),
+            WasmCommand::WriteMultipleCoils {
+                unit_id,
+                address,
+                values,
+                resp,
+            } => {
                 use mbus_core::models::coil::Coils;
                 match Coils::new(address, values.len() as u16) {
                     Ok(mut coils) => {
@@ -144,7 +209,14 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                             }
                         }
                         if ok {
-                            (ClientRequest::WriteMultipleCoils { unit: unit_id, address, coils }, resp)
+                            (
+                                ClientRequest::WriteMultipleCoils {
+                                    unit: unit_id,
+                                    address,
+                                    coils,
+                                },
+                                resp,
+                            )
                         } else {
                             let _ = resp.send(Err("Failed to set coil values".to_string()));
                             return;
@@ -156,60 +228,129 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                     }
                 }
             }
-            WasmCommand::WriteMultipleRegisters { unit_id, address, values, resp } => {
+            WasmCommand::WriteMultipleRegisters {
+                unit_id,
+                address,
+                values,
+                resp,
+            } => {
                 let mut heapless_vals = heapless::Vec::new();
                 if heapless_vals.extend_from_slice(&values).is_err() {
                     let _ = resp.send(Err("Too many registers".to_string()));
                     return;
                 }
-                (ClientRequest::WriteMultipleRegisters { unit: unit_id, address, values: heapless_vals }, resp)
+                (
+                    ClientRequest::WriteMultipleRegisters {
+                        unit: unit_id,
+                        address,
+                        values: heapless_vals,
+                    },
+                    resp,
+                )
             }
-            WasmCommand::ReadWriteMultipleRegisters { unit_id, read_address, read_quantity, write_address, write_values, resp } => {
+            WasmCommand::ReadWriteMultipleRegisters {
+                unit_id,
+                read_address,
+                read_quantity,
+                write_address,
+                write_values,
+                resp,
+            } => {
                 let mut heapless_vals = heapless::Vec::new();
                 if heapless_vals.extend_from_slice(&write_values).is_err() {
                     let _ = resp.send(Err("Too many write registers".to_string()));
                     return;
                 }
-                (ClientRequest::ReadWriteMultipleRegisters {
+                (
+                    ClientRequest::ReadWriteMultipleRegisters {
+                        unit: unit_id,
+                        read_address,
+                        read_quantity,
+                        write_address,
+                        write_values: heapless_vals,
+                    },
+                    resp,
+                )
+            }
+            WasmCommand::ReadFifoQueue {
+                unit_id,
+                address,
+                resp,
+            } => (
+                ClientRequest::ReadFifoQueue {
                     unit: unit_id,
-                    read_address,
-                    read_quantity,
-                    write_address,
-                    write_values: heapless_vals,
-                }, resp)
-            }
-            WasmCommand::ReadFifoQueue { unit_id, address, resp } => {
-                (ClientRequest::ReadFifoQueue { unit: unit_id, address }, resp)
-            }
-            WasmCommand::MaskWriteRegister { unit_id, address, and_mask, or_mask, resp } => {
-                (ClientRequest::MaskWriteRegister { unit: unit_id, address, and_mask, or_mask }, resp)
-            }
+                    address,
+                },
+                resp,
+            ),
+            WasmCommand::MaskWriteRegister {
+                unit_id,
+                address,
+                and_mask,
+                or_mask,
+                resp,
+            } => (
+                ClientRequest::MaskWriteRegister {
+                    unit: unit_id,
+                    address,
+                    and_mask,
+                    or_mask,
+                },
+                resp,
+            ),
             #[cfg(feature = "file-record")]
-            WasmCommand::ReadFileRecord { unit_id, requests, resp } => {
+            WasmCommand::ReadFileRecord {
+                unit_id,
+                requests,
+                resp,
+            } => {
                 use mbus_core::models::file_record::SubRequest;
                 let mut sub_req = SubRequest::new();
                 let mut ok = true;
                 for req in requests {
-                    if sub_req.add_read_sub_request(req.file_number, req.record_number, req.record_length).is_err() {
+                    if sub_req
+                        .add_read_sub_request(req.file_number, req.record_number, req.record_length)
+                        .is_err()
+                    {
                         ok = false;
                         break;
                     }
                 }
                 if ok {
-                    (ClientRequest::ReadFileRecord { unit: unit_id, sub_request: sub_req }, resp)
+                    (
+                        ClientRequest::ReadFileRecord {
+                            unit: unit_id,
+                            sub_request: sub_req,
+                        },
+                        resp,
+                    )
                 } else {
-                    let _ = resp.send(Err("Failed to build read file record sub-request".to_string()));
+                    let _ = resp.send(Err(
+                        "Failed to build read file record sub-request".to_string()
+                    ));
                     return;
                 }
             }
             #[cfg(feature = "file-record")]
-            WasmCommand::WriteFileRecord { unit_id, requests, resp } => {
+            WasmCommand::WriteFileRecord {
+                unit_id,
+                requests,
+                resp,
+            } => {
                 use mbus_core::models::file_record::SubRequest;
                 let mut sub_req = SubRequest::new();
                 let mut ok = true;
                 for req in requests {
                     if let Some(data) = req.record_data {
-                        if sub_req.add_write_sub_request(req.file_number, req.record_number, req.record_length, data).is_err() {
+                        if sub_req
+                            .add_write_sub_request(
+                                req.file_number,
+                                req.record_number,
+                                req.record_length,
+                                data,
+                            )
+                            .is_err()
+                        {
                             ok = false;
                             break;
                         }
@@ -219,9 +360,17 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                     }
                 }
                 if ok {
-                    (ClientRequest::WriteFileRecord { unit: unit_id, sub_request: sub_req }, resp)
+                    (
+                        ClientRequest::WriteFileRecord {
+                            unit: unit_id,
+                            sub_request: sub_req,
+                        },
+                        resp,
+                    )
                 } else {
-                    let _ = resp.send(Err("Failed to build write file record sub-request".to_string()));
+                    let _ = resp.send(Err(
+                        "Failed to build write file record sub-request".to_string()
+                    ));
                     return;
                 }
             }
@@ -229,7 +378,12 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                 (ClientRequest::ReadExceptionStatus { unit: unit_id }, resp)
             }
             #[cfg(feature = "diagnostics")]
-            WasmCommand::Diagnostics { unit_id, sub_function, data, resp } => {
+            WasmCommand::Diagnostics {
+                unit_id,
+                sub_function,
+                data,
+                resp,
+            } => {
                 use mbus_core::function_codes::public::DiagnosticSubFunction;
                 match DiagnosticSubFunction::try_from(sub_function) {
                     Ok(sub_fn) => {
@@ -238,7 +392,14 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                             let _ = resp.send(Err("Too much diagnostic data".to_string()));
                             return;
                         }
-                        (ClientRequest::Diagnostics { unit: unit_id, sub_function: sub_fn, data: heapless_data }, resp)
+                        (
+                            ClientRequest::Diagnostics {
+                                unit: unit_id,
+                                sub_function: sub_fn,
+                                data: heapless_data,
+                            },
+                            resp,
+                        )
                     }
                     Err(e) => {
                         let _ = resp.send(Err(format!("{:?}", e)));
@@ -247,12 +408,25 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                 }
             }
             #[cfg(feature = "diagnostics")]
-            WasmCommand::ReadDeviceIdentification { unit_id, read_device_id_code, object_id, resp } => {
-                use mbus_core::models::diagnostic::{ReadDeviceIdCode, ObjectId};
-                match (ReadDeviceIdCode::try_from(read_device_id_code), ObjectId::try_from(object_id)) {
-                    (Ok(code), Ok(obj_id)) => {
-                        (ClientRequest::ReadDeviceIdentification { unit: unit_id, read_device_id_code: code, object_id: obj_id }, resp)
-                    }
+            WasmCommand::ReadDeviceIdentification {
+                unit_id,
+                read_device_id_code,
+                object_id,
+                resp,
+            } => {
+                use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
+                match (
+                    ReadDeviceIdCode::try_from(read_device_id_code),
+                    ObjectId::try_from(object_id),
+                ) {
+                    (Ok(code), Ok(obj_id)) => (
+                        ClientRequest::ReadDeviceIdentification {
+                            unit: unit_id,
+                            read_device_id_code: code,
+                            object_id: obj_id,
+                        },
+                        resp,
+                    ),
                     _ => {
                         let _ = resp.send(Err("Invalid readDeviceIdCode or objectId".to_string()));
                         return;
@@ -263,16 +437,14 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
 
         let txn_id = self.advance_txn_id();
         match encode_request(txn_id, &req, self.transport_type) {
-            Ok(frame) => {
-                match self.transport.send_frame(&frame) {
-                    Ok(()) => {
-                        self.pending.insert(txn_id, (resp_tx, req));
-                    }
-                    Err(e) => {
-                        let _ = resp_tx.send(Err(format!("{:?}", e)));
-                    }
+            Ok(frame) => match self.transport.send_frame(&frame) {
+                Ok(()) => {
+                    self.pending.insert(txn_id, (resp_tx, req));
                 }
-            }
+                Err(e) => {
+                    let _ = resp_tx.send(Err(format!("{:?}", e)));
+                }
+            },
             Err(e) => {
                 let _ = resp_tx.send(Err(format!("{:?}", e)));
             }
@@ -312,50 +484,51 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
         }
     }
 
-    fn map_response(&self, resp: mbus_async::client::response::ClientResponse, req: &ClientRequest) -> WasmResponse {
+    fn map_response(
+        &self,
+        resp: mbus_async::client::response::ClientResponse,
+        req: &ClientRequest,
+    ) -> WasmResponse {
         use mbus_async::client::response::ClientResponse as R;
         match resp {
             #[cfg(feature = "coils")]
-            R::Coils(coils) => {
-                match req {
-                    ClientRequest::ReadMultipleCoils { quantity, .. } => {
-                        let mut vec = Vec::with_capacity(*quantity as usize);
-                        for i in 0..*quantity {
-                            let byte_idx = (i / 8) as usize;
-                            let bit_idx = i % 8;
-                            let val = (coils.values()[byte_idx] & (1 << bit_idx)) != 0;
-                            vec.push(val);
-                        }
-                        WasmResponse::BoolArray(vec)
+            R::Coils(coils) => match req {
+                ClientRequest::ReadMultipleCoils { quantity, .. } => {
+                    let mut vec = Vec::with_capacity(*quantity as usize);
+                    for i in 0..*quantity {
+                        let byte_idx = (i / 8) as usize;
+                        let bit_idx = i % 8;
+                        let val = (coils.values()[byte_idx] & (1 << bit_idx)) != 0;
+                        vec.push(val);
                     }
-                    _ => WasmResponse::Void,
+                    WasmResponse::BoolArray(vec)
                 }
-            }
+                _ => WasmResponse::Void,
+            },
             #[cfg(feature = "discrete-inputs")]
-            R::DiscreteInputs(inputs) => {
-                match req {
-                    ClientRequest::ReadDiscreteInputs { quantity, .. } => {
-                        let mut vec = Vec::with_capacity(*quantity as usize);
-                        for i in 0..*quantity {
-                            let byte_idx = (i / 8) as usize;
-                            let bit_idx = i % 8;
-                            let val = (inputs.values()[byte_idx] & (1 << bit_idx)) != 0;
-                            vec.push(val);
-                        }
-                        WasmResponse::BoolArray(vec)
+            R::DiscreteInputs(inputs) => match req {
+                ClientRequest::ReadDiscreteInputs { quantity, .. } => {
+                    let mut vec = Vec::with_capacity(*quantity as usize);
+                    for i in 0..*quantity {
+                        let byte_idx = (i / 8) as usize;
+                        let bit_idx = i % 8;
+                        let val = (inputs.values()[byte_idx] & (1 << bit_idx)) != 0;
+                        vec.push(val);
                     }
-                    _ => WasmResponse::Void,
+                    WasmResponse::BoolArray(vec)
                 }
-            }
+                _ => WasmResponse::Void,
+            },
             #[cfg(feature = "holding-registers")]
-            R::HoldingRegisters(registers) => {
-                let quantity = match req {
-                    ClientRequest::ReadHoldingRegisters { quantity, .. } => *quantity,
-                    ClientRequest::ReadWriteMultipleRegisters { read_quantity, .. } => *read_quantity,
-                    _ => registers.quantity(),
-                };
-                WasmResponse::U16Array(registers.values()[..quantity as usize].to_vec())
-            }
+            R::HoldingRegisters(registers) => match req {
+                ClientRequest::ReadHoldingRegisters { quantity, .. } => {
+                    WasmResponse::U16Array(registers.values()[..*quantity as usize].to_vec())
+                }
+                ClientRequest::ReadWriteMultipleRegisters { read_quantity, .. } => {
+                    WasmResponse::U16Array(registers.values()[..*read_quantity as usize].to_vec())
+                }
+                _ => WasmResponse::Void,
+            },
             #[cfg(feature = "input-registers")]
             R::InputRegisters(registers) => {
                 let quantity = match req {
@@ -369,9 +542,7 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
             #[cfg(feature = "holding-registers")]
             R::MaskWriteRegister => WasmResponse::Void,
             #[cfg(feature = "fifo")]
-            R::FifoQueue(fifo) => {
-                WasmResponse::U16Array(fifo.queue()[..fifo.length()].to_vec())
-            }
+            R::FifoQueue(fifo) => WasmResponse::U16Array(fifo.queue()[..fifo.length()].to_vec()),
             #[cfg(feature = "file-record")]
             R::FileRecordRead(sub_requests) => {
                 let mut vec = Vec::new();
@@ -389,12 +560,10 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
             #[cfg(feature = "diagnostics")]
             R::ExceptionStatus(status) => WasmResponse::U8(status),
             #[cfg(feature = "diagnostics")]
-            R::DiagnosticsData { sub_function, data } => {
-                WasmResponse::Diagnostics {
-                    sub_function: sub_function.into(),
-                    data: data.to_vec(),
-                }
-            }
+            R::DiagnosticsData { sub_function, data } => WasmResponse::Diagnostics {
+                sub_function: sub_function.into(),
+                data: data.to_vec(),
+            },
             #[cfg(feature = "diagnostics")]
             R::DeviceIdentification(resp) => {
                 let mut objects = Vec::new();
@@ -403,7 +572,11 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                         let val_str = core::str::from_utf8(&o.value)
                             .map(|s| s.to_owned())
                             .unwrap_or_else(|_| {
-                                o.value.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
+                                o.value
+                                    .iter()
+                                    .map(|b| format!("{:02X}", b))
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
                             });
                         objects.push((o.object_id.into(), val_str));
                     }

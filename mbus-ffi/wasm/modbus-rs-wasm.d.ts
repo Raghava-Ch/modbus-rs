@@ -167,3 +167,134 @@ export interface DeviceIdentificationResponse {
   nextObjectId: number;
   objects: DeviceIdentificationObject[];
 }
+
+// WASM Server interfaces and declarations
+export interface ReadCoilsRequest {
+  unitId: number;
+  address: number;
+  quantity: number;
+}
+export interface ReadDiscreteInputsRequest {
+  unitId: number;
+  address: number;
+  quantity: number;
+}
+export interface ReadHoldingRegistersRequest {
+  unitId: number;
+  address: number;
+  quantity: number;
+}
+export interface ReadInputRegistersRequest {
+  unitId: number;
+  address: number;
+  quantity: number;
+}
+export interface WriteSingleCoilRequest {
+  unitId: number;
+  address: number;
+  value: boolean;
+}
+export interface WriteSingleRegisterRequest {
+  unitId: number;
+  address: number;
+  value: number;
+}
+export interface WriteMultipleCoilsRequest {
+  unitId: number;
+  address: number;
+  values: boolean[];
+}
+export interface WriteMultipleRegistersRequest {
+  unitId: number;
+  address: number;
+  values: number[];
+}
+export interface ReadWriteMultipleRegistersRequest {
+  unitId: number;
+  readAddress: number;
+  readQuantity: number;
+  writeAddress: number;
+  writeValues: number[];
+}
+export interface ReadFifoQueueRequest {
+  unitId: number;
+  address: number;
+}
+export interface FileRecordReadServerSubRequest {
+  fileNumber: number;
+  recordNumber: number;
+  recordLength: number;
+}
+export interface ReadFileRecordRequest {
+  unitId: number;
+  requests: FileRecordReadServerSubRequest[];
+}
+export interface FileRecordWriteSubRequest {
+  fileNumber: number;
+  recordNumber: number;
+  recordData: number[];
+}
+export interface WriteFileRecordRequest {
+  unitId: number;
+  requests: FileRecordWriteSubRequest[];
+}
+export interface ReadExceptionStatusRequest {
+  unitId: number;
+}
+export interface DiagnosticsRequest {
+  unitId: number;
+  subFunction: number;
+  data: number[];
+}
+export interface ServerDiagnosticsResponse {
+  subFunction: number;
+  data: number[];
+}
+export interface ModbusException {
+  exception: number;
+}
+
+export interface ServerHandlers {
+  onReadCoils?: (req: ReadCoilsRequest) => boolean[] | ModbusException | Promise<boolean[] | ModbusException>;
+  onReadDiscreteInputs?: (req: ReadDiscreteInputsRequest) => boolean[] | ModbusException | Promise<boolean[] | ModbusException>;
+  onReadHoldingRegisters?: (req: ReadHoldingRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onReadInputRegisters?: (req: ReadInputRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onWriteSingleCoil?: (req: WriteSingleCoilRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onWriteSingleRegister?: (req: WriteSingleRegisterRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadExceptionStatus?: (req: ReadExceptionStatusRequest) => number | ModbusException | Promise<number | ModbusException>;
+  onDiagnostics?: (req: DiagnosticsRequest) => ServerDiagnosticsResponse | ModbusException | Promise<ServerDiagnosticsResponse | ModbusException>;
+  onWriteMultipleCoils?: (req: WriteMultipleCoilsRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onWriteMultipleRegisters?: (req: WriteMultipleRegistersRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadFileRecord?: (req: ReadFileRecordRequest) => number[][] | ModbusException | Promise<number[][] | ModbusException>;
+  onWriteFileRecord?: (req: WriteFileRecordRequest) => void | ModbusException | Promise<void | ModbusException>;
+  onReadWriteMultipleRegisters?: (req: ReadWriteMultipleRegistersRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+  onReadFifoQueue?: (req: ReadFifoQueueRequest) => number[] | ModbusException | Promise<number[] | ModbusException>;
+}
+
+export interface WasmTcpServerOptions {
+  wsUrl: string;
+  unitId: number;
+}
+
+export interface WasmSerialServerOptions {
+  serialPort: WasmSerialPortHandle | any;
+  unitId: number;
+  baudRate?: number;
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 2;
+  parity?: "none" | "even" | "odd";
+  responseTimeoutMs?: number;
+}
+
+export declare class WasmTcpServer {
+  static bind(opts: WasmTcpServerOptions, handlers: ServerHandlers): Promise<WasmTcpServer>;
+  serve(): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
+export declare class WasmSerialServer {
+  static bindRtu(opts: WasmSerialServerOptions, handlers: ServerHandlers): Promise<WasmSerialServer>;
+  static bindAscii(opts: WasmSerialServerOptions, handlers: ServerHandlers): Promise<WasmSerialServer>;
+  serve(): Promise<void>;
+  shutdown(): Promise<void>;
+}

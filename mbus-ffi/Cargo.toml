@@ -41,7 +41,6 @@ wasm-server = [
     "dep:js-sys",
     "dep:wasm-bindgen-futures",
     "dep:gloo-timers",
-    "dep:mbus-server",
     "mbus-network/wasm",
     "mbus-serial/wasm",
 ]
@@ -467,6 +466,7 @@ mbus-async = { path = "../mbus-async", default-features = false, features = ["co
 futures-channel = "0.3"
 futures-util = "0.3"
 # Note: web-sys is pulled in transitively through mbus-network/wasm.
+web-sys = { version = "0.3", features = ["console"] }
 
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }

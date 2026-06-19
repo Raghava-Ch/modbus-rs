@@ -17,6 +17,6 @@ pub use client::{
 
 #[cfg(feature = "wasm-server")]
 pub use server::{
-    WasmSerialServer, WasmSerialServerConfig, WasmServerBindingPlan, WasmServerStatusSnapshot,
-    WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
+    WasmSerialServer, WasmSerialServerOptions, WasmServerTransportKind, WasmTcpServer,
+    WasmTcpServerOptions,
 };

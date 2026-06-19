@@ -11,11 +11,11 @@
 //! response shapes stay consistent across transports.
 
 mod command;
-mod response;
-mod task;
-mod helpers;
+pub(crate) mod helpers;
 mod net_client;
+mod response;
 mod serial_client;
+mod task;
 
 pub use net_client::{WasmModbusClient, WasmTcpTransport};
 pub use serial_client::{

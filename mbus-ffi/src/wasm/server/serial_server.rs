@@ -1,159 +1,148 @@
-//! Web Serial server binding (phase 1).
-//!
-//! This type wires lifecycle and JS callback bridging. Serial frame I/O loop
-//! wiring is intentionally deferred to the next phase.
+//! Async Serial (RTU/ASCII) server bindings.
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
-use js_sys::Function;
+use futures_channel::oneshot;
+use mbus_core::transport::{
+    BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
+    SerialMode, Transport, UnitIdOrSlaveAddr,
+};
+use mbus_serial::WasmSerialTransport;
 use wasm_bindgen::prelude::*;
 
-use super::adapters::SerialServerAdapter;
-use super::binding_types::{WasmSerialServerConfig, WasmServerTransportKind};
-use super::bridge::JsServerHandler;
+use super::binding_types::WasmSerialServerOptions;
+use super::handlers::JsServerHandlers;
+use super::task::WasmServerTask;
+use crate::wasm::client::helpers::{get_string, get_u8, get_u32};
+
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Mutex;
 
 #[wasm_bindgen]
-/// Browser-facing Modbus server endpoint for Web Serial traffic.
+/// Browser-facing Modbus serial server (RTU or ASCII) running over Web Serial.
 pub struct WasmSerialServer {
-    adapter: Rc<RefCell<SerialServerAdapter>>,
-    running: Rc<Cell<bool>>,
-    bridge: JsServerHandler,
-    dispatched_requests: Cell<u32>,
-    sent_frames: Cell<u32>,
-    received_frames: Cell<u32>,
-    last_error: RefCell<Option<String>>,
-}
-
-impl WasmSerialServer {
-    fn capture_error(&self, e: JsValue) -> JsValue {
-        let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-        *self.last_error.borrow_mut() = Some(msg);
-        e
-    }
+    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
+    task_fut: Mutex<Option<Pin<Box<dyn Future<Output = Result<(), JsValue>> + Send>>>>,
 }
 
 #[wasm_bindgen]
 impl WasmSerialServer {
-    /// Create a serial server with a JS request handler callback.
-    ///
-    /// `on_request` receives one request object and may return a direct value or Promise.
-    #[wasm_bindgen(constructor)]
-    pub fn new(config: WasmSerialServerConfig, on_request: Function) -> Result<Self, JsValue> {
-        let adapter = SerialServerAdapter::new(&config)?;
-        Ok(Self {
-            adapter: Rc::new(RefCell::new(adapter)),
-            running: Rc::new(Cell::new(false)),
-            bridge: JsServerHandler::new(on_request),
-            dispatched_requests: Cell::new(0),
-            sent_frames: Cell::new(0),
-            received_frames: Cell::new(0),
-            last_error: RefCell::new(None),
+    /// Binds a Web Serial RTU server.
+    #[wasm_bindgen(js_name = bindRtu)]
+    pub async fn bind_rtu(
+        options: WasmSerialServerOptions,
+        handlers: JsValue,
+    ) -> Result<WasmSerialServer, JsValue> {
+        Self::bind_internal::<false>(options, handlers).await
+    }
+
+    /// Binds a Web Serial ASCII server.
+    #[wasm_bindgen(js_name = bindAscii)]
+    pub async fn bind_ascii(
+        options: WasmSerialServerOptions,
+        handlers: JsValue,
+    ) -> Result<WasmSerialServer, JsValue> {
+        Self::bind_internal::<true>(options, handlers).await
+    }
+
+    /// Runs the server loop. Returns a promise that resolves on clean shutdown
+    /// or rejects with the error that caused the server to stop.
+    pub async fn serve(&self) -> Result<(), JsValue> {
+        let fut = self
+            .task_fut
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| JsValue::from_str("Server is already running or shut down"))?;
+        fut.await
+    }
+
+    /// Shutdown the server.
+    pub async fn shutdown(&self) -> Result<(), JsValue> {
+        if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
+            let _ = tx.send(());
+        }
+        Ok(())
+    }
+}
+
+impl WasmSerialServer {
+    async fn bind_internal<const ASCII: bool>(
+        options: WasmSerialServerOptions,
+        handlers: JsValue,
+    ) -> Result<WasmSerialServer, JsValue> {
+        let options_val = JsValue::from(options);
+
+        let port_val = js_sys::Reflect::get(&options_val, &JsValue::from_str("serialPort"))?;
+        if port_val.is_null() || port_val.is_undefined() {
+            return Err(JsValue::from_str("Missing or empty 'serialPort'"));
+        }
+
+        let unit_id = get_u8(&options_val, "unitId", 1);
+        let unit =
+            UnitIdOrSlaveAddr::new(unit_id).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        let mode = if ASCII {
+            SerialMode::Ascii
+        } else {
+            SerialMode::Rtu
+        };
+
+        let baud_rate = get_u32(&options_val, "baudRate", 9600);
+        let data_bits = get_u8(&options_val, "dataBits", 8);
+        let stop_bits = get_u8(&options_val, "stopBits", 1);
+        let parity_str = get_string(&options_val, "parity", "none");
+        let response_timeout_ms = get_u32(&options_val, "responseTimeoutMs", 1000);
+
+        let baud = match baud_rate {
+            19200 => BaudRate::Baud19200,
+            r => BaudRate::Custom(r),
+        };
+
+        let db = match data_bits {
+            5 => DataBits::Five,
+            6 => DataBits::Six,
+            7 => DataBits::Seven,
+            _ => DataBits::Eight,
+        };
+
+        let pr = match parity_str.as_str() {
+            "even" => Parity::Even,
+            "odd" => Parity::Odd,
+            _ => Parity::None,
+        };
+
+        let config = ModbusConfig::Serial(ModbusSerialConfig {
+            port_path: heapless::String::try_from("wasm")
+                .map_err(|_| JsValue::from_str("port path overflow"))?,
+            baud_rate: baud,
+            data_bits: db,
+            stop_bits,
+            parity: pr,
+            mode,
+            response_timeout_ms,
+            retry_attempts: 0,
+            retry_backoff_strategy: BackoffStrategy::Immediate,
+            retry_jitter_strategy: JitterStrategy::None,
+            retry_random_fn: None,
+        });
+
+        // 1. Create and connect transport
+        let mut transport = WasmSerialTransport::<ASCII>::new();
+        transport.attach_port(port_val);
+        Transport::connect(&mut transport, &config)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        // 2. Setup channels
+        let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+        // 3. Create server task
+        let handlers = JsServerHandlers::new(handlers);
+        let task = WasmServerTask::new(transport, handlers, unit, shutdown_rx);
+        let task_fut = Box::pin(task.run());
+
+        Ok(WasmSerialServer {
+            shutdown_tx: Mutex::new(Some(shutdown_tx)),
+            task_fut: Mutex::new(Some(task_fut)),
         })
-    }
-
-    /// Attach browser SerialPort object delegated to mbus-serial transport.
-    pub fn attach_serial_port(&self, port: JsValue) {
-        self.adapter.borrow_mut().attach_port(port);
-    }
-
-    /// Start server lifecycle.
-    pub fn start(&self) -> Result<(), JsValue> {
-        self.adapter
-            .borrow_mut()
-            .connect()
-            .map_err(|e| self.capture_error(e))?;
-        self.running.set(true);
-        Ok(())
-    }
-
-    /// Stop server lifecycle.
-    pub fn stop(&self) -> Result<(), JsValue> {
-        self.adapter
-            .borrow_mut()
-            .disconnect()
-            .map_err(|e| self.capture_error(e))?;
-        self.running.set(false);
-        Ok(())
-    }
-
-    /// Whether server lifecycle is currently active.
-    pub fn is_running(&self) -> bool {
-        self.running.get()
-    }
-
-    /// Whether delegated serial transport currently reports connected.
-    pub fn transport_connected(&self) -> bool {
-        self.adapter.borrow().is_connected()
-    }
-
-    /// Selected serial mode as numeric enum.
-    pub fn mode(&self) -> WasmServerTransportKind {
-        self.adapter.borrow().kind()
-    }
-
-    /// Send one encoded frame through delegated serial transport.
-    pub fn send_frame(&self, frame: &[u8]) -> Result<(), JsValue> {
-        self.adapter
-            .borrow_mut()
-            .send_frame(frame)
-            .map_err(|e| self.capture_error(e))?;
-        self.sent_frames.set(self.sent_frames.get() + 1);
-        Ok(())
-    }
-
-    /// Try receiving one frame from delegated serial transport.
-    pub fn recv_frame(&self) -> Result<Vec<u8>, JsValue> {
-        let frame = self
-            .adapter
-            .borrow_mut()
-            .recv_frame()
-            .map_err(|e| self.capture_error(e))?;
-
-        match frame {
-            Some(frame) => {
-                self.received_frames.set(self.received_frames.get() + 1);
-                Ok(frame.as_slice().to_vec())
-            }
-            None => Ok(Vec::new()),
-        }
-    }
-
-    /// Dispatch a request object into JS app handler.
-    pub async fn dispatch_request(&self, request: JsValue) -> Result<JsValue, JsValue> {
-        if !self.is_running() {
-            return Err(self.capture_error(JsValue::from_str("server is not running")));
-        }
-        let out = self
-            .bridge
-            .dispatch(request)
-            .await
-            .map_err(|e| self.capture_error(e))?;
-        self.dispatched_requests
-            .set(self.dispatched_requests.get() + 1);
-        Ok(out)
-    }
-
-    /// Returns a point-in-time status snapshot for diagnostics/observability.
-    pub fn status_snapshot(&self) -> super::binding_types::WasmServerStatusSnapshot {
-        super::binding_types::WasmServerStatusSnapshot::new(
-            self.mode(),
-            self.is_running(),
-            self.transport_connected(),
-            self.dispatched_requests.get(),
-            self.sent_frames.get(),
-            self.received_frames.get(),
-            self.last_error.borrow().is_some(),
-        )
-    }
-
-    /// Returns the last captured binding-layer error message, if any.
-    pub fn last_error_message(&self) -> Option<String> {
-        self.last_error.borrow().clone()
-    }
-
-    /// Clears the stored last-error message.
-    pub fn clear_last_error(&self) {
-        self.last_error.borrow_mut().take();
     }
 }

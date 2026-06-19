@@ -48,4 +48,5 @@ pub use tcp_server::AsyncTcpServer;
 #[cfg(feature = "server-serial")]
 pub use serial_server::{AsyncAsciiServer, AsyncRtuServer, AsyncSerialServer};
 
+#[cfg(any(feature = "server-tcp", feature = "server-serial"))]
 pub use mbus_macros::async_modbus_app;

@@ -3,281 +3,1168 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>mbus-ffi WASM Serial Server Smoke</title>
+  <title>Modbus WASM Serial Server Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #311042 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(217, 70, 239, 0.15);
+      --accent: #d946ef;
+      --accent-glow: rgba(217, 70, 239, 0.4);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.3);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 840px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      line-height: 1.4;
-      background: #312e81;
-      color: #eef2ff;
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+      line-height: 1.5;
     }
-    .row { margin: 0.6rem 0; }
-    label { display: inline-block; min-width: 230px; }
-    input, select, textarea {
-      width: 360px;
-      max-width: 100%;
-      padding: 0.35rem;
-      background: #4338ca;
-      color: #eef2ff;
-      border: 1px solid #c7d2fe;
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
     }
-    textarea {
-      min-height: 120px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
     }
-    button {
-      margin-right: 0.5rem;
+
+    h1 {
+      font-weight: 700;
+      font-size: 2.5rem;
+      background: linear-gradient(to right, #f472b6, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .hint {
+      background: rgba(217, 70, 239, 0.05);
+      border: 1px dashed rgba(217, 70, 239, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: #f472b6;
+      margin-bottom: 1.5rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .span-2 {
+        grid-column: span 2;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.5rem;
+    }
+
+    .form-group-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.875rem;
       margin-bottom: 0.4rem;
-      padding: 0.45rem 0.8rem;
-      background: #3730a3;
-      color: #eef2ff;
-      border: 1px solid #c7d2fe;
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1.25rem;
+    }
+
+    button {
+      flex: 1;
+      min-width: 130px;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
       cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
     }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #c084fc;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Simulation Registers Table */
+    .sim-table-container {
+      overflow-x: auto;
+    }
+
+    .sim-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    .sim-table th, .sim-table td {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .sim-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .sim-table td {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .value-cell {
+      color: #34d399;
+      font-weight: 500;
+    }
+
+    .value-cell.boolean-true {
+      color: #34d399;
+    }
+
+    .value-cell.boolean-false {
+      color: #f87171;
+    }
+
+    .reg-input {
+      width: 85px;
+      padding: 0.25rem 0.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      color: var(--text-main);
+      text-align: center;
+      font-size: 0.85rem;
+    }
+
+    /* Logging */
     pre {
-      border: 1px solid #a5b4fc;
-      border-radius: 6px;
-      background: #1e1b4b;
-      padding: 0.8rem;
-      min-height: 220px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      height: 320px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 1rem;
       white-space: pre-wrap;
+      word-break: break-all;
     }
-    .hint { color: #dbeafe; }
+
+    .log-entry {
+      margin-bottom: 0.4rem;
+      border-left: 2px solid var(--accent);
+      padding-left: 0.5rem;
+    }
+
+    .log-entry.error {
+      border-left-color: #ef4444;
+      color: #f87171;
+    }
+
+    .log-entry.success {
+      border-left-color: var(--success);
+      color: #34d399;
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      margin-right: 0.5rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.25rem;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      min-width: auto;
+      flex: none;
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    .advanced-section {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .advanced-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #c084fc;
+      margin-bottom: 0.75rem;
+    }
   </style>
 </head>
 <body>
-  <h1>mbus-ffi WASM Serial Server Smoke</h1>
+  <div class="container">
+    <header>
+      <h1>Modbus Serial Server</h1>
+      <p class="subtitle">WASM Event-Driven Simulator over Web Serial</p>
+    </header>
 
-  <p class="hint">
-    Requires Chromium-based browser + HTTPS/localhost + user gesture for serial permission.
-  </p>
-  <p class="hint">
-    Build package first in <code>mbus-ffi/wasm</code>:
-    <br />
-    <code>npm run build</code>
-  </p>
+    <div class="hint">
+      <strong>Requirements:</strong> Chromium-based browser (Chrome, Edge, Opera) + HTTPS or localhost. Ensure you select the correct serial port using the browser dialog.
+    </div>
 
-  <div class="row">
-    <label for="mode">Serial Server Mode</label>
-    <select id="mode">
-      <option value="rtu">RTU</option>
-      <option value="ascii">ASCII</option>
-    </select>
+    <div class="grid">
+      <!-- Configuration Panel -->
+      <div class="card">
+        <div class="card-title">
+          <span>Server Configuration</span>
+          <span style="margin-left: auto;">
+            <div id="statusBadge" class="status-badge">
+              <span class="status-dot"></span>
+              <span id="statusText">Disconnected</span>
+            </div>
+          </span>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="mode">Modbus Mode</label>
+            <select id="mode">
+              <option value="rtu">RTU</option>
+              <option value="ascii">ASCII</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="unitId">Unit / Slave ID</label>
+            <input id="unitId" type="number" min="1" max="247" value="1" />
+          </div>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="baudRate">Baud Rate</label>
+            <select id="baudRate">
+              <option value="9600">9600</option>
+              <option value="19200">19200</option>
+              <option value="38400">38400</option>
+              <option value="57600">57600</option>
+              <option value="115200">115200</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="parity">Parity</label>
+            <select id="parity">
+              <option value="none">None</option>
+              <option value="even" selected>Even</option>
+              <option value="odd">Odd</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="dataBits">Data Bits</label>
+            <select id="dataBits">
+              <option value="8">8</option>
+              <option value="7">7</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="stopBits">Stop Bits</label>
+            <select id="stopBits">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button id="btnSelectPort" class="btn-secondary">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            Attach Serial Port
+          </button>
+          <button id="btnBind" class="btn-primary" disabled>
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+            Bind & Start
+          </button>
+        </div>
+        <div class="button-group" style="margin-top: 0.5rem;">
+          <button id="btnShutdown" class="btn-secondary" style="width: 100%;" disabled>
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+            Shutdown Server
+          </button>
+        </div>
+      </div>
+
+      <!-- Data Simulation Twin -->
+      <div class="card">
+        <div class="card-title">
+          <span>Digital Twin Registers</span>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-target="paneHolding">Holding Regs</button>
+          <button class="tab-btn" data-target="paneInputRegs">Input Regs</button>
+          <button class="tab-btn" data-target="paneCoils">Coils</button>
+          <button class="tab-btn" data-target="paneDiscrete">Discrete Inputs</button>
+          <button class="tab-btn" data-target="paneAdvanced">Files & Advanced</button>
+        </div>
+
+        <div class="sim-table-container">
+          <!-- Holding Registers -->
+          <div id="paneHolding" class="tab-pane active">
+            <table class="sim-table">
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>Value (U16)</th>
+                  <th>Modify</th>
+                </tr>
+              </thead>
+              <tbody id="holdingBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Input Registers -->
+          <div id="paneInputRegs" class="tab-pane">
+            <table class="sim-table">
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>Value (U16)</th>
+                  <th>Modify</th>
+                </tr>
+              </thead>
+              <tbody id="inputRegsBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Coils -->
+          <div id="paneCoils" class="tab-pane">
+            <table class="sim-table">
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>State</th>
+                  <th>Toggle</th>
+                </tr>
+              </thead>
+              <tbody id="coilsBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Discrete Inputs -->
+          <div id="paneDiscrete" class="tab-pane">
+            <table class="sim-table">
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>State</th>
+                  <th>Toggle</th>
+                </tr>
+              </thead>
+              <tbody id="discreteBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Advanced -->
+          <div id="paneAdvanced" class="tab-pane">
+            <!-- Exception Status -->
+            <div class="advanced-section">
+              <div class="advanced-title">Exception Status (FC07)</div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label>Status Byte Value (0 - 255)</label>
+                <input id="exceptionStatusInput" type="number" min="0" max="255" value="0" />
+              </div>
+            </div>
+
+            <!-- FIFO Queue -->
+            <div class="advanced-section">
+              <div class="advanced-title">FIFO Queue (FC18)</div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label>Queue Values (comma-separated integers)</label>
+                <input id="fifoQueueInput" value="10, 20, 30, 40, 50" />
+              </div>
+            </div>
+
+            <!-- File Records -->
+            <div class="advanced-section">
+              <div class="advanced-title">File Records (FC14/FC15)</div>
+              <div class="form-group">
+                <label>File Number</label>
+                <select id="fileSelect">
+                  <option value="1">File 1</option>
+                  <option value="2">File 2</option>
+                  <option value="3">File 3</option>
+                </select>
+              </div>
+              <table class="sim-table">
+                <thead>
+                  <tr>
+                    <th>Record Address</th>
+                    <th>Value (U16)</th>
+                    <th>Modify</th>
+                  </tr>
+                </thead>
+                <tbody id="fileRecordsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs -->
+      <div class="card span-2">
+        <div class="card-title">
+          <span>Server Execution Log</span>
+          <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+            <button id="btnCopy" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; min-width: auto; display: inline-flex; align-items: center; gap: 0.25rem;">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+              Copy
+            </button>
+            <button id="btnClear" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; min-width: auto;">
+              Clear
+            </button>
+          </div>
+        </div>
+        <pre id="log"></pre>
+      </div>
+    </div>
   </div>
-
-  <div class="row">
-    <label for="requestJson">Dispatch Request JSON</label>
-    <textarea id="requestJson">{"kind":"readCoils","unit_id":1,"address":0,"quantity":8}</textarea>
-  </div>
-
-  <div class="row">
-    <label for="frameHex">Frame Hex (send_frame)</label>
-    <input id="frameHex" value="010300000002C40B" />
-  </div>
-
-  <div class="row">
-    <button id="btnCreate">Create Server</button>
-    <button id="btnPickPort">Attach Browser Serial Port</button>
-    <button id="btnStart">Start</button>
-    <button id="btnStop">Stop</button>
-    <button id="btnStatus">Status</button>
-    <button id="btnDispatch">Dispatch Request</button>
-    <button id="btnSend">Send Frame</button>
-    <button id="btnRecv">Recv Frame</button>
-    <button id="btnRunAll">Run Full Smoke</button>
-    <button id="btnClear">Clear Log</button>
-  </div>
-
-  <h3>Log</h3>
-  <pre id="log"></pre>
 
   <script type="module">
-    import init, { WasmSerialServer, WasmSerialServerConfig } from "../../dist/web/modbus-rs.js";
+    import init, { WasmSerialServer } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
-    const log = (msg) => {
+    const statusBadge = document.getElementById("statusBadge");
+    const statusText = document.getElementById("statusText");
+    const btnSelectPort = document.getElementById("btnSelectPort");
+    const btnBind = document.getElementById("btnBind");
+    const btnShutdown = document.getElementById("btnShutdown");
+    
+    // Simulated state databases
+    const simulatedHolding = new Uint16Array(10);
+    const simulatedInputRegisters = new Uint16Array(10);
+    const simulatedCoils = new Uint8Array(10);
+    const simulatedDiscreteInputs = new Uint8Array(10);
+    let simulatedFifoQueue = [10, 20, 30, 40, 50];
+    let exceptionStatus = 0;
+    
+    // File record databases: 3 files (1, 2, 3), each with 10 registers (0 to 9)
+    const simulatedFiles = {
+      1: new Uint16Array([100, 101, 102, 103, 104, 105, 106, 107, 108, 109]),
+      2: new Uint16Array([200, 201, 202, 203, 204, 205, 206, 207, 208, 209]),
+      3: new Uint16Array([300, 301, 302, 303, 304, 305, 306, 307, 308, 309]),
+    };
+
+    // Seed initial mock values
+    simulatedHolding[0] = 50;
+    simulatedHolding[1] = 120;
+    simulatedHolding[2] = 300;
+    
+    simulatedInputRegisters[0] = 67;
+    simulatedInputRegisters[1] = 92;
+    simulatedInputRegisters[2] = 181;
+
+    simulatedCoils[0] = 1;
+    simulatedCoils[1] = 1;
+
+    simulatedDiscreteInputs[0] = 1;
+    simulatedDiscreteInputs[2] = 1;
+
+    let serverInstance = null;
+    let selectedPortHandle = null;
+
+    const log = (msg, type = 'info') => {
       const ts = new Date().toISOString().slice(11, 23);
-      logEl.textContent += `[${ts}] ${msg}\n`;
+      const div = document.createElement("div");
+      div.className = `log-entry ${type}`;
+      
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "log-time";
+      timeSpan.textContent = `[${ts}]`;
+      
+      const textNode = document.createTextNode(msg);
+      
+      div.appendChild(timeSpan);
+      div.appendChild(textNode);
+      logEl.appendChild(div);
       logEl.scrollTop = logEl.scrollHeight;
     };
 
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    // Render registers tables
+    const renderTables = () => {
+      // Holding registers
+      const hBody = document.getElementById("holdingBody");
+      hBody.innerHTML = "";
+      for (let i = 0; i < simulatedHolding.length; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>%MW${i} (4000${i+1})</td>
+          <td class="value-cell" id="val-h-${i}">${simulatedHolding[i]}</td>
+          <td><input type="number" class="reg-input" id="input-h-${i}" value="${simulatedHolding[i]}" /></td>
+        `;
+        hBody.appendChild(tr);
 
-    const parseJson = (text) => {
+        document.getElementById(`input-h-${i}`).addEventListener("change", (e) => {
+          const val = Math.max(0, Math.min(65535, parseInt(e.target.value) || 0));
+          simulatedHolding[i] = val;
+          document.getElementById(`val-h-${i}`).textContent = val;
+          log(`Manual Holding Register edit: %MW${i} = ${val}`, 'success');
+        });
+      }
+
+      // Input registers
+      const irBody = document.getElementById("inputRegsBody");
+      irBody.innerHTML = "";
+      for (let i = 0; i < simulatedInputRegisters.length; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>%IW${i} (3000${i+1})</td>
+          <td class="value-cell" id="val-ir-${i}">${simulatedInputRegisters[i]}</td>
+          <td><input type="number" class="reg-input" id="input-ir-${i}" value="${simulatedInputRegisters[i]}" /></td>
+        `;
+        irBody.appendChild(tr);
+
+        document.getElementById(`input-ir-${i}`).addEventListener("change", (e) => {
+          const val = Math.max(0, Math.min(65535, parseInt(e.target.value) || 0));
+          simulatedInputRegisters[i] = val;
+          document.getElementById(`val-ir-${i}`).textContent = val;
+          log(`Manual Input Register edit: %IW${i} = ${val}`, 'success');
+        });
+      }
+
+      // Coils
+      const cBody = document.getElementById("coilsBody");
+      cBody.innerHTML = "";
+      for (let i = 0; i < simulatedCoils.length; i++) {
+        const isTrue = simulatedCoils[i] === 1;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>%M${i} (0000${i+1})</td>
+          <td class="value-cell ${isTrue ? 'boolean-true' : 'boolean-false'}" id="val-c-${i}">${isTrue ? 'ON' : 'OFF'}</td>
+          <td><button class="btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.8rem; min-width: auto;" id="btn-toggle-c-${i}">Toggle</button></td>
+        `;
+        cBody.appendChild(tr);
+
+        document.getElementById(`btn-toggle-c-${i}`).addEventListener("click", () => {
+          simulatedCoils[i] = simulatedCoils[i] === 1 ? 0 : 1;
+          const updated = simulatedCoils[i] === 1;
+          const valCell = document.getElementById(`val-c-${i}`);
+          valCell.textContent = updated ? 'ON' : 'OFF';
+          valCell.className = `value-cell ${updated ? 'boolean-true' : 'boolean-false'}`;
+          log(`Manual Coil toggle: %M${i} = ${updated}`, 'success');
+        });
+      }
+
+      // Discrete Inputs
+      const dBody = document.getElementById("discreteBody");
+      dBody.innerHTML = "";
+      for (let i = 0; i < simulatedDiscreteInputs.length; i++) {
+        const isTrue = simulatedDiscreteInputs[i] === 1;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>%I${i} (1000${i+1})</td>
+          <td class="value-cell ${isTrue ? 'boolean-true' : 'boolean-false'}" id="val-d-${i}">${isTrue ? 'ON' : 'OFF'}</td>
+          <td><button class="btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.8rem; min-width: auto;" id="btn-toggle-d-${i}">Toggle</button></td>
+        `;
+        dBody.appendChild(tr);
+
+        document.getElementById(`btn-toggle-d-${i}`).addEventListener("click", () => {
+          simulatedDiscreteInputs[i] = simulatedDiscreteInputs[i] === 1 ? 0 : 1;
+          const updated = simulatedDiscreteInputs[i] === 1;
+          const valCell = document.getElementById(`val-d-${i}`);
+          valCell.textContent = updated ? 'ON' : 'OFF';
+          valCell.className = `value-cell ${updated ? 'boolean-true' : 'boolean-false'}`;
+          log(`Manual Discrete Input toggle: %I${i} = ${updated}`, 'success');
+        });
+      }
+
+      // File Records
+      renderFileRecordsTable();
+    };
+
+    const renderFileRecordsTable = () => {
+      const fileNum = parseInt(document.getElementById("fileSelect").value) || 1;
+      const body = document.getElementById("fileRecordsBody");
+      body.innerHTML = "";
+      const fileData = simulatedFiles[fileNum];
+      if (!fileData) return;
+      for (let i = 0; i < fileData.length; i++) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>File ${fileNum}, Record ${i}</td>
+          <td class="value-cell" id="val-file-${fileNum}-${i}">${fileData[i]}</td>
+          <td><input type="number" class="reg-input" id="input-file-${fileNum}-${i}" value="${fileData[i]}" /></td>
+        `;
+        body.appendChild(tr);
+
+        document.getElementById(`input-file-${fileNum}-${i}`).addEventListener("change", (e) => {
+          const val = Math.max(0, Math.min(65535, parseInt(e.target.value) || 0));
+          fileData[i] = val;
+          document.getElementById(`val-file-${fileNum}-${i}`).textContent = val;
+          log(`Manual File Record edit: File ${fileNum}, Record ${i} = ${val}`, 'success');
+        });
+      }
+    };
+
+    // Select change binding for file records
+    document.getElementById("fileSelect").addEventListener("change", renderFileRecordsTable);
+
+    // Exception Status Binding
+    document.getElementById("exceptionStatusInput").addEventListener("change", (e) => {
+      exceptionStatus = Math.max(0, Math.min(255, parseInt(e.target.value) || 0));
+      log(`Manual Exception Status byte configured: ${exceptionStatus}`, 'success');
+    });
+
+    // FIFO Queue Input Binding
+    document.getElementById("fifoQueueInput").addEventListener("change", (e) => {
+      simulatedFifoQueue = e.target.value.split(',').map(s => parseInt(s.trim()) || 0);
+      log(`Manual FIFO Queue configured: [${simulatedFifoQueue.join(', ')}]`, 'success');
+    });
+
+    // Tab switching
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-pane").forEach(tp => tp.classList.remove("active"));
+
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.target).classList.add("active");
+      });
+    });
+
+    // Copy Logs
+    document.getElementById("btnCopy").addEventListener("click", async () => {
+      const text = logEl.innerText;
       try {
-        return JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Invalid JSON: ${String(e)}`);
+        await navigator.clipboard.writeText(text);
+        log("Logs copied to clipboard!", "success");
+      } catch (err) {
+        log(`Failed to copy logs: ${err.message || String(err)}`, "error");
       }
-    };
-
-    const hexToBytes = (hexRaw) => {
-      const hex = hexRaw.replace(/\s+/g, "").toLowerCase();
-      if (!hex.length) return new Uint8Array(0);
-      if (hex.length % 2 !== 0) throw new Error("Hex length must be even");
-      const out = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < out.length; i += 1) {
-        const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-        if (Number.isNaN(byte)) throw new Error("Invalid hex byte");
-        out[i] = byte;
-      }
-      return out;
-    };
-
-    const formatValue = (value) => {
-      if (value == null) return String(value);
-      if (ArrayBuffer.isView(value)) return JSON.stringify(Array.from(value));
-      if (typeof value === "object") return JSON.stringify(value);
-      return String(value);
-    };
-
-    let server = null;
-    let attached = false;
-
-    await init();
-    log("WASM initialized.");
-
-    const ensureServer = () => {
-      if (!server) {
-        log("Server not created. Click Create Server first.");
-        return false;
-      }
-      return true;
-    };
+    });
 
     document.getElementById("btnClear").addEventListener("click", () => {
-      logEl.textContent = "";
+      logEl.innerHTML = "";
     });
 
-    document.getElementById("btnCreate").addEventListener("click", () => {
-      try {
-        const mode = document.getElementById("mode").value;
-        const cfg = mode === "ascii" ? WasmSerialServerConfig.ascii() : WasmSerialServerConfig.rtu();
+    // Initialize WASM and UI tables
+    try {
+      await init();
+      log("WASM FFI module loaded successfully.", "success");
+      renderTables();
+    } catch (err) {
+      log(`WASM initialization failed: ${err.message}`, "error");
+    }
 
-        const onRequest = (req) => {
-          const response = {
-            ok: true,
-            mode,
-            received: req,
-            at: new Date().toISOString(),
+    // Set up Server Handler Callbacks
+    const createServerHandlers = () => {
+      return {
+        onReadHoldingRegisters: (req) => {
+          log(`[Modbus Request] Read Holding Registers: address=${req.address}, quantity=${req.quantity} (unit=${req.unitId})`);
+          if (req.address + req.quantity > simulatedHolding.length) {
+            log("ReadHoldingRegisters: Address out of range", "error");
+            return { exception: 2 }; // Illegal Data Address
+          }
+          const response = [];
+          for (let i = 0; i < req.quantity; i++) {
+            response.push(simulatedHolding[req.address + i]);
+          }
+          log(`[Modbus Response] Sending registers: [${response.join(', ')}]`, "success");
+          return response;
+        },
+
+        onWriteSingleRegister: (req) => {
+          log(`[Modbus Request] Write Single Register: address=${req.address}, value=${req.value}`);
+          if (req.address >= simulatedHolding.length) {
+            log("WriteSingleRegister: Address out of range", "error");
+            return { exception: 2 };
+          }
+          simulatedHolding[req.address] = req.value;
+          
+          // Update UI
+          const cell = document.getElementById(`val-h-${req.address}`);
+          const input = document.getElementById(`input-h-${req.address}`);
+          if (cell) cell.textContent = req.value;
+          if (input) input.value = req.value;
+
+          log(`[Modbus Response] Acknowledged write to register %MW${req.address}`, "success");
+        },
+
+        onWriteMultipleRegisters: (req) => {
+          log(`[Modbus Request] Write Multiple Registers: address=${req.address}, values=[${req.values.join(', ')}]`);
+          if (req.address + req.values.length > simulatedHolding.length) {
+            log("WriteMultipleRegisters: Address out of range", "error");
+            return { exception: 2 };
+          }
+
+          for (let i = 0; i < req.values.length; i++) {
+            const addr = req.address + i;
+            const val = req.values[i];
+            simulatedHolding[addr] = val;
+            
+            // Update UI
+            const cell = document.getElementById(`val-h-${addr}`);
+            const input = document.getElementById(`input-h-${addr}`);
+            if (cell) cell.textContent = val;
+            if (input) input.value = val;
+          }
+
+          log(`[Modbus Response] Acknowledged write to multiple registers starting at %MW${req.address}`, "success");
+        },
+
+        onReadCoils: (req) => {
+          log(`[Modbus Request] Read Coils: address=${req.address}, quantity=${req.quantity}`);
+          if (req.address + req.quantity > simulatedCoils.length) {
+            log("ReadCoils: Address out of range", "error");
+            return { exception: 2 };
+          }
+          const response = [];
+          for (let i = 0; i < req.quantity; i++) {
+            response.push(simulatedCoils[req.address + i] === 1);
+          }
+          log(`[Modbus Response] Sending coils: [${response.join(', ')}]`, "success");
+          return response;
+        },
+
+        onWriteSingleCoil: (req) => {
+          log(`[Modbus Request] Write Single Coil: address=${req.address}, value=${req.value}`);
+          if (req.address >= simulatedCoils.length) {
+            log("WriteSingleCoil: Address out of range", "error");
+            return { exception: 2 };
+          }
+          simulatedCoils[req.address] = req.value ? 1 : 0;
+
+          // Update UI
+          const cell = document.getElementById(`val-c-${req.address}`);
+          if (cell) {
+            cell.textContent = req.value ? 'ON' : 'OFF';
+            cell.className = `value-cell ${req.value ? 'boolean-true' : 'boolean-false'}`;
+          }
+
+          log(`[Modbus Response] Acknowledged write to coil %M${req.address}`, "success");
+        },
+
+        onWriteMultipleCoils: (req) => {
+          log(`[Modbus Request] Write Multiple Coils: address=${req.address}, values=[${req.values.join(', ')}]`);
+          if (req.address + req.values.length > simulatedCoils.length) {
+            log("WriteMultipleCoils: Address out of range", "error");
+            return { exception: 2 };
+          }
+
+          for (let i = 0; i < req.values.length; i++) {
+            const addr = req.address + i;
+            const val = req.values[i] ? 1 : 0;
+            simulatedCoils[addr] = val;
+            
+            // Update UI
+            const cell = document.getElementById(`val-c-${addr}`);
+            if (cell) {
+              cell.textContent = req.values[i] ? 'ON' : 'OFF';
+              cell.className = `value-cell ${req.values[i] ? 'boolean-true' : 'boolean-false'}`;
+            }
+          }
+
+          log(`[Modbus Response] Acknowledged write to multiple coils starting at %M${req.address}`, "success");
+        },
+
+        onReadDiscreteInputs: (req) => {
+          log(`[Modbus Request] Read Discrete Inputs: address=${req.address}, quantity=${req.quantity}`);
+          if (req.address + req.quantity > simulatedDiscreteInputs.length) {
+            log("ReadDiscreteInputs: Address out of range", "error");
+            return { exception: 2 };
+          }
+          const response = [];
+          for (let i = 0; i < req.quantity; i++) {
+            response.push(simulatedDiscreteInputs[req.address + i] === 1);
+          }
+          log(`[Modbus Response] Sending discrete inputs: [${response.join(', ')}]`, "success");
+          return response;
+        },
+
+        onReadInputRegisters: (req) => {
+          log(`[Modbus Request] Read Input Registers: address=${req.address}, quantity=${req.quantity}`);
+          if (req.address + req.quantity > simulatedInputRegisters.length) {
+            log("ReadInputRegisters: Address out of range", "error");
+            return { exception: 2 };
+          }
+          const response = [];
+          for (let i = 0; i < req.quantity; i++) {
+            response.push(simulatedInputRegisters[req.address + i]);
+          }
+          log(`[Modbus Response] Sending input registers: [${response.join(', ')}]`, "success");
+          return response;
+        },
+
+        onReadWriteMultipleRegisters: (req) => {
+          log(`[Modbus Request] Read/Write Multiple Registers: readAddress=${req.readAddress}, readQuantity=${req.readQuantity}, writeAddress=${req.writeAddress}, writeValues=[${req.writeValues.join(', ')}]`);
+          // Write part
+          if (req.writeAddress + req.writeValues.length > simulatedHolding.length) {
+            log("ReadWriteMultipleRegisters (write): Address out of range", "error");
+            return { exception: 2 };
+          }
+          for (let i = 0; i < req.writeValues.length; i++) {
+            const addr = req.writeAddress + i;
+            const val = req.writeValues[i];
+            simulatedHolding[addr] = val;
+            const cell = document.getElementById(`val-h-${addr}`);
+            const input = document.getElementById(`input-h-${addr}`);
+            if (cell) cell.textContent = val;
+            if (input) input.value = val;
+          }
+          // Read part
+          if (req.readAddress + req.readQuantity > simulatedHolding.length) {
+            log("ReadWriteMultipleRegisters (read): Address out of range", "error");
+            return { exception: 2 };
+          }
+          const response = [];
+          for (let i = 0; i < req.readQuantity; i++) {
+            response.push(simulatedHolding[req.readAddress + i]);
+          }
+          log(`[Modbus Response] Acknowledged write & sending registers: [${response.join(', ')}]`, "success");
+          return response;
+        },
+
+        onReadFifoQueue: (req) => {
+          log(`[Modbus Request] Read FIFO Queue: address=${req.address}`);
+          log(`[Modbus Response] Sending FIFO queue data: [${simulatedFifoQueue.join(', ')}]`, "success");
+          return Array.from(simulatedFifoQueue);
+        },
+
+        onReadFileRecord: (req) => {
+          log(`[Modbus Request] Read File Record: ${req.requests.length} subrequests`);
+          const response = [];
+          for (let r of req.requests) {
+            const fNum = r.fileNumber;
+            const rNum = r.recordNumber;
+            const len = r.recordLength;
+            log(`  Subrequest: file=${fNum}, record=${rNum}, length=${len}`);
+            
+            if (!simulatedFiles[fNum] || rNum + len > simulatedFiles[fNum].length) {
+              log("ReadFileRecord: File or record out of range", "error");
+              return { exception: 2 };
+            }
+            
+            const recordVals = [];
+            for (let i = 0; i < len; i++) {
+              recordVals.push(simulatedFiles[fNum][rNum + i]);
+            }
+            response.push(recordVals);
+          }
+          log(`[Modbus Response] Sending file record data`, "success");
+          return response;
+        },
+
+        onWriteFileRecord: (req) => {
+          log(`[Modbus Request] Write File Record: ${req.requests.length} subrequests`);
+          for (let r of req.requests) {
+            const fNum = r.fileNumber;
+            const rNum = r.recordNumber;
+            const data = r.recordData;
+            log(`  Subrequest: file=${fNum}, record=${rNum}, data=[${data.join(', ')}]`);
+            
+            if (!simulatedFiles[fNum] || rNum + data.length > simulatedFiles[fNum].length) {
+              log("WriteFileRecord: File or record out of range", "error");
+              return { exception: 2 };
+            }
+            
+            for (let i = 0; i < data.length; i++) {
+              simulatedFiles[fNum][rNum + i] = data[i];
+            }
+          }
+          
+          renderFileRecordsTable();
+          log(`[Modbus Response] Acknowledged file record write`, "success");
+        },
+
+        onReadExceptionStatus: (req) => {
+          log(`[Modbus Request] Read Exception Status`);
+          log(`[Modbus Response] Sending exception status: ${exceptionStatus}`, "success");
+          return exceptionStatus;
+        },
+
+        onDiagnostics: (req) => {
+          log(`[Modbus Request] Diagnostics: subFunction=${req.subFunction}, data=[${req.data.join(', ')}]`);
+          log(`[Modbus Response] Echoing diagnostic response`, "success");
+          return {
+            subFunction: req.subFunction,
+            data: req.data
           };
-          return Promise.resolve(response);
-        };
+        },
 
-        server = new WasmSerialServer(cfg, onRequest);
-        attached = false;
-        log(`Server created. mode=${mode}, enum=${server.mode()}`);
-      } catch (err) {
-        log(`Create ERROR: ${String(err)}`);
-      }
-    });
+        onReadDeviceIdentification: (req) => {
+          log(`[Modbus Request] Read Device Identification: code=${req.readDeviceIdCode}, objectId=${req.objectId}`);
+          const objects = [
+            { id: 0x00, value: "Modbus-RS WASM Server" },
+            { id: 0x01, value: "mbus-wasm-server" },
+            { id: 0x02, value: "0.14.2" },
+            { id: 0x03, value: "https://github.com/Raghava-Ch/modbus-rs" },
+            { id: 0x04, value: "WASM Server Simulator" }
+          ];
+          log(`[Modbus Response] Sending device identification info`, "success");
+          return {
+            conformityLevel: 0x82,
+            moreFollows: false,
+            nextObjectId: 0,
+            objects: objects
+          };
+        }
+      };
+    };
 
-    document.getElementById("btnPickPort").addEventListener("click", async () => {
-      if (!ensureServer()) return;
+    // Attach Serial Port Button
+    btnSelectPort.addEventListener("click", async () => {
       if (!navigator.serial || !navigator.serial.requestPort) {
-        log("Web Serial API unavailable in this browser/context.");
+        log("Web Serial API is not supported by your browser or configuration. (Check HTTPS / Chromium flags)", "error");
         return;
       }
+
       try {
-        const port = await navigator.serial.requestPort();
-        server.attach_serial_port(port);
-        attached = true;
-        log("Serial port attached to server.");
+        selectedPortHandle = await navigator.serial.requestPort();
+        log("Serial port selected & attached successfully! Ready to bind.", "success");
+        btnBind.disabled = false;
       } catch (err) {
-        log(`Attach port ERROR: ${String(err)}`);
+        log(`Failed to select serial port: ${err.message || String(err)}`, "error");
       }
     });
 
-    document.getElementById("btnStart").addEventListener("click", () => {
-      if (!ensureServer()) return;
-      try {
-        server.start();
-        log("start() OK");
-      } catch (err) {
-        log(`start() ERROR: ${String(err)}`);
+    // Bind Button Event
+    btnBind.addEventListener("click", async () => {
+      if (!selectedPortHandle) {
+        log("Cannot bind: Please attach a serial port first.", "error");
+        return;
       }
-    });
 
-    document.getElementById("btnStop").addEventListener("click", () => {
-      if (!ensureServer()) return;
+      const mode = document.getElementById("mode").value;
+      const unitId = parseInt(document.getElementById("unitId").value) || 1;
+      const baudRate = parseInt(document.getElementById("baudRate").value) || 9600;
+      const parity = document.getElementById("parity").value;
+      const dataBits = parseInt(document.getElementById("dataBits").value) || 8;
+      const stopBits = parseInt(document.getElementById("stopBits").value) || 1;
+
+      const opts = {
+        serialPort: selectedPortHandle,
+        unitId,
+        baudRate,
+        parity,
+        dataBits,
+        stopBits,
+      };
+
+      log(`Binding Serial Server in ${mode.toUpperCase()} mode (unit=${unitId}, baud=${baudRate})...`);
+      statusBadge.className = "status-badge";
+      statusText.textContent = "Binding...";
+      btnBind.disabled = true;
+      btnSelectPort.disabled = true;
+
       try {
-        server.stop();
-        log("stop() OK");
-      } catch (err) {
-        log(`stop() ERROR: ${String(err)}`);
-      }
-    });
-
-    document.getElementById("btnStatus").addEventListener("click", () => {
-      if (!ensureServer()) return;
-      log(`attached=${attached} is_running=${server.is_running()} transport_connected=${server.transport_connected()} mode=${server.mode()}`);
-    });
-
-    document.getElementById("btnDispatch").addEventListener("click", async () => {
-      if (!ensureServer()) return;
-      try {
-        const req = parseJson(document.getElementById("requestJson").value);
-        const out = await server.dispatch_request(req);
-        log(`dispatch_request OK: ${formatValue(out)}`);
-      } catch (err) {
-        log(`dispatch_request ERROR: ${String(err)}`);
-      }
-    });
-
-    document.getElementById("btnSend").addEventListener("click", () => {
-      if (!ensureServer()) return;
-      try {
-        const bytes = hexToBytes(document.getElementById("frameHex").value);
-        server.send_frame(bytes);
-        log(`send_frame OK (${bytes.length} bytes)`);
-      } catch (err) {
-        log(`send_frame ERROR: ${String(err)}`);
-      }
-    });
-
-    document.getElementById("btnRecv").addEventListener("click", () => {
-      if (!ensureServer()) return;
-      try {
-        const out = server.recv_frame();
-        log(`recv_frame OK: ${formatValue(out)}`);
-      } catch (err) {
-        log(`recv_frame ERROR: ${String(err)}`);
-      }
-    });
-
-    document.getElementById("btnRunAll").addEventListener("click", async () => {
-      if (!ensureServer()) return;
-      const req = parseJson(document.getElementById("requestJson").value);
-      const steps = [
-        ["status-before", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
-        ["dispatch-before-start", async () => server.dispatch_request(req)],
-        ["start", async () => { server.start(); return "ok"; }],
-        ["status-after-start", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
-        ["dispatch-after-start", async () => server.dispatch_request(req)],
-        ["send_frame", async () => {
-          const bytes = hexToBytes(document.getElementById("frameHex").value);
-          server.send_frame(bytes);
-          return `sent ${bytes.length} bytes`;
-        }],
-        ["recv_frame", async () => server.recv_frame()],
-        ["stop", async () => { server.stop(); return "ok"; }],
-        ["status-after-stop", async () => `attached=${attached} running=${server.is_running()} connected=${server.transport_connected()}`],
-      ];
-
-      log("Running serial server smoke...");
-      for (const [name, run] of steps) {
-        try {
-          const out = await run();
-          log(`OK   ${name}: ${formatValue(out)}`);
-        } catch (err) {
-          log(`SKIP ${name}: ${String(err)}`);
+        const handlers = createServerHandlers();
+        if (mode === "ascii") {
+          serverInstance = await WasmSerialServer.bindAscii(opts, handlers);
+        } else {
+          serverInstance = await WasmSerialServer.bindRtu(opts, handlers);
         }
-        await sleep(400);
+        serverInstance.serve().catch(err => {
+          log(`Server stopped: ${err}`, "error");
+          statusBadge.className = "status-badge";
+          statusText.textContent = "Disconnected";
+          btnBind.disabled = false;
+          btnSelectPort.disabled = false;
+          btnShutdown.disabled = true;
+          serverInstance = null;
+        });
+
+        log(`Successfully bound to Serial ${mode.toUpperCase()} server! Monitoring unitId ${unitId}`, "success");
+        statusBadge.className = "status-badge active";
+        statusText.textContent = "Connected";
+        btnShutdown.disabled = false;
+      } catch (err) {
+        log(`Failed to bind serial server: ${err.message || String(err)}`, "error");
+        statusBadge.className = "status-badge";
+        statusText.textContent = "Disconnected";
+        btnBind.disabled = false;
+        btnSelectPort.disabled = false;
+        serverInstance = null;
       }
-      log("Serial server smoke complete.");
+    });
+
+    // Shutdown Button Event
+    btnShutdown.addEventListener("click", async () => {
+      if (!serverInstance) return;
+      
+      log("Shutting down Modbus serial server...");
+      btnShutdown.disabled = true;
+      
+      try {
+        await serverInstance.shutdown();
+        log("Server shutdown complete.", "success");
+      } catch (err) {
+        log(`Error during shutdown: ${err.message || String(err)}`, "error");
+      } finally {
+        statusBadge.className = "status-badge";
+        statusText.textContent = "Disconnected";
+        btnBind.disabled = false;
+        btnSelectPort.disabled = false;
+        btnShutdown.disabled = true;
+        serverInstance = null;
+      }
     });
   </script>
 </body>

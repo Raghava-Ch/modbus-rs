@@ -3,7 +3,7 @@
 //! # Entry point
 //!
 //! [`decode_response`] is the single entry called by the task receive branch.
-//! It decompiles the raw ADU into a [`ModbusMessage`], extracts the transaction
+//! It decompiles the raw ADU into a [`ModbusMessage`](mbus_core::data_unit::common::ModbusMessage), extracts the transaction
 //! id + unit, and dispatches to a per-FC helper that returns a [`ClientResponse`].
 //!
 //! # Error handling

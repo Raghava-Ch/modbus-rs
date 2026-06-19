@@ -69,18 +69,28 @@ jobs:
         run: wasm-pack test --node --features wasm-full --test wasm_server_bindings
         working-directory: mbus-ffi
 
-      - name: Run WASM browser E2E tests (Chrome)
-        run: wasm-pack test --chrome --headless --features wasm-full --test wasm_e2e
-        working-directory: mbus-ffi
-
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 24.16.0
+          cache: 'npm'
+          cache-dependency-path: mbus-ffi/wasm/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mbus-ffi/wasm
+        run: npm ci
 
       - name: Build and Verify WASM package
         working-directory: mbus-ffi/wasm
         run: |
           npm run build
           npm run verify
+
+      - name: Install Playwright Chromium
+        working-directory: mbus-ffi/wasm
+        run: npx playwright install --with-deps chromium
+
+      - name: Run WASM browser E2E tests (Playwright + Vitest)
+        working-directory: mbus-ffi/wasm
+        run: npm test
 

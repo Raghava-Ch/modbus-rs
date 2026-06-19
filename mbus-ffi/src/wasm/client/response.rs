@@ -1,7 +1,7 @@
 //! Response enum representing results returned from WasmClientTask to WasmModbusClient.
 
-use wasm_bindgen::JsValue;
 use js_sys::{Array, Object, Reflect, Uint16Array};
+use wasm_bindgen::JsValue;
 
 pub(crate) enum WasmResponse {
     Void,
@@ -39,9 +39,7 @@ impl WasmResponse {
                 let arr = Uint16Array::from(vec.as_slice());
                 arr.into()
             }
-            WasmResponse::U8(val) => {
-                JsValue::from_f64(val as f64)
-            }
+            WasmResponse::U8(val) => JsValue::from_f64(val as f64),
             #[cfg(feature = "file-record")]
             WasmResponse::FileRecord(records) => {
                 let arr = Array::new();

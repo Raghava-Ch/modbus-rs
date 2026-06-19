@@ -167,11 +167,13 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
             }
 
             #[cfg(feature = "diagnostics")]
-            if self
-                .try_dispatch_fc08_auto(r.txn_id, r.unit, &r.req)
-                .await?
             {
-                continue;
+                if self
+                    .try_dispatch_fc08_auto(r.txn_id, r.unit, &r.req)
+                    .await?
+                {
+                    continue;
+                }
             }
 
             if r.unit.is_broadcast() && r.transport_type.is_serial_type() {
@@ -214,7 +216,8 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
         self.stats.increment_message_count();
 
         let transport_type = T::TRANSPORT_TYPE;
-        match self.parse_adu(&adu, transport_type) {
+        let res = self.parse_adu(&adu, transport_type);
+        match res {
             Ok(Some(req)) => {
                 let txn_id = req.txn_id();
                 let unit = req.unit();
@@ -226,7 +229,7 @@ impl<T: AsyncTransport + Send> AsyncServerSession<T> {
                     transport_type,
                 }))
             }
-            Ok(None) => Ok(None), // wrong unit address — discard silently
+            Ok(None) => Ok(None),
             Err(AsyncServerError::FramingError(e)) => {
                 #[cfg(feature = "diagnostics-stats")]
                 self.stats.increment_comm_error_count();

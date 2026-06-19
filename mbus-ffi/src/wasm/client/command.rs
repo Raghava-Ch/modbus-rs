@@ -1,8 +1,8 @@
 //! Command enum representing requests sent from WasmModbusClient to WasmClientTask.
 
+use super::response::WasmResponse;
 use futures_channel::oneshot::Sender as OneshotSender;
 use mbus_core::transport::UnitIdOrSlaveAddr;
-use super::response::WasmResponse;
 
 #[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequestParams;

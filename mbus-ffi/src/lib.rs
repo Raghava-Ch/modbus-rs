@@ -61,8 +61,8 @@ pub use wasm::{
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-server"))]
 pub use wasm::{
-    WasmSerialServer, WasmSerialServerConfig, WasmServerBindingPlan, WasmServerStatusSnapshot,
-    WasmServerTransportKind, WasmTcpGatewayConfig, WasmTcpServer,
+    WasmSerialServer, WasmSerialServerOptions, WasmServerTransportKind, WasmTcpServer,
+    WasmTcpServerOptions,
 };
 
 #[allow(missing_docs)]

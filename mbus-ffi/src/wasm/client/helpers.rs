@@ -1,9 +1,9 @@
 //! Option parsing and JS type extraction helpers for the WASM client.
 
+use js_sys::{Array, Reflect, Uint16Array};
 use wasm_bindgen::prelude::*;
-use js_sys::{Reflect, Array, Uint16Array};
 
-pub(super) fn get_u32(obj: &JsValue, key: &str, default: u32) -> u32 {
+pub(crate) fn get_u32(obj: &JsValue, key: &str, default: u32) -> u32 {
     if obj.is_null() || obj.is_undefined() {
         return default;
     }
@@ -19,15 +19,15 @@ pub(super) fn get_u32(obj: &JsValue, key: &str, default: u32) -> u32 {
         .unwrap_or(default)
 }
 
-pub(super) fn get_u16(obj: &JsValue, key: &str, default: u16) -> u16 {
+pub(crate) fn get_u16(obj: &JsValue, key: &str, default: u16) -> u16 {
     get_u32(obj, key, default as u32) as u16
 }
 
-pub(super) fn get_u8(obj: &JsValue, key: &str, default: u8) -> u8 {
+pub(crate) fn get_u8(obj: &JsValue, key: &str, default: u8) -> u8 {
     get_u32(obj, key, default as u32) as u8
 }
 
-pub(super) fn get_bool(obj: &JsValue, key: &str, default: bool) -> bool {
+pub(crate) fn get_bool(obj: &JsValue, key: &str, default: bool) -> bool {
     if obj.is_null() || obj.is_undefined() {
         return default;
     }
@@ -43,7 +43,7 @@ pub(super) fn get_bool(obj: &JsValue, key: &str, default: bool) -> bool {
         .unwrap_or(default)
 }
 
-pub(super) fn get_string(obj: &JsValue, key: &str, default: &str) -> String {
+pub(crate) fn get_string(obj: &JsValue, key: &str, default: &str) -> String {
     if obj.is_null() || obj.is_undefined() {
         return default.to_string();
     }
@@ -60,7 +60,7 @@ pub(super) fn get_string(obj: &JsValue, key: &str, default: &str) -> String {
 }
 
 /// Parse a boolean array from options. Can be a JS array of booleans.
-pub(super) fn get_bool_array(obj: &JsValue, key: &str) -> Result<Vec<bool>, String> {
+pub(crate) fn get_bool_array(obj: &JsValue, key: &str) -> Result<Vec<bool>, String> {
     let val = Reflect::get(obj, &JsValue::from_str(key))
         .map_err(|_| format!("Missing property '{}'", key))?;
     if val.is_null() || val.is_undefined() {
@@ -80,7 +80,7 @@ pub(super) fn get_bool_array(obj: &JsValue, key: &str) -> Result<Vec<bool>, Stri
 }
 
 /// Parse a u16 array from options. Can be a JS array of numbers or a Uint16Array.
-pub(super) fn get_u16_array(obj: &JsValue, key: &str) -> Result<Vec<u16>, String> {
+pub(crate) fn get_u16_array(obj: &JsValue, key: &str) -> Result<Vec<u16>, String> {
     let val = Reflect::get(obj, &JsValue::from_str(key))
         .map_err(|_| format!("Missing property '{}'", key))?;
     if val.is_null() || val.is_undefined() {
@@ -102,5 +102,8 @@ pub(super) fn get_u16_array(obj: &JsValue, key: &str) -> Result<Vec<u16>, String
         return Ok(vec);
     }
 
-    Err(format!("Property '{}' must be a Uint16Array or an array of numbers", key))
+    Err(format!(
+        "Property '{}' must be a Uint16Array or an array of numbers",
+        key
+    ))
 }

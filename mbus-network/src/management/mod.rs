@@ -13,6 +13,5 @@ pub mod wasm_transport;
 #[cfg(all(feature = "ws-client", target_arch = "wasm32"))]
 pub mod wasm_async_transport;
 
-
 #[cfg(all(feature = "ws-server", not(target_arch = "wasm32")))]
 pub mod ws_upstream_transport;

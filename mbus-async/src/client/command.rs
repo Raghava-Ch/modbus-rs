@@ -6,7 +6,7 @@
 //! - [`ClientRequest`] — the user-facing operation parameters, one variant per
 //!   Modbus function code, carrying only the values the caller supplies.  The
 //!   task assigns the transaction id internally.
-//! - [`TaskCommand`] — the full envelope sent over the `mpsc` channel, which
+//! - `TaskCommand` — the full envelope sent over the `mpsc` channel, which
 //!   wraps a [`ClientRequest`] together with the oneshot reply sender, or
 //!   represents a connection request.
 //!

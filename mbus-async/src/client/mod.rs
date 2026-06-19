@@ -28,11 +28,11 @@ mod network_client;
 mod serial_client;
 
 pub use client_core::AsyncClientCore;
-pub use network_client::AsyncTcpClient;
 pub use command::ClientRequest;
-pub use response::ClientResponse;
+pub use network_client::AsyncTcpClient;
 #[cfg(feature = "traffic")]
 pub use notifier::AsyncClientTrafficNotifier;
+pub use response::ClientResponse;
 #[cfg(any(feature = "serial-rtu", feature = "serial-ascii"))]
 pub use serial_client::AsyncSerialClientKind;
 pub use serial_client::{AsyncAsciiClient, AsyncRtuClient, AsyncSerialClient};

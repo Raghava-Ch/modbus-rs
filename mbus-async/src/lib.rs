@@ -10,7 +10,11 @@
 //! The full implementation lives in internal module files.
 
 pub mod client;
-#[cfg(any(feature = "server-tcp", feature = "server-serial"))]
+#[cfg(any(
+    feature = "server-tcp",
+    feature = "server-serial",
+    target_arch = "wasm32"
+))]
 pub mod server;
 
 #[cfg(any(feature = "server-tcp", feature = "server-serial"))]

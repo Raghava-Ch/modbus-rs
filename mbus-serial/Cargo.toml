@@ -44,7 +44,10 @@ serial-wasm = [
 
 # Backward-Compatibility / Legacy Aliases
 async = ["serial-async"]
-wasm = ["serial-wasm"]
+wasm = ["serial-wasm", "mbus-core/async"]
+serial-wasm-async = ["serial-wasm", "mbus-core/async"]
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 futures-channel = "0.3"
 futures-util = "0.3"
+futures = { version = "0.3", default-features = false, features = ["async-await"] }

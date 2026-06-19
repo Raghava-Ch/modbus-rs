@@ -3,7 +3,8 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use js_sys::{Function, Promise, Reflect, Array};
+use futures_util::FutureExt;
+use js_sys::{Array, Function, Promise, Reflect};
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
     SerialMode, TransportType, UnitIdOrSlaveAddr,
@@ -13,10 +14,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 
 use super::command::WasmCommand;
-use super::response::WasmResponse;
-use super::task::{WasmClientTask, WasmAsyncTransportTrait};
 use super::helpers::*;
 use super::net_client::CreateClientOptions;
+use super::response::WasmResponse;
+use super::task::{WasmAsyncTransportTrait, WasmClientTask};
 
 #[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequestParams;
@@ -48,7 +49,10 @@ impl WasmRuntimeSerialTransport {
             Self::Ascii(transport) => transport.attach_port(port),
         }
     }
-    fn connect(&mut self, config: &ModbusConfig) -> Result<(), mbus_core::transport::TransportError> {
+    fn connect(
+        &mut self,
+        config: &ModbusConfig,
+    ) -> Result<(), mbus_core::transport::TransportError> {
         use mbus_core::transport::Transport;
         match self {
             Self::Rtu(t) => t.connect(config),
@@ -66,7 +70,12 @@ impl WasmRuntimeSerialTransport {
 }
 
 impl WasmAsyncTransportTrait for WasmRuntimeSerialTransport {
-    async fn recv_frame(&mut self) -> Result<heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>, mbus_core::errors::MbusError> {
+    async fn recv_frame(
+        &mut self,
+    ) -> Result<
+        heapless::Vec<u8, { mbus_core::data_unit::common::MAX_ADU_FRAME_LEN }>,
+        mbus_core::errors::MbusError,
+    > {
         match self {
             Self::Rtu(t) => t.recv_frame().await,
             Self::Ascii(t) => t.recv_frame().await,
@@ -147,13 +156,17 @@ pub struct WasmSerialTransport {
     cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
     pending_count: Rc<Cell<usize>>,
     active_transport: Rc<RefCell<Option<WasmRuntimeSerialTransport>>>,
+    response_timeout_ms: u32,
 }
 
 #[wasm_bindgen]
 impl WasmSerialTransport {
     /// Creates a new Serial transport using the provided `port_handle` and option parameters.
     #[wasm_bindgen(constructor)]
-    pub fn new(port_handle: WasmSerialPortHandle, options: Option<WasmSerialTransportOptions>) -> Result<WasmSerialTransport, JsValue> {
+    pub fn new(
+        port_handle: WasmSerialPortHandle,
+        options: Option<WasmSerialTransportOptions>,
+    ) -> Result<WasmSerialTransport, JsValue> {
         let options_val = options.map(JsValue::from).unwrap_or(JsValue::UNDEFINED);
         let mode_str = get_string(&options_val, "mode", "rtu");
         let baud_rate = get_u32(&options_val, "baudRate", 9600);
@@ -206,7 +219,9 @@ impl WasmSerialTransport {
         transport.attach_port(port_handle.clone_port());
 
         // Sync connect
-        transport.connect(&config).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+        transport
+            .connect(&config)
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         let (cmd_tx, cmd_rx) = futures_channel::mpsc::unbounded::<WasmCommand>();
         let pending_count = Rc::new(Cell::new(0));
@@ -228,6 +243,7 @@ impl WasmSerialTransport {
             cmd_tx: Rc::new(RefCell::new(cmd_tx)),
             pending_count,
             active_transport,
+            response_timeout_ms,
         })
     }
 
@@ -249,17 +265,25 @@ impl WasmSerialTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[wasm_bindgen(js_name = "createClient")]
-    pub fn create_client(&self, options: CreateClientOptions) -> Result<WasmSerialModbusClient, JsValue> {
+    pub fn create_client(
+        &self,
+        options: CreateClientOptions,
+    ) -> Result<WasmSerialModbusClient, JsValue> {
         let options_val = JsValue::from(options);
         if options_val.is_null() || options_val.is_undefined() {
-            return Err(JsValue::from_str("Missing options object. unitId is required."));
+            return Err(JsValue::from_str(
+                "Missing options object. unitId is required.",
+            ));
         }
         let unit_id_val = Reflect::get(&options_val, &JsValue::from_str("unitId"))
             .map_err(|_| JsValue::from_str("Missing property 'unitId'"))?;
         if unit_id_val.is_null() || unit_id_val.is_undefined() {
             return Err(JsValue::from_str("Property 'unitId' is required"));
         }
-        let unit_id = unit_id_val.as_f64().ok_or_else(|| JsValue::from_str("unitId must be a number"))? as u8;
+        let unit_id = unit_id_val
+            .as_f64()
+            .ok_or_else(|| JsValue::from_str("unitId must be a number"))?
+            as u8;
 
         UnitIdOrSlaveAddr::new(unit_id).map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
@@ -267,6 +291,7 @@ impl WasmSerialTransport {
             cmd_tx: self.cmd_tx.clone(),
             unit_id,
             pending_count: self.pending_count.clone(),
+            response_timeout_ms: self.response_timeout_ms,
         })
     }
 }
@@ -279,6 +304,7 @@ pub struct WasmSerialModbusClient {
     cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
     unit_id: u8,
     pending_count: Rc<Cell<usize>>,
+    response_timeout_ms: u32,
 }
 
 #[wasm_bindgen]
@@ -296,7 +322,11 @@ impl WasmSerialModbusClient {
     }
 
     // Helper to dispatch a command and return a Promise
-    fn dispatch(&self, cmd: WasmCommand, rx: futures_channel::oneshot::Receiver<Result<WasmResponse, String>>) -> Promise {
+    fn dispatch(
+        &self,
+        cmd: WasmCommand,
+        rx: futures_channel::oneshot::Receiver<Result<WasmResponse, String>>,
+    ) -> Promise {
         let (promise, resolve, reject) = make_promise();
         let pending_count = self.pending_count.clone();
         pending_count.set(pending_count.get() + 1);
@@ -307,19 +337,28 @@ impl WasmSerialModbusClient {
             return promise;
         }
 
+        let timeout_ms = self.response_timeout_ms;
+
         spawn_local(async move {
-            match rx.await {
-                Ok(Ok(resp)) => {
+            let timeout_fut = gloo_timers::future::TimeoutFuture::new(timeout_ms);
+            futures_util::select! {
+                res = rx.fuse() => {
                     pending_count.set(pending_count.get() - 1);
-                    let _ = resolve.call1(&JsValue::NULL, &resp.to_js_value());
+                    match res {
+                        Ok(Ok(resp)) => {
+                            let _ = resolve.call1(&JsValue::NULL, &resp.to_js_value());
+                        }
+                        Ok(Err(err)) => {
+                            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&err));
+                        }
+                        Err(_) => {
+                            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
+                        }
+                    }
                 }
-                Ok(Err(err)) => {
+                _ = timeout_fut.fuse() => {
                     pending_count.set(pending_count.get() - 1);
-                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str(&err));
-                }
-                Err(_) => {
-                    pending_count.set(pending_count.get() - 1);
-                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("ConnectionLost"));
+                    let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Timeout"));
                 }
             }
         });
@@ -336,7 +375,12 @@ impl WasmSerialModbusClient {
         let quantity = get_u16(options, "quantity", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadCoils { unit_id, address, quantity, resp: tx };
+        let cmd = WasmCommand::ReadCoils {
+            unit_id,
+            address,
+            quantity,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -347,7 +391,12 @@ impl WasmSerialModbusClient {
         let value = get_bool(options, "value", false);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::WriteSingleCoil { unit_id, address, value, resp: tx };
+        let cmd = WasmCommand::WriteSingleCoil {
+            unit_id,
+            address,
+            value,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -365,7 +414,12 @@ impl WasmSerialModbusClient {
         };
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::WriteMultipleCoils { unit_id, address, values, resp: tx };
+        let cmd = WasmCommand::WriteMultipleCoils {
+            unit_id,
+            address,
+            values,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -376,7 +430,12 @@ impl WasmSerialModbusClient {
         let quantity = get_u16(options, "quantity", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadDiscreteInputs { unit_id, address, quantity, resp: tx };
+        let cmd = WasmCommand::ReadDiscreteInputs {
+            unit_id,
+            address,
+            quantity,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -389,7 +448,12 @@ impl WasmSerialModbusClient {
         let quantity = get_u16(options, "quantity", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadHoldingRegisters { unit_id, address, quantity, resp: tx };
+        let cmd = WasmCommand::ReadHoldingRegisters {
+            unit_id,
+            address,
+            quantity,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -400,7 +464,12 @@ impl WasmSerialModbusClient {
         let quantity = get_u16(options, "quantity", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadInputRegisters { unit_id, address, quantity, resp: tx };
+        let cmd = WasmCommand::ReadInputRegisters {
+            unit_id,
+            address,
+            quantity,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -411,7 +480,12 @@ impl WasmSerialModbusClient {
         let value = get_u16(options, "value", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::WriteSingleRegister { unit_id, address, value, resp: tx };
+        let cmd = WasmCommand::WriteSingleRegister {
+            unit_id,
+            address,
+            value,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -429,7 +503,12 @@ impl WasmSerialModbusClient {
         };
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::WriteMultipleRegisters { unit_id, address, values, resp: tx };
+        let cmd = WasmCommand::WriteMultipleRegisters {
+            unit_id,
+            address,
+            values,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -468,7 +547,13 @@ impl WasmSerialModbusClient {
         let or_mask = get_u16(options, "orMask", 0x0000);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::MaskWriteRegister { unit_id, address, and_mask, or_mask, resp: tx };
+        let cmd = WasmCommand::MaskWriteRegister {
+            unit_id,
+            address,
+            and_mask,
+            or_mask,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -481,7 +566,11 @@ impl WasmSerialModbusClient {
         let address = get_u16(options, "address", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadFifoQueue { unit_id, address, resp: tx };
+        let cmd = WasmCommand::ReadFifoQueue {
+            unit_id,
+            address,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -495,13 +584,19 @@ impl WasmSerialModbusClient {
             Ok(v) => v,
             Err(_) => {
                 let (promise, _, reject) = make_promise();
-                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Missing property 'requests'"));
+                let _ = reject.call1(
+                    &JsValue::NULL,
+                    &JsValue::from_str("Missing property 'requests'"),
+                );
                 return promise;
             }
         };
         if !Array::is_array(&reqs_val) {
             let (promise, _, reject) = make_promise();
-            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Property 'requests' must be an array"));
+            let _ = reject.call1(
+                &JsValue::NULL,
+                &JsValue::from_str("Property 'requests' must be an array"),
+            );
             return promise;
         }
         let arr = Array::from(&reqs_val);
@@ -521,7 +616,11 @@ impl WasmSerialModbusClient {
 
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadFileRecord { unit_id, requests, resp: tx };
+        let cmd = WasmCommand::ReadFileRecord {
+            unit_id,
+            requests,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -533,13 +632,19 @@ impl WasmSerialModbusClient {
             Ok(v) => v,
             Err(_) => {
                 let (promise, _, reject) = make_promise();
-                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Missing property 'requests'"));
+                let _ = reject.call1(
+                    &JsValue::NULL,
+                    &JsValue::from_str("Missing property 'requests'"),
+                );
                 return promise;
             }
         };
         if !Array::is_array(&reqs_val) {
             let (promise, _, reject) = make_promise();
-            let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Property 'requests' must be an array"));
+            let _ = reject.call1(
+                &JsValue::NULL,
+                &JsValue::from_str("Property 'requests' must be an array"),
+            );
             return promise;
         }
         let arr = Array::from(&reqs_val);
@@ -548,7 +653,6 @@ impl WasmSerialModbusClient {
             let item = arr.get(i);
             let file_number = get_u16(&item, "fileNumber", 0);
             let record_number = get_u16(&item, "recordNumber", 0);
-            let record_length = get_u16(&item, "recordLength", 0);
             let record_data_val = match get_u16_array(&item, "recordData") {
                 Ok(d) => d,
                 Err(e) => {
@@ -557,10 +661,17 @@ impl WasmSerialModbusClient {
                     return promise;
                 }
             };
+            let mut record_length = get_u16(&item, "recordLength", 0);
+            if record_length == 0 {
+                record_length = record_data_val.len() as u16;
+            }
             let mut hv_data = heapless::Vec::new();
             if hv_data.extend_from_slice(&record_data_val).is_err() {
                 let (promise, _, reject) = make_promise();
-                let _ = reject.call1(&JsValue::NULL, &JsValue::from_str("Too many registers in recordData"));
+                let _ = reject.call1(
+                    &JsValue::NULL,
+                    &JsValue::from_str("Too many registers in recordData"),
+                );
                 return promise;
             }
             requests.push(SubRequestParams {
@@ -573,7 +684,11 @@ impl WasmSerialModbusClient {
 
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::WriteFileRecord { unit_id, requests, resp: tx };
+        let cmd = WasmCommand::WriteFileRecord {
+            unit_id,
+            requests,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -604,7 +719,12 @@ impl WasmSerialModbusClient {
         };
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::Diagnostics { unit_id, sub_function, data, resp: tx };
+        let cmd = WasmCommand::Diagnostics {
+            unit_id,
+            sub_function,
+            data,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 
@@ -616,7 +736,12 @@ impl WasmSerialModbusClient {
         let object_id = get_u8(options, "objectId", 0);
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
-        let cmd = WasmCommand::ReadDeviceIdentification { unit_id, read_device_id_code, object_id, resp: tx };
+        let cmd = WasmCommand::ReadDeviceIdentification {
+            unit_id,
+            read_device_id_code,
+            object_id,
+            resp: tx,
+        };
         self.dispatch(cmd, rx)
     }
 }

@@ -3,284 +3,1096 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>mbus-ffi Minimal Full Smoke</title>
+  <title>Modbus WASM TCP Client Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(99, 102, 241, 0.15);
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.4);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.3);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 780px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      line-height: 1.4;
-      background-color: #555;
-      text-decoration-color: aqua;
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+      line-height: 1.5;
     }
-    .row { margin: 0.6rem 0; }
-    label { display: inline-block; min-width: 170px; background-color: #6a6a6a;}
-    input { width: 320px; max-width: 100%; padding: 0.35rem; background-color: #6a6a6a;}
-    button { margin-right: 0.5rem; padding: 0.45rem 0.8rem; background-color: #676262;}
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    h1 {
+      font-weight: 700;
+      font-size: 2.5rem;
+      background: linear-gradient(to right, #818cf8, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .grid {
+        grid-template-columns: 380px 1fr;
+      }
+      .span-2 {
+        grid-column: span 2;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.5rem;
+    }
+
+    .form-group-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    button {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #4f46e5;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-run {
+      background: var(--success);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-run:hover:not(:disabled) {
+      background: #059669;
+      box-shadow: 0 0 15px var(--success-glow);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Tabs Layout */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.25rem;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      min-width: auto;
+      flex: none;
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Logging */
     pre {
-      border: 1px solid #020202;
-      border-radius: 6px;
-      background: #a37d7d;
-      padding: 0.8rem;
-      min-height: 180px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      height: 300px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 1rem;
       white-space: pre-wrap;
+      word-break: break-all;
     }
-    .hint { color: #555; font-size: 0.95rem; }
+
+    .log-entry {
+      margin-bottom: 0.4rem;
+      border-left: 2px solid var(--accent);
+      padding-left: 0.5rem;
+    }
+
+    .log-entry.error {
+      border-left-color: #ef4444;
+      color: #f87171;
+    }
+
+    .log-entry.success {
+      border-left-color: var(--success);
+      color: #34d399;
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      margin-right: 0.5rem;
+    }
+
+    .op-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .op-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #818cf8;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hint-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>mbus-ffi Minimal Full Smoke</h1>
+  <div class="container">
+    <header>
+      <h1>Modbus TCP Client Controller</h1>
+      <p class="subtitle">WASM Event-Driven Controller over WebSocket Gateway</p>
+    </header>
 
-  <p class="hint">
-    Before opening this page, build the wasm package in <code>mbus-ffi/wasm</code>:
-    <br />
-    <code>npm run build</code>
-  </p>
+    <div class="grid">
+      <!-- Connection & Configuration Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>Connection Settings</span>
+          <span style="margin-left: auto;">
+            <div id="statusBadge" class="status-badge">
+              <span class="status-dot"></span>
+              <span id="statusText">Disconnected</span>
+            </div>
+          </span>
+        </div>
 
-  <p class="hint">
-    This page uses hard-coded addresses from <code>0</code> and intentionally keeps the UI minimal.
-    Unsupported functions may fail depending on the target device.
-  </p>
-  <div class="row">
-    <label for="ws">WebSocket URL</label>
-    <input id="ws" value="ws://127.0.0.1:8080" />
-  </div>
-  <div class="row">
-    <label for="unitId">Unit ID</label>
-    <input id="unitId" type="number" value="1" min="1" max="247" />
-  </div>
-  <div class="row">
-    <label for="timeout">Response Timeout (ms)</label>
-    <input id="timeout" type="number" value="3000" min="1" />
-  </div>
-  <div class="row">
-    <label for="retries">Retry Attempts</label>
-    <input id="retries" type="number" value="1" min="0" />
-  </div>
-  <div class="row">
-    <label for="tick">Tick Interval (ms)</label>
-    <input id="tick" type="number" value="20" min="1" />
-  </div>
-  <div class="row">
-    <label for="fc04Addr">Input Register Address</label>
-    <input id="fc04Addr" type="number" value="0" min="0" max="65535" />
-  </div>
-  <div class="row">
-    <label for="fc04Qty">Input Register Quantity</label>
-    <input id="fc04Qty" type="number" value="10" min="1" max="125" />
-  </div>
+        <div class="form-group">
+          <label for="wsUrl">WebSocket Gateway URL</label>
+          <input id="wsUrl" value="ws://127.0.0.1:8080" />
+        </div>
 
-  <div class="row">
-    <button id="btnConnect">Connect</button>
-    <button id="btnPing">Connection Status</button>
-    <button id="btnRawPing">Raw WS Test</button>
-    <button id="btnRunInputRegs">Run Input Register Checks</button>
-    <button id="btnRunAll">Run All Feature Checks</button>
-  </div>
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="unitId">Unit / Slave ID</label>
+            <input id="unitId" type="number" min="1" max="247" value="1" />
+          </div>
+          <div class="form-group">
+            <label for="timeout">Timeout (ms)</label>
+            <input id="timeout" type="number" min="1" value="3000" />
+          </div>
+        </div>
 
-  <h3>Log</h3>
-  <pre id="log"></pre>
+        <div class="form-group">
+          <label for="retries">Retry Attempts</label>
+          <input id="retries" type="number" min="0" value="1" />
+        </div>
+
+        <div class="button-group">
+          <button id="btnConnect" class="btn-primary">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+            Connect
+          </button>
+          <button id="btnDisconnect" class="btn-secondary" disabled>
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+            Disconnect
+          </button>
+        </div>
+
+        <div class="button-group" style="margin-top: 0.75rem;">
+          <button id="btnPing" class="btn-secondary" style="width: 100%;">
+            Check Status
+          </button>
+          <button id="btnRawPing" class="btn-secondary">
+            Raw WS Ping
+          </button>
+        </div>
+      </div>
+
+      <!-- Modbus Interactive Operations Card -->
+      <div class="card">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tabCoils">Coils & Discrete Inputs</button>
+          <button class="tab-btn" data-tab="tabRegisters">Registers</button>
+          <button class="tab-btn" data-tab="tabAdvanced">Advanced & Files</button>
+          <button class="tab-btn" data-tab="tabSmoke">Automated Smoke Test</button>
+        </div>
+
+        <!-- Coils Tab -->
+        <div id="tabCoils" class="tab-content active">
+          <!-- FC01 Read Coils -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Coils</span>
+              <span class="hint-label">FC 01</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc1Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Quantity</label>
+                <input id="fc1Qty" type="number" min="1" max="2000" value="8" />
+              </div>
+            </div>
+            <button id="btnFc1" class="btn-run" disabled>Execute Read</button>
+          </div>
+
+          <!-- FC02 Read Discrete Inputs -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Discrete Inputs</span>
+              <span class="hint-label">FC 02</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc2Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Quantity</label>
+                <input id="fc2Qty" type="number" min="1" max="2000" value="8" />
+              </div>
+            </div>
+            <button id="btnFc2" class="btn-run" disabled>Execute Read</button>
+          </div>
+
+          <!-- FC05 Write Single Coil -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Write Single Coil</span>
+              <span class="hint-label">FC 05</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Coil Address</label>
+                <input id="fc5Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <select id="fc5Val">
+                  <option value="true">ON (true)</option>
+                  <option value="false">OFF (false)</option>
+                </select>
+              </div>
+            </div>
+            <button id="btnFc5" class="btn-run" disabled>Execute Write</button>
+          </div>
+
+          <!-- FC15 Write Multiple Coils -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Write Multiple Coils</span>
+              <span class="hint-label">FC 15</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc15Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Values (comma-separated booleans)</label>
+                <input id="fc15Vals" value="true, true, false, false" placeholder="true, false, true" />
+              </div>
+            </div>
+            <button id="btnFc15" class="btn-run" disabled>Execute Write</button>
+          </div>
+        </div>
+
+        <!-- Registers Tab -->
+        <div id="tabRegisters" class="tab-content">
+          <!-- FC03 Read Holding Registers -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Holding Registers</span>
+              <span class="hint-label">FC 03</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc3Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Quantity</label>
+                <input id="fc3Qty" type="number" min="1" max="125" value="5" />
+              </div>
+            </div>
+            <button id="btnFc3" class="btn-run" disabled>Execute Read</button>
+          </div>
+
+          <!-- FC04 Read Input Registers -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Input Registers</span>
+              <span class="hint-label">FC 04</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc04Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Quantity</label>
+                <input id="fc04Qty" type="number" min="1" max="125" value="5" />
+              </div>
+            </div>
+            <button id="btnFc4" class="btn-run" disabled>Execute Read</button>
+          </div>
+
+          <!-- FC06 Write Single Register -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Write Single Register</span>
+              <span class="hint-label">FC 06</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Register Address</label>
+                <input id="fc6Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Value (0 - 65535)</label>
+                <input id="fc6Val" type="number" min="0" max="65535" value="123" />
+              </div>
+            </div>
+            <button id="btnFc6" class="btn-run" disabled>Execute Write</button>
+          </div>
+
+          <!-- FC16 Write Multiple Registers -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Write Multiple Registers</span>
+              <span class="hint-label">FC 16</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Start Address</label>
+                <input id="fc16Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Values (comma-separated integers)</label>
+                <input id="fc16Vals" value="100, 200, 300" placeholder="10, 20, 30" />
+              </div>
+            </div>
+            <button id="btnFc16" class="btn-run" disabled>Execute Write</button>
+          </div>
+
+          <!-- FC23 Read/Write Multiple Registers -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read/Write Multiple Registers</span>
+              <span class="hint-label">FC 23</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Read Address</label>
+                <input id="fc23ReadAddr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Read Qty</label>
+                <input id="fc23ReadQty" type="number" min="1" max="125" value="2" />
+              </div>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Write Address</label>
+                <input id="fc23WriteAddr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Write Values (comma-separated)</label>
+                <input id="fc23WriteVals" value="99, 88" placeholder="99, 88" />
+              </div>
+            </div>
+            <button id="btnFc23" class="btn-run" disabled>Execute Read/Write</button>
+          </div>
+
+          <!-- FC22 Mask Write Register -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Mask Write Register</span>
+              <span class="hint-label">FC 22</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Register Address</label>
+                <input id="fc22Addr" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>AND Mask (Hex)</label>
+                <input id="fc22And" value="0xFFFF" placeholder="0xFFFF" />
+              </div>
+              <div class="form-group">
+                <label>OR Mask (Hex)</label>
+                <input id="fc22Or" value="0x0001" placeholder="0x0001" />
+              </div>
+            </div>
+            <button id="btnFc22" class="btn-run" disabled>Execute Mask Write</button>
+          </div>
+        </div>
+
+        <!-- Advanced & Files Tab -->
+        <div id="tabAdvanced" class="tab-content">
+          <!-- FC14 Read File Record -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read File Record</span>
+              <span class="hint-label">FC 14</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>File Number</label>
+                <input id="fc14File" type="number" min="0" value="1" />
+              </div>
+              <div class="form-group">
+                <label>Record Number</label>
+                <input id="fc14Record" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Record Length</label>
+                <input id="fc14Length" type="number" min="1" value="2" />
+              </div>
+            </div>
+            <button id="btnFc14" class="btn-run" disabled>Execute Read File</button>
+          </div>
+
+          <!-- FC15 Write File Record -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Write File Record</span>
+              <span class="hint-label">FC 15 (FC15/06)</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>File Number</label>
+                <input id="fc15FileNum" type="number" min="0" value="1" />
+              </div>
+              <div class="form-group">
+                <label>Record Number</label>
+                <input id="fc15RecNum" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Record Data (comma-separated)</label>
+                <input id="fc15RecData" value="456, 789" placeholder="456, 789" />
+              </div>
+            </div>
+            <button id="btnFc15Record" class="btn-run" disabled>Execute Write File</button>
+          </div>
+
+          <!-- FC18 Read FIFO Queue -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read FIFO Queue</span>
+              <span class="hint-label">FC 18</span>
+            </div>
+            <div class="form-group">
+              <label>FIFO Register Address</label>
+              <input id="fc18Addr" type="number" min="0" value="0" />
+            </div>
+            <button id="btnFc18" class="btn-run" disabled>Execute Read FIFO</button>
+          </div>
+
+          <!-- FC07 Read Exception Status -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Exception Status</span>
+              <span class="hint-label">FC 07</span>
+            </div>
+            <button id="btnFc7" class="btn-run" disabled>Execute Read Status</button>
+          </div>
+
+          <!-- FC08 Diagnostics -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Diagnostics Query</span>
+              <span class="hint-label">FC 08</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Sub-Function Code</label>
+                <input id="fc8Sub" type="number" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Data values (comma-separated integers)</label>
+                <input id="fc8Data" value="0" />
+              </div>
+            </div>
+            <button id="btnFc8" class="btn-run" disabled>Execute Diagnostics</button>
+          </div>
+
+          <!-- FC43 Read Device Identification -->
+          <div class="op-card">
+            <div class="op-title">
+              <span>Read Device Identification</span>
+              <span class="hint-label">FC 43/14</span>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Read Device ID Code</label>
+                <select id="fc43Code">
+                  <option value="1">1 (Basic Identification)</option>
+                  <option value="2">2 (Regular Identification)</option>
+                  <option value="3">3 (Extended Identification)</option>
+                  <option value="4">4 (Specific Identification)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Object ID</label>
+                <input id="fc43Obj" type="number" min="0" value="0" />
+              </div>
+            </div>
+            <button id="btnFc43" class="btn-run" disabled>Execute Read Dev ID</button>
+          </div>
+        </div>
+
+        <!-- Smoke Test Tab -->
+        <div id="tabSmoke" class="tab-content">
+          <div class="op-card">
+            <div class="op-title">
+              <span>Full Automated Feature Suite Check</span>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+              Clicking below will execute a sequential batch check of all Modbus functions supported by this library starting from address 0.
+            </p>
+            <div class="button-group">
+              <button id="btnRunAll" class="btn-primary" disabled>Run Full Checks Suite</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Execution Log -->
+      <div class="card span-2">
+        <div class="card-title">
+          <span>Client Execution Log</span>
+          <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+            <button id="btnCopy" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; min-width: auto; display: inline-flex; align-items: center; gap: 0.25rem;">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+              Copy
+            </button>
+            <button id="btnClear" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; min-width: auto;">
+              Clear
+            </button>
+          </div>
+        </div>
+        <pre id="log"></pre>
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     import init, { WasmTcpTransport } from "../../dist/web/modbus-rs.js";
 
     const logEl = document.getElementById("log");
-    const log = (msg) => {
-      const ts = new Date().toISOString().slice(11, 23);
-      logEl.textContent += `[${ts}] ${msg}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    };
-
-    const formatValue = (value) => {
-      if (value == null) {
-        return String(value);
-      }
-      if (ArrayBuffer.isView(value)) {
-        return JSON.stringify(Array.from(value));
-      }
-      if (Array.isArray(value)) {
-        return JSON.stringify(value.map((entry) => {
-          if (entry && typeof entry === "object") {
-            const normalized = { ...entry };
-            if (normalized.data && ArrayBuffer.isView(normalized.data)) {
-              normalized.data = Array.from(normalized.data);
-            }
-            return normalized;
-          }
-          return entry;
-        }));
-      }
-      if (typeof value === "object") {
-        return JSON.stringify(value);
-      }
-      return String(value);
-    };
-
-    const requireClient = () => {
-      if (!client) {
-        log("Client not initialized. Click Connect first.");
-        return false;
-      }
-      return true;
-    };
-
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    const classifyError = (name, err) => {
-      const text = String(err);
-      if (text.includes("InvalidTransport")) {
-        return { level: "SKIP", detail: `${text} (serial-only function on TCP/WebSocket transport)` };
-      }
-      if (text.includes("ModbusException(1)")) {
-        return { level: "SKIP", detail: `${text} (device reports unsupported function)` };
-      }
-      return { level: "FAIL", detail: text };
-    };
-
-    const withBusyRetry = async (name, run, retries = 1) => {
-      try {
-        return await run();
-      } catch (err) {
-        const text = String(err);
-        if (retries > 0 && text.includes("ModbusException(6)")) {
-          log(`RETRY ${name}: ${text} -> waiting and retrying once`);
-          await sleep(900);
-          return withBusyRetry(name, run, retries - 1);
-        }
-        throw err;
-      }
-    };
-
-    const withTransportRecovery = async (name, run, retries = 1) => {
-      try {
-        return await run();
-      } catch (err) {
-        const text = String(err);
-        if (retries > 0 && text.includes("NoRetriesLeft")) {
-          if (transport) {
-            log(`RETRY ${name}: ${text} -> reconnecting...`);
-            await transport.reconnect();
-          }
-          await sleep(500);
-          return withTransportRecovery(name, run, retries - 1);
-        }
-        throw err;
-      }
-    };
-
-    const runRobust = async (name, run) =>
-      withTransportRecovery(name, () => withBusyRetry(name, run, 2), 1);
+    const statusBadge = document.getElementById("statusBadge");
+    const statusText = document.getElementById("statusText");
+    const btnConnect = document.getElementById("btnConnect");
+    const btnDisconnect = document.getElementById("btnDisconnect");
+    const btnPing = document.getElementById("btnPing");
+    const btnRawPing = document.getElementById("btnRawPing");
+    
+    // Operations buttons
+    const runButtons = Array.from(document.querySelectorAll('.btn-run'));
+    const btnRunAll = document.getElementById("btnRunAll");
 
     let transport = null;
     let client = null;
 
-    await init();
-    log("WASM initialized.");
+    const log = (msg, type = 'info') => {
+      const ts = new Date().toISOString().slice(11, 23);
+      const div = document.createElement("div");
+      div.className = `log-entry ${type}`;
+      
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "log-time";
+      timeSpan.textContent = `[${ts}]`;
+      
+      const textNode = document.createTextNode(msg);
+      
+      div.appendChild(timeSpan);
+      div.appendChild(textNode);
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    };
 
-    document.getElementById("btnConnect").addEventListener("click", async () => {
+    const formatValue = (value) => {
+      if (value === undefined) return "Success";
+      if (value === null) return "null";
+      if (ArrayBuffer.isView(value)) return `[${Array.from(value).join(', ')}]`;
+      if (Array.isArray(value)) {
+        return `[${value.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(', ')}]`;
+      }
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    };
+
+    const setInteractiveButtonsDisabled = (disabled) => {
+      runButtons.forEach(btn => btn.disabled = disabled);
+      btnRunAll.disabled = disabled;
+    };
+
+    // Initialize WASM
+    try {
+      await init();
+      log("WASM FFI module loaded successfully.", "success");
+    } catch (err) {
+      log(`WASM initialization failed: ${err.message || String(err)}`, "error");
+    }
+
+    // Connect Action
+    btnConnect.addEventListener("click", async () => {
+      const wsUrl = document.getElementById("wsUrl").value.trim();
+      const unitId = parseInt(document.getElementById("unitId").value) || 1;
+      const timeout = parseInt(document.getElementById("timeout").value) || 3000;
+      const retries = parseInt(document.getElementById("retries").value) || 1;
+
+      if (!wsUrl) {
+        log("Cannot connect: WebSocket URL is required.", "error");
+        return;
+      }
+
+      log(`Connecting to WebSocket Gateway at ${wsUrl}...`);
+      statusBadge.className = "status-badge";
+      statusText.textContent = "Connecting...";
+      btnConnect.disabled = true;
+
       try {
-        const ws = document.getElementById("ws").value.trim();
-        const unitId = Number(document.getElementById("unitId").value);
-        const timeout = Number(document.getElementById("timeout").value);
-        const retries = Number(document.getElementById("retries").value);
-
-        log(`Connecting to ${ws}...`);
-        transport = await WasmTcpTransport.connect(ws, {
+        transport = await WasmTcpTransport.connect(wsUrl, {
           responseTimeoutMs: timeout,
           retryAttempts: retries,
         });
+
         client = transport.createClient({ unitId });
-        log(`Client created and connected for ${ws}, unit=${unitId}.`);
+        log(`Successfully connected! Modbus client configured for unitId ${unitId}`, "success");
+        
+        statusBadge.className = "status-badge active";
+        statusText.textContent = "Connected";
+        btnDisconnect.disabled = false;
+        setInteractiveButtonsDisabled(false);
       } catch (err) {
-        log(`Connect setup error: ${String(err)}`);
+        log(`Connection failed: ${err.message || String(err)}`, "error");
+        statusBadge.className = "status-badge";
+        statusText.textContent = "Disconnected";
+        btnConnect.disabled = false;
+        transport = null;
+        client = null;
       }
     });
 
-    document.getElementById("btnPing").addEventListener("click", () => {
+    // Disconnect Action
+    btnDisconnect.addEventListener("click", () => {
+      if (transport) {
+        transport.close();
+        log("Connection closed.", "success");
+      }
+      statusBadge.className = "status-badge";
+      statusText.textContent = "Disconnected";
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      setInteractiveButtonsDisabled(true);
+      transport = null;
+      client = null;
+    });
+
+    // Status Ping Button
+    btnPing.addEventListener("click", () => {
       if (!client) {
-        log("Client not initialized. Click Connect first.");
+        log("Client is not initialized.", "error");
         return;
       }
-      log(`is_connected = ${client.is_connected()}, pendingRequests = ${transport.pendingRequests}`);
+      const isConnected = client.isConnected();
+      const pending = transport.pendingRequests;
+      log(`Client isConnected: ${isConnected}, Transport pendingRequests: ${pending}`, isConnected ? "success" : "error");
     });
 
-    // ── Raw WebSocket connectivity test (bypasses WASM entirely) ──────────
-    document.getElementById("btnRawPing").addEventListener("click", () => {
-      const url = document.getElementById("ws").value.trim();
-      log(`[RAW] Opening plain WebSocket to ${url} ...`);
-      const sock = new WebSocket(url);
-      sock.binaryType = "arraybuffer";
-      sock.onopen  = () => { log(`[RAW] onopen readyState=${sock.readyState}`); sock.close(); };
-      sock.onclose = (e) => { log(`[RAW] onclose code=${e.code} reason='${e.reason}'`); };
-      sock.onerror = ()  => { log(`[RAW] onerror — proxy not reachable or not running`); };
-    });
-
-    document.getElementById("btnRunInputRegs").addEventListener("click", async () => {
-      if (!requireClient()) {
-        return;
+    // Raw WebSocket Ping
+    btnRawPing.addEventListener("click", () => {
+      const url = document.getElementById("wsUrl").value.trim();
+      log(`[RAW WS] Opening plain WebSocket to ${url} ...`);
+      try {
+        const sock = new WebSocket(url);
+        sock.binaryType = "arraybuffer";
+        sock.onopen = () => {
+          log(`[RAW WS] Connection succeeded (readyState=${sock.readyState})`, "success");
+          sock.close();
+        };
+        sock.onclose = (e) => {
+          log(`[RAW WS] Connection closed (code=${e.code} reason='${e.reason}')`);
+        };
+        sock.onerror = () => {
+          log(`[RAW WS] Connection error — proxy may be offline`, "error");
+        };
+      } catch (e) {
+        log(`[RAW WS] Constructor error: ${e.message}`, "error");
       }
-
-      const addr = Number(document.getElementById("fc04Addr").value);
-      const qty = Number(document.getElementById("fc04Qty").value);
-
-      const steps = [
-        ["is_connected", async () => client.is_connected()],
-        ["readInputRegisters", async () => runRobust("readInputRegisters", () => client.readInputRegisters({ address: addr, quantity: qty }))],
-      ];
-
-      log(`Running isolated FC04 checks from address ${addr}, qty ${qty}...`);
-      await sleep(1200);
-      for (const [name, run] of steps) {
-        try {
-          const result = await run();
-          log(`OK   ${name}: ${formatValue(result)}`);
-        } catch (err) {
-          const classified = classifyError(name, err);
-          log(`${classified.level} ${name}: ${classified.detail}`);
-        }
-        await sleep(1200);
-      }
-      log("Isolated FC04 run complete.");
     });
 
+    // Copy Logs
+    document.getElementById("btnCopy").addEventListener("click", async () => {
+      const text = logEl.innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        log("Logs copied to clipboard!", "success");
+      } catch (err) {
+        log(`Failed to copy logs: ${err.message || String(err)}`, "error");
+      }
+    });
+
+    // Clear Logs
+    document.getElementById("btnClear").addEventListener("click", () => {
+      logEl.innerHTML = "";
+    });
+
+    // Tabs Switching
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+        
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    // Parsers
+    const parseBooleans = (str) => {
+      return str.split(',').map(s => s.trim().toLowerCase() === 'true');
+    };
+    const parseIntegers = (str) => {
+      return str.split(',').map(s => parseInt(s.trim()) || 0);
+    };
+
+    // Helper wrapper for request execution
+    const execRequest = async (name, operation) => {
+      log(`Executing operation: ${name}...`);
+      try {
+        const result = await operation();
+        log(`Result [${name}]: ${formatValue(result)}`, "success");
+      } catch (err) {
+        log(`Failed [${name}]: ${err.message || String(err)}`, "error");
+      }
+    };
+
+    // Individual operations event bindings
+    document.getElementById("btnFc1").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc1Addr").value) || 0;
+      const quantity = parseInt(document.getElementById("fc1Qty").value) || 1;
+      execRequest("FC01 Read Coils", () => client.readCoils({ address, quantity }));
+    });
+
+    document.getElementById("btnFc2").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc2Addr").value) || 0;
+      const quantity = parseInt(document.getElementById("fc2Qty").value) || 1;
+      execRequest("FC02 Read Discrete Inputs", () => client.readDiscreteInputs({ address, quantity }));
+    });
+
+    document.getElementById("btnFc5").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc5Addr").value) || 0;
+      const value = document.getElementById("fc5Val").value === "true";
+      execRequest("FC05 Write Single Coil", () => client.writeSingleCoil({ address, value }));
+    });
+
+    document.getElementById("btnFc15").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc15Addr").value) || 0;
+      const values = parseBooleans(document.getElementById("fc15Vals").value);
+      execRequest("FC15 Write Multiple Coils", () => client.writeMultipleCoils({ address, values }));
+    });
+
+    document.getElementById("btnFc3").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc3Addr").value) || 0;
+      const quantity = parseInt(document.getElementById("fc3Qty").value) || 1;
+      execRequest("FC03 Read Holding Registers", () => client.readHoldingRegisters({ address, quantity }));
+    });
+
+    document.getElementById("btnFc4").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc04Addr").value) || 0;
+      const quantity = parseInt(document.getElementById("fc04Qty").value) || 1;
+      execRequest("FC04 Read Input Registers", () => client.readInputRegisters({ address, quantity }));
+    });
+
+    document.getElementById("btnFc6").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc6Addr").value) || 0;
+      const value = parseInt(document.getElementById("fc6Val").value) || 0;
+      execRequest("FC06 Write Single Register", () => client.writeSingleRegister({ address, value }));
+    });
+
+    document.getElementById("btnFc16").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc16Addr").value) || 0;
+      const values = parseIntegers(document.getElementById("fc16Vals").value);
+      execRequest("FC16 Write Multiple Registers", () => client.writeMultipleRegisters({ address, values }));
+    });
+
+    document.getElementById("btnFc23").addEventListener("click", () => {
+      const readAddress = parseInt(document.getElementById("fc23ReadAddr").value) || 0;
+      const readQuantity = parseInt(document.getElementById("fc23ReadQty").value) || 1;
+      const writeAddress = parseInt(document.getElementById("fc23WriteAddr").value) || 0;
+      const writeValues = parseIntegers(document.getElementById("fc23WriteVals").value);
+      execRequest("FC23 Read/Write Multiple Registers", () => client.readWriteMultipleRegisters({
+        readAddress, readQuantity, writeAddress, writeValues
+      }));
+    });
+
+    document.getElementById("btnFc22").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc22Addr").value) || 0;
+      const andMask = parseInt(document.getElementById("fc22And").value, 16) || 0;
+      const orMask = parseInt(document.getElementById("fc22Or").value, 16) || 0;
+      execRequest("FC22 Mask Write Register", () => client.maskWriteRegister({ address, andMask, orMask }));
+    });
+
+    document.getElementById("btnFc14").addEventListener("click", () => {
+      const fileNumber = parseInt(document.getElementById("fc14File").value) || 0;
+      const recordNumber = parseInt(document.getElementById("fc14Record").value) || 0;
+      const recordLength = parseInt(document.getElementById("fc14Length").value) || 1;
+      execRequest("FC14 Read File Record", () => client.readFileRecord({
+        requests: [{ fileNumber, recordNumber, recordLength }]
+      }));
+    });
+
+    document.getElementById("btnFc15Record").addEventListener("click", () => {
+      const fileNumber = parseInt(document.getElementById("fc15FileNum").value) || 0;
+      const recordNumber = parseInt(document.getElementById("fc15RecNum").value) || 0;
+      const recordData = parseIntegers(document.getElementById("fc15RecData").value);
+      execRequest("FC15 Write File Record", () => client.writeFileRecord({
+        requests: [{ fileNumber, recordNumber, recordData }]
+      }));
+    });
+
+    document.getElementById("btnFc18").addEventListener("click", () => {
+      const address = parseInt(document.getElementById("fc18Addr").value) || 0;
+      execRequest("FC18 Read FIFO Queue", () => client.readFifoQueue({ address }));
+    });
+
+    document.getElementById("btnFc7").addEventListener("click", () => {
+      execRequest("FC07 Read Exception Status", () => client.readExceptionStatus());
+    });
+
+    document.getElementById("btnFc8").addEventListener("click", () => {
+      const subFunction = parseInt(document.getElementById("fc8Sub").value) || 0;
+      const data = parseIntegers(document.getElementById("fc8Data").value);
+      execRequest("FC08 Diagnostics", () => client.diagnostics({ subFunction, data }));
+    });
+
+    document.getElementById("btnFc43").addEventListener("click", () => {
+      const readDeviceIdCode = parseInt(document.getElementById("fc43Code").value) || 1;
+      const objectId = parseInt(document.getElementById("fc43Obj").value) || 0;
+      execRequest("FC43 Read Device ID", () => client.readDeviceIdentification({ readDeviceIdCode, objectId }));
+    });
+
+    // Automated full smoke checks
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    
     document.getElementById("btnRunAll").addEventListener("click", async () => {
-      if (!requireClient()) {
-        return;
-      }
+      if (!client) return;
 
       const steps = [
-        ["is_connected", async () => client.is_connected()],
-        ["readCoils", async () => runRobust("readCoils", () => client.readCoils({ address: 0, quantity: 8 }))],
-        ["writeSingleCoil", async () => runRobust("writeSingleCoil", () => client.writeSingleCoil({ address: 0, value: true }))],
-        ["writeMultipleCoils", async () => runRobust("writeMultipleCoils", () => client.writeMultipleCoils({ address: 0, values: [true, true, true, true, false, false, false, false] }))],
-        ["readDiscreteInputs", async () => runRobust("readDiscreteInputs", () => client.readDiscreteInputs({ address: 0, quantity: 8 }))],
-        ["readHoldingRegisters", async () => runRobust("readHoldingRegisters", () => client.readHoldingRegisters({ address: 0, quantity: 2 }))],
-        ["writeSingleRegister", async () => runRobust("writeSingleRegister", () => client.writeSingleRegister({ address: 0, value: 1 }))],
-        ["writeMultipleRegisters", async () => runRobust("writeMultipleRegisters", () => client.writeMultipleRegisters({ address: 0, values: [1, 2] }))],
-        ["readWriteMultipleRegisters", async () => runRobust("readWriteMultipleRegisters", () => client.readWriteMultipleRegisters({ readAddress: 0, readQuantity: 1, writeAddress: 0, writeValues: [3, 4] }))],
-        ["maskWriteRegister", async () => runRobust("maskWriteRegister", () => client.maskWriteRegister({ address: 0, andMask: 0xFFFF, orMask: 0x0001 }))],
-        ["readInputRegisters", async () => runRobust("readInputRegisters", () => client.readInputRegisters({ address: 0, quantity: 10 }))],
-        ["readFifoQueue", async () => runRobust("readFifoQueue", () => client.readFifoQueue({ address: 0 }))],
-        ["readFileRecord", async () => runRobust("readFileRecord", () => client.readFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordLength: 1 }] }))],
-        ["writeFileRecord", async () => runRobust("writeFileRecord", () => client.writeFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordData: [1] }] }))],
-        ["readExceptionStatus", async () => runRobust("readExceptionStatus", () => client.readExceptionStatus())],
-        ["diagnostics", async () => runRobust("diagnostics", () => client.diagnostics({ subFunction: 0, data: [0] }))],
-        ["readDeviceIdentification", async () => runRobust("readDeviceIdentification", () => client.readDeviceIdentification({ readDeviceIdCode: 1, objectId: 0 }))],
+        ["isConnected", async () => client.isConnected()],
+        ["readCoils", async () => client.readCoils({ address: 0, quantity: 8 })],
+        ["writeSingleCoil", async () => client.writeSingleCoil({ address: 0, value: true })],
+        ["writeMultipleCoils", async () => client.writeMultipleCoils({ address: 0, values: [true, true, true, true, false, false, false, false] })],
+        ["readDiscreteInputs", async () => client.readDiscreteInputs({ address: 0, quantity: 8 })],
+        ["readHoldingRegisters", async () => client.readHoldingRegisters({ address: 0, quantity: 2 })],
+        ["writeSingleRegister", async () => client.writeSingleRegister({ address: 0, value: 1 })],
+        ["writeMultipleRegisters", async () => client.writeMultipleRegisters({ address: 0, values: [1, 2] })],
+        ["readWriteMultipleRegisters", async () => client.readWriteMultipleRegisters({ readAddress: 0, readQuantity: 1, writeAddress: 0, writeValues: [3, 4] })],
+        ["maskWriteRegister", async () => client.maskWriteRegister({ address: 0, andMask: 0xFFFF, orMask: 0x0001 })],
+        ["readInputRegisters", async () => client.readInputRegisters({ address: 0, quantity: 10 })],
+        ["readFifoQueue", async () => client.readFifoQueue({ address: 0 })],
+        ["readFileRecord", async () => client.readFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordLength: 1 }] })],
+        ["writeFileRecord", async () => client.writeFileRecord({ requests: [{ fileNumber: 1, recordNumber: 0, recordData: [1] }] })],
+        ["readExceptionStatus", async () => client.readExceptionStatus()],
+        ["diagnostics", async () => client.diagnostics({ subFunction: 0, data: [0] })],
+        ["readDeviceIdentification", async () => client.readDeviceIdentification({ readDeviceIdCode: 1, objectId: 0 })],
       ];
 
-      log("Running minimal full smoke from address 0...");
+      log("Starting automated smoke run suite...", "info");
+      btnRunAll.disabled = true;
       for (const [name, run] of steps) {
         try {
-          const result = await run();
-          log(`OK   ${name}: ${formatValue(result)}`);
+          const res = await run();
+          log(`OK   ${name}: ${formatValue(res)}`, "success");
         } catch (err) {
-          const classified = classifyError(name, err);
-          log(`${classified.level} ${name}: ${classified.detail}`);
+          log(`FAIL ${name}: ${err.message || String(err)}`, "error");
         }
-        await sleep(700);
+        await sleep(400);
       }
-      log("Smoke run complete.");
+      log("Automated smoke run suite complete.", "info");
+      btnRunAll.disabled = false;
     });
   </script>
 </body>
