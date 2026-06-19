@@ -135,16 +135,15 @@ document.getElementById('connect-btn').addEventListener('click', async () => {
       stopBits: 1,
       parity: 'even',
       responseTimeoutMs: 1000,
-      retryAttempts: 3,
-      tickIntervalMs: 20
+      retryAttempts: 3
     });
 
     // 3. Spawn a client for a specific slave (Unit ID)
-    const client = transport.create_client({ unitId: 10 });
+    const client = transport.createClient({ unitId: 10 });
 
     // 4. Read coils
-    const coils = await client.read_coils(0, 8);
-    console.log('Coils:', coils); // Uint8Array
+    const coils = await client.readCoils({ address: 0, quantity: 8 });
+    console.log('Coils:', coils); // boolean[]
     
   } catch (err) {
     console.error('Serial error:', err);
@@ -160,18 +159,17 @@ import { WasmTcpTransport } from 'modbus-rs-wasm';
 
 async function readRegisters() {
   // 1. Connect to a WebSocket proxy that forwards to a Modbus TCP device
-  const transport = new WasmTcpTransport('ws://localhost:8502', { 
+  const transport = await WasmTcpTransport.connect('ws://localhost:8502', { 
     responseTimeoutMs: 5000, 
-    retryAttempts: 3, 
-    tickIntervalMs: 20 
+    retryAttempts: 3
   });
 
   // 2. Spawn a client attached to Unit ID 1
-  const client = transport.create_client({ unitId: 1 });
+  const client = transport.createClient({ unitId: 1 });
 
   try {
     // 3. Read 10 holding registers starting at address 0
-    const registers = await client.read_holding_registers(0, 10);
+    const registers = await client.readHoldingRegisters({ address: 0, quantity: 10 });
     console.log('Holding registers:', registers); // Uint16Array
   } catch (error) {
     console.error('Failed to read registers:', error);
@@ -181,36 +179,40 @@ async function readRegisters() {
 
 ### Modbus server demo with modbus-rs-wasm
 
-The `modbus-rs-wasm` package also provides building blocks for server simulation inside the browser. You can instantiate a `WasmTcpServer` or `WasmSerialServer` by providing a configuration and a JavaScript callback to process incoming requests.
+The `modbus-rs-wasm` package also provides building blocks for server simulation inside the browser. You can bind a `WasmTcpServer` or `WasmSerialServer` by providing configurations and an object implementing `ServerHandlers` callback methods.
 
 Here is a quick example of setting up a simulated server via a WebSocket TCP gateway:
 
 ```javascript
-import { WasmTcpGatewayConfig, WasmTcpServer } from 'modbus-rs-wasm';
+import { WasmTcpServer } from 'modbus-rs-wasm';
 
 async function simulateServer() {
-  // 1. Configure the server (e.g., pointing to a WebSocket gateway)
-  const config = new WasmTcpGatewayConfig("ws://localhost:8080");
+  // 1. Define the request handlers
+  const handlers = {
+    onReadHoldingRegisters: async (request) => {
+      console.log("Received Modbus request:", request);
+      
+      // Callbacks can return values synchronously or as Promises
+      return [100, 200, 300];
+    }
+  };
 
-  // 2. Create the server and define the request handler
-  const server = new WasmTcpServer(config, async (request) => {
-    console.log("Received Modbus request:", request);
-    
-    // Simulate processing the request
-    // The handler can be fully asynchronous and return a Promise
-    return {
-      // Return appropriate response fields based on the request
-      success: true,
-      data: [100, 200, 300]
-    };
+  // 2. Bind the server
+  const server = await WasmTcpServer.bind(
+    {
+      wsUrl: "ws://localhost:8080",
+      unitId: 1
+    },
+    handlers
+  );
+
+  // 3. Start the event loop (runs asynchronously in background)
+  server.serve().catch(err => {
+    console.error("Server crashed:", err);
   });
-
-  // 3. Start the server
-  server.start();
   
-  // Observe the server status
-  console.log("Server running:", server.is_running());
-  console.log("Server status:", server.status_snapshot());
+  // To stop the server later:
+  // await server.shutdown();
 }
 ```
 
@@ -219,31 +221,34 @@ async function simulateServer() {
 You can also create a simulated serial server (RTU or ASCII) and attach a browser `SerialPort` to it using the Web Serial API:
 
 ```javascript
-import { WasmSerialServerConfig, WasmSerialServer } from 'modbus-rs-wasm';
+import { WasmSerialServer } from 'modbus-rs-wasm';
 
 async function simulateSerialServer() {
   // 1. Request a serial port from the user (requires user gesture)
   const port = await navigator.serial.requestPort();
   
-  // 2. Configure the server for RTU or ASCII mode
-  const config = WasmSerialServerConfig.rtu(); // or .ascii()
+  // 2. Define the request handlers
+  const handlers = {
+    onReadHoldingRegisters: (request) => {
+      console.log("Received Modbus request via Serial:", request);
+      return [100, 200, 300];
+    }
+  };
 
-  // 3. Create the server with a request handler callback
-  const server = new WasmSerialServer(config, async (request) => {
-    console.log("Received Modbus request via Serial:", request);
-    return {
-      success: true,
-      data: [100, 200, 300]
-    };
+  // 3. Bind the server for RTU mode
+  const server = await WasmSerialServer.bindRtu(
+    {
+      serialPort: port,
+      unitId: 1,
+      baudRate: 19200
+    },
+    handlers
+  );
+
+  // 4. Start the event loop
+  server.serve().catch(err => {
+    console.error("Serial Server crashed:", err);
   });
-
-  // 4. Attach the browser serial port
-  server.attach_serial_port(port);
-
-  // 5. Start the server
-  server.start();
-  
-  console.log("Serial Server running:", server.is_running());
 }
 ```
 
