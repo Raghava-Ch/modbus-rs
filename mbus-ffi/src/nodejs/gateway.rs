@@ -81,7 +81,7 @@ impl AsyncTcpGateway {
         let stop_signal_clone = stop_signal.clone();
 
         // Build the route table
-        let mut route_table: UnitRouteTable<16> = UnitRouteTable::new();
+        let mut route_table: UnitRouteTable<64> = UnitRouteTable::new();
         for entry in &config.routes {
             let unit = UnitIdOrSlaveAddr::new(entry.unit_id)
                 .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;

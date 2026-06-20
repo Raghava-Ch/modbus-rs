@@ -1058,7 +1058,7 @@ impl JsServerHandlers {
     fn default_device_id_response(read_device_id_code: u8, start_object_id: u8) -> ModbusResponse {
         let vendor_name = b"Modbus-RS WASM Server";
         let product_code = b"mbus-wasm-server";
-        let revision = b"0.14.2";
+        let revision = b"0.15.0";
         let vendor_url = b"https://github.com/Raghava-Ch/modbus-rs";
         let product_name = b"WASM Server Simulator";
 

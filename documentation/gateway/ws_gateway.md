@@ -27,7 +27,7 @@ Because `WasmModbusClient` already constructs complete Modbus TCP ADUs (MBAP hea
 
 ```toml
 [dependencies]
-mbus-gateway = { version = "0.14.0", features = ["upstream-ws"] }
+mbus-gateway = { version = "0.15.0", features = ["upstream-ws"] }
 ```
 
 `upstream-ws` pulls in `tokio-tungstenite` (opt-in; not included in the default features).
@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
 The downstream can be any `AsyncTransport` — including Tokio async serial. Pair `upstream-ws` with the `downstream-serial-rtu` feature:
 
 ```toml
-mbus-gateway = { version = "0.14.0", features = ["upstream-ws", "downstream-serial-rtu"] }
+mbus-gateway = { version = "0.15.0", features = ["upstream-ws", "downstream-serial-rtu"] }
 ```
 
 <!-- validate: no_run -->

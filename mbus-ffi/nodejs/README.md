@@ -5,10 +5,10 @@ High-performance Modbus TCP/RTU/ASCII client, server, and gateway for Node.js, p
 ## Features
 
 - **Async/Promise-based API** - All operations return Promises
-- **TCP Client** - Full Modbus TCP/IP client implementation (supports communicating with multiple unit IDs behind a single IP address and port)
+- **TCP Client** - Full Modbus TCP/IP client implementation (supports communicating with multiple unit IDs behind a single IP address and a serial port)
 - **Serial Client** - Modbus RTU and ASCII over serial port
 - **TCP & Serial Servers** - Build Modbus TCP servers, or Serial RTU and ASCII servers, using custom JavaScript handlers to respond to incoming requests
-- **Modbus Gateway** - Deploy high-performance gateways supporting WebSockets, TCP, and Serial (RTU/ASCII) as both upstream and downstream channels, dynamically routing requests based on unit ID mapping tables
+- **Modbus Gateway** - Deploy high-performance gateways supporting WebSockets, TCP, and Serial (RTU/ASCII) as upstream channels, and TCP/Serial (RTU/ASCII) as downstream channels (WebSocket downstream support planned for a future release), dynamically routing requests based on unit ID mapping tables
 - **Thread Safety & Concurrency** - Rust-backed concurrent architecture ensures safe access across multiple async execution contexts
 - **Safety Locks** - Integrated bus locking to prevent command collisions and state corruption
 - **Multi-drop Serial Support** - Manage and communicate with multiple device unit IDs on a single physical RTU/ASCII bus
@@ -156,37 +156,8 @@ main().catch(console.error);
 
 ## Migration Guide
 
-### v0.15 Breaking Changes
+Detailed step-by-step migration guides are available in the [Migration Guides](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/migrations) directory.
 
-#### `TcpTransportOptions.timeoutMs` renamed to `requestTimeoutMs`
-
-```js
-// v0.14 (old)
-const transport = await AsyncTcpTransport.connect({
-  host: '127.0.0.1',
-  port: 502,
-  timeoutMs: 5000,   // ← old name
-});
-
-// v0.15+ (new)
-const transport = await AsyncTcpTransport.connect({
-  host: '127.0.0.1',
-  port: 502,
-  requestTimeoutMs: 5000,   // ← consistent with all other transports
-});
-```
-
-#### Server `bind()` / `bindRtu()` / `bindAscii()` are now async
-
-```js
-// v0.14 (old)
-const server = AsyncTcpModbusServer.bind(opts, handlers);  // sync
-
-// v0.15+ (new)
-const server = await AsyncTcpModbusServer.bind(opts, handlers);  // async, throws on bind failure
-```
-
-This change allows bind errors (port already in use, invalid address, etc.) to propagate to your code instead of being silently swallowed.
 
 ## Error Handling with Code Constants
 
@@ -211,8 +182,8 @@ try {
 ## Known Limitations
 
 - **AbortSignal**: Uses `signal.onabort` instead of `signal.addEventListener`. Only one abort handler per signal object is supported.
-- **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **16 routing entries**. Attempting to add more will throw at `bind()` time.
-- **Server file record handlers (FC20/FC21)**: The server-side handler receives a simplified request structure. Complex multi-sub-request scenarios are supported.
+- **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **64 routing entries**. Attempting to add more will throw at `bind()` time.
+- **Gateway Downstream**: WebSockets are currently not supported as a downstream channel (support is planned for a future release).
 
 ## API Reference
 

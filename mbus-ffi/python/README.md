@@ -221,14 +221,18 @@ import modbus_rs
 
 async def main():
     gw = modbus_rs.AsyncTcpGateway("0.0.0.0:5020")
-    ch = await gw.add_tcp_downstream("192.168.1.10", 502)
-    await gw.add_unit_route(unit=1, channel=ch)
+    ch = gw.add_tcp_downstream("192.168.1.10", 502)
+    gw.add_unit_route(unit=1, channel=ch)
     await gw.serve_forever()  # cancel the task or call gw.stop() to exit
 
 asyncio.run(main())
 ```
 
 > Note: The optional `event_handler=` constructor argument accepts a `GatewayEventHandler` subclass to receive telemetry callbacks for routing, forwarding, and errors. See [event_handler_demo.py](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/examples/python_gateway/event_handler_demo.py) for a complete example of logging telemetry events.
+
+## Migration Guide
+
+Detailed step-by-step migration guides are available in the [Migration Guides](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/migrations) directory.
 
 ## More Docs
 

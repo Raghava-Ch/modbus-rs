@@ -100,7 +100,8 @@ Ready-to-run HTML examples demonstrating both Modbus client and server functiona
 - **[wasm_client/serial_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_client/serial_smoke.html)**: Web Serial Modbus RTU client example.
 - **[wasm_server/network_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_server/network_smoke.html)**: WebSocket Modbus TCP server example.
 - **[wasm_server/serial_smoke.html](https://github.com/Raghava-Ch/modbus-rs/blob/main/mbus-ffi/wasm/examples/wasm_server/serial_smoke.html)**: Web Serial Modbus RTU server example.
-- **[real world example](https://github.com/Raghava-Ch/modbus-lab)**: Comes with demo web client and tauri based desktop client and server simulators with source code.
+- **[Demo Application](https://modbus-lab.vercel.app)**: Live web application demonstrating modbus-rs-wasm in action. [modbus-lab.vercel.app](https://modbus-lab.vercel.app)
+- **[Real-World Example Source Code](https://github.com/Raghava-Ch/modbus-lab)**: Repository containing the source code for the demo web client and Tauri-based desktop client/server simulators.
 
 To run the examples locally:
 ```bash
@@ -251,6 +252,10 @@ async function simulateSerialServer() {
   });
 }
 ```
+
+## Migration Guide
+
+Detailed step-by-step migration guides are available in the [Migration Guides](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/migrations) directory.
 
 ## License
 
