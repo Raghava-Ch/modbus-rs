@@ -28,24 +28,35 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.16.0
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: mbus-ffi/wasm/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mbus-ffi/wasm
+        run: npm ci
+
       - name: Build WASM package
         working-directory: mbus-ffi/wasm
         run: |
           npm run build
           npm run verify
 
+      - name: Install Playwright Chromium
+        working-directory: mbus-ffi/wasm
+        run: npx playwright install --with-deps chromium
+
       - name: Run WASM tests (headless Chrome)
         working-directory: mbus-ffi/wasm
         run: npm test
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24.16.0
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to npm
         working-directory: mbus-ffi/wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
+
