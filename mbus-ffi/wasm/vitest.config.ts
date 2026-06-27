@@ -1,16 +1,24 @@
+/// <reference types="vitest" />
+
 import { defineConfig } from 'vitest/config';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
+  plugins: [wasm(), topLevelAwait()],
   test: {
-    // All tests run inside a real Chromium browser page.
+    globalSetup: './tests/global-setup.ts',
     browser: {
       enabled: true,
-      provider: 'playwright',
-      name: 'chromium',
-      headless: true,         // false locally for debugging
+      headless: true,
+      provider: playwright(),
+      instances: [
+        { browser: 'chromium' }
+      ],
     },
-    globalSetup: './tests/global-setup.ts',  // starts ws server
-    testTimeout: 15_000,
-    hookTimeout: 10_000,
+  },
+  optimizeDeps: {
+    exclude: ['modbus-rs-wasm'],
   },
 });

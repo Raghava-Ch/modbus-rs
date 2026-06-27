@@ -47,8 +47,8 @@ traffic = ["mbus-async/traffic"]
 
 [[example]]
 name = "quick_async_server"
-required-features = ["server-tcp", "coils", "registers"]
+required-features = ["server-tcp", "coils", "registers", "traffic"]
 
 [[example]]
 name = "macro_async_server"
-required-features = ["server-tcp", "coils", "registers"]
+required-features = ["server-tcp", "coils", "registers", "traffic"]

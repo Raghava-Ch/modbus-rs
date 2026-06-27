@@ -78,6 +78,8 @@ struct PendingEntry {
     resp_tx: ResponseSender,
     /// Original request parameters — used for traffic hooks and response fix-up.
     request: ClientRequest,
+    retry_attempts: u8,
+    retry_delay_ms: u64,
 }
 
 // ─── ClientTask ───────────────────────────────────────────────────────────────
@@ -165,61 +167,103 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     ///
     /// `Connect` variants arriving here are rejected with `MbusError::Unexpected`.
     async fn dispatch_request(&mut self, cmd: TaskCommand) {
-        let (params, resp_tx) = match cmd {
-            TaskCommand::Request { params, resp_tx } => (params, resp_tx),
+        let (params, resp_tx, mut retry_attempts, retry_delay_ms) = match cmd {
+            TaskCommand::Request {
+                params,
+                resp_tx,
+                retry_attempts,
+                retry_delay_ms,
+            } => (params, resp_tx, retry_attempts, retry_delay_ms),
             TaskCommand::Connect { resp_tx } => {
                 let _ = resp_tx.send(Err(MbusError::Unexpected));
                 return;
             }
             // Disconnect is handled in handle_command before reaching here.
             TaskCommand::Disconnect => return,
-        };
-
-        // Bail early if disconnected; transport-family metadata is compile-time.
-        if self.transport.is_none() {
-            let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
-            return;
-        }
-        let ttype = T::TRANSPORT_TYPE;
-        let txn_id = self.advance_txn_id();
-        let frame = match encode_request(txn_id, &params, ttype) {
-            Ok(f) => f,
-            Err(e) => {
-                let _ = resp_tx.send(Err(e));
+            TaskCommand::Shutdown => {
+                println!("shutown reached and sending reply");
                 return;
             }
         };
 
-        // Capture unit before moving `params` into the pending map.
-        #[cfg(feature = "traffic")]
-        let unit = params.unit();
-
-        // Take a mutable transport borrow only for the duration of the send.
-        // Using a scoped expression so NLL ends the borrow before we insert into
-        // `self.pending` (which also needs `&mut self`).
-        let send_result = match self.transport.as_mut() {
-            Some(t) => t.send(&frame).await,
-            None => Err(MbusError::ConnectionClosed),
-        };
-
-        match send_result {
-            Ok(()) => {
-                #[cfg(feature = "traffic")]
-                self.fire_tx_frame(txn_id, unit, &frame);
-                self.pending.insert(
-                    txn_id,
-                    PendingEntry {
-                        resp_tx,
-                        request: params,
-                    },
-                );
-                self.in_flight += 1;
-                self.update_pending_count();
+        loop {
+            // Bail early if disconnected and we have no retries left
+            if self.transport.is_none() && retry_attempts == 0 {
+                let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
+                return;
             }
-            Err(e) => {
-                #[cfg(feature = "traffic")]
-                self.fire_tx_error(txn_id, unit, e);
-                let _ = resp_tx.send(Err(e));
+
+            // If disconnected but we have retries left, attempt reconnect
+            if self.transport.is_none() {
+                if retry_delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(retry_delay_ms)).await;
+                }
+                if let Err(e) = self.do_connect().await {
+                    retry_attempts = retry_attempts.saturating_sub(1);
+                    if retry_attempts == 0 {
+                        let _ = resp_tx.send(Err(e));
+                        return;
+                    }
+                    continue;
+                }
+            }
+
+            let ttype = T::TRANSPORT_TYPE;
+            let txn_id = self.advance_txn_id();
+            let frame = match encode_request(txn_id, &params, ttype) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = resp_tx.send(Err(e));
+                    return;
+                }
+            };
+
+            // Capture unit before moving `params` into the pending map.
+            #[cfg(feature = "traffic")]
+            let unit = params.unit();
+
+            // Take a mutable transport borrow only for the duration of the send.
+            // Using a scoped expression so NLL ends the borrow before we insert into
+            // `self.pending` (which also needs `&mut self`).
+            let send_result = match self.transport.as_mut() {
+                Some(t) => t.send(&frame).await,
+                None => Err(MbusError::ConnectionClosed),
+            };
+
+            match send_result {
+                Ok(()) => {
+                    #[cfg(feature = "traffic")]
+                    self.fire_tx_frame(txn_id, unit, &frame);
+                    self.pending.insert(
+                        txn_id,
+                        PendingEntry {
+                            resp_tx,
+                            request: params,
+                            retry_attempts,
+                            retry_delay_ms,
+                        },
+                    );
+                    self.in_flight += 1;
+                    self.update_pending_count();
+                    return;
+                }
+                Err(e) => {
+                    #[cfg(feature = "traffic")]
+                    self.fire_tx_error(txn_id, unit, e);
+
+                    // Connection failed. We must set transport to None.
+                    self.transport = None;
+
+                    // Option (b): fail or re-queue other in-flight requests
+                    self.handle_connection_loss();
+
+                    if retry_attempts == 0 {
+                        let _ = resp_tx.send(Err(e));
+                        return;
+                    }
+
+                    retry_attempts = retry_attempts.saturating_sub(1);
+                }
             }
         }
     }
@@ -293,15 +337,40 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             if let TaskCommand::Request { resp_tx, .. } = cmd {
                 let _ = resp_tx.send(Err(MbusError::ConnectionClosed));
             }
-            // TaskCommand::Connect / Disconnect have no resp_tx to drain.
+            // TaskCommand::Connect / Disconnect / Shutdown have no resp_tx to drain.
         }
         self.in_flight = 0;
         self.update_pending_count();
     }
 
-    /// Dispatches or queues a single request command; handles `Connect` and
-    /// `Disconnect` inline.
-    async fn handle_command(&mut self, cmd: TaskCommand) {
+    /// Called when the active transport connection is lost.
+    /// Drains all pending entries. If they have retry attempts left, they are
+    /// re-queued at the front of `self.queued` (in original txn_id order) to be
+    /// retried after reconnecting. Otherwise, they fail with `ConnectionClosed`.
+    fn handle_connection_loss(&mut self) {
+        let mut pending_entries: Vec<(u16, PendingEntry)> = self.pending.drain().collect();
+        pending_entries.sort_by_key(|(txn_id, _)| *txn_id);
+
+        for (_txn_id, entry) in pending_entries.into_iter().rev() {
+            if entry.retry_attempts > 0 {
+                self.queued.push_front(TaskCommand::Request {
+                    params: entry.request,
+                    resp_tx: entry.resp_tx,
+                    retry_attempts: entry.retry_attempts - 1,
+                    retry_delay_ms: entry.retry_delay_ms,
+                });
+            } else {
+                let _ = entry.resp_tx.send(Err(MbusError::ConnectionClosed));
+            }
+        }
+        self.in_flight = 0;
+        self.update_pending_count();
+    }
+
+    /// Dispatches or queues a single request command; handles `Connect`,
+    /// `Disconnect` and `Shutdown` inline. Returns `true` if the task
+    /// loop should continue running, or `false` if `Shutdown` was received.
+    async fn handle_command(&mut self, cmd: TaskCommand) -> bool {
         match cmd {
             TaskCommand::Connect { resp_tx } => {
                 let result = self.do_connect().await;
@@ -313,6 +382,12 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 self.drain_all();
                 self.transport = None;
             }
+            TaskCommand::Shutdown => {
+                // Permanently shut down the communication task.
+                self.drain_all();
+                self.transport = None;
+                return false;
+            }
             req_cmd => {
                 if self.in_flight < N {
                     self.dispatch_request(req_cmd).await;
@@ -321,6 +396,7 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 }
             }
         }
+        true
     }
 
     // ── Traffic hooks (no-ops when feature is off) ────────────────────────────
@@ -389,10 +465,9 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 recv_result = recv_if_active(&mut self.transport, self.in_flight) => {
                     match recv_result {
                         Ok(frame) => self.process_frame(&frame),
-                        Err(e) => {
-                            eprintln!("Client transport recv error: {:?}", e);
+                        Err(_e) => {
                             self.transport = None;
-                            self.drain_all();
+                            self.handle_connection_loss();
                         }
                     }
                 }
@@ -401,12 +476,16 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 maybe_cmd = self.cmd_rx.recv() => {
                     match maybe_cmd {
                         Some(cmd) => {
-                            self.handle_command(cmd).await;
+                            if !self.handle_command(cmd).await {
+                                return;
+                            }
                             let mut count = 1;
                             while self.in_flight < N && count < 16 {
                                 match self.cmd_rx.try_recv() {
                                     Ok(next_cmd) => {
-                                        self.handle_command(next_cmd).await;
+                                        if !self.handle_command(next_cmd).await {
+                                            return;
+                                        }
                                         count += 1;
                                     }
                                     _ => break,

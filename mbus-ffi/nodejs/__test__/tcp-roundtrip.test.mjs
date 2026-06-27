@@ -603,3 +603,431 @@ test('round-trip reads/writes for remaining Modbus services (discrete inputs, in
   ]);
 });
 
+test('client fails to connect to non-existent server', async () => {
+  // Attempt to connect to a port where no server is listening.
+  await assert.rejects(
+    async () => {
+      await AsyncTcpTransport.connect({
+        host: '127.0.0.1',
+        port: PORT + 14, // Unused port
+        requestTimeoutMs: 500, // Use a short timeout
+      });
+    },
+    (err) => {
+      // The exact error message can vary, but it should indicate a connection failure.
+      const msg = err.message.toLowerCase();
+      assert.ok(
+        msg.includes('connection refused') ||
+        msg.includes('connect error') ||
+        msg.includes('timeout') ||
+        msg.includes('connectionfailed'),
+        `Unexpected connection error: ${err.message}`
+      );
+      return true;
+    }
+  );
+});
+
+test('client retries on send failure and succeeds after reconnect', async (t) => {
+  // This test simulates a scenario where the server connection is dropped,
+  // a client request fails to send, and then the client successfully
+  // reconnects and retries the request.
+
+  let server;
+  const serverPort = PORT + 16;
+  const holdingRegisters = new Uint16Array(10).fill(0);
+
+  // This function creates and starts a server instance.
+  const startServer = async () => {
+    const s = await AsyncTcpModbusServer.bind(
+      { host: '127.0.0.1', port: serverPort, unitId: 1 },
+      {
+        onWriteSingleRegister: async ({ address, value }) => {
+          holdingRegisters[address] = value;
+        },
+        onReadHoldingRegisters: async ({ address, quantity }) => {
+          return Array.from(holdingRegisters.slice(address, address + quantity));
+        }
+      }
+    );
+    // Give the server a moment to bind fully.
+    await new Promise((r) => setTimeout(r, 50));
+    return s;
+  };
+
+  server = await startServer();
+  t.after(async () => {
+    if (server) await server.shutdown();
+  });
+
+  // Connect the client with retries enabled.
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: serverPort,
+    requestTimeoutMs: 1000,
+    retryAttempts: 3,
+    retryDelayMs: 200,
+  });
+  t.after(async () => await transport.close());
+
+  const client = transport.createClient({ unitId: 1 });
+
+  // 1. Initial successful write to confirm connection.
+  await client.writeSingleRegister({ address: 0, value: 42 });
+  let regs = await client.readHoldingRegisters({ address: 0, quantity: 1 });
+  assert.deepEqual(regs, [42], 'Initial write should succeed');
+
+  // 2. Shut down the server to simulate connection loss.
+  await server.shutdown();
+  server = null;
+  await new Promise((r) => setTimeout(r, 100)); // Wait for OS to close port.
+
+  // 3. Attempt a write, which will fail to send and be queued for retry.
+  // We don't await this promise yet.
+  const writePromise = client.writeSingleRegister({ address: 1, value: 99 });
+
+  // Give the client time to attempt the first send, which should fail.
+  await new Promise((r) => setTimeout(r, 100));
+
+  // 4. Restart the server.
+  server = await startServer();
+
+  // 5. Now, await the write promise. The client's background task should
+  // automatically reconnect and the retry mechanism should successfully
+  // send the queued request.
+  try {
+    await writePromise;
+  } catch (err) {
+    console.error("WRITE_PROMISE_ERROR:", err);
+    throw err;
+  }
+
+  // 6. Verify the write succeeded by reading the value back.
+  regs = await client.readHoldingRegisters({ address: 1, quantity: 1 });
+  assert.deepEqual(regs, [99], 'Write after reconnect and retry should succeed');
+});
+
+test('client request fails if server disconnects mid-operation and does not recover', async (t) => {
+  // This test validates that if a server disconnects while a client is
+  // waiting for a response, the request will eventually fail with a
+  // timeout or connection error, even with retries enabled.
+
+  let server;
+  server = await AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 17, unitId: 1 },
+    {
+      onReadHoldingRegisters: async () => {
+        // Trigger server shutdown while this handler is running.
+        // The client's request will fail because the server closes down.
+        // We use a finite timeout longer than the client's outer timeout
+        // so no zombie tasks are left behind.
+        server.shutdown().catch(() => {});
+        await new Promise((r) => setTimeout(r, 2500));
+        return [1, 2, 3];
+      }
+    }
+  );
+  t.after(async () => {
+    if (server) {
+      try {
+        await server.shutdown();
+      } catch (e) { /* ignore */ }
+    }
+  });
+
+  const transport = await AsyncTcpTransport.connect({ host: '127.0.0.1', port: PORT + 17, requestTimeoutMs: 500, retryAttempts: 2, retryDelayMs: 100 });
+  t.after(async () => await transport.close());
+  const client = transport.createClient({ unitId: 1 });
+
+  await assert.rejects(client.readHoldingRegisters({ address: 0, quantity: 1 }), (err) => {
+    const msg = err.message.toLowerCase();
+    assert.ok(msg.includes('timeout') || msg.includes('connection'), `Unexpected error on mid-operation disconnect: ${err.message}`);
+    return true;
+  });
+});
+
+test('server disconnects during client request', async (t) => {
+  let server;
+  const serverPromise = AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 15, unitId: 1 },
+    {
+      onReadHoldingRegisters: async () => {
+        // This handler will never complete because we shut down the server.
+        await new Promise((r) => setTimeout(r, 2000));
+        return [1, 2, 3];
+      }
+    }
+  );
+  server = await serverPromise;
+
+  // Ensure server is shut down, even if the test fails.
+  t.after(async () => {
+    if (server) {
+      try {
+        await server.shutdown();
+      } catch (e) { /* ignore, may already be closing */ }
+    }
+  });
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 15,
+    requestTimeoutMs: 1500,
+    responseTimeoutMs: 1500,
+  });
+  t.after(async () => {
+    await transport.close();
+  });
+
+  const client = transport.createClient({ unitId: 1 });
+
+  // Start a request that will hang on the server side.
+  const requestPromise = client.readHoldingRegisters({ address: 0, quantity: 3 });
+
+  // Give the request a moment to be sent to the server.
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Now, abruptly shut down the server.
+  await server.shutdown();
+  server = null; // Prevent the 'after' hook from trying to shut it down again.
+
+  // The pending client request should fail with a connection-related error.
+  await assert.rejects(
+    requestPromise,
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(
+        msg.includes('connection') ||
+        msg.includes('workerclosed') ||
+        msg.includes('timeout'),
+        `Unexpected error on server disconnect: ${err.message}`
+      );
+      return true;
+    }
+  );
+});
+
+test('high-concurrency client multiplexing', async (t) => {
+  const server = await AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: PORT + 18, unitId: 1 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        // Add variable delay to verify client maps frames back to their correct transaction IDs
+        const delay = Math.floor(Math.random() * 30) + 5;
+        await new Promise((r) => setTimeout(r, delay));
+        return [req.address, req.quantity];
+      }
+    }
+  );
+  t.after(async () => await server.shutdown());
+  await new Promise((r) => setTimeout(r, 100));
+
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: PORT + 18,
+    requestTimeoutMs: 3000,
+  });
+  t.after(async () => await transport.close());
+
+  const client = transport.createClient({ unitId: 1 });
+
+  const promises = [];
+  for (let i = 0; i < 50; i++) {
+    promises.push(
+      client.readHoldingRegisters({ address: i, quantity: 2 }).then((res) => {
+        assert.deepEqual(res, [i, 2], `Mismatch on multiplexed index ${i}`);
+      })
+    );
+  }
+
+  await Promise.all(promises);
+});
+
+test('connection fatigue under heavy connect/disconnect cycles', async (t) => {
+  const serverPort = PORT + 19;
+  const server = await AsyncTcpModbusServer.bind(
+    { host: '127.0.0.1', port: serverPort, unitId: 1 },
+    {
+      onReadHoldingRegisters: async (req) => {
+        return [req.address];
+      }
+    }
+  );
+  t.after(async () => await server.shutdown());
+  await new Promise((r) => setTimeout(r, 100));
+
+  for (let i = 0; i < 10; i++) {
+    const transport = await AsyncTcpTransport.connect({
+      host: '127.0.0.1',
+      port: serverPort,
+      requestTimeoutMs: 1000,
+    });
+    const client = transport.createClient({ unitId: 1 });
+    const regs = await client.readHoldingRegisters({ address: i, quantity: 1 });
+    assert.deepEqual(regs, [i]);
+    await transport.close();
+  }
+});
+
+test('client remains intact and works after manual transport reconnect', async (t) => {
+  const serverPort = PORT + 20;
+  const holdingRegisters = new Uint16Array(10).fill(0);
+  holdingRegisters[0] = 42;
+  holdingRegisters[1] = 99;
+
+  const startServer = async () => {
+    const s = await AsyncTcpModbusServer.bind(
+      { host: '127.0.0.1', port: serverPort, unitId: 1 },
+      {
+        onReadHoldingRegisters: async ({ address, quantity }) => {
+          return Array.from(holdingRegisters.slice(address, address + quantity));
+        }
+      }
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    return s;
+  };
+
+  let server = await startServer();
+  t.after(async () => {
+    if (server) {
+      try { await server.shutdown(); } catch (e) {}
+    }
+  });
+
+  // Connect client transport with 0 retries so we can control reconnect manually
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: serverPort,
+    requestTimeoutMs: 500,
+    retryAttempts: 0,
+  });
+  t.after(async () => await transport.close());
+
+  const client = transport.createClient({ unitId: 1 });
+
+  // 1. Initial read should succeed
+  let regs = await client.readHoldingRegisters({ address: 0, quantity: 1 });
+  assert.deepEqual(regs, [42], 'Initial read should succeed');
+
+  // 2. Shut down server to break connection
+  await server.shutdown();
+  server = null;
+  await new Promise((r) => setTimeout(r, 100)); // wait for socket cleanup
+
+  // 3. Client read should now fail because server is down
+  await assert.rejects(
+    client.readHoldingRegisters({ address: 0, quantity: 1 }),
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(msg.includes('connection') || msg.includes('closed'));
+      return true;
+    },
+    'Read should fail when server is shut down'
+  );
+
+  // 4. Reconnect should fail because the server is still down
+  await assert.rejects(
+    transport.reconnect(),
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(msg.includes('refused') || msg.includes('failed') || msg.includes('connection'));
+      return true;
+    },
+    'Reconnect should fail when server is down'
+  );
+
+  // 5. Restart the server
+  server = await startServer();
+
+  // 6. Reconnect should now succeed
+  await transport.reconnect();
+
+  // 7. Reuse the EXACT same client instance to read again — it should work immediately!
+  regs = await client.readHoldingRegisters({ address: 1, quantity: 1 });
+  assert.deepEqual(regs, [99], 'Read after reconnect should succeed using original client');
+});
+
+
+test('client remains intact and fails after manual transport reconnect', async (t) => {
+  const serverPort = PORT + 21;
+  const holdingRegisters = new Uint16Array(10).fill(0);
+  holdingRegisters[0] = 42;
+  holdingRegisters[1] = 99;
+
+  const startServer = async () => {
+    const s = await AsyncTcpModbusServer.bind(
+      { host: '127.0.0.1', port: serverPort, unitId: 1 },
+      {
+        onReadHoldingRegisters: async ({ address, quantity }) => {
+          return Array.from(holdingRegisters.slice(address, address + quantity));
+        }
+      }
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    return s;
+  };
+
+  let server = await startServer();
+  t.after(async () => {
+    if (server) {
+      try { await server.shutdown(); } catch (e) {}
+    }
+  });
+
+  // Connect client transport with 0 retries so we can control reconnect manually
+  const transport = await AsyncTcpTransport.connect({
+    host: '127.0.0.1',
+    port: serverPort,
+    requestTimeoutMs: 500,
+    retryAttempts: 0,
+  });
+  t.after(async () => await transport.close());
+
+  const client = transport.createClient({ unitId: 1 });
+
+  // 1. Initial read should succeed
+  let regs = await client.readHoldingRegisters({ address: 0, quantity: 1 });
+  assert.deepEqual(regs, [42], 'Initial read should succeed');
+
+  // 2. Shut down server to break connection
+  await server.shutdown();
+  server = null;
+  await new Promise((r) => setTimeout(r, 100)); // wait for socket cleanup
+
+  // 3. Client read should now fail because server is down
+  await assert.rejects(
+    client.readHoldingRegisters({ address: 0, quantity: 1 }),
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(msg.includes('connection') || msg.includes('closed'));
+      return true;
+    },
+    'Read should fail when server is shut down'
+  );
+
+  // 4. Reconnect should fail because the server is still down
+  await assert.rejects(
+    transport.reconnect(),
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(msg.includes('refused') || msg.includes('failed') || msg.includes('connection'));
+      return true;
+    },
+    'Reconnect should fail when server is down'
+  );
+
+  // Server never started again
+
+  // 5. Reuse the EXACT same client instance to read again — it should fail immediately!
+  await assert.rejects(
+    client.readHoldingRegisters({ address: 0, quantity: 1 }),
+    (err) => {
+      const msg = err.message.toLowerCase();
+      assert.ok(msg.includes('connection') || msg.includes('closed'));
+      return true;
+    },
+    'Read should fail when server is shut down'
+  );
+});

@@ -299,9 +299,13 @@ pub(crate) enum TaskCommand {
     Request {
         params: ClientRequest,
         resp_tx: ResponseSender,
+        retry_attempts: u8,
+        retry_delay_ms: u64,
     },
     /// Drain all in-flight and queued requests with `ConnectionClosed` and
     /// close the transport.  Issued automatically after a per-request timeout
     /// so the pipeline self-heals without caller intervention.
     Disconnect,
+    /// Permanently shuts down the background task.
+    Shutdown,
 }

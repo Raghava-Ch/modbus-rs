@@ -1,6 +1,6 @@
 {
   "name": "modbus-rs-wasm",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Modbus TCP/RTU/ASCII client & server for the browser, powered by Rust + WebAssembly",
   "type": "module",
   "exports": {
@@ -36,15 +36,21 @@
   "scripts": {
     "build:web": "wasm-pack build ../. --target web --out-name modbus-rs --out-dir wasm/dist/web --features wasm-full",
     "build:bundler": "wasm-pack build ../. --target bundler --out-name modbus-rs --out-dir wasm/dist/bundler --features wasm-full",
-    "build": "npm run build:web && npm run build:bundler && rm -f dist/web/.gitignore dist/bundler/.gitignore dist/web/package.json dist/bundler/package.json dist/web/README.md dist/bundler/README.md && cp modbus-rs-wasm.d.ts dist/web/modbus-rs.d.ts && cp modbus-rs-wasm.d.ts dist/bundler/modbus-rs.d.ts",
+    "build": "npm run build:web && npm run build:bundler && rm -f dist/web/.gitignore dist/bundler/.gitignore dist/web/package.json dist/bundler/package.json dist/web/README.md dist/bundler/README.md",
     "test": "npm run build:web && vitest run --reporter=verbose",
     "test:watch": "vitest --browser",
     "verify": "node verify-dist.js"
   },
   "devDependencies": {
-    "@vitest/browser": "^2.1.8",
-    "playwright": "^1.49.1",
-    "vitest": "^2.1.8",
+    "@vitest/browser": "^4.1.9",
+    "@vitest/browser-playwright": "^4.1.9",
+    "esbuild": "^0.28.1",
+    "playwright": "^1.50.0",
+    "rollup": "^4.62.2",
+    "vite": "^8.1.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0",
+    "vitest": "^4.1.9",
     "ws": "^8.18.0"
   },
   "keywords": [

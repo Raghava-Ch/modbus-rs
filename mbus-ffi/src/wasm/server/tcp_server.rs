@@ -1,5 +1,13 @@
 //! Async TCP-gateway server bindings.
 
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &'static str = r#"
+export interface WasmTcpServerOptions {
+  wsUrl: string;
+  unitId: number;
+}
+"#;
+
 use futures_channel::oneshot;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_network::WasmAsyncTransport;
@@ -10,24 +18,37 @@ use super::handlers::JsServerHandlers;
 use super::task::WasmServerTask;
 use crate::wasm::client::helpers::{get_string, get_u8};
 
-use std::future::Future;
-use std::pin::Pin;
 
 use std::sync::Mutex;
 
 #[wasm_bindgen]
+/// A browser-facing Modbus server that communicates over a WebSocket gateway.
+///
+/// This class allows you to create a simulated Modbus TCP device that can be accessed
+/// by other applications through a WebSocket-to-TCP proxy, such as the `modbus-gateway` application.
+/// An instance is created via the static `bind` method.
 /// Browser-facing Modbus TCP server proxy running over a WebSocket gateway.
 pub struct WasmTcpServer {
-    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
-    task_fut: Mutex<Option<Pin<Box<dyn Future<Output = Result<(), JsValue>> + Send>>>>,
+    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>, // Sender to signal the server task to shut down.
+    task_fut: Mutex<Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), JsValue>> + Send>>>>, // The future representing the running server task.
 }
 
 #[wasm_bindgen]
 impl WasmTcpServer {
-    /// Binds to a WebSocket gateway URL.
+    /// Creates and binds a new Modbus TCP server to a WebSocket gateway.
     ///
-    /// The `options` contains `wsUrl` and `unitId`.
-    /// The `handlers` is the JS callback registry.
+    /// @param {WasmTcpServerOptions} options - The server configuration.
+    /// @param {string} options.wsUrl - The URL of the WebSocket gateway that will proxy TCP traffic.
+    /// @param {number} options.unitId - The Modbus unit ID (1-247) the server will respond to.
+    /// @param {object} handlers - An object containing callback functions to handle incoming Modbus requests (e.g., `onReadHoldingRegisters`).
+    /// @returns {Promise<WasmTcpServer>} A promise that resolves to a new `WasmTcpServer` instance.
+    ///
+    /// @example
+    /// const handlers = {
+    ///   onReadHoldingRegisters: (req) => [10, 20, 30]
+    /// };
+    /// const server = await WasmTcpServer.bind({ wsUrl: "ws://localhost:8080", unitId: 1 }, handlers);
+    /// console.log("Server bound!");
     pub async fn bind(
         options: WasmTcpServerOptions,
         handlers: JsValue,
@@ -58,7 +79,13 @@ impl WasmTcpServer {
         })
     }
 
-    /// Runs the server loop. Returns a promise that resolves on clean shutdown
+    /// Starts the server's event loop to listen for and process incoming requests.
+    ///
+    /// This method runs indefinitely. The returned promise only resolves when the server
+    /// is shut down via the `shutdown()` method, or rejects if a fatal connection
+    /// error occurs.
+    ///
+    /// @returns {Promise<void>} A promise that completes when the server stops.
     /// or rejects with the error that caused the server to stop.
     pub async fn serve(&self) -> Result<(), JsValue> {
         let fut = self
@@ -70,7 +97,9 @@ impl WasmTcpServer {
         fut.await
     }
 
-    /// Shutdown the server.
+    /// Stops the server and closes the WebSocket connection.
+    ///
+    /// @returns {Promise<void>} A promise that resolves when the shutdown is complete.
     pub async fn shutdown(&self) -> Result<(), JsValue> {
         if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
             let _ = tx.send(());
