@@ -1,9 +1,10 @@
 import { WebSocketServer } from 'ws';
 
-let wss: WebSocketServer;
+const servers: WebSocketServer[] = [];
 
 export async function setup() {
-  wss = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+  const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+  servers.push(wss);
   await new Promise<void>(r => wss.once('listening', r));
   const { port } = wss.address() as { port: number };
   process.env.VITE_WS_TEST_PORT = String(port);
@@ -15,15 +16,33 @@ export async function setup() {
     const testPath = req.url || '/';
     (ws as any).testPath = testPath;
 
-    ws.on('message', (data, isBinary) => {
-      for (const client of wss.clients) {
-        if (client !== ws && (client as any).testPath === testPath && client.readyState === 1)
-          client.send(data, { binary: isBinary });
+    ws.on('message', (data: any, isBinary: boolean) => {
+      if (wss?.clients) {
+        for (const client of wss.clients) {
+          if (client !== ws && (client as any).testPath === testPath && client.readyState === 1)
+            client.send(data, { binary: isBinary });
+        }
       }
     });
   });
 }
 
 export async function teardown() {
-  wss.close();
+  const closePromises: Promise<void>[] = [];
+  for (const wss of servers) {
+    if (wss?.clients) {
+      for (const client of wss.clients) {
+        client.terminate();
+      }
+    }
+    closePromises.push(new Promise<void>((resolve) => {
+      try {
+        wss.close(() => resolve());
+      } catch (err) {
+        resolve(); // Ignore already closed errors
+      }
+    }));
+  }
+  await Promise.all(closePromises);
+  servers.length = 0; // Clear the array
 }

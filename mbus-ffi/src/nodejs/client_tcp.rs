@@ -34,11 +34,13 @@ pub struct TcpTransportOptions {
     pub host: String,
     /// Target TCP port (typically 502).
     pub port: u16,
-    /// Per-request timeout in milliseconds (optional).
+    /// Per-request timeout in milliseconds.
     pub request_timeout_ms: Option<u32>,
-    /// Number of retry attempts on failure (0 = none). Default: 0.
+    /// Number of retry attempts on failure. Default: 0 (no retries).
     pub retry_attempts: Option<u32>,
-    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    /// Delay between retry attempts in milliseconds.
+    pub retry_delay_ms: Option<u32>,
+    /// Backoff strategy for retries: "immediate", "fixed", or "exponential". Default: "immediate".
     pub retry_backoff_strategy: Option<String>,
 }
 
@@ -46,7 +48,7 @@ pub struct TcpTransportOptions {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct CreateClientOptions {
-    /// Modbus unit ID (1-247).
+    /// Modbus unit ID (slave address) from 1 to 247.
     pub unit_id: u8,
 }
 
@@ -55,9 +57,9 @@ pub struct CreateClientOptions {
 pub struct ReadRegistersOptions<'a> {
     /// Starting register address.
     pub address: u16,
-    /// Number of registers to read.
+    /// Number of registers to read (quantity).
     pub quantity: u16,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -66,9 +68,9 @@ pub struct ReadRegistersOptions<'a> {
 pub struct WriteSingleRegisterOptions<'a> {
     /// Register address.
     pub address: u16,
-    /// Value to write.
+    /// The 16-bit value to write to the register.
     pub value: u16,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -77,9 +79,9 @@ pub struct WriteSingleRegisterOptions<'a> {
 pub struct WriteMultipleRegistersOptions<'a> {
     /// Starting register address.
     pub address: u16,
-    /// Values to write.
+    /// An array of 16-bit values to write.
     pub values: Vec<u16>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -88,13 +90,13 @@ pub struct WriteMultipleRegistersOptions<'a> {
 pub struct ReadWriteMultipleRegistersOptions<'a> {
     /// Starting address for read operation.
     pub read_address: u16,
-    /// Number of registers to read.
+    /// Number of registers to read (quantity).
     pub read_quantity: u16,
     /// Starting address for write operation.
     pub write_address: u16,
-    /// Values to write.
+    /// An array of 16-bit values to write.
     pub write_values: Vec<u16>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -103,9 +105,9 @@ pub struct ReadWriteMultipleRegistersOptions<'a> {
 pub struct ReadBitsOptions<'a> {
     /// Starting address.
     pub address: u16,
-    /// Number of bits to read.
+    /// Number of bits (coils or discrete inputs) to read.
     pub quantity: u16,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -114,9 +116,9 @@ pub struct ReadBitsOptions<'a> {
 pub struct WriteSingleCoilOptions<'a> {
     /// Coil address.
     pub address: u16,
-    /// Value to write.
+    /// The boolean value to write (true for ON, false for OFF).
     pub value: bool,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -125,9 +127,9 @@ pub struct WriteSingleCoilOptions<'a> {
 pub struct WriteMultipleCoilsOptions<'a> {
     /// Starting coil address.
     pub address: u16,
-    /// Values to write.
+    /// An array of boolean values to write.
     pub values: Vec<bool>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -136,7 +138,7 @@ pub struct WriteMultipleCoilsOptions<'a> {
 pub struct ReadFifoQueueOptions<'a> {
     /// FIFO pointer address.
     pub address: u16,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -144,9 +146,9 @@ pub struct ReadFifoQueueOptions<'a> {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct FifoQueueResponse {
-    /// Number of values in the queue.
+    /// The number of values returned from the FIFO queue.
     pub count: u16,
-    /// Queue values.
+    /// The values from the FIFO queue as an array of 16-bit numbers.
     pub values: Vec<u16>,
 }
 
@@ -154,20 +156,20 @@ pub struct FifoQueueResponse {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct FileRecordReadRequest {
-    /// File number (1-65535).
+    /// The file number (1-65535).
     pub file_number: u16,
-    /// Starting record number.
+    /// The starting record number within the file.
     pub record_number: u16,
-    /// Number of records to read.
+    /// The number of records to read.
     pub record_length: u16,
 }
 
 /// Options for reading file records.
 #[napi(object)]
 pub struct ReadFileRecordOptions<'a> {
-    /// Array of sub-requests.
+    /// An array of file record read sub-requests.
     pub requests: Vec<FileRecordReadRequest>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -175,20 +177,20 @@ pub struct ReadFileRecordOptions<'a> {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct FileRecordWriteRequest {
-    /// File number (1-65535).
+    /// The file number (1-65535).
     pub file_number: u16,
-    /// Starting record number.
+    /// The starting record number within the file.
     pub record_number: u16,
-    /// Record data to write.
+    /// The record data to write, as an array of 16-bit values.
     pub record_data: Vec<u16>,
 }
 
 /// Options for writing file records.
 #[napi(object)]
 pub struct WriteFileRecordOptions<'a> {
-    /// Array of sub-requests.
+    /// An array of file record write sub-requests.
     pub requests: Vec<FileRecordWriteRequest>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -197,9 +199,9 @@ pub struct WriteFileRecordOptions<'a> {
 pub struct ReadDeviceIdentificationOptions<'a> {
     /// Read device ID code (1=basic, 2=regular, 3=extended, 4=individual).
     pub read_device_id_code: u8,
-    /// Starting object ID.
+    /// The ID of the first object to read.
     pub object_id: u8,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -208,9 +210,9 @@ pub struct ReadDeviceIdentificationOptions<'a> {
 pub struct DiagnosticsOptions<'a> {
     /// Diagnostic sub-function code.
     pub sub_function: u16,
-    /// Data words for the request.
+    /// Data to be sent with the diagnostics request.
     pub data: Vec<u16>,
-    /// Optional abort signal to cancel the request.
+    /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
 
@@ -218,9 +220,9 @@ pub struct DiagnosticsOptions<'a> {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DiagnosticsResponse {
-    /// Echoed sub-function code.
+    /// The sub-function code from the request.
     pub sub_function: u16,
-    /// Response data words.
+    /// The data returned by the diagnostics function.
     pub data: Vec<u16>,
 }
 
@@ -228,9 +230,9 @@ pub struct DiagnosticsResponse {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DeviceIdentificationObject {
-    /// Object ID.
+    /// The object ID.
     pub id: u8,
-    /// Object value as string.
+    /// The value of the object, represented as a string.
     pub value: String,
 }
 
@@ -238,13 +240,13 @@ pub struct DeviceIdentificationObject {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DeviceIdentificationResponse {
-    /// Conformity level.
+    /// The conformity level of the device.
     pub conformity_level: u8,
-    /// Whether more objects follow.
+    /// Indicates if more objects are available to be read.
     pub more_follows: bool,
-    /// Next object ID if more follows.
+    /// The ID of the next object to read if `moreFollows` is true.
     pub next_object_id: u8,
-    /// Retrieved objects.
+    /// An array of device identification objects.
     pub objects: Vec<DeviceIdentificationObject>,
 }
 
@@ -252,6 +254,11 @@ pub struct DeviceIdentificationResponse {
 
 /// Physical TCP socket connection to a Modbus device or gateway.
 #[napi]
+#[doc = "Manages a physical TCP socket connection to a Modbus device or gateway."]
+#[doc = "This class is a factory for creating lightweight `AsyncTcpModbusClient` instances"]
+#[doc = "that are bound to a specific unit ID and share the underlying TCP connection."]
+#[doc = ""]
+#[doc = "Use the static `connect` method to establish a connection."]
 pub struct AsyncTcpTransport {
     inner: Mutex<Option<Arc<TcpClient>>>,
 }
@@ -260,6 +267,11 @@ pub struct AsyncTcpTransport {
 impl AsyncTcpTransport {
     /// Connects to a Modbus TCP device or gateway.
     #[napi(factory)]
+    #[doc = "Establishes a connection to a Modbus TCP device or gateway."]
+    #[doc = ""]
+    #[doc = "@param opts - Connection options including host, port, and timeout settings."]
+    #[doc = "@param opts.host - Target host address (IP or hostname)."]
+    #[doc = "@param opts.port - Target TCP port (typically 502)."]
     pub async fn connect(opts: TcpTransportOptions) -> Result<AsyncTcpTransport> {
         if let Some(ref strategy) = opts.retry_backoff_strategy {
             let _ = parse_backoff_strategy(strategy)?;
@@ -273,6 +285,10 @@ impl AsyncTcpTransport {
         if let Some(timeout_ms) = opts.request_timeout_ms {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
+
+        let retry_attempts = opts.retry_attempts.unwrap_or(0) as u8;
+        let retry_delay = Duration::from_millis(opts.retry_delay_ms.unwrap_or(0) as u64);
+        client.set_retry_options(retry_attempts, retry_delay);
 
         Ok(AsyncTcpTransport {
             inner: Mutex::new(Some(Arc::new(client))),
@@ -291,6 +307,10 @@ impl AsyncTcpTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[napi]
+    #[doc = "Creates a lightweight device client that communicates through this transport."]
+    #[doc = "The client is bound to a specific Modbus unit ID."]
+    #[doc = ""]
+    #[doc = "@param opts - Options specifying the unit ID."]
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncTcpModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.unit_id;
@@ -303,6 +323,9 @@ impl AsyncTcpTransport {
 
     /// Sets the per-request timeout in milliseconds.
     #[napi]
+    #[doc = "Sets the timeout for individual Modbus requests made through this transport."]
+    #[doc = ""]
+    #[doc = "@param timeout_ms - The timeout duration in milliseconds."]
     pub fn set_request_timeout(&self, timeout_ms: u32) -> Result<()> {
         let client = self.get_client()?;
         client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
@@ -311,6 +334,7 @@ impl AsyncTcpTransport {
 
     /// Clears the per-request timeout.
     #[napi]
+    #[doc = "Clears any previously set per-request timeout, reverting to the default behavior."]
     pub fn clear_request_timeout(&self) -> Result<()> {
         let client = self.get_client()?;
         client.clear_request_timeout();
@@ -319,12 +343,14 @@ impl AsyncTcpTransport {
 
     /// Returns whether there are pending requests.
     #[napi(getter)]
+    #[doc = "Checks if there are any Modbus requests currently in-flight on this transport."]
     pub fn pending_requests(&self) -> Result<bool> {
         let client = self.get_client()?;
         Ok(client.has_pending_requests())
     }
 
     /// Closes the connection.
+    #[doc = "Closes the underlying TCP connection and shuts down the transport."]
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let client = {
@@ -335,13 +361,14 @@ impl AsyncTcpTransport {
             guard.take()
         };
         if let Some(inner) = client {
-            let _ = inner.disconnect().await;
+            let _ = inner.shutdown().await;
         }
         Ok(())
     }
 
     /// Reconnects the transport after a disconnect.
     #[napi]
+    #[doc = "Attempts to re-establish the TCP connection if it has been closed."]
     pub async fn reconnect(&self) -> Result<()> {
         let client = self.get_client()?;
         client.connect().await.map_err(from_async_error)
@@ -351,6 +378,8 @@ impl AsyncTcpTransport {
 // ── AsyncTcpModbusClient ─────────────────────────────────────────────────────
 
 /// Lightweight device client sharing the TCP transport.
+#[doc = "A lightweight Modbus client that sends requests for a specific unit ID"]
+#[doc = "over a shared `AsyncTcpTransport`."]
 #[napi]
 pub struct AsyncTcpModbusClient {
     inner: Arc<TcpClient>,
@@ -364,6 +393,11 @@ impl AsyncTcpModbusClient {
     /// Reads holding registers (FC03).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Reads one or more holding registers (Function Code 03)."]
+    #[doc = "@param opts Options for reading registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.quantity The number of registers to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_holding_registers(
         &self,
         env: Env,
@@ -395,6 +429,11 @@ impl AsyncTcpModbusClient {
     /// Reads input registers (FC04).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "input-registers")]
+    #[doc = "Reads one or more input registers (Function Code 04)."]
+    #[doc = "@param opts Options for reading registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.quantity The number of registers to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_input_registers(
         &self,
         env: Env,
@@ -426,6 +465,11 @@ impl AsyncTcpModbusClient {
     /// Writes a single register (FC06).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Writes a single holding register (Function Code 06)."]
+    #[doc = "@param opts Options for writing a single register."]
+    #[doc = "@param opts.address The register address."]
+    #[doc = "@param opts.value The 16-bit value to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_single_register(
         &self,
         env: Env,
@@ -457,6 +501,11 @@ impl AsyncTcpModbusClient {
     /// Writes multiple registers (FC16).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Writes multiple consecutive holding registers (Function Code 16)."]
+    #[doc = "@param opts Options for writing multiple registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.values An array of 16-bit values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_multiple_registers(
         &self,
         env: Env,
@@ -488,6 +537,13 @@ impl AsyncTcpModbusClient {
     /// Reads and writes multiple registers atomically (FC23).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Performs an atomic read/write operation on multiple registers (Function Code 23)."]
+    #[doc = "@param opts Options for the read/write operation."]
+    #[doc = "@param opts.read_address The starting address for the read operation."]
+    #[doc = "@param opts.read_quantity The number of registers to read."]
+    #[doc = "@param opts.write_address The starting address for the write operation."]
+    #[doc = "@param opts.write_values An array of 16-bit values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_write_multiple_registers(
         &self,
         env: Env,
@@ -529,6 +585,11 @@ impl AsyncTcpModbusClient {
     /// Reads coils (FC01).
     #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "coils")]
+    #[doc = "Reads the status of one or more coils (Function Code 01)."]
+    #[doc = "@param opts Options for reading bits."]
+    #[doc = "@param opts.address The starting coil address."]
+    #[doc = "@param opts.quantity The number of coils to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_coils(
         &self,
         env: Env,
@@ -565,6 +626,11 @@ impl AsyncTcpModbusClient {
     /// Writes a single coil (FC05).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
+    #[doc = "Writes a single coil (Function Code 05)."]
+    #[doc = "@param opts Options for writing a single coil."]
+    #[doc = "@param opts.address The coil address."]
+    #[doc = "@param opts.value The boolean value to write (true for ON, false for OFF)."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_single_coil(
         &self,
         env: Env,
@@ -596,6 +662,11 @@ impl AsyncTcpModbusClient {
     /// Writes multiple coils (FC15).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
+    #[doc = "Writes multiple consecutive coils (Function Code 15)."]
+    #[doc = "@param opts Options for writing multiple coils."]
+    #[doc = "@param opts.address The starting coil address."]
+    #[doc = "@param opts.values An array of boolean values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_multiple_coils(
         &self,
         env: Env,
@@ -642,6 +713,11 @@ impl AsyncTcpModbusClient {
     /// Reads discrete inputs (FC02).
     #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "discrete-inputs")]
+    #[doc = "Reads the status of one or more discrete inputs (Function Code 02)."]
+    #[doc = "@param opts Options for reading bits."]
+    #[doc = "@param opts.address The starting discrete input address."]
+    #[doc = "@param opts.quantity The number of discrete inputs to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_discrete_inputs(
         &self,
         env: Env,
@@ -680,6 +756,10 @@ impl AsyncTcpModbusClient {
     /// Reads FIFO queue (FC24).
     #[napi(ts_return_type = "Promise<FifoQueueResponse>")]
     #[cfg(feature = "fifo")]
+    #[doc = "Reads from a FIFO queue register (Function Code 24)."]
+    #[doc = "@param opts Options for reading the FIFO queue."]
+    #[doc = "@param opts.address The FIFO pointer address."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_fifo_queue(
         &self,
         env: Env,
@@ -714,6 +794,10 @@ impl AsyncTcpModbusClient {
     /// Reads file records (FC20).
     #[napi(ts_return_type = "Promise<number[][]>")]
     #[cfg(feature = "file-record")]
+    #[doc = "Reads one or more file records (Function Code 20)."]
+    #[doc = "@param opts Options for reading file records."]
+    #[doc = "@param opts.requests An array of file record read sub-requests."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_file_record(
         &self,
         env: Env,
@@ -763,6 +847,10 @@ impl AsyncTcpModbusClient {
     /// Writes file records (FC21).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "file-record")]
+    #[doc = "Writes one or more file records (Function Code 21)."]
+    #[doc = "@param opts Options for writing file records."]
+    #[doc = "@param opts.requests An array of file record write sub-requests."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_file_record(
         &self,
         env: Env,
@@ -815,6 +903,7 @@ impl AsyncTcpModbusClient {
     /// Reads exception status (FC07).
     #[napi]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Reads the device's exception status byte (Function Code 07)."]
     pub async fn read_exception_status(&self) -> Result<u8> {
         self.inner
             .read_exception_status(self.unit_id)
@@ -825,6 +914,11 @@ impl AsyncTcpModbusClient {
     /// Sends a diagnostics request (FC08).
     #[napi(ts_return_type = "Promise<DiagnosticsResponse>")]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Executes a diagnostic function on the device (Function Code 08)."]
+    #[doc = "@param opts Options for the diagnostics request."]
+    #[doc = "@param opts.sub_function The diagnostic sub-function code."]
+    #[doc = "@param opts.data Data to be sent with the request."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn diagnostics(
         &self,
         env: Env,
@@ -869,6 +963,11 @@ impl AsyncTcpModbusClient {
     /// Reads device identification (FC43/MEI14).
     #[napi(ts_return_type = "Promise<DeviceIdentificationResponse>")]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Reads device identification information (Function Code 43, MEI 14)."]
+    #[doc = "@param opts Options for reading device identification."]
+    #[doc = "@param opts.read_device_id_code The category of objects to read (e.g., basic, regular)."]
+    #[doc = "@param opts.object_id The ID of the first object to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_device_identification(
         &self,
         env: Env,

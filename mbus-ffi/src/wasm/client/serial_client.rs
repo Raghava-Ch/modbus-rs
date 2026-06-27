@@ -22,8 +22,55 @@ use super::task::{WasmAsyncTransportTrait, WasmClientTask};
 #[cfg(feature = "file-record")]
 use mbus_client::services::file_record::SubRequestParams;
 
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &'static str = r#"
+export interface WasmSerialTransportOptions {
+  /**
+   * The serial mode to use.
+   * @default "rtu"
+   */
+  mode?: "rtu" | "ascii";
+  /** @default 9600 */
+  baudRate?: number;
+  /** @default 8 */
+  dataBits?: 7 | 8;
+  /** @default 1 */
+  stopBits?: 1 | 2;
+  /** @default "none" */
+  parity?: "none" | "even" | "odd";
+  /**
+   * The maximum time in milliseconds to wait for a response.
+   * @default 1000
+   */
+  responseTimeoutMs?: number;
+}"#;
+
 #[wasm_bindgen]
 extern "C" {
+    /// Options for creating a `WasmSerialTransport`.
+    ///
+    /// ```typescript
+    /// interface WasmSerialTransportOptions {
+    ///   /**
+    ///    * The serial mode to use.
+    ///    * @default "rtu"
+    ///    */
+    ///   mode?: "rtu" | "ascii";
+    ///   /** @default 9600 */
+    ///   baudRate?: number;
+    ///   /** @default 8 */
+    ///   dataBits?: 7 | 8;
+    ///   /** @default 1 */
+    ///   stopBits?: 1 | 2;
+    ///   /** @default "none" */
+    ///   parity?: "none" | "even" | "odd";
+    ///   /**
+    ///    * The maximum time in milliseconds to wait for a response.
+    ///    * @default 1000
+    ///    */
+    ///   responseTimeoutMs?: number;
+    /// }
+    /// ```
     #[wasm_bindgen(typescript_type = "WasmSerialTransportOptions")]
     pub type WasmSerialTransportOptions;
 }
@@ -122,12 +169,32 @@ impl WasmSerialPortHandle {
 }
 
 /// Requests a browser serial port from `navigator.serial.requestPort()`.
+///
+/// This function must be called from within a user gesture handler, such as a button click.
+/// It prompts the user to select a serial port, which is then returned as an opaque handle.
+///
+/// @returns {Promise<WasmSerialPortHandle>} A promise that resolves with the port handle.
+/// @throws {Error} If the Web Serial API is not available or the user cancels the request.
+///
+/// @example
+/// ```javascript
+/// document.getElementById('connect-button').addEventListener('click', async () => {
+///   try {
+///     const portHandle = await request_serial_port();
+///     // Now use this handle to create a WasmSerialTransport
+///     const transport = new WasmSerialTransport(portHandle, { baudRate: 19200 });
+///   } catch (e) {
+///     console.error("Failed to get serial port:", e);
+///   }
+/// });
+/// ```
 #[wasm_bindgen]
 pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
     let global = js_sys::global();
     let navigator = Reflect::get(&global, &JsValue::from_str("navigator"))?;
     let serial = Reflect::get(&navigator, &JsValue::from_str("serial"))?;
 
+    // Check for HTTPS/localhost context, which is required by Web Serial.
     if serial.is_null() || serial.is_undefined() {
         return Err(JsValue::from_str(
             "Web Serial API unavailable. Use a Chromium-based browser over HTTPS/localhost.",
@@ -150,7 +217,11 @@ pub async fn request_serial_port() -> Result<WasmSerialPortHandle, JsValue> {
 // ── WasmSerialTransport ──────────────────────────────────────────────────────
 
 #[wasm_bindgen]
-/// Connection manager for browser Modbus Serial clients.
+/// Connection manager for browser Modbus Serial (RTU/ASCII) clients using the Web Serial API.
+///
+/// This class manages a single physical serial port connection and multiplexes requests
+/// from multiple `WasmSerialModbusClient` instances, which are bound to specific unit IDs
+/// (slave addresses) on the same serial bus.
 pub struct WasmSerialTransport {
     _port_handle: WasmSerialPortHandle,
     cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
@@ -161,7 +232,21 @@ pub struct WasmSerialTransport {
 
 #[wasm_bindgen]
 impl WasmSerialTransport {
-    /// Creates a new Serial transport using the provided `port_handle` and option parameters.
+    /// Creates and opens a new Serial transport using the provided port handle and options.
+    ///
+    /// The constructor immediately attempts to open the serial port with the specified parameters.
+    ///
+    /// @param {WasmSerialPortHandle} port_handle - The opaque handle obtained from `request_serial_port()`.
+    /// @param {WasmSerialTransportOptions} [options] - Configuration for the serial connection.
+    /// @returns {WasmSerialTransport} A new transport instance.
+    /// @throws {Error} If the port fails to open or parameters are invalid.
+    ///
+    /// @example
+    /// ```javascript
+    /// // Assumes `portHandle` is an existing WasmSerialPortHandle.
+    /// const transport = new WasmSerialTransport(portHandle, { mode: 'rtu', baudRate: 19200 });
+    /// const client = transport.createClient({ unitId: 5 });
+    /// ```
     #[wasm_bindgen(constructor)]
     pub fn new(
         port_handle: WasmSerialPortHandle,
@@ -247,23 +332,43 @@ impl WasmSerialTransport {
         })
     }
 
-    /// Returns `true` if there are in-flight Modbus requests.
+    /// Returns `true` if there are any in-flight Modbus requests pending a response.
     #[wasm_bindgen(getter, js_name = "pendingRequests")]
     pub fn pending_requests(&self) -> bool {
         self.pending_count.get() > 0
     }
 
-    /// Closes the connection.
+    /// Closes the serial port connection and terminates the background task.
     pub fn close(&mut self) {
+        // Drop the command sender to terminate the background task.
         *self.cmd_tx.borrow_mut() = futures_channel::mpsc::unbounded::<WasmCommand>().0;
         self.pending_count.set(0);
+        // Attempt to gracefully close the underlying serial port.
         if let Some(t) = self.active_transport.borrow_mut().as_mut() {
             let _ = t.disconnect();
         }
         *self.active_transport.borrow_mut() = None;
     }
 
-    /// Creates a device client bound to the specified unit ID.
+    /// Creates a lightweight client instance bound to a specific Modbus unit ID (slave address).
+    ///
+    /// Multiple clients for different unit IDs can be created from a single transport.
+    /// They all share the same underlying serial port connection.
+    ///
+    /// @param {CreateClientOptions} options - The client configuration.
+    /// @returns {WasmSerialModbusClient} A new client instance.
+    /// @throws {Error} If `options.unitId` is missing or invalid.
+    ///
+    /// @example
+    /// ```javascript
+    /// // Assumes `transport` is an existing WasmSerialTransport instance.
+    ///
+    /// // Create a client for the device at unit ID 1
+    /// const client1 = transport.createClient({ unitId: 1 });
+    ///
+    /// // Create another client for a different device on the same RS-485 bus
+    /// const client2 = transport.createClient({ unitId: 10 });
+    /// ```
     #[wasm_bindgen(js_name = "createClient")]
     pub fn create_client(
         &self,
@@ -299,7 +404,10 @@ impl WasmSerialTransport {
 // ── WasmSerialModbusClient ───────────────────────────────────────────────────
 
 #[wasm_bindgen]
-/// Browser-facing Modbus serial client bound to a specific unit ID.
+/// A browser-facing Modbus serial client bound to a specific unit ID (slave address).
+///
+/// This class provides methods for all standard Modbus function codes. All operations
+/// are asynchronous and return a `Promise`. It is created via `WasmSerialTransport.createClient()`.
 pub struct WasmSerialModbusClient {
     cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
     unit_id: u8,
@@ -309,13 +417,13 @@ pub struct WasmSerialModbusClient {
 
 #[wasm_bindgen]
 impl WasmSerialModbusClient {
-    /// Returns `true` if there are in-flight Modbus requests.
+    /// Returns `true` if there are any in-flight Modbus requests pending a response for this client.
     #[wasm_bindgen(getter, js_name = "pendingRequests")]
     pub fn pending_requests(&self) -> bool {
         self.pending_count.get() > 0
     }
 
-    /// Returns `true` if the client is connected.
+    /// Returns `true` if the underlying transport is considered connected.
     #[wasm_bindgen(js_name = "isConnected")]
     pub fn is_connected(&self) -> bool {
         !self.cmd_tx.borrow().is_closed()
@@ -368,7 +476,18 @@ impl WasmSerialModbusClient {
 
     // ── Coil operations ──────────────────────────────────────────────────────
 
-    /// Read coils (FC 01).
+    /// Reads a sequence of coils (Function Code 01).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the coils to read (0-based).
+    /// @param {number} options.quantity - The number of coils to read (1-125).
+    /// @returns {Promise<boolean[]>} A promise that resolves to an array of booleans representing the coil states.
+    ///
+    /// @example
+    /// ```javascript
+    /// const coils = await client.readCoils({ address: 0, quantity: 8 });
+    /// console.log(coils); // e.g., [true, false, true, ...]
+    /// ```
     #[wasm_bindgen(js_name = "readCoils")]
     pub fn read_coils(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -384,7 +503,17 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Write a single coil (FC 05).
+    /// Writes a single coil state (Function Code 05).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The address of the coil to write (0-based).
+    /// @param {boolean} options.value - The state to write (`true` for ON, `false` for OFF).
+    /// @returns {Promise<void>} A promise that resolves when the write is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// await client.writeSingleCoil({ address: 10, value: true });
+    /// ```
     #[wasm_bindgen(js_name = "writeSingleCoil")]
     pub fn write_single_coil(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -400,7 +529,17 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Write multiple coils (FC 15).
+    /// Writes a sequence of coil states (Function Code 15).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the coils to write (0-based).
+    /// @param {boolean[]} options.values - An array of boolean states to write.
+    /// @returns {Promise<void>} A promise that resolves when the write is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// await client.writeMultipleCoils({ address: 20, values: [true, false, true, true] });
+    /// ```
     #[wasm_bindgen(js_name = "writeMultipleCoils")]
     pub fn write_multiple_coils(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -423,7 +562,19 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Read discrete inputs (FC 02).
+    /// Reads a sequence of discrete inputs (Function Code 02).
+    ///
+    /// These are read-only boolean inputs.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the inputs to read (0-based).
+    /// @param {number} options.quantity - The number of inputs to read (1-125).
+    /// @returns {Promise<boolean[]>} A promise that resolves to an array of booleans.
+    ///
+    /// @example
+    /// ```javascript
+    /// const inputs = await client.readDiscreteInputs({ address: 0, quantity: 4 });
+    /// ```
     #[wasm_bindgen(js_name = "readDiscreteInputs")]
     pub fn read_discrete_inputs(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -441,7 +592,19 @@ impl WasmSerialModbusClient {
 
     // ── Register operations ───────────────────────────────────────────────────
 
-    /// Read holding registers (FC 03).
+    /// Reads a sequence of holding registers (Function Code 03).
+    ///
+    /// These are 16-bit read/write registers.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the registers to read (0-based).
+    /// @param {number} options.quantity - The number of registers to read (1-125).
+    /// @returns {Promise<Uint16Array>} A promise that resolves to a `Uint16Array` of register values.
+    ///
+    /// @example
+    /// ```javascript
+    /// const regs = await client.readHoldingRegisters({ address: 100, quantity: 10 });
+    /// ```
     #[wasm_bindgen(js_name = "readHoldingRegisters")]
     pub fn read_holding_registers(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -457,7 +620,19 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Read input registers (FC 04).
+    /// Reads a sequence of input registers (Function Code 04).
+    ///
+    /// These are 16-bit read-only registers.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the registers to read (0-based).
+    /// @param {number} options.quantity - The number of registers to read (1-125).
+    /// @returns {Promise<Uint16Array>} A promise that resolves to a `Uint16Array` of register values.
+    ///
+    /// @example
+    /// ```javascript
+    /// const inputRegs = await client.readInputRegisters({ address: 50, quantity: 2 });
+    /// ```
     #[wasm_bindgen(js_name = "readInputRegisters")]
     pub fn read_input_registers(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -473,7 +648,17 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Write a single register (FC 06).
+    /// Writes a single holding register (Function Code 06).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The address of the register to write (0-based).
+    /// @param {number} options.value - The 16-bit value to write.
+    /// @returns {Promise<void>} A promise that resolves when the write is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// await client.writeSingleRegister({ address: 100, value: 42 });
+    /// ```
     #[wasm_bindgen(js_name = "writeSingleRegister")]
     pub fn write_single_register(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -489,7 +674,18 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Write multiple registers (FC 16).
+    /// Writes a sequence of holding registers (Function Code 16).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The starting address of the registers to write (0-based).
+    /// @param {number[] | Uint16Array} options.values - An array of 16-bit values to write.
+    /// @returns {Promise<void>} A promise that resolves when the write is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// await client.writeMultipleRegisters({ address: 200, values: });
+    /// await client.writeMultipleRegisters({ address: 210, values: Uint16Array.from() });
+    /// ```
     #[wasm_bindgen(js_name = "writeMultipleRegisters")]
     pub fn write_multiple_registers(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -512,7 +708,23 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Read and write multiple registers (FC 23).
+    /// Performs an atomic read and write of holding registers in a single transaction (Function Code 23).
+    ///
+    /// The write operation is performed before the read.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.readAddress - The starting address for the read operation.
+    /// @param {number} options.readQuantity - The number of registers to read.
+    /// @param {number} options.writeAddress - The starting address for the write operation.
+    /// @param {number[] | Uint16Array} options.writeValues - The values to write.
+    /// @returns {Promise<Uint16Array>} A promise that resolves to a `Uint16Array` of the registers read.
+    ///
+    /// @example
+    /// ```javascript
+    /// const readData = await client.readWriteMultipleRegisters({
+    ///   readAddress: 10, readQuantity: 2, writeAddress: 20, writeValues:
+    /// });
+    /// ```
     #[wasm_bindgen(js_name = "readWriteMultipleRegisters")]
     pub fn read_write_multiple_registers(&mut self, options: &JsValue) -> Promise {
         let read_address = get_u16(options, "readAddress", 0);
@@ -539,7 +751,23 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Mask write register (FC 22).
+    /// Modifies a single holding register using a bitwise AND/OR mask (Function Code 22).
+    ///
+    /// The operation is `(current_value AND andMask) OR (orMask AND (NOT andMask))`.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The address of the register to modify.
+    /// @param {number} options.andMask - The bitwise AND mask.
+    /// @param {number} options.orMask - The bitwise OR mask.
+    /// @returns {Promise<void>} A promise that resolves when the operation is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// // Set bits 0-7 and clear bits 8-15 of the register at address 300
+    /// await client.maskWriteRegister({
+    ///   address: 300, andMask: 0x00FF, orMask: 0xFF00
+    /// });
+    /// ```
     #[wasm_bindgen(js_name = "maskWriteRegister")]
     pub fn mask_write_register(&mut self, options: &JsValue) -> Promise {
         let address = get_u16(options, "address", 0);
@@ -559,7 +787,16 @@ impl WasmSerialModbusClient {
 
     // ── FIFO queue operations ─────────────────────────────────────────────────
 
-    /// Read FIFO queue (FC 18).
+    /// Reads the contents of a FIFO queue of 16-bit registers (Function Code 18).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.address - The address of the FIFO queue.
+    /// @returns {Promise<Uint16Array>} A promise that resolves to a `Uint16Array` of the queue contents.
+    ///
+    /// @example
+    /// ```javascript
+    /// const fifoContents = await client.readFifoQueue({ address: 42 });
+    /// ```
     #[wasm_bindgen(js_name = "readFifoQueue")]
     #[cfg(feature = "fifo")]
     pub fn read_fifo_queue(&mut self, options: &JsValue) -> Promise {
@@ -576,7 +813,24 @@ impl WasmSerialModbusClient {
 
     // ── File record operations ────────────────────────────────────────────────
 
-    /// Read file record (FC 14).
+    /// Reads one or more file records (Function Code 14).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {object[]} options.requests - An array of sub-request objects.
+    /// @param {number} options.requests[].fileNumber - The file number.
+    /// @param {number} options.requests[].recordNumber - The starting record number within the file.
+    /// @param {number} options.requests[].recordLength - The number of registers to read for this record.
+    /// @returns {Promise<Uint16Array[]>} A promise that resolves to an array of `Uint16Array`, with each element corresponding to a sub-request.
+    ///
+    /// @example
+    /// ```javascript
+    /// const records = await client.readFileRecord({
+    ///   requests: [
+    ///     { fileNumber: 4, recordNumber: 1, recordLength: 2 },
+    ///     { fileNumber: 3, recordNumber: 0, recordLength: 5 }
+    ///   ]
+    /// });
+    /// ```
     #[wasm_bindgen(js_name = "readFileRecord")]
     #[cfg(feature = "file-record")]
     pub fn read_file_record(&mut self, options: &JsValue) -> Promise {
@@ -624,7 +878,23 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Write file record (FC 15).
+    /// Writes one or more file records (Function Code 15).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {object[]} options.requests - An array of sub-request objects to write.
+    /// @param {number} options.requests[].fileNumber - The file number.
+    /// @param {number} options.requests[].recordNumber - The starting record number within the file.
+    /// @param {number[] | Uint16Array} options.requests[].recordData - The register data to write.
+    /// @returns {Promise<void>} A promise that resolves when the write is complete.
+    ///
+    /// @example
+    /// ```javascript
+    /// await client.writeFileRecord({
+    ///   requests: [
+    ///     { fileNumber: 4, recordNumber: 1, recordData: [0xDEAD, 0xBEEF] }
+    ///   ]
+    /// });
+    /// ```
     #[wasm_bindgen(js_name = "writeFileRecord")]
     #[cfg(feature = "file-record")]
     pub fn write_file_record(&mut self, options: &JsValue) -> Promise {
@@ -694,7 +964,14 @@ impl WasmSerialModbusClient {
 
     // ── Diagnostics operations ────────────────────────────────────────────────
 
-    /// Read exception status (FC 07).
+    /// Reads the device's exception status (Function Code 07).
+    ///
+    /// The result is an 8-bit value where each bit corresponds to a specific exception flag.
+    ///
+    /// @returns {Promise<number>} A promise that resolves to the 8-bit exception status.
+    ///
+    /// @example
+    /// const status = await client.readExceptionStatus();
     #[wasm_bindgen(js_name = "readExceptionStatus")]
     #[cfg(feature = "diagnostics")]
     pub fn read_exception_status(&mut self) -> Promise {
@@ -704,7 +981,21 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Diagnostics operations (FC 08).
+    /// Performs a diagnostic function on the device (Function Code 08).
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} options.subFunction - The diagnostic sub-function code to execute.
+    /// @param {number[] | Uint16Array} [options.data] - Optional data to send with the request.
+    /// @returns {Promise<object>} A promise that resolves to an object containing the `subFunction` and `data` (`Uint16Array`) from the response.
+    ///
+    /// @example
+    /// ```javascript
+    /// // Example: Return query data
+    /// const response = await client.diagnostics({
+    ///   subFunction: 0,
+    ///   data: [0x12, 0x34]
+    /// });
+    /// ```
     #[wasm_bindgen(js_name = "diagnostics")]
     #[cfg(feature = "diagnostics")]
     pub fn diagnostics(&mut self, options: &JsValue) -> Promise {
@@ -728,7 +1019,25 @@ impl WasmSerialModbusClient {
         self.dispatch(cmd, rx)
     }
 
-    /// Read device identification (FC 43/14).
+    /// Reads device identification information (MEI Function Code 43, Sub-code 14).
+    ///
+    /// This allows reading standard device information like Vendor Name, Product Code, etc.
+    ///
+    /// @param {object} options - The request parameters.
+    /// @param {number} [options.readDeviceIdCode=1] - The type of read (1=Basic, 2=Regular, 3=Extended).
+    /// @param {number} [options.objectId=0] - The specific object ID to start reading from (0-255).
+    /// @returns {Promise<object>} A promise that resolves to an object containing the device identification data.
+    ///
+    /// @example
+    /// ```javascript
+    /// const id = await client.readDeviceIdentification({
+    ///   readDeviceIdCode: 1, // Basic device identification
+    ///   objectId: 0,
+    /// });
+    ///
+    /// // id.objects will be an array like:
+    /// // [{ id: 0, value: "VendorName" }, { id: 1, value: "ProductCode" }]
+    /// ```
     #[wasm_bindgen(js_name = "readDeviceIdentification")]
     #[cfg(feature = "diagnostics")]
     pub fn read_device_identification(&mut self, options: &JsValue) -> Promise {

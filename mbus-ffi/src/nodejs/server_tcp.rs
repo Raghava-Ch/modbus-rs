@@ -23,11 +23,11 @@ use crate::nodejs::runtime;
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct TcpServerOptions {
-    /// Bind host address (e.g., "0.0.0.0").
+    #[doc = "Bind host address (e.g., \"0.0.0.0\")."]
     pub host: String,
-    /// Bind port.
+    #[doc = "Bind port."]
     pub port: u16,
-    /// Modbus unit ID to respond to.
+    #[doc = "Modbus unit ID to respond to."]
     pub unit_id: u8,
 }
 
@@ -35,8 +35,11 @@ pub struct TcpServerOptions {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadCoilsRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the coils to read."]
     pub address: u16,
+    #[doc = "The number of coils to read."]
     pub quantity: u16,
 }
 
@@ -44,8 +47,11 @@ pub struct ReadCoilsRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WriteSingleCoilRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The address of the coil to write to."]
     pub address: u16,
+    #[doc = "The value to write (true for ON, false for OFF)."]
     pub value: bool,
 }
 
@@ -53,8 +59,11 @@ pub struct WriteSingleCoilRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WriteMultipleCoilsRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the coils to write to."]
     pub address: u16,
+    #[doc = "The array of boolean values to write."]
     pub values: Vec<bool>,
 }
 
@@ -62,8 +71,11 @@ pub struct WriteMultipleCoilsRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadDiscreteInputsRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the discrete inputs to read."]
     pub address: u16,
+    #[doc = "The number of discrete inputs to read."]
     pub quantity: u16,
 }
 
@@ -71,8 +83,11 @@ pub struct ReadDiscreteInputsRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadHoldingRegistersRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the holding registers to read."]
     pub address: u16,
+    #[doc = "The number of holding registers to read."]
     pub quantity: u16,
 }
 
@@ -80,8 +95,11 @@ pub struct ReadHoldingRegistersRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadInputRegistersRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the input registers to read."]
     pub address: u16,
+    #[doc = "The number of input registers to read."]
     pub quantity: u16,
 }
 
@@ -89,8 +107,11 @@ pub struct ReadInputRegistersRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WriteSingleRegisterRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The address of the register to write to."]
     pub address: u16,
+    #[doc = "The 16-bit value to write."]
     pub value: u16,
 }
 
@@ -98,8 +119,11 @@ pub struct WriteSingleRegisterRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WriteMultipleRegistersRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address of the registers to write to."]
     pub address: u16,
+    #[doc = "The array of 16-bit values to write."]
     pub values: Vec<u16>,
 }
 
@@ -107,7 +131,9 @@ pub struct WriteMultipleRegistersRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadFifoQueueRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The address of the FIFO queue pointer register."]
     pub address: u16,
 }
 
@@ -115,6 +141,7 @@ pub struct ReadFifoQueueRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadExceptionStatusRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
 }
 
@@ -122,10 +149,15 @@ pub struct ReadExceptionStatusRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadWriteMultipleRegistersRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The starting address for the read operation."]
     pub read_address: u16,
+    #[doc = "The number of registers to read."]
     pub read_quantity: u16,
+    #[doc = "The starting address for the write operation."]
     pub write_address: u16,
+    #[doc = "The array of 16-bit values to write."]
     pub write_values: Vec<u16>,
 }
 
@@ -133,8 +165,11 @@ pub struct ReadWriteMultipleRegistersRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FileRecordReadServerSubRequest {
+    #[doc = "The file number (1-65535)."]
     pub file_number: u16,
+    #[doc = "The starting record number within the file."]
     pub record_number: u16,
+    #[doc = "The number of records to read."]
     pub record_length: u16,
 }
 
@@ -142,7 +177,9 @@ pub struct FileRecordReadServerSubRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadFileRecordRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "An array of file record read sub-requests."]
     pub requests: Vec<FileRecordReadServerSubRequest>,
 }
 
@@ -150,8 +187,11 @@ pub struct ReadFileRecordRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FileRecordWriteSubRequest {
+    #[doc = "The file number (1-65535)."]
     pub file_number: u16,
+    #[doc = "The starting record number within the file."]
     pub record_number: u16,
+    #[doc = "The record data to write, as an array of 16-bit values."]
     pub record_data: Vec<u16>,
 }
 
@@ -159,7 +199,9 @@ pub struct FileRecordWriteSubRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WriteFileRecordRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "An array of file record write sub-requests."]
     pub requests: Vec<FileRecordWriteSubRequest>,
 }
 
@@ -167,8 +209,11 @@ pub struct WriteFileRecordRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DiagnosticsRequest {
+    #[doc = "The unit ID of the device that sent the request."]
     pub unit_id: u8,
+    #[doc = "The diagnostic sub-function code to execute."]
     pub sub_function: u16,
+    #[doc = "Data sent with the diagnostics request."]
     pub data: Vec<u16>,
 }
 
@@ -176,6 +221,7 @@ pub struct DiagnosticsRequest {
 #[napi(object)]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServerExceptionResponse {
+    #[doc = "The Modbus exception code (e.g., 1 for Illegal Function)."]
     /// Modbus exception code if this is an error response.
     pub exception: Option<u8>,
 }
@@ -187,7 +233,9 @@ pub struct ServerExceptionResponse {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerDiagnosticsResponse {
+    #[doc = "The sub-function code from the request."]
     pub sub_function: u16,
+    #[doc = "The data to be returned by the diagnostics function."]
     pub data: Vec<u16>,
 }
 
@@ -1354,20 +1402,26 @@ fn wrap_handlers_to_promise<'a>(env: &'a Env, handlers: &'a Object<'a>) -> Resul
 ///
 /// Binds to a TCP port and handles incoming Modbus requests using JS callbacks.
 #[napi]
+#[doc = "An asynchronous Modbus TCP server that listens for incoming client connections."]
 pub struct AsyncTcpModbusServer {
     stop_signal: Arc<Notify>,
     join_handle: Mutex<Option<JoinHandle<()>>>,
+    conn_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
 }
 
 #[napi]
 impl AsyncTcpModbusServer {
     /// Creates and starts a new TCP server.
-    ///
-    /// @param opts - Server bind options.
-    /// @param handlers - Object containing handler functions for each Modbus operation.
-    /// @returns A running server instance.
     #[napi]
     #[allow(clippy::missing_transmute_annotations)]
+    #[doc = "Creates and starts a new Modbus TCP server."]
+    #[doc = ""]
+    #[doc = "@param opts Server bind options."]
+    #[doc = "@param opts.host The host address to bind to (e.g., '0.0.0.0')."]
+    #[doc = "@param opts.port The TCP port to listen on."]
+    #[doc = "@param opts.unitId The Modbus unit ID the server will respond to."]
+    #[doc = "@param handlers An object containing callback functions to handle Modbus requests (matches the `ServerHandlers` interface in TypeScript)."]
+    #[doc = "@returns A `Promise` that resolves to a running `AsyncTcpModbusServer` instance."]
     pub fn bind(
         env: Env,
         opts: TcpServerOptions,
@@ -1379,6 +1433,8 @@ impl AsyncTcpModbusServer {
         let bind_addr = format!("{}:{}", opts.host, opts.port);
         let stop_signal = Arc::new(Notify::new());
         let stop_signal_clone = stop_signal.clone();
+        let conn_handles: Arc<Mutex<Vec<JoinHandle<()>>>> = Arc::new(Mutex::new(Vec::new()));
+        let conn_handles_clone = conn_handles.clone();
 
         // Build the handler adapter
         let adapter = build_adapter(&env, &handlers)?;
@@ -1401,9 +1457,13 @@ impl AsyncTcpModbusServer {
                         result = server.accept() => {
                             if let Ok((mut session, _peer)) = result {
                                 let mut app_instance = adapter.clone();
-                                tokio::spawn(async move {
+                                let handle = tokio::spawn(async move {
                                     let _ = session.run(&mut app_instance).await;
                                 });
+                                if let Ok(mut handles) = conn_handles_clone.lock() {
+                                    handles.retain(|h| !h.is_finished());
+                                    handles.push(handle);
+                                }
                             } else {
                                 break;
                             }
@@ -1415,6 +1475,7 @@ impl AsyncTcpModbusServer {
             Ok(AsyncTcpModbusServer {
                 stop_signal,
                 join_handle: Mutex::new(Some(join_handle)),
+                conn_handles,
             })
         })?;
 
@@ -1423,8 +1484,16 @@ impl AsyncTcpModbusServer {
 
     /// Stops the server.
     #[napi]
+    #[doc = "Stops the server and closes all active connections."]
     pub async fn shutdown(&self) -> Result<()> {
         self.stop_signal.notify_one();
+
+        // Abort all active connection handler tasks immediately
+        if let Ok(mut handles) = self.conn_handles.lock() {
+            for h in handles.drain(..) {
+                h.abort();
+            }
+        }
 
         let handle = {
             let mut guard = self

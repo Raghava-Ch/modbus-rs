@@ -22,7 +22,7 @@
 //!
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
@@ -78,6 +78,10 @@ pub struct AsyncClientCore {
     pending_count_rx: PendingCountReceiver,
     /// Per-request timeout in nanoseconds; 0 = disabled.
     request_timeout_ns: Arc<AtomicU64>,
+    /// Number of retry attempts.
+    retry_attempts: Arc<AtomicU8>,
+    /// Delay between retry attempts in milliseconds.
+    retry_delay_ms: Arc<AtomicU64>,
     #[cfg(feature = "traffic")]
     notifier: NotifierStore,
 }
@@ -92,10 +96,19 @@ impl AsyncClientCore {
         Self {
             cmd_tx,
             pending_count_rx,
-            request_timeout_ns: Arc::new(AtomicU64::new(0)),
+            request_timeout_ns: Arc::new(AtomicU64::new(30 * 1_000_000_000)), // 30 seconds default
+            retry_attempts: Arc::new(AtomicU8::new(0)),
+            retry_delay_ms: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "traffic")]
             notifier,
         }
+    }
+
+    /// Sets the retry options for subsequent requests.
+    pub fn set_retry_options(&self, attempts: u8, delay: Duration) {
+        self.retry_attempts.store(attempts, Ordering::Relaxed);
+        self.retry_delay_ms
+            .store(delay.as_millis() as u64, Ordering::Relaxed);
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────
@@ -106,14 +119,32 @@ impl AsyncClientCore {
     /// and no response arrives within that deadline, returns [`AsyncError::Timeout`].
     async fn send_request(&self, params: ClientRequest) -> Result<ClientResponse, AsyncError> {
         let (resp_tx, rx) = oneshot::channel();
+        let retry_attempts = self.retry_attempts.load(Ordering::Relaxed);
+        let retry_delay_ms = self.retry_delay_ms.load(Ordering::Relaxed);
+
         self.cmd_tx
-            .send(TaskCommand::Request { params, resp_tx })
+            .send(TaskCommand::Request {
+                params,
+                resp_tx,
+                retry_attempts,
+                retry_delay_ms,
+            })
             .await
             .map_err(|_| AsyncError::WorkerClosed)?;
 
         let timeout_ns = self.request_timeout_ns.load(Ordering::Relaxed);
         if timeout_ns > 0 {
-            let outcome = tokio::time::timeout(Duration::from_nanos(timeout_ns), rx).await;
+            // When there are retry attempts, each attempt can take up to timeout_ns.
+            // In addition, there is retry_delay_ms between attempts.
+            // So we scale the outer oneshot timeout appropriately to avoid the caller
+            // timing out prematurely while the background task is actively retrying/reconnecting.
+            let total_attempts = retry_attempts as u64 + 1;
+            let total_delay_ns = retry_delay_ms * retry_attempts as u64 * 1_000_000;
+            let outer_timeout_ns = timeout_ns
+                .saturating_mul(total_attempts)
+                .saturating_add(total_delay_ns);
+
+            let outcome = tokio::time::timeout(Duration::from_nanos(outer_timeout_ns), rx).await;
             if outcome.is_err() {
                 // Transport may be hung.  Send a non-blocking Disconnect so the
                 // background task drains the pipeline and closes the transport;
@@ -161,6 +192,17 @@ impl AsyncClientCore {
     pub async fn disconnect(&self) -> Result<(), AsyncError> {
         self.cmd_tx
             .send(TaskCommand::Disconnect)
+            .await
+            .map_err(|_| AsyncError::WorkerClosed)
+    }
+
+    /// Permanently shuts down the communication task.
+    ///
+    /// Drains all pending and queued requests with
+    /// [`MbusError::ConnectionClosed`] and terminates the background loop.
+    pub async fn shutdown(&self) -> Result<(), AsyncError> {
+        self.cmd_tx
+            .send(TaskCommand::Shutdown)
             .await
             .map_err(|_| AsyncError::WorkerClosed)
     }

@@ -1,5 +1,22 @@
 //! Async Serial (RTU/ASCII) server bindings.
 
+#[wasm_bindgen(typescript_custom_section)]
+const TS_APPEND_CONTENT: &'static str = r#"
+export interface WasmSerialServerOptions {
+  serialPort: any; // The SerialPort object from navigator.serial
+  unitId: number;
+  baudRate?: number;
+  dataBits?: 7 | 8;
+  stopBits?: 1 | 2;
+  parity?: "none" | "even" | "odd";
+}
+
+export interface ServerHandlers {
+  onReadCoils?: (req: { address: number, quantity: number }) => boolean[] | Promise<boolean[]>;
+  onReadHoldingRegisters?: (req: { address: number, quantity: number }) => number[] | Promise<number[]>;
+  // Add other handlers as needed...
+}"#;
+
 use futures_channel::oneshot;
 use mbus_core::transport::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, ModbusConfig, ModbusSerialConfig, Parity,
@@ -13,20 +30,38 @@ use super::handlers::JsServerHandlers;
 use super::task::WasmServerTask;
 use crate::wasm::client::helpers::{get_string, get_u8, get_u32};
 
-use std::future::Future;
-use std::pin::Pin;
+
 use std::sync::Mutex;
 
 #[wasm_bindgen]
+/// A browser-facing Modbus server that communicates over a serial port using the Web Serial API.
+///
+/// This class allows you to create a simulated Modbus device (RTU or ASCII) that can be accessed
+/// by other applications through a physical or virtual serial port connected to the browser.
+/// An instance is created via the static `bindRtu` or `bindAscii` methods.
 /// Browser-facing Modbus serial server (RTU or ASCII) running over Web Serial.
 pub struct WasmSerialServer {
-    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
-    task_fut: Mutex<Option<Pin<Box<dyn Future<Output = Result<(), JsValue>> + Send>>>>,
+    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>, // Sender to signal the server task to shut down.
+    task_fut: Mutex<Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), JsValue>> + Send>>>>, // The future representing the running server task.
 }
 
 #[wasm_bindgen]
 impl WasmSerialServer {
-    /// Binds a Web Serial RTU server.
+    /// Creates and binds a new Modbus RTU server to a browser `SerialPort`.
+    ///
+    /// @param {WasmSerialServerOptions} options - The server configuration.
+    /// @param {object} options.serialPort - The `SerialPort` object obtained from `navigator.serial.requestPort()`.
+    /// @param {number} options.unitId - The Modbus unit ID (1-247) the server will respond to.
+    /// @param {number} [options.baudRate=9600] - The serial baud rate.
+    /// @param {number} [options.dataBits=8] - The number of data bits (7 or 8).
+    /// @param {number} [options.stopBits=1] - The number of stop bits (1 or 2).
+    /// @param {string} [options.parity="none"] - The parity setting ('none', 'even', or 'odd').
+    /// @param {object} handlers - An object containing callback functions to handle incoming Modbus requests (e.g., `onReadHoldingRegisters`).
+    /// @returns {Promise<WasmSerialServer>} A promise that resolves to a new `WasmSerialServer` instance.
+    ///
+    /// @example
+    /// const port = await navigator.serial.requestPort();
+    /// const server = await WasmSerialServer.bindRtu({ serialPort: port, unitId: 1 }, { onReadHoldingRegisters: () => [1,2,3] });
     #[wasm_bindgen(js_name = bindRtu)]
     pub async fn bind_rtu(
         options: WasmSerialServerOptions,
@@ -35,7 +70,21 @@ impl WasmSerialServer {
         Self::bind_internal::<false>(options, handlers).await
     }
 
-    /// Binds a Web Serial ASCII server.
+    /// Creates and binds a new Modbus ASCII server to a browser `SerialPort`.
+    ///
+    /// @param {WasmSerialServerOptions} options - The server configuration.
+    /// @param {object} options.serialPort - The `SerialPort` object obtained from `navigator.serial.requestPort()`.
+    /// @param {number} options.unitId - The Modbus unit ID (1-247) the server will respond to.
+    /// @param {number} [options.baudRate=9600] - The serial baud rate.
+    /// @param {number} [options.dataBits=7] - The number of data bits (7 or 8, defaults to 7 for ASCII).
+    /// @param {number} [options.stopBits=1] - The number of stop bits (1 or 2).
+    /// @param {string} [options.parity="none"] - The parity setting ('none', 'even', or 'odd').
+    /// @param {object} handlers - An object containing callback functions to handle incoming Modbus requests.
+    /// @returns {Promise<WasmSerialServer>} A promise that resolves to a new `WasmSerialServer` instance.
+    ///
+    /// @example
+    /// const port = await navigator.serial.requestPort();
+    /// const server = await WasmSerialServer.bindAscii({ serialPort: port, unitId: 1, baudRate: 19200 }, { onReadCoils: () => [true, false] });
     #[wasm_bindgen(js_name = bindAscii)]
     pub async fn bind_ascii(
         options: WasmSerialServerOptions,
@@ -44,7 +93,13 @@ impl WasmSerialServer {
         Self::bind_internal::<true>(options, handlers).await
     }
 
-    /// Runs the server loop. Returns a promise that resolves on clean shutdown
+    /// Starts the server's event loop to listen for and process incoming requests.
+    ///
+    /// This method runs indefinitely. The returned promise only resolves when the server
+    /// is shut down via the `shutdown()` method, or rejects if a fatal connection
+    /// error occurs.
+    ///
+    /// @returns {Promise<void>} A promise that completes when the server stops.
     /// or rejects with the error that caused the server to stop.
     pub async fn serve(&self) -> Result<(), JsValue> {
         let fut = self
@@ -56,7 +111,9 @@ impl WasmSerialServer {
         fut.await
     }
 
-    /// Shutdown the server.
+    /// Stops the server and releases the serial port.
+    ///
+    /// @returns {Promise<void>} A promise that resolves when the shutdown is complete.
     pub async fn shutdown(&self) -> Result<(), JsValue> {
         if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
             let _ = tx.send(());

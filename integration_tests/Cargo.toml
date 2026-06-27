@@ -6,8 +6,22 @@ publish = false
 
 [dependencies]
 modbus-rs = { version = "0.15.0", path = "../modbus-rs", features = [
+    "client",
+    "server",
+    "gateway",
     "async",
+    "network-tcp",
+    "serial-rtu",
     "serial-ascii",
+    "coils",
+    "registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "diagnostics-stats",
+    "traffic",
+    "error-trait",
 ] }
 mbus-core = { version = "0.15.0", path = "../mbus-core", features = ["async"] }
 mbus-server = { version = "0.15.0", path = "../mbus-server" }
@@ -19,7 +33,18 @@ anyhow = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 
 [features]
-default = ["coils", "holding-registers", "input-registers"]
+default = [
+    "coils",
+    "holding-registers",
+    "input-registers",
+    "discrete-inputs",
+    "fifo",
+    "file-record",
+    "diagnostics",
+    "diagnostics-stats",
+    "traffic",
+    "async-server",
+]
 coils = []
 registers = []
 holding-registers = ["registers"]

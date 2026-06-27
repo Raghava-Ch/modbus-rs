@@ -3,7 +3,7 @@ import init, { WasmTcpTransport, WasmModbusClient } from '../../dist/web/modbus-
 
 await init(); // initialize WASM in browser context
 
-const WS_PORT = import.meta.env.VITE_WS_TEST_PORT; // injected by globalSetup
+const WS_PORT = (import.meta as any).env.VITE_WS_TEST_PORT; // injected by globalSetup
 
 interface MockServerContext {
   client: WasmModbusClient;

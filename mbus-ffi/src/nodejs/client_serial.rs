@@ -41,23 +41,25 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct RtuTransportOptions {
-    /// Serial port path (e.g., "/dev/ttyUSB0", "COM3").
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
     pub port_path: String,
-    /// Baud rate (e.g., 9600, 19200, 38400, 57600, 115200).
+    #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
-    /// Data bits (5, 6, 7, or 8).
+    #[doc = "Data bits (5, 6, 7, or 8)."]
     pub data_bits: Option<u8>,
-    /// Parity ("none", "even", "odd").
+    #[doc = "Parity (\"none\", \"even\", \"odd\")."]
     pub parity: Option<String>,
-    /// Stop bits (1 or 2).
+    #[doc = "Stop bits (1 or 2)."]
     pub stop_bits: Option<u8>,
-    /// Response timeout in milliseconds.
+    #[doc = "Response timeout in milliseconds."]
     pub response_timeout_ms: Option<u32>,
-    /// Per-request timeout in milliseconds.
+    #[doc = "Per-request timeout in milliseconds."]
     pub request_timeout_ms: Option<u32>,
-    /// Number of retry attempts on failure (0 = none). Default: 0.
+    #[doc = "Number of retry attempts on failure (0 = none). Default: 0."]
     pub retry_attempts: Option<u32>,
-    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    #[doc = "Delay between retry attempts in milliseconds."]
+    pub retry_delay_ms: Option<u32>,
+    #[doc = "Backoff strategy: \"immediate\", \"fixed\", or \"exponential\". Default: \"immediate\"."]
     pub retry_backoff_strategy: Option<String>,
 }
 
@@ -65,23 +67,25 @@ pub struct RtuTransportOptions {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct AsciiTransportOptions {
-    /// Serial port path (e.g., "/dev/ttyUSB0", "COM3").
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
     pub port_path: String,
-    /// Baud rate (e.g., 9600, 19200, 38400, 57600, 115200).
+    #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
-    /// Data bits (5, 6, 7, or 8).
+    #[doc = "Data bits (5, 6, 7, or 8)."]
     pub data_bits: Option<u8>,
-    /// Parity ("none", "even", "odd").
+    #[doc = "Parity (\"none\", \"even\", \"odd\")."]
     pub parity: Option<String>,
-    /// Stop bits (1 or 2).
+    #[doc = "Stop bits (1 or 2)."]
     pub stop_bits: Option<u8>,
-    /// Response timeout in milliseconds.
+    #[doc = "Response timeout in milliseconds."]
     pub response_timeout_ms: Option<u32>,
-    /// Per-request timeout in milliseconds.
+    #[doc = "Per-request timeout in milliseconds."]
     pub request_timeout_ms: Option<u32>,
-    /// Number of retry attempts on failure (0 = none). Default: 0.
+    #[doc = "Number of retry attempts on failure (0 = none). Default: 0."]
     pub retry_attempts: Option<u32>,
-    /// Backoff strategy: "immediate", "fixed", or "exponential". Default: "immediate".
+    #[doc = "Delay between retry attempts in milliseconds."]
+    pub retry_delay_ms: Option<u32>,
+    #[doc = "Backoff strategy: \"immediate\", \"fixed\", or \"exponential\". Default: \"immediate\"."]
     pub retry_backoff_strategy: Option<String>,
 }
 
@@ -233,6 +237,11 @@ fn build_ascii_config(opts: &AsciiTransportOptions) -> Result<ModbusSerialConfig
 
 /// Physical serial port in RTU mode. Factory for device clients.
 #[napi]
+#[doc = "Manages a physical serial port connection in RTU mode."]
+#[doc = "This class is a factory for creating lightweight `AsyncSerialModbusClient` instances"]
+#[doc = "that are bound to a specific unit ID and share the underlying serial connection."]
+#[doc = ""]
+#[doc = "Use the static `open` method to establish a connection."]
 pub struct AsyncRtuTransport {
     inner: Mutex<Option<Arc<AsyncSerialClientKind>>>,
 }
@@ -241,6 +250,11 @@ pub struct AsyncRtuTransport {
 impl AsyncRtuTransport {
     /// Opens the serial port in RTU mode.
     #[napi(factory)]
+    #[doc = "Opens a serial port and establishes a connection in RTU mode."]
+    #[doc = "@param opts Options for the serial RTU transport."]
+    #[doc = "@param opts.portPath The path to the serial port (e.g., '/dev/ttyUSB0', 'COM3')."]
+    #[doc = "@param opts.baudRate The baud rate for the serial communication."]
+    #[doc = "@returns A `Promise` that resolves to an `AsyncRtuTransport` instance."]
     pub async fn open(opts: RtuTransportOptions) -> Result<AsyncRtuTransport> {
         let config = build_rtu_config(&opts)?;
 
@@ -252,6 +266,10 @@ impl AsyncRtuTransport {
         if let Some(timeout_ms) = opts.request_timeout_ms {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
+
+        let retry_attempts = opts.retry_attempts.unwrap_or(0) as u8;
+        let retry_delay = Duration::from_millis(opts.retry_delay_ms.unwrap_or(0) as u64);
+        client.set_retry_options(retry_attempts, retry_delay);
 
         Ok(AsyncRtuTransport {
             inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Rtu(client)))),
@@ -270,6 +288,9 @@ impl AsyncRtuTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[napi]
+    #[doc = "Creates a lightweight device client that communicates through this transport."]
+    #[doc = "The client is bound to a specific Modbus unit ID."]
+    #[doc = "@param opts Options specifying the unit ID."]
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.unit_id;
@@ -282,6 +303,8 @@ impl AsyncRtuTransport {
 
     /// Sets the per-request timeout in milliseconds.
     #[napi]
+    #[doc = "Sets the timeout for individual Modbus requests made through this transport."]
+    #[doc = "@param timeout_ms The timeout duration in milliseconds."]
     pub fn set_request_timeout(&self, timeout_ms: u32) -> Result<()> {
         let client = self.get_client()?;
         client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
@@ -290,6 +313,7 @@ impl AsyncRtuTransport {
 
     /// Clears the per-request timeout.
     #[napi]
+    #[doc = "Clears any previously set per-request timeout."]
     pub fn clear_request_timeout(&self) -> Result<()> {
         let client = self.get_client()?;
         client.clear_request_timeout();
@@ -298,6 +322,7 @@ impl AsyncRtuTransport {
 
     /// Returns whether there are pending requests.
     #[napi(getter)]
+    #[doc = "Checks if there are any Modbus requests currently in-flight on this transport."]
     pub fn pending_requests(&self) -> Result<bool> {
         let client = self.get_client()?;
         Ok(client.has_pending_requests())
@@ -305,6 +330,7 @@ impl AsyncRtuTransport {
 
     /// Closes the transport.
     #[napi]
+    #[doc = "Closes the underlying serial port connection."]
     pub async fn close(&self) -> Result<()> {
         let client = {
             let mut guard = self
@@ -314,13 +340,14 @@ impl AsyncRtuTransport {
             guard.take()
         };
         if let Some(inner) = client {
-            let _ = inner.disconnect().await;
+            let _ = inner.shutdown().await;
         }
         Ok(())
     }
 
     /// Reconnects the transport after a disconnect.
     #[napi]
+    #[doc = "Attempts to re-establish the serial connection if it has been closed."]
     pub async fn reconnect(&self) -> Result<()> {
         let client = self.get_client()?;
         client.connect().await.map_err(from_async_error)
@@ -331,6 +358,11 @@ impl AsyncRtuTransport {
 
 /// Physical serial port in ASCII mode. Factory for device clients.
 #[napi]
+#[doc = "Manages a physical serial port connection in ASCII mode."]
+#[doc = "This class is a factory for creating lightweight `AsyncSerialModbusClient` instances"]
+#[doc = "that are bound to a specific unit ID and share the underlying serial connection."]
+#[doc = ""]
+#[doc = "Use the static `open` method to establish a connection."]
 pub struct AsyncAsciiTransport {
     inner: Mutex<Option<Arc<AsyncSerialClientKind>>>,
 }
@@ -339,6 +371,11 @@ pub struct AsyncAsciiTransport {
 impl AsyncAsciiTransport {
     /// Opens the serial port in ASCII mode.
     #[napi(factory)]
+    #[doc = "Opens a serial port and establishes a connection in ASCII mode."]
+    #[doc = "@param opts Options for the serial ASCII transport."]
+    #[doc = "@param opts.portPath The path to the serial port (e.g., '/dev/ttyUSB0', 'COM3')."]
+    #[doc = "@param opts.baudRate The baud rate for the serial communication."]
+    #[doc = "@returns A `Promise` that resolves to an `AsyncAsciiTransport` instance."]
     pub async fn open(opts: AsciiTransportOptions) -> Result<AsyncAsciiTransport> {
         let config = build_ascii_config(&opts)?;
 
@@ -350,6 +387,10 @@ impl AsyncAsciiTransport {
         if let Some(timeout_ms) = opts.request_timeout_ms {
             client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
         }
+
+        let retry_attempts = opts.retry_attempts.unwrap_or(0) as u8;
+        let retry_delay = Duration::from_millis(opts.retry_delay_ms.unwrap_or(0) as u64);
+        client.set_retry_options(retry_attempts, retry_delay);
 
         Ok(AsyncAsciiTransport {
             inner: Mutex::new(Some(Arc::new(AsyncSerialClientKind::Ascii(client)))),
@@ -368,6 +409,9 @@ impl AsyncAsciiTransport {
 
     /// Creates a device client bound to the specified unit ID.
     #[napi]
+    #[doc = "Creates a lightweight device client that communicates through this transport."]
+    #[doc = "The client is bound to a specific Modbus unit ID."]
+    #[doc = "@param opts Options specifying the unit ID."]
     pub fn create_client(&self, opts: CreateClientOptions) -> Result<AsyncSerialModbusClient> {
         let client = self.get_client()?;
         let unit_id = opts.unit_id;
@@ -380,6 +424,8 @@ impl AsyncAsciiTransport {
 
     /// Sets the per-request timeout in milliseconds.
     #[napi]
+    #[doc = "Sets the timeout for individual Modbus requests made through this transport."]
+    #[doc = "@param timeout_ms The timeout duration in milliseconds."]
     pub fn set_request_timeout(&self, timeout_ms: u32) -> Result<()> {
         let client = self.get_client()?;
         client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
@@ -388,6 +434,7 @@ impl AsyncAsciiTransport {
 
     /// Clears the per-request timeout.
     #[napi]
+    #[doc = "Clears any previously set per-request timeout."]
     pub fn clear_request_timeout(&self) -> Result<()> {
         let client = self.get_client()?;
         client.clear_request_timeout();
@@ -396,6 +443,7 @@ impl AsyncAsciiTransport {
 
     /// Returns whether there are pending requests.
     #[napi(getter)]
+    #[doc = "Checks if there are any Modbus requests currently in-flight on this transport."]
     pub fn pending_requests(&self) -> Result<bool> {
         let client = self.get_client()?;
         Ok(client.has_pending_requests())
@@ -403,6 +451,7 @@ impl AsyncAsciiTransport {
 
     /// Closes the transport.
     #[napi]
+    #[doc = "Closes the underlying serial port connection."]
     pub async fn close(&self) -> Result<()> {
         let client = {
             let mut guard = self
@@ -412,13 +461,14 @@ impl AsyncAsciiTransport {
             guard.take()
         };
         if let Some(inner) = client {
-            let _ = inner.disconnect().await;
+            let _ = inner.shutdown().await;
         }
         Ok(())
     }
 
     /// Reconnects the transport after a disconnect.
     #[napi]
+    #[doc = "Attempts to re-establish the serial connection if it has been closed."]
     pub async fn reconnect(&self) -> Result<()> {
         let client = self.get_client()?;
         client.connect().await.map_err(from_async_error)
@@ -428,6 +478,8 @@ impl AsyncAsciiTransport {
 // ── AsyncSerialModbusClient ──────────────────────────────────────────────────
 
 /// Lightweight device client sharing the serial transport.
+#[doc = "A lightweight Modbus client that sends requests for a specific unit ID"]
+#[doc = "over a shared `AsyncRtuTransport` or `AsyncAsciiTransport`."]
 #[napi]
 pub struct AsyncSerialModbusClient {
     inner: Arc<AsyncSerialClientKind>,
@@ -441,6 +493,11 @@ impl AsyncSerialModbusClient {
     /// Reads holding registers (FC03).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Reads one or more holding registers (Function Code 03)."]
+    #[doc = "@param opts Options for reading registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.quantity The number of registers to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_holding_registers(
         &self,
         env: Env,
@@ -472,6 +529,11 @@ impl AsyncSerialModbusClient {
     /// Reads input registers (FC04).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "input-registers")]
+    #[doc = "Reads one or more input registers (Function Code 04)."]
+    #[doc = "@param opts Options for reading registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.quantity The number of registers to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_input_registers(
         &self,
         env: Env,
@@ -503,6 +565,11 @@ impl AsyncSerialModbusClient {
     /// Writes a single register (FC06).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Writes a single holding register (Function Code 06)."]
+    #[doc = "@param opts Options for writing a single register."]
+    #[doc = "@param opts.address The register address."]
+    #[doc = "@param opts.value The 16-bit value to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_single_register(
         &self,
         env: Env,
@@ -534,6 +601,11 @@ impl AsyncSerialModbusClient {
     /// Writes multiple registers (FC16).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Writes multiple consecutive holding registers (Function Code 16)."]
+    #[doc = "@param opts Options for writing multiple registers."]
+    #[doc = "@param opts.address The starting register address."]
+    #[doc = "@param opts.values An array of 16-bit values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_multiple_registers(
         &self,
         env: Env,
@@ -565,6 +637,13 @@ impl AsyncSerialModbusClient {
     /// Reads and writes multiple registers atomically (FC23).
     #[napi(ts_return_type = "Promise<number[]>")]
     #[cfg(feature = "holding-registers")]
+    #[doc = "Performs an atomic read/write operation on multiple registers (Function Code 23)."]
+    #[doc = "@param opts Options for the read/write operation."]
+    #[doc = "@param opts.read_address The starting address for the read operation."]
+    #[doc = "@param opts.read_quantity The number of registers to read."]
+    #[doc = "@param opts.write_address The starting address for the write operation."]
+    #[doc = "@param opts.write_values An array of 16-bit values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_write_multiple_registers(
         &self,
         env: Env,
@@ -606,6 +685,11 @@ impl AsyncSerialModbusClient {
     /// Reads coils (FC01).
     #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "coils")]
+    #[doc = "Reads the status of one or more coils (Function Code 01)."]
+    #[doc = "@param opts Options for reading bits."]
+    #[doc = "@param opts.address The starting coil address."]
+    #[doc = "@param opts.quantity The number of coils to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_coils(
         &self,
         env: Env,
@@ -642,6 +726,11 @@ impl AsyncSerialModbusClient {
     /// Writes a single coil (FC05).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
+    #[doc = "Writes a single coil (Function Code 05)."]
+    #[doc = "@param opts Options for writing a single coil."]
+    #[doc = "@param opts.address The coil address."]
+    #[doc = "@param opts.value The boolean value to write (true for ON, false for OFF)."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_single_coil(
         &self,
         env: Env,
@@ -673,6 +762,11 @@ impl AsyncSerialModbusClient {
     /// Writes multiple coils (FC15).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "coils")]
+    #[doc = "Writes multiple consecutive coils (Function Code 15)."]
+    #[doc = "@param opts Options for writing multiple coils."]
+    #[doc = "@param opts.address The starting coil address."]
+    #[doc = "@param opts.values An array of boolean values to write."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_multiple_coils(
         &self,
         env: Env,
@@ -719,6 +813,11 @@ impl AsyncSerialModbusClient {
     /// Reads discrete inputs (FC02).
     #[napi(ts_return_type = "Promise<boolean[]>")]
     #[cfg(feature = "discrete-inputs")]
+    #[doc = "Reads the status of one or more discrete inputs (Function Code 02)."]
+    #[doc = "@param opts Options for reading bits."]
+    #[doc = "@param opts.address The starting discrete input address."]
+    #[doc = "@param opts.quantity The number of discrete inputs to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_discrete_inputs(
         &self,
         env: Env,
@@ -757,6 +856,10 @@ impl AsyncSerialModbusClient {
     /// Reads FIFO queue (FC24).
     #[napi(ts_return_type = "Promise<FifoQueueResponse>")]
     #[cfg(feature = "fifo")]
+    #[doc = "Reads from a FIFO queue register (Function Code 24)."]
+    #[doc = "@param opts Options for reading the FIFO queue."]
+    #[doc = "@param opts.address The FIFO pointer address."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_fifo_queue(
         &self,
         env: Env,
@@ -791,6 +894,10 @@ impl AsyncSerialModbusClient {
     /// Reads file records (FC20).
     #[napi(ts_return_type = "Promise<number[][]>")]
     #[cfg(feature = "file-record")]
+    #[doc = "Reads one or more file records (Function Code 20)."]
+    #[doc = "@param opts Options for reading file records."]
+    #[doc = "@param opts.requests An array of file record read sub-requests."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_file_record(
         &self,
         env: Env,
@@ -840,6 +947,10 @@ impl AsyncSerialModbusClient {
     /// Writes file records (FC21).
     #[napi(ts_return_type = "Promise<void>")]
     #[cfg(feature = "file-record")]
+    #[doc = "Writes one or more file records (Function Code 21)."]
+    #[doc = "@param opts Options for writing file records."]
+    #[doc = "@param opts.requests An array of file record write sub-requests."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn write_file_record(
         &self,
         env: Env,
@@ -892,6 +1003,7 @@ impl AsyncSerialModbusClient {
     /// Reads exception status (FC07).
     #[napi]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Reads the device's exception status byte (Function Code 07)."]
     pub async fn read_exception_status(&self) -> Result<u8> {
         self.inner
             .read_exception_status(self.unit_id)
@@ -902,6 +1014,11 @@ impl AsyncSerialModbusClient {
     /// Sends a diagnostics request (FC08).
     #[napi(ts_return_type = "Promise<DiagnosticsResponse>")]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Executes a diagnostic function on the device (Function Code 08)."]
+    #[doc = "@param opts Options for the diagnostics request."]
+    #[doc = "@param opts.sub_function The diagnostic sub-function code."]
+    #[doc = "@param opts.data Data to be sent with the request."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn diagnostics(
         &self,
         env: Env,
@@ -946,6 +1063,11 @@ impl AsyncSerialModbusClient {
     /// Reads device identification (FC43/MEI14).
     #[napi(ts_return_type = "Promise<DeviceIdentificationResponse>")]
     #[cfg(feature = "diagnostics")]
+    #[doc = "Reads device identification information (Function Code 43, MEI 14)."]
+    #[doc = "@param opts Options for reading device identification."]
+    #[doc = "@param opts.read_device_id_code The category of objects to read (e.g., basic, regular)."]
+    #[doc = "@param opts.object_id The ID of the first object to read."]
+    #[doc = "@param opts.signal An optional `AbortSignal` to cancel the operation."]
     pub fn read_device_identification(
         &self,
         env: Env,
