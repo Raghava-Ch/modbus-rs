@@ -1,6 +1,6 @@
 {
   "name": "modbus-rs-win32-x64-msvc",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "os": [
     "win32"
   ],

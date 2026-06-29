@@ -1,6 +1,6 @@
 {
   "name": "modbus-rs-wasm",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "description": "Modbus TCP/RTU/ASCII client & server for the browser, powered by Rust + WebAssembly",
   "type": "module",
   "exports": {
