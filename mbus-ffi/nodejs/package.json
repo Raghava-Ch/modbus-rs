@@ -68,6 +68,6 @@
     "modbus-rs-linux-x64-gnu": "0.15.3",
     "modbus-rs-darwin-x64": "0.15.3",
     "modbus-rs-darwin-arm64": "0.15.3",
-    "modbus-rs-linux-arm64-gnu": "0.1532"
+    "modbus-rs-linux-arm64-gnu": "0.15.3"
   }
 }
