@@ -1,6 +1,6 @@
 [package]
 name = "mbus-ffi"
-version = "0.15.5"
+version = "0.15.6"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"

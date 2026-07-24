@@ -511,3 +511,15 @@ if (fs.existsSync(wasmNpmDir)) {
   console.log('WASM postbuild tasks complete.');
 }
 
+// Force all native packages to un-ignore .node files for npm publish
+const npmDistDir = path.join(distDir, 'npm');
+if (fs.existsSync(npmDistDir)) {
+  const dirs = fs.readdirSync(npmDistDir, { withFileTypes: true })
+    .filter(d => d.isDirectory() && d.name !== 'wasm')
+    .map(d => d.name);
+  for (const d of dirs) {
+    const npmignorePath = path.join(npmDistDir, d, '.npmignore');
+    fs.writeFileSync(npmignorePath, '!*.node\n', 'utf8');
+    console.log(`Generated .npmignore for ${d} to un-ignore .node files`);
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "modbus-rs",
-  "version": "0.15.5",
+  "version": "0.15.6",
   "description": "High-performance Modbus TCP/RTU/ASCII client, server and gateway for Node.js, powered by Rust",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,10 +19,10 @@
     }
   },
   "scripts": {
-    "build": "npm run build:nodejs && npm run build:wasm && node scripts/postbuild.js",
+    "build": "npm run build:nodejs && npm run build:wasm",
     "build:nodejs": "napi build --platform --release --features nodejs-full --js index.js --dts index.d.ts --output-dir dist --manifest-path ../Cargo.toml",
     "build:debug": "napi build --platform --features nodejs-full --js index.js --dts index.d.ts --output-dir dist --manifest-path ../Cargo.toml && node scripts/postbuild.js",
-    "build:wasm": "npm run build:wasm:web && npm run build:wasm:bundler",
+    "build:wasm": "npm run build:wasm:web && npm run build:wasm:bundler && node scripts/postbuild.js",
     "build:wasm:web": "wasm-pack build ../. --target web --out-name modbus-rs --out-dir javascript/dist/npm/wasm/dist/web --features wasm-full",
     "build:wasm:bundler": "wasm-pack build ../. --target bundler --out-name modbus-rs --out-dir javascript/dist/npm/wasm/dist/bundler --features wasm-full",
     "test": "node --test __test__/*.test.mjs",
@@ -93,11 +93,11 @@
     "LICENSE"
   ],
   "optionalDependencies": {
-    "modbus-rs-darwin-arm64": "0.15.5",
-    "modbus-rs-darwin-x64": "0.15.5",
-    "modbus-rs-linux-arm64-gnu": "0.15.5",
-    "modbus-rs-linux-x64-gnu": "0.15.5",
-    "modbus-rs-wasm": "0.15.5",
-    "modbus-rs-win32-x64-msvc": "0.15.5"
+    "modbus-rs-darwin-arm64": "0.15.6",
+    "modbus-rs-darwin-x64": "0.15.6",
+    "modbus-rs-linux-arm64-gnu": "0.15.6",
+    "modbus-rs-linux-x64-gnu": "0.15.6",
+    "modbus-rs-wasm": "0.15.6",
+    "modbus-rs-win32-x64-msvc": "0.15.6"
   }
 }
