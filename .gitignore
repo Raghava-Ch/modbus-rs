@@ -71,6 +71,3 @@ CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
 
-# Build outputs
-mbus-ffi/javascript/dist/
-

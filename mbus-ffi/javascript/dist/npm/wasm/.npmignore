@@ -1,0 +1,3 @@
+# An empty .npmignore prevents npm from using parent .gitignore files.
+# This ensures that the 'dist' directory is included based on the package.json 'files' array.
+!dist/

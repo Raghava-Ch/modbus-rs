@@ -1,0 +1,2 @@
+# Ignore the generated WebAssembly builds from git
+dist/

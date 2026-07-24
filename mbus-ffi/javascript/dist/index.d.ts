@@ -192,7 +192,7 @@ export declare class AsyncSerialModbusClient {
    * @param {number} options.address - The coil address.
    * @param {CoilState} options.value - The coil state to write.
    * @param {AbortSignal} [options.signal] - An optional cancellation signal.
-   * @returns {Promise<void>} - A promise that resolves when the write is complete.
+   * @returns {`Promise<void>`} - A promise that resolves when the write is complete.
    *
    * @example
    * ```javascript
@@ -207,7 +207,7 @@ export declare class AsyncSerialModbusClient {
    * @param {number} options.address - The starting coil address.
    * @param {CoilState[]} options.values - An array of coil states to write.
    * @param {AbortSignal} [options.signal] - An optional cancellation signal.
-   * @returns {Promise<void>} - A promise that resolves when the write is complete.
+   * @returns {`Promise<void>`} - A promise that resolves when the write is complete.
    *
    * @example
    * ```javascript
@@ -313,7 +313,7 @@ export declare class AsyncSerialModbusServer {
    * @param {number} [options.responseTimeoutMs] Optional response timeout in milliseconds. Defaults to 1000.
    *
    * @param {ServerHandlers} handlers An object containing callback functions to handle Modbus requests.
-   * @returns {Promise<AsyncSerialModbusServer>} A `Promise` that resolves to a running `AsyncSerialModbusServer` instance.
+   * @returns {`Promise<AsyncSerialModbusServer>`} A `Promise` that resolves to a running `AsyncSerialModbusServer` instance.
    */
   static bindRtu(options: SerialServerOptions, handlers: ServerHandlers): Promise<AsyncSerialModbusServer>;
   /**
@@ -329,7 +329,7 @@ export declare class AsyncSerialModbusServer {
    * @param {number} [options.responseTimeoutMs] Optional response timeout in milliseconds. Defaults to 1000.
    *
    * @param {ServerHandlers} handlers An object containing callback functions to handle Modbus requests.
-   * @returns {Promise<AsyncSerialModbusServer>} A `Promise` that resolves to a running `AsyncSerialModbusServer` instance.
+   * @returns {`Promise<AsyncSerialModbusServer>`} A `Promise` that resolves to a running `AsyncSerialModbusServer` instance.
    */
   static bindAscii(options: SerialServerOptions, handlers: ServerHandlers): Promise<AsyncSerialModbusServer>;
   /**
@@ -355,7 +355,7 @@ export declare class AsyncTcpGateway {
    * @param {GatewayConfig} config - Gateway configuration including downstreams and routes.
    * @param {DownstreamConfig[]} config.downstreams - List of downstream servers.
    * @param {RouteEntry[]} config.routes - Routing table mapping unit IDs to downstream channels.
-   * @returns {Promise<AsyncTcpGateway>} A promise that resolves to the running gateway instance.
+   * @returns {`Promise<AsyncTcpGateway>`} A promise that resolves to the running gateway instance.
    */
   static bind(options: GatewayBindOptions, config: GatewayConfig): Promise<AsyncTcpGateway>;
   /** Stops the gateway. */
@@ -448,7 +448,7 @@ export declare class AsyncTcpModbusClient {
    * @param {number} options.address - The coil address.
    * @param {CoilState} options.value - The coil state to write.
    * @param {AbortSignal} [options.signal] - An optional cancellation signal.
-   * @returns {Promise<void>} - A promise that resolves when the write is complete.
+   * @returns {`Promise<void>`} - A promise that resolves when the write is complete.
    *
    * @example
    * ```javascript
@@ -463,7 +463,7 @@ export declare class AsyncTcpModbusClient {
    * @param {number} options.address - The starting coil address.
    * @param {CoilState[]} options.values - An array of coil states to write.
    * @param {AbortSignal} [options.signal] - An optional cancellation signal.
-   * @returns {Promise<void>} - A promise that resolves when the write is complete.
+   * @returns {`Promise<void>`} - A promise that resolves when the write is complete.
    *
    * @example
    * ```javascript
@@ -565,7 +565,7 @@ export declare class AsyncTcpModbusServer {
    * @param {number} options.port The TCP port to listen on.
    * @param {number} options.unitId The Modbus unit ID the server will respond to.
    * @param {ServerHandlers} handlers An object containing callback functions to handle Modbus requests.
-   * @returns {Promise<AsyncTcpModbusServer>} A `Promise` that resolves to a running `AsyncTcpModbusServer` instance.
+   * @returns {`Promise<AsyncTcpModbusServer>`} A `Promise` that resolves to a running `AsyncTcpModbusServer` instance.
    */
   static bind(options: TcpServerOptions, handlers: ServerHandlers): Promise<AsyncTcpModbusServer>;
   /**
