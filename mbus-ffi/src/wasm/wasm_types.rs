@@ -960,6 +960,19 @@ export class WasmRtuTransport {
      * Returns `true` if there are any in-flight Modbus requests pending a response.
      */
     readonly pendingRequests: boolean;
+    /**
+     * Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
+     */
+    setRequestTimeout(ms: number): void;
+    /**
+     * Clears any request timeout override and restores the default timeout.
+     */
+    clearRequestTimeout(): void;
+    /**
+     * Drop all pending in-flight requests and attempt to reconnect.
+     */
+    reconnect(): Promise<void>;
+
 }
 
 /**
@@ -995,6 +1008,18 @@ export class WasmAsciiTransport {
      * Returns `true` if there are any in-flight Modbus requests pending a response.
      */
     readonly pendingRequests: boolean;
+    /**
+     * Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
+     */
+    setRequestTimeout(ms: number): void;
+    /**
+     * Clears any request timeout override and restores the default timeout.
+     */
+    clearRequestTimeout(): void;
+    /**
+     * Drop all pending in-flight requests and attempt to reconnect.
+     */
+    reconnect(): Promise<void>;
 }
 "#;
 
