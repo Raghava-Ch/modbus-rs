@@ -7,12 +7,10 @@
 use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
-#[cfg(feature = "diagnostics")]
-use mbus_core::function_codes::public::EncapsulatedInterfaceType;
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_PER_PDU};
-use mbus_core::transport::{SerialMode, TransportType, UnitIdOrSlaveAddr, checksum};
+use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
 use std::future::Future;
 
 /// Direction of a Modbus traffic event — mirrors `mbus_server::TrafficDirection` for
@@ -854,7 +852,7 @@ impl ModbusResponse {
 /// #[cfg(feature = "traffic")]
 /// impl AsyncServerTrafficNotifier for MyApp {
 ///     fn on_rx_frame(&mut self, txn_id: u16, unit: UnitIdOrSlaveAddr, frame: &[u8]) {
-///         println!("rx txn={txn_id} unit={} bytes={frame:02X?}", unit.get());
+///         println!("rx txn={txn_id} unit={} bytes={frame:02X?}", unit);
 ///     }
 /// }
 /// ```
@@ -1015,7 +1013,7 @@ fn encode_byte_count_payload(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_byte_count_payload(fc, data)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 fn encode_echo_coil(
@@ -1026,7 +1024,7 @@ fn encode_echo_coil(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, address, raw_value)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 fn encode_echo_register(
@@ -1037,7 +1035,7 @@ fn encode_echo_register(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, address, value)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 fn encode_echo_mask_write(
@@ -1049,7 +1047,7 @@ fn encode_echo_mask_write(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_mask_write_register(address, and_mask, or_mask)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 fn encode_echo_multi_write(
@@ -1061,7 +1059,7 @@ fn encode_echo_multi_write(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_write_single_u16(fc, address, count)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -1073,7 +1071,7 @@ fn encode_single_byte(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_byte_payload(fc, value)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -1085,7 +1083,7 @@ fn encode_diagnostics_echo(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_diagnostics(sub_function, result)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -1098,7 +1096,7 @@ fn encode_two_u16(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_write_single_u16(fc, first, second)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 #[cfg(feature = "fifo")]
@@ -1109,13 +1107,10 @@ fn encode_fifo_data(
     tt: TransportType,
 ) -> EncodeResult {
     let pdu = Pdu::build_fifo_payload(data)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 /// Encodes a `ReadDeviceId` (FC2B / MEI 0x0E) response.
-///
-/// Builds the 5-byte MEI header (`code`, `conformity`, `more`, `next_id`, `n_objects`),
-/// appends the raw object triples, then wraps in a MEI-type PDU.
 #[cfg(feature = "diagnostics")]
 #[allow(clippy::too_many_arguments)]
 fn encode_read_device_id(
@@ -1128,31 +1123,14 @@ fn encode_read_device_id(
     unit: UnitIdOrSlaveAddr,
     tt: TransportType,
 ) -> EncodeResult {
-    let n_objects = count_mei_objects(objects).map_err(|_| MbusError::InvalidPduLength)?;
-    let more_byte: u8 = if more_follows { 0xFF } else { 0x00 };
-    let header = [
+    let pdu = Pdu::build_read_device_id_response(
         read_device_id_code,
         conformity_level,
-        more_byte,
+        more_follows,
         next_object_id,
-        n_objects,
-    ];
-    if header.len() + objects.len() > MAX_ADU_FRAME_LEN - 1 {
-        return Err(MbusError::BufferTooSmall);
-    }
-    let mut mei_data: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-    mei_data
-        .extend_from_slice(&header)
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    mei_data
-        .extend_from_slice(objects)
-        .map_err(|_| MbusError::BufferTooSmall)?;
-    let pdu = Pdu::build_mei_type(
-        FunctionCode::EncapsulatedInterfaceTransport,
-        EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
-        &mei_data,
+        objects,
     )?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 #[cfg(feature = "file-record")]
@@ -1164,7 +1142,7 @@ fn encode_file_record_write_echo(
 ) -> EncodeResult {
     let len = pdu_data.len() as u8;
     let pdu = Pdu::new(FunctionCode::WriteFileRecord, pdu_data, len);
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 fn encode_exception(
@@ -1178,7 +1156,7 @@ fn encode_exception(
         .exception_response()
         .ok_or(MbusError::InvalidFunctionCode)?;
     let pdu = Pdu::build_byte_payload(exception_fc, code as u8)?;
-    compile_adu_frame(txn_id, unit.get(), pdu, tt)
+    compile_adu_frame(txn_id, unit, pdu, tt)
 }
 
 /// Encode an exception response for an arbitrary (possibly vendor-specific)
@@ -1192,90 +1170,9 @@ fn encode_exception_raw(
     unit: UnitIdOrSlaveAddr,
     tt: TransportType,
 ) -> EncodeResult {
-    let exception_fc_byte = fc_byte | 0x80;
-    let code_byte = code as u8;
-    let unit_id = unit.get();
-    let mut frame: AduFrame = AduFrame::new();
-    match tt {
-        TransportType::StdTcp | TransportType::CustomTcp => {
-            // MBAP header: TID(2) + Protocol(2) + Length(2) + UnitID(1) + PDU(2) = 9 bytes
-            // Length field = 1 (unit) + 2 (PDU) = 3
-            frame
-                .extend_from_slice(&txn_id.to_be_bytes())
-                .map_err(|_| MbusError::Unexpected)?;
-            frame
-                .extend_from_slice(&0u16.to_be_bytes())
-                .map_err(|_| MbusError::Unexpected)?;
-            frame
-                .extend_from_slice(&3u16.to_be_bytes())
-                .map_err(|_| MbusError::Unexpected)?;
-            frame.push(unit_id).map_err(|_| MbusError::Unexpected)?;
-            frame
-                .push(exception_fc_byte)
-                .map_err(|_| MbusError::Unexpected)?;
-            frame.push(code_byte).map_err(|_| MbusError::Unexpected)?;
-        }
-        TransportType::StdSerial(mode) | TransportType::CustomSerial(mode) => match mode {
-            SerialMode::Rtu => {
-                let payload = [unit_id, exception_fc_byte, code_byte];
-                frame
-                    .extend_from_slice(&payload)
-                    .map_err(|_| MbusError::Unexpected)?;
-                let crc = checksum::crc16(&payload);
-                frame
-                    .extend_from_slice(&crc.to_le_bytes())
-                    .map_err(|_| MbusError::Unexpected)?;
-            }
-            SerialMode::Ascii => {
-                let binary = [unit_id, exception_fc_byte, code_byte];
-                let lrc = checksum::lrc(&binary);
-                frame.push(b':').map_err(|_| MbusError::Unexpected)?;
-                for &b in &binary {
-                    frame
-                        .push(raw_nibble_to_hex(b >> 4))
-                        .map_err(|_| MbusError::Unexpected)?;
-                    frame
-                        .push(raw_nibble_to_hex(b & 0x0F))
-                        .map_err(|_| MbusError::Unexpected)?;
-                }
-                frame
-                    .push(raw_nibble_to_hex(lrc >> 4))
-                    .map_err(|_| MbusError::Unexpected)?;
-                frame
-                    .push(raw_nibble_to_hex(lrc & 0x0F))
-                    .map_err(|_| MbusError::Unexpected)?;
-                frame.push(b'\r').map_err(|_| MbusError::Unexpected)?;
-                frame.push(b'\n').map_err(|_| MbusError::Unexpected)?;
-            }
-        },
-    }
-    Ok(frame)
-}
-
-#[inline]
-fn raw_nibble_to_hex(nibble: u8) -> u8 {
-    if nibble < 10 {
-        b'0' + nibble
-    } else {
-        b'A' + nibble - 10
-    }
-}
-
-/// Counts the `[id(1), len(1), value(N)...]` object triples in a FC2B/MEI 0x0E objects payload.
-#[cfg(feature = "diagnostics")]
-fn count_mei_objects(payload: &[u8]) -> Result<u8, MbusError> {
-    let mut offset = 0usize;
-    let mut count: u8 = 0;
-    while offset < payload.len() {
-        if offset + 2 > payload.len() {
-            return Err(MbusError::InvalidPduLength);
-        }
-        let val_len = payload[offset + 1] as usize;
-        offset += 2 + val_len;
-        if offset > payload.len() {
-            return Err(MbusError::InvalidPduLength);
-        }
-        count = count.checked_add(1).ok_or(MbusError::InvalidPduLength)?;
-    }
-    Ok(count)
+    let exception_pdu = [
+        fc_byte | mbus_core::data_unit::common::ERROR_BIT_MASK,
+        code as u8,
+    ];
+    mbus_core::data_unit::common::compile_raw_pdu_adu_frame(txn_id, unit.get(), &exception_pdu, tt)
 }

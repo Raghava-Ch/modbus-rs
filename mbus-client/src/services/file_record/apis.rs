@@ -50,7 +50,7 @@ where
         // Construct the ADU frame (MBAP/Serial Header + PDU + CRC/LRC if applicable)
         let frame = file_record::service::ServiceBuilder::read_file_record(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             sub_request,
             TRANSPORT::TRANSPORT_TYPE,
         )?;
@@ -99,7 +99,7 @@ where
         // Construct the ADU frame using the service builder.
         let frame = file_record::service::ServiceBuilder::write_file_record(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             sub_request,
             TRANSPORT::TRANSPORT_TYPE,
         )?;

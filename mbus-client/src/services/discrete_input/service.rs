@@ -2,6 +2,7 @@ use heapless::Vec;
 
 use crate::services::discrete_input::{request::ReqPduCompiler, response::ResponseParser};
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
@@ -17,7 +18,7 @@ impl ServiceBuilder {
     /// Sends a Read Discrete Inputs (FC 0x02) request.
     pub(crate) fn read_discrete_inputs(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         transport_type: TransportType,

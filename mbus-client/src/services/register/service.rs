@@ -1,11 +1,12 @@
 use heapless::Vec;
 
 use crate::services::register::{request::ReqPduCompiler, response::ResponseParser};
-#[cfg(feature = "holding-registers")]
-use mbus_core::models::register::HoldingRegisters;
 #[cfg(feature = "input-registers")]
 use mbus_core::models::register::InputRegisters;
+#[cfg(feature = "holding-registers")]
+use mbus_core::models::register::HoldingRegisters;
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::MAX_ADU_FRAME_LEN,
     data_unit::common::{self, Pdu},
     errors::MbusError,
@@ -22,7 +23,7 @@ impl ServiceBuilder {
     #[cfg(feature = "holding-registers")]
     pub(super) fn read_holding_registers(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         transport_type: TransportType,
@@ -35,7 +36,7 @@ impl ServiceBuilder {
     #[cfg(feature = "input-registers")]
     pub(super) fn read_input_registers(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         transport_type: TransportType,
@@ -48,7 +49,7 @@ impl ServiceBuilder {
     #[cfg(feature = "holding-registers")]
     pub(super) fn write_single_register(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         value: u16,
         transport_type: TransportType,
@@ -61,7 +62,7 @@ impl ServiceBuilder {
     #[cfg(feature = "holding-registers")]
     pub(super) fn write_multiple_registers(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         values: &[u16],
@@ -75,7 +76,7 @@ impl ServiceBuilder {
     #[cfg(feature = "holding-registers")]
     pub(super) fn read_write_multiple_registers(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         read_address: u16,
         read_quantity: u16,
         write_address: u16,
@@ -95,7 +96,7 @@ impl ServiceBuilder {
     #[cfg(feature = "holding-registers")]
     pub(super) fn mask_write_register(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         and_mask: u16,
         or_mask: u16,

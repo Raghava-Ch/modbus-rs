@@ -80,12 +80,16 @@ fn uid(v: u8) -> UnitIdOrSlaveAddr {
 
 fn build_tcp_request(
     txn_id: u16,
-    unit: u8,
+    unit: UnitIdOrSlaveAddr,
     fc: FunctionCode,
     payload: &[u8],
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::new(fc, HVec::from_slice(payload).unwrap(), payload.len() as u8);
     compile_adu_frame(txn_id, unit, pdu, TransportType::StdTcp).unwrap()
+}
+
+fn unit_id(u: u8) -> UnitIdOrSlaveAddr {
+    UnitIdOrSlaveAddr::try_from(u).unwrap()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,14 +102,14 @@ fn build_tcp_request(
 fn gateway_forwards_request_and_returns_response() {
     let request_adu = build_tcp_request(
         0x0001, // txn_id
-        1,      // unit
+        unit_id(1),      // unit
         FunctionCode::ReadCoils,
         &[0x00, 0x00, 0x00, 0x08], // address=0, quantity=8
     );
 
     let response_adu = build_tcp_request(
         0x0000, // downstream txn (gateway assigns 0)
-        1,      // unit
+        unit_id(1),      // unit
         FunctionCode::ReadCoils,
         &[0x01, 0xFF], // byte_count=1, coil_data=0xFF
     );
@@ -167,7 +171,7 @@ fn gateway_poll_returns_idle_when_no_upstream_data() {
 fn gateway_sends_exception_on_routing_miss() {
     let request_adu = build_tcp_request(
         0x000F,
-        42, // unit 42 — no route configured
+        unit_id(42), // unit 42 — no route configured
         FunctionCode::ReadCoils,
         &[0x00, 0x00, 0x00, 0x01],
     );
@@ -197,7 +201,7 @@ fn gateway_sends_exception_on_routing_miss() {
 fn gateway_handles_downstream_timeout() {
     let request_adu = build_tcp_request(
         0x0002,
-        1,
+        unit_id(1),
         FunctionCode::ReadCoils,
         &[0x00, 0x00, 0x00, 0x01],
     );
@@ -247,8 +251,8 @@ fn gateway_handles_downstream_timeout() {
 /// Verify that two upstreams can simultaneously connect and run independent sessions.
 #[test]
 fn gateway_supports_multi_upstream_sessions() {
-    let req_1 = build_tcp_request(0x1111, 1, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
-    let req_2 = build_tcp_request(0x2222, 2, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_1 = build_tcp_request(0x1111, unit_id(1), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_2 = build_tcp_request(0x2222, unit_id(2), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
 
     let upstream_1 = MockTransport::tcp().with_rx(req_1);
     let upstream_2 = MockTransport::tcp().with_rx(req_2);
@@ -277,8 +281,8 @@ fn gateway_supports_multi_upstream_sessions() {
 /// and `on_downstream_busy(queued=false)` is fired.
 #[test]
 fn gateway_n_pending_0_drops_on_busy() {
-    let req_first = build_tcp_request(0x0001, 1, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
-    let req_second = build_tcp_request(0x0002, 1, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_first = build_tcp_request(0x0001, unit_id(1), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_second = build_tcp_request(0x0002, unit_id(1), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
 
     // Upstream has two requests lined up
     let upstream = MockTransport::tcp().with_rx(req_first);
@@ -322,11 +326,11 @@ fn gateway_n_pending_0_drops_on_busy() {
 /// and then dispatched once the downstream becomes free.
 #[test]
 fn gateway_n_pending_gt0_queues_on_busy() {
-    let req_first = build_tcp_request(0x0001, 1, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
-    let req_second = build_tcp_request(0x0002, 1, FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_first = build_tcp_request(0x0001, unit_id(1), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
+    let req_second = build_tcp_request(0x0002, unit_id(1), FunctionCode::ReadCoils, &[0, 0, 0, 8]);
 
-    let resp_first = build_tcp_request(0, 1, FunctionCode::ReadCoils, &[1, 0xFF]);
-    let resp_second = build_tcp_request(1, 1, FunctionCode::ReadCoils, &[1, 0xEE]);
+    let resp_first = build_tcp_request(0, unit_id(1), FunctionCode::ReadCoils, &[1, 0xFF]);
+    let resp_second = build_tcp_request(1, unit_id(1), FunctionCode::ReadCoils, &[1, 0xEE]);
 
     let upstream = MockTransport::tcp().with_rx(req_first);
 

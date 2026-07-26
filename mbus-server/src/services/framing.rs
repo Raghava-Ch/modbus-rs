@@ -86,17 +86,12 @@ pub(super) fn parse_write_multiple_request(
 pub(super) fn build_byte_count_prefixed_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     payload: &[u8],
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_byte_count_payload(function_code, payload)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Builds a response carrying exactly one data byte.
@@ -104,17 +99,12 @@ pub(super) fn build_byte_count_prefixed_response<TRANSPORT: Transport>(
 pub(super) fn build_single_byte_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     value: u8,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_byte_payload(function_code, value)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Builds a response carrying exactly two `u16` values (big-endian).
@@ -122,18 +112,13 @@ pub(super) fn build_single_byte_response<TRANSPORT: Transport>(
 pub(super) fn build_two_u16_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     first: u16,
     second: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_write_single_u16(function_code, first, second)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Builds a write-style echo response containing two `u16` values.
@@ -141,18 +126,13 @@ pub(super) fn build_two_u16_response<TRANSPORT: Transport>(
 pub(super) fn build_echo_u16_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     function_code: FunctionCode,
     first: u16,
     second: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_write_single_u16(function_code, first, second)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Parses FC16 (Mask Write Register) requests.
@@ -171,18 +151,13 @@ pub(super) fn parse_mask_write_request(
 pub(super) fn build_mask_write_echo_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     address: u16,
     and_mask: u16,
     or_mask: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_mask_write_register(address, and_mask, or_mask)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Parses FC17 (Read/Write Multiple Registers) requests.
@@ -238,19 +213,14 @@ pub(super) fn parse_file_record_write_request(
 pub(super) fn build_file_record_read_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     payload: &[u8],
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     if payload.len() > FILE_RECORD_RESPONSE_MAX_PAYLOAD_LEN {
         return Err(MbusError::FileReadPduOverflow);
     }
     let pdu = Pdu::build_byte_count_payload(FunctionCode::ReadFileRecord, payload)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Builds an FC15 (Write File Record) echo response.
@@ -260,7 +230,7 @@ pub(super) fn build_file_record_read_response<TRANSPORT: Transport>(
 pub(super) fn build_file_record_write_echo_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     request_pdu_data: &[u8],
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     if request_pdu_data.len() > MAX_PDU_DATA_LEN {
@@ -274,12 +244,7 @@ pub(super) fn build_file_record_write_echo_response<TRANSPORT: Transport>(
         data,
         request_pdu_data.len() as u8,
     );
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Parses FC18 (Read FIFO Queue) requests.
@@ -309,16 +274,11 @@ pub(super) fn parse_diagnostics_request(message: &ModbusMessage) -> Result<(u16,
 pub(super) fn build_fifo_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     app_payload: &[u8],
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_fifo_payload(app_payload)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Builds a response for FC08 (Diagnostics) requests.
@@ -328,17 +288,12 @@ pub(super) fn build_fifo_response<TRANSPORT: Transport>(
 pub(super) fn build_diagnostics_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     sub_function: u16,
     result: u16,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_diagnostics(sub_function, result)?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Parses an FC2B (Encapsulated Interface Transport) request PDU.
@@ -363,7 +318,7 @@ pub(super) fn parse_fc2b_request(
 pub(super) fn build_fc2b_read_device_id_response<TRANSPORT: Transport>(
     _: &TRANSPORT,
     txn_id: u16,
-    unit_id_or_slave_addr: UnitIdOrSlaveAddr,
+    unit_id_slave_addr: UnitIdOrSlaveAddr,
     read_device_id_code: u8,
     conformity_level: u8,
     more_follows: bool,
@@ -402,12 +357,7 @@ pub(super) fn build_fc2b_read_device_id_response<TRANSPORT: Transport>(
         EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
         &mei_data,
     )?;
-    common::compile_adu_frame(
-        txn_id,
-        unit_id_or_slave_addr.get(),
-        pdu,
-        TRANSPORT::TRANSPORT_TYPE,
-    )
+    common::compile_adu_frame(txn_id, unit_id_slave_addr, pdu, TRANSPORT::TRANSPORT_TYPE)
 }
 
 /// Counts the number of `[id(1), len(1), value(N)…]` object triples in `payload`.

@@ -2,6 +2,7 @@ use heapless::Vec;
 
 use crate::services::coil::{Coils, request::ReqPduCompiler, response::ResponseParser};
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
@@ -25,7 +26,7 @@ impl ServiceBuilder {
     ///
     pub fn read_coils(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         transport_type: TransportType,
@@ -45,7 +46,7 @@ impl ServiceBuilder {
     /// A `Result` containing the raw bytes of the Modbus ADU to be sent, or an `MbusError` if the request could not be created.
     pub fn write_single_coil(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         value: bool,
         transport_type: TransportType,
@@ -57,7 +58,7 @@ impl ServiceBuilder {
     /// Sends a Write Multiple Coils request to a Modbus server and registers the expected response.
     pub fn write_multiple_coils(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         values: &Coils,

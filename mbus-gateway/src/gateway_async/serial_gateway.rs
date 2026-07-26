@@ -345,18 +345,15 @@ impl AsyncSerialGatewayServer {
             };
 
             // 5. Lock the `downstreams[channel_idx]` transport mutex, execute PDU translation, wait for response, and write the formatted Modbus response frame back to the serial line.
-            let ds_adu = match compile_adu_frame(
-                0,
-                downstream_unit.get(),
-                msg.pdu.clone(),
-                TransportType::StdTcp,
-            ) {
-                Ok(adu) => adu,
-                Err(e) => {
-                    gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
-                    continue;
-                }
-            };
+            let ds_adu =
+                match compile_adu_frame(0, downstream_unit, msg.pdu.clone(), TransportType::StdTcp)
+                {
+                    Ok(adu) => adu,
+                    Err(e) => {
+                        gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
+                        continue;
+                    }
+                };
 
             #[cfg(feature = "traffic")]
             {
@@ -393,6 +390,8 @@ impl AsyncSerialGatewayServer {
                         .await;
                         continue;
                     }
+                    #[allow(unreachable_patterns)]
+                    _ => continue,
                 }
             };
 
@@ -412,7 +411,7 @@ impl AsyncSerialGatewayServer {
 
             let us_adu = match compile_adu_frame(
                 upstream_txn,
-                unit.get(),
+                unit,
                 response_msg.pdu.clone(),
                 transport_type,
             ) {

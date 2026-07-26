@@ -40,7 +40,7 @@ where
 
         let frame = diagnostic::service::ServiceBuilder::read_device_identification(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             read_device_id_code,
             object_id,
             TRANSPORT::TRANSPORT_TYPE,
@@ -81,7 +81,7 @@ where
     ) -> Result<(), MbusError> {
         let frame = diagnostic::service::ServiceBuilder::encapsulated_interface_transport(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             mei_type,
             data,
             TRANSPORT::TRANSPORT_TYPE,
@@ -134,7 +134,7 @@ where
         }
         // Delegate PDU and ADU construction to the ServiceBuilder.
         let frame = diagnostic::service::ServiceBuilder::read_exception_status(
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             TRANSPORT::TRANSPORT_TYPE,
         )?;
 
@@ -199,7 +199,7 @@ where
             return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::diagnostics(
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             sub_function,
             data,
             TRANSPORT::TRANSPORT_TYPE,
@@ -242,7 +242,7 @@ where
             return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_counter(
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             TRANSPORT::TRANSPORT_TYPE,
         )?;
 
@@ -277,7 +277,7 @@ where
             return Err(MbusError::BroadcastNotAllowed);
         }
         let frame = diagnostic::service::ServiceBuilder::get_comm_event_log(
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             TRANSPORT::TRANSPORT_TYPE,
         )?;
 
@@ -313,7 +313,7 @@ where
         }
 
         let frame = diagnostic::service::ServiceBuilder::report_server_id(
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             TRANSPORT::TRANSPORT_TYPE,
         )?;
 

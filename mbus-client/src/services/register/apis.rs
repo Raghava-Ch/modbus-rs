@@ -44,7 +44,7 @@ where
 
         let frame = register::service::ServiceBuilder::read_holding_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             from_address,
             quantity,
             TRANSPORT::TRANSPORT_TYPE,
@@ -104,7 +104,7 @@ where
         // Construct the ADU frame using the register service builder with quantity = 1
         let frame = register::service::ServiceBuilder::read_holding_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             1, // quantity = 1
             TRANSPORT::TRANSPORT_TYPE,
@@ -165,7 +165,7 @@ where
 
         let frame = register::service::ServiceBuilder::read_input_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             quantity,
             TRANSPORT::TRANSPORT_TYPE,
@@ -221,7 +221,7 @@ where
 
         let frame = register::service::ServiceBuilder::read_input_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             1,
             TRANSPORT::TRANSPORT_TYPE,
@@ -278,7 +278,7 @@ where
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::write_single_register(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             value,
             transport_type,
@@ -341,7 +341,7 @@ where
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::write_multiple_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             quantity,
             values,
@@ -408,7 +408,7 @@ where
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = register::service::ServiceBuilder::read_write_multiple_registers(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             read_address,
             read_quantity,
             write_address,
@@ -468,7 +468,7 @@ where
     ) -> Result<(), MbusError> {
         let frame = register::service::ServiceBuilder::mask_write_register(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             and_mask,
             or_mask,

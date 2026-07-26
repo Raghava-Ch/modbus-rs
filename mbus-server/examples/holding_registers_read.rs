@@ -135,7 +135,7 @@ fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
 fn build_fc03_request(start_addr: u16, qty: u16) -> Vec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, start_addr, qty)
         .expect("valid FC03 payload");
-    common::compile_adu_frame(0x0001, unit_id(1).get(), pdu, TransportType::StdTcp)
+    common::compile_adu_frame(0x0001, unit_id(1), pdu, TransportType::StdTcp)
         .expect("request ADU should compile")
 }
 

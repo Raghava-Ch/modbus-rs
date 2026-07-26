@@ -83,8 +83,7 @@ fn build_fc03_request(
     let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, address, quantity)
         .expect("valid FC03 request");
 
-    compile_adu_frame(txn_id, unit.get(), pdu, TransportType::StdTcp)
-        .expect("request ADU should compile")
+    compile_adu_frame(txn_id, unit, pdu, TransportType::StdTcp).expect("request ADU should compile")
 }
 
 fn run_single_request(

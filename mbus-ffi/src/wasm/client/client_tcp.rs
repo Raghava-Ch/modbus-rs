@@ -59,7 +59,7 @@ extern "C" {
 /// `WasmModbusClient` instances, which are bound to specific unit IDs. It handles the
 /// connection lifecycle, request dispatch, and response routing.
 #[wasm_bindgen(js_name = "WasmWsTransport")]
-pub struct WasmTcpTransport {
+pub struct WasmWsTransport {
     ws_url: String,
     cmd_tx: Rc<RefCell<futures_channel::mpsc::UnboundedSender<WasmCommand>>>,
     pending_count: Rc<Cell<usize>>,
@@ -69,7 +69,7 @@ pub struct WasmTcpTransport {
 }
 
 #[wasm_bindgen(js_class = "WasmWsTransport")]
-impl WasmTcpTransport {
+impl WasmWsTransport {
     /// Establishes a connection to a Modbus TCP server via a WebSocket gateway.
     ///
     /// This is the entry point for creating a new TCP transport. It returns a `Promise`
@@ -944,12 +944,12 @@ fn make_promise() -> (Promise, Function, Function) {
     (promise, resolve, reject)
 }
 
-impl WasmTcpTransport {
+impl WasmWsTransport {
     /// Rust-internal async connect helper
     pub(crate) async fn connect_rust(
         ws_url: &str,
         options: &JsValue,
-    ) -> Result<WasmTcpTransport, JsValue> {
+    ) -> Result<WasmWsTransport, JsValue> {
         let transport = WasmAsyncTransport::connect(ws_url).await?;
         let (cmd_tx, cmd_rx) = futures_channel::mpsc::unbounded::<WasmCommand>();
         let pending_count = Rc::new(Cell::new(0));
@@ -967,7 +967,7 @@ impl WasmTcpTransport {
             }
         });
 
-        Ok(WasmTcpTransport {
+        Ok(WasmWsTransport {
             ws_url: ws_url.to_string(),
             cmd_tx: Rc::new(RefCell::new(cmd_tx)),
             pending_count,

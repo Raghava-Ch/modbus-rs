@@ -277,7 +277,7 @@ where
                     {
                         let adu_result = compile_adu_frame(
                             entry.upstream_txn,
-                            unit.get(),
+                            unit,
                             response_msg.pdu.clone(),
                             upstream_type,
                         );
@@ -568,19 +568,15 @@ where
         };
 
         let ds_type = DownstreamT::TRANSPORT_TYPE;
-        let downstream_adu = match compile_adu_frame(
-            internal_txn,
-            req.downstream_unit.get(),
-            req.pdu.clone(),
-            ds_type,
-        ) {
-            Ok(adu) => adu,
-            Err(e) => {
-                gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
-                let _ = self.txn_map.remove(internal_txn);
-                return;
-            }
-        };
+        let downstream_adu =
+            match compile_adu_frame(internal_txn, req.downstream_unit, req.pdu.clone(), ds_type) {
+                Ok(adu) => adu,
+                Err(e) => {
+                    gateway_log_debug!("failed to encode downstream ADU: {:?}", e);
+                    let _ = self.txn_map.remove(internal_txn);
+                    return;
+                }
+            };
 
         if let Err(e) = self.downstreams[channel_idx]
             .transport
@@ -682,6 +678,6 @@ where
     };
     let pdu = Pdu::build_byte_payload(exception_fc, exception_code as u8)
         .map_err(|_| MbusError::Unexpected)?;
-    let adu = compile_adu_frame(txn_id, unit.get(), pdu, transport_type)?;
+    let adu = compile_adu_frame(txn_id, unit, pdu, transport_type)?;
     upstream.send(&adu).map_err(|e| e.into())
 }

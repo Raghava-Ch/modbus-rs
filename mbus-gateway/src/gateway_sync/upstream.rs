@@ -89,7 +89,7 @@ impl Transport for GatewayUpstream {
             Self::Rtu(t) => {
                 // Translate from TCP MBAP → RTU CRC
                 let msg = decompile_adu_frame(adu, TransportType::StdTcp)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 let wire = compile_adu_frame(0, unit, msg.pdu, StdRtuTransport::TRANSPORT_TYPE)?;
                 t.send(&wire).map_err(MbusError::from)
             }
@@ -97,7 +97,7 @@ impl Transport for GatewayUpstream {
             Self::Ascii(t) => {
                 // Translate from TCP MBAP → ASCII LRC
                 let msg = decompile_adu_frame(adu, TransportType::StdTcp)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 let wire = compile_adu_frame(0, unit, msg.pdu, StdAsciiTransport::TRANSPORT_TYPE)?;
                 t.send(&wire).map_err(MbusError::from)
             }
@@ -113,7 +113,7 @@ impl Transport for GatewayUpstream {
                 // Translate RTU CRC → TCP MBAP
                 let wire = t.recv().map_err(MbusError::from)?;
                 let msg = decompile_adu_frame(&wire, StdRtuTransport::TRANSPORT_TYPE)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 compile_adu_frame(0, unit, msg.pdu, TransportType::StdTcp)
             }
             #[cfg(feature = "upstream-serial-ascii")]
@@ -121,7 +121,7 @@ impl Transport for GatewayUpstream {
                 // Translate ASCII LRC → TCP MBAP
                 let wire = t.recv().map_err(MbusError::from)?;
                 let msg = decompile_adu_frame(&wire, StdAsciiTransport::TRANSPORT_TYPE)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 compile_adu_frame(0, unit, msg.pdu, TransportType::StdTcp)
             }
         }

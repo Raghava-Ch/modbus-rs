@@ -44,7 +44,7 @@ where
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::read_coils_request
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             quantity,
             TRANSPORT::TRANSPORT_TYPE,
@@ -101,7 +101,7 @@ where
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             1,
             transport_type,
@@ -151,7 +151,7 @@ where
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_single_coil_request
         let frame = coil::service::ServiceBuilder::write_single_coil(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             value,
             transport_type,
@@ -210,7 +210,7 @@ where
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_multiple_coils_request
         let frame = coil::service::ServiceBuilder::write_multiple_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             values.quantity(),
             values,

@@ -21,7 +21,7 @@ use crate::{
     services::{ClientCommon, ClientServices, ExpectedResponse, register},
 };
 use mbus_core::{
-    data_unit::common::{ModbusMessage, Pdu},
+    data_unit::common::{ModbusMessage, Pdu, be_bytes_to_u16_iter},
     errors::MbusError,
     function_codes::public::FunctionCode,
     transport::Transport,
@@ -164,13 +164,10 @@ impl ResponseParser {
         }
 
         let mut values = Vec::new();
-        for chunk in bcp.payload.chunks(2) {
-            if chunk.len() == 2 {
-                let val = u16::from_be_bytes([chunk[0], chunk[1]]);
-                values
-                    .push(val)
-                    .map_err(|_| MbusError::BufferLenMissmatch)?;
-            }
+        for val in be_bytes_to_u16_iter(bcp.payload) {
+            values
+                .push(val)
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
         }
         Ok(values)
     }

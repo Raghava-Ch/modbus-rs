@@ -68,6 +68,8 @@ impl AsyncTransport for GatewayTransport {
             Self::Rtu(_) => true,
             #[cfg(feature = "downstream-serial-ascii")]
             Self::Ascii(_) => true,
+            #[allow(unreachable_patterns)]
+            _ => false,
         }
     }
 
@@ -79,7 +81,7 @@ impl AsyncTransport for GatewayTransport {
             Self::Rtu(t) => {
                 // Translate from TCP MBAP → RTU CRC
                 let msg = decompile_adu_frame(adu, TransportType::StdTcp)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 let wire = compile_adu_frame(0, unit, msg.pdu, TokioRtuTransport::TRANSPORT_TYPE)?;
                 t.send(&wire).await
             }
@@ -87,11 +89,13 @@ impl AsyncTransport for GatewayTransport {
             Self::Ascii(t) => {
                 // Translate from TCP MBAP → ASCII LRC
                 let msg = decompile_adu_frame(adu, TransportType::StdTcp)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 let wire =
                     compile_adu_frame(0, unit, msg.pdu, TokioAsciiTransport::TRANSPORT_TYPE)?;
                 t.send(&wire).await
             }
+            #[allow(unreachable_patterns)]
+            _ => Err(MbusError::Unexpected),
         }
     }
 
@@ -104,7 +108,7 @@ impl AsyncTransport for GatewayTransport {
                 // Translate RTU CRC → TCP MBAP
                 let wire = t.recv().await?;
                 let msg = decompile_adu_frame(&wire, TokioRtuTransport::TRANSPORT_TYPE)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 compile_adu_frame(0, unit, msg.pdu, TransportType::StdTcp)
             }
             #[cfg(feature = "downstream-serial-ascii")]
@@ -112,9 +116,11 @@ impl AsyncTransport for GatewayTransport {
                 // Translate ASCII LRC → TCP MBAP
                 let wire = t.recv().await?;
                 let msg = decompile_adu_frame(&wire, TokioAsciiTransport::TRANSPORT_TYPE)?;
-                let unit = msg.unit_id_or_slave_addr().get();
+                let unit = msg.unit_id_or_slave_addr();
                 compile_adu_frame(0, unit, msg.pdu, TransportType::StdTcp)
             }
+            #[allow(unreachable_patterns)]
+            _ => Err(MbusError::Unexpected),
         }
     }
 }

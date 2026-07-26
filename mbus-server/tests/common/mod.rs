@@ -57,6 +57,9 @@ impl Transport for MockTransport {
 
 /// Returns a [`UnitIdOrSlaveAddr`] for the given value, panicking on invalid input.
 pub fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
+    if v == 0 {
+        return UnitIdOrSlaveAddr::new_broadcast_address();
+    }
     UnitIdOrSlaveAddr::new(v).expect("valid unit id")
 }
 
@@ -98,8 +101,7 @@ pub fn build_request(
         HVec::from_slice(payload).expect("request payload should fit in PDU"),
         payload.len() as u8,
     );
-    compile_adu_frame(txn_id, unit.get(), pdu, TransportType::StdTcp)
-        .expect("request ADU should compile")
+    compile_adu_frame(txn_id, unit, pdu, TransportType::StdTcp).expect("request ADU should compile")
 }
 
 /// Builds a complete RTU Serial Modbus request ADU with the given function code and payload bytes.
@@ -114,13 +116,8 @@ pub fn build_serial_request(
         HVec::from_slice(payload).expect("request payload should fit in PDU"),
         payload.len() as u8,
     );
-    compile_adu_frame(
-        txn_id,
-        unit.get(),
-        pdu,
-        TransportType::StdSerial(SerialMode::Rtu),
-    )
-    .expect("serial request ADU should compile")
+    compile_adu_frame(txn_id, unit, pdu, TransportType::StdSerial(SerialMode::Rtu))
+        .expect("serial request ADU should compile")
 }
 
 /// A serial-mode mock transport (RTU) for tests that require serial-only function codes.

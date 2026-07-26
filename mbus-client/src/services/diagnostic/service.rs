@@ -3,6 +3,7 @@ use heapless::Vec;
 use crate::services::diagnostic::{ObjectId, ReadDeviceIdCode, request::ReqPduCompiler};
 
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN},
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType},
@@ -17,7 +18,7 @@ impl ServiceBuilder {
     /// Sends a Read Device Identification request.
     pub fn read_device_identification(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         read_device_id_code: ReadDeviceIdCode,
         object_id: ObjectId,
         transport_type: TransportType,
@@ -33,7 +34,7 @@ impl ServiceBuilder {
     /// The `data` payload is appended after the MEI type in the PDU.
     pub fn encapsulated_interface_transport(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         mei_type: EncapsulatedInterfaceType,
         data: &[u8],
         transport_type: TransportType,
@@ -44,7 +45,7 @@ impl ServiceBuilder {
 
     /// Sends a Read Exception Status request (FC 0x07). Serial Line only.
     pub fn read_exception_status(
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         Self::check_serial(&transport_type)?;
@@ -55,7 +56,7 @@ impl ServiceBuilder {
 
     /// Sends a Diagnostics request (FC 0x08). Serial Line only.
     pub fn diagnostics(
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         sub_function: DiagnosticSubFunction,
         data: &[u16],
         transport_type: TransportType,
@@ -68,7 +69,7 @@ impl ServiceBuilder {
 
     /// Sends a Get Comm Event Counter request (FC 0x0B). Serial Line only.
     pub fn get_comm_event_counter(
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         Self::check_serial(&transport_type)?;
@@ -79,7 +80,7 @@ impl ServiceBuilder {
 
     /// Sends a Get Comm Event Log request (FC 0x0C). Serial Line only.
     pub fn get_comm_event_log(
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         Self::check_serial(&transport_type)?;
@@ -90,7 +91,7 @@ impl ServiceBuilder {
 
     /// Sends a Report Server ID request (FC 0x11). Serial Line only.
     pub fn report_server_id(
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
         Self::check_serial(&transport_type)?;

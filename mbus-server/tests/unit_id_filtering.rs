@@ -157,7 +157,7 @@ impl TrafficNotifier for CountingApp {
 /// Build a TCP FC03 request frame addressed to the given `wire_unit`.
 fn build_fc03_request(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
     address: u16,
     quantity: u16,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
@@ -170,7 +170,7 @@ fn build_fc03_request(
 /// Build a TCP FC06 write request addressed to the given `wire_unit`.
 fn build_fc06_request(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
     address: u16,
     value: u16,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
@@ -275,7 +275,7 @@ fn run_request_with_traffic(
 #[test]
 fn matching_unit_id_is_processed_and_responded_to() {
     let server_unit = unit_id(1);
-    let frame = build_fc03_request(1, 1, 0, 1); // wire unit = 1, server unit = 1
+    let frame = build_fc03_request(1, unit_id(1), 0, 1); // wire unit = 1, server unit = 1
 
     let (app_calls, response_count) = run_request(frame, server_unit);
 
@@ -291,7 +291,7 @@ fn matching_unit_id_is_processed_and_responded_to() {
 #[test]
 fn mismatched_unit_id_is_silently_dropped_with_no_response() {
     let server_unit = unit_id(1);
-    let frame = build_fc03_request(2, 5, 0, 1); // wire unit = 5, server unit = 1
+    let frame = build_fc03_request(2, unit_id(5), 0, 1); // wire unit = 5, server unit = 1
 
     let (app_calls, response_count) = run_request(frame, server_unit);
 
@@ -311,7 +311,7 @@ fn various_mismatched_unit_ids_are_all_silently_dropped() {
     let server_unit = unit_id(10);
 
     for wire_unit in [1u8, 2, 9, 11, 50, 100, 247] {
-        let frame = build_fc03_request(3, wire_unit, 0, 1);
+        let frame = build_fc03_request(3, unit_id(wire_unit), 0, 1);
         let (app_calls, response_count) = run_request(frame, server_unit);
 
         assert_eq!(
@@ -334,7 +334,7 @@ fn broadcast_frame_is_silently_dropped_with_no_response() {
     // Wire unit = 0 (broadcast). FC06 is a write FC — it would be the candidate for
     // broadcast forwarding in a Serial context, but must still be dropped until
     // the feature is implemented.
-    let frame = build_fc06_request(4, 0, 0, 0xABCD);
+    let frame = build_fc06_request(4, unit_id(0), 0, 0xABCD);
 
     let (app_calls, response_count) = run_request(frame, server_unit);
 
@@ -354,8 +354,8 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
     let calls = Arc::new(AtomicUsize::new(0));
 
     // Use a two-poll sequence by injecting frames manually.
-    let wrong_frame = build_fc03_request(10, 7, 0, 1); // wrong unit
-    let right_frame = build_fc03_request(11, 3, 0, 1); // correct unit
+    let wrong_frame = build_fc03_request(10, unit_id(7), 0, 1); // wrong unit
+    let right_frame = build_fc03_request(11, unit_id(3), 0, 1); // correct unit
 
     // First poll — misaddressed frame.
     {
@@ -441,7 +441,7 @@ fn misaddressed_frame_does_not_corrupt_server_state_for_next_request() {
 #[cfg(feature = "traffic")]
 #[test]
 fn traffic_callbacks_for_address_filtering_behave_as_expected() {
-    let matched = build_fc03_request(100, 1, 0, 1);
+    let matched = build_fc03_request(100, unit_id(1), 0, 1);
     let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
         run_request_with_traffic(matched, unit_id(1));
     assert_eq!(calls, 1);
@@ -451,7 +451,7 @@ fn traffic_callbacks_for_address_filtering_behave_as_expected() {
     assert_eq!(rx_errors, 0);
     assert_eq!(tx_errors, 0);
 
-    let misaddressed = build_fc03_request(101, 9, 0, 1);
+    let misaddressed = build_fc03_request(101, unit_id(9), 0, 1);
     let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
         run_request_with_traffic(misaddressed, unit_id(1));
     assert_eq!(calls, 0);
@@ -461,7 +461,7 @@ fn traffic_callbacks_for_address_filtering_behave_as_expected() {
     assert_eq!(rx_errors, 0);
     assert_eq!(tx_errors, 0);
 
-    let broadcast = build_fc06_request(102, 0, 0, 0xABCD);
+    let broadcast = build_fc06_request(102, unit_id(0), 0, 0xABCD);
     let (calls, responses, rx_frames, tx_frames, rx_errors, tx_errors) =
         run_request_with_traffic(broadcast, unit_id(1));
     assert_eq!(calls, 0);

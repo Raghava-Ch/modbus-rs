@@ -52,7 +52,7 @@ include!(concat!(env!("OUT_DIR"), "/pool_config.rs"));
 mod wasm;
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-client"))]
-pub use wasm::{WasmModbusClient, WasmTcpTransport};
+pub use wasm::{WasmModbusClient, WasmWsTransport};
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm-client"))]
 pub use wasm::{

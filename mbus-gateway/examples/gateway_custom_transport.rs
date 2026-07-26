@@ -18,6 +18,7 @@
 //! defaults.
 
 use heapless::Vec as HVec;
+use mbus_core::UnitIdOrSlaveAddr;
 use mbus_core::data_unit::common::Pdu;
 use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, compile_adu_frame};
 use mbus_core::errors::MbusError;
@@ -91,7 +92,7 @@ impl Transport for LoopbackTransport {
 // Helper: build a minimal Modbus TCP ADU frame
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn make_read_coils_request(txn_id: u16, unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+fn make_read_coils_request(txn_id: u16, unit: UnitIdOrSlaveAddr) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::new(
         FunctionCode::ReadCoils,
         HVec::from_slice(&[0x00, 0x00, 0x00, 0x08]).unwrap(), // addr=0, qty=8
@@ -101,7 +102,7 @@ fn make_read_coils_request(txn_id: u16, unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN>
         .expect("ADU encoding must succeed")
 }
 
-fn make_read_coils_response(txn_id: u16, unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+fn make_read_coils_response(txn_id: u16, unit: UnitIdOrSlaveAddr) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::new(
         FunctionCode::ReadCoils,
         HVec::from_slice(&[0x01, 0xFF]).unwrap(), // byte_count=1, coils=0xFF
@@ -109,6 +110,10 @@ fn make_read_coils_response(txn_id: u16, unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN
     );
     compile_adu_frame(txn_id, unit, pdu, TransportType::CustomTcp)
         .expect("ADU encoding must succeed")
+}
+
+fn unit_id(unit: u8) -> UnitIdOrSlaveAddr {
+    UnitIdOrSlaveAddr::new(unit).unwrap()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,12 +124,12 @@ fn main() {
     println!("=== Custom Transport Gateway Example ===\n");
 
     // Build the request that will be received from the upstream side.
-    let upstream_request = make_read_coils_request(0xABCD, 1);
+    let upstream_request = make_read_coils_request(0xABCD, unit_id(1));
 
     // Build the response the downstream device will return.
     // The gateway replaces the downstream txn-id (0) with the upstream txn-id
     // (0xABCD) before forwarding back to the upstream client.
-    let downstream_response = make_read_coils_response(0x0000, 1);
+    let downstream_response = make_read_coils_response(0x0000, unit_id(1));
 
     // ── Upstream transport: pre-loaded with the request ───────────────────────
     let mut upstream = LoopbackTransport::tcp();

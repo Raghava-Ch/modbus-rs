@@ -44,7 +44,7 @@ where
 
         let frame = fifo_queue::service::ServiceBuilder::read_fifo_queue(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             TRANSPORT::TRANSPORT_TYPE,
         )?;

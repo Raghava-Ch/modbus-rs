@@ -35,8 +35,9 @@ mod tests {
         self, request::ReqPduCompiler, response::ResponseParser,
     };
     use mbus_core::{
-        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
-        models::discrete_input::DiscreteInputs, transport::TransportType,
+        UnitIdOrSlaveAddr, data_unit::common::Pdu, errors::MbusError,
+        function_codes::public::FunctionCode, models::discrete_input::DiscreteInputs,
+        transport::TransportType,
     };
 
     // --- Request Creation Tests ---
@@ -183,7 +184,7 @@ mod tests {
     fn test_service_read_discrete_inputs_tcp() {
         let adu = discrete_input::service::ServiceBuilder::read_discrete_inputs(
             0x1234,
-            1,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
             0,
             10,
             TransportType::StdTcp,

@@ -953,6 +953,18 @@ export class WasmRtuTransport {
      */
     createClient(options: CreateClientOptions): WasmSerialModbusClient;
     /**
+     * Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
+     */
+    setRequestTimeout(ms: number): void;
+    /**
+     * Clears any request timeout override and restores the default timeout.
+     */
+    clearRequestTimeout(): void;
+    /**
+     * Drop all pending in-flight requests and attempt to reconnect.
+     */
+    reconnect(): Promise<void>;
+    /**
      * Closes the serial port connection and terminates the background task.
      */
     close(): void;
@@ -987,6 +999,18 @@ export class WasmAsciiTransport {
      * @returns {WasmSerialModbusClient} A new client instance.
      */
     createClient(options: CreateClientOptions): WasmSerialModbusClient;
+    /**
+     * Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
+     */
+    setRequestTimeout(ms: number): void;
+    /**
+     * Clears any request timeout override and restores the default timeout.
+     */
+    clearRequestTimeout(): void;
+    /**
+     * Drop all pending in-flight requests and attempt to reconnect.
+     */
+    reconnect(): Promise<void>;
     /**
      * Closes the serial port connection and terminates the background task.
      */
