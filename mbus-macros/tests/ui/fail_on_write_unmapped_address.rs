@@ -75,6 +75,7 @@ pub mod transport {
     }
 }
 
+pub mod models { pub mod coil { #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum CoilState { On, Off } } }
 pub mod app {
     pub trait ServerExceptionHandler {}
     pub trait ServerCoilHandler {}
@@ -85,7 +86,6 @@ pub mod app {
     pub trait ServerFileRecordHandler {}
     pub trait ServerDiagnosticsHandler {}
 }
-
 use mbus_macros::{HoldingRegistersModel, modbus_app};
 
 #[derive(Default, HoldingRegistersModel)]

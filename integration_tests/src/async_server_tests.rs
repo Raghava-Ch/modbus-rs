@@ -5,6 +5,7 @@
 //! encode → network → decode → app → encode → network → decode round-trip works.
 
 use anyhow::Result;
+use mbus_core::models::coil::CoilState;
 use mbus_async::AsyncTcpClient;
 #[cfg(feature = "file-record")]
 use mbus_async::client::SubRequest;
@@ -81,7 +82,11 @@ impl TestApp {
                 ModbusResponse::packed_bits(FunctionCode::ReadCoils, &bytes)
             }
             // FC05 — Write Single Coil
-            ModbusRequest::WriteSingleCoil { address, value, .. } => {
+            ModbusRequest::WriteSingleCoil {
+                address,
+                state: value,
+                ..
+            } => {
                 let addr = address as usize;
                 if addr >= self.coils.len() {
                     return ModbusResponse::exception(
@@ -89,7 +94,7 @@ impl TestApp {
                         mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                self.coils[addr] = value;
+                self.coils[addr] = value == CoilState::On;
                 ModbusResponse::echo_coil(address, value)
             }
             // FC0F — Write Multiple Coils
@@ -495,7 +500,7 @@ async fn fc01_read_coils() -> Result<()> {
     let coils = client.read_multiple_coils(1, 0, 8).await?;
     assert_eq!(coils.quantity(), 8);
     // LSB of packed byte → coil 0 = ON → 0x55 = 0101_0101
-    assert_eq!(coils.values()[0], 0x55);
+    assert_eq!(coils.raw_values()[0], 0x55);
     Ok(())
 }
 
@@ -507,14 +512,14 @@ async fn fc05_write_single_coil() -> Result<()> {
     let port = start_server(app).await?;
     let client = connect_client(port).await?;
 
-    client.write_single_coil(1, 3, true).await?;
+    client.write_single_coil(1, 3, CoilState::On).await?;
 
     let coils = client.read_multiple_coils(1, 0, 8).await?;
     // Coil 3 (zero-indexed) is ON: bit 3 = 0b0000_1000 = 0x08
-    assert_eq!(coils.values()[0] & 0x08, 0x08, "coil 3 should be ON");
+    assert_eq!(coils.raw_values()[0] & 0x08, 0x08, "coil 3 should be ON");
     // All other low bits should be off
     assert_eq!(
-        coils.values()[0] & !0x08,
+        coils.raw_values()[0] & !0x08,
         0x00,
         "no other coils should be set"
     );
@@ -532,12 +537,12 @@ async fn fc0f_write_multiple_coils() -> Result<()> {
     // Write 8 coils starting at address 0: alternating ON/OFF = 0xAA (bits 1,3,5,7 ON)
     let mut coils_to_write = mbus_core::models::coil::Coils::new(0, 8)?;
     for i in [1u16, 3, 5, 7] {
-        coils_to_write.set_value(i, true)?;
+        coils_to_write.set_value(i, CoilState::On)?;
     }
     client.write_multiple_coils(1, 0, &coils_to_write).await?;
 
     let coils = client.read_multiple_coils(1, 0, 8).await?;
-    assert_eq!(coils.values()[0], 0xAA, "coil pattern should be 0xAA");
+    assert_eq!(coils.raw_values()[0], 0xAA, "coil pattern should be 0xAA");
     Ok(())
 }
 
@@ -1331,9 +1336,9 @@ async fn async_modbus_app_macro_read_write_roundtrip() -> Result<()> {
     assert_eq!(regs.value(0).unwrap(), 42);
 
     // Write then read coil.
-    client.write_single_coil(1u8, 0, true).await?;
+    client.write_single_coil(1u8, 0, CoilState::On).await?;
     let coils = client.read_multiple_coils(1u8, 0, 1).await?;
-    assert!(coils.value(0).unwrap());
+    assert_eq!(coils.value(0).unwrap(), CoilState::On);
 
     Ok(())
 }

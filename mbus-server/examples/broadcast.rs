@@ -63,10 +63,10 @@ impl ServerCoilHandler for ControllerApp {
         _txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         if (address as usize) < self.relay_states.len() {
-            self.relay_states[address as usize] = value;
+            self.relay_states[address as usize] = value == mbus_core::models::coil::CoilState::On;
             if unit_id_or_slave_addr.is_broadcast() {
                 self.broadcast_writes_received += 1;
             }
@@ -166,7 +166,7 @@ fn main() {
     // ── FC05: broadcast single coil ON ────────────────────────────────────
     #[cfg(feature = "coils")]
     {
-        app.write_single_coil_request(1, broadcast, 3, true)
+        app.write_single_coil_request(1, broadcast, 3, mbus_core::models::coil::CoilState::On)
             .expect("FC05 broadcast callback should succeed");
         println!(
             "FC05 broadcast → relay[3] = {} (no response sent to master)",

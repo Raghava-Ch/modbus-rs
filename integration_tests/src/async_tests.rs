@@ -1,4 +1,5 @@
 use anyhow::Result;
+use modbus_rs::mbus_core::models::coil::CoilState;
 use modbus_rs::Coils;
 use modbus_rs::mbus_async::{AsyncError, AsyncTcpClient};
 use modbus_rs::{EncapsulatedInterfaceType, ObjectId, ReadDeviceIdCode, SubRequest};
@@ -57,7 +58,7 @@ async fn test_async_tcp_client_read_multiple_coils() -> Result<()> {
 
     assert_eq!(coils.from_address(), 0);
     assert_eq!(coils.quantity(), 8);
-    assert_eq!(coils.values()[0], 0x55);
+    assert_eq!(coils.raw_values()[0], 0x55);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -94,10 +95,10 @@ async fn test_async_tcp_client_write_single_coil() -> Result<()> {
     });
 
     let client = connected_tcp_client(addr.port()).await?;
-    let (addr_echo, value_echo) = client.write_single_coil(1, 10, true).await?;
+    let (addr_echo, value_echo) = client.write_single_coil(1, 10, CoilState::On).await?;
 
     assert_eq!(addr_echo, 10);
-    assert!(value_echo);
+    assert_eq!(value_echo, CoilState::On);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -241,10 +242,10 @@ async fn test_async_tcp_client_write_multiple_coils() -> Result<()> {
 
     let mut coils = Coils::new(0, 8)?;
     // Set bits 1, 3, 5, 7 → 0b1010_1010 = 0xAA
-    coils.set_value(1, true)?;
-    coils.set_value(3, true)?;
-    coils.set_value(5, true)?;
-    coils.set_value(7, true)?;
+    coils.set_value(1, CoilState::On)?;
+    coils.set_value(3, CoilState::On)?;
+    coils.set_value(5, CoilState::On)?;
+    coils.set_value(7, CoilState::On)?;
 
     let client = connected_tcp_client(addr.port()).await?;
     let (start_addr, qty) = client.write_multiple_coils(1, 0, &coils).await?;
@@ -744,7 +745,7 @@ async fn test_async_tcp_client_read_single_coil() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let coils = client.read_multiple_coils(1, 5, 1).await?;
     assert_eq!(coils.quantity(), 1);
-    assert!(coils.value(5)?);
+    assert_eq!(coils.value(5)?, CoilState::On);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())

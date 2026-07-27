@@ -178,7 +178,7 @@ struct TestClientApp {
     coil_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>,
     write_single_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     write_multiple_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
-    write_single_coils: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool)>>,
+    write_single_coils: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, mbus_core::models::coil::CoilState)>>,
     write_multiple_coils: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError)>>,
 }
@@ -300,7 +300,7 @@ impl CoilResponse for TestClientApp {
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _address: u16,
-        _value: bool,
+        _state: mbus_core::models::coil::CoilState,
     ) {
     }
 
@@ -309,7 +309,7 @@ impl CoilResponse for TestClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) {
         self.write_single_coils
             .borrow_mut()
@@ -574,11 +574,11 @@ fn server_fc01_fc05_fc0f_coils_roundtrip_via_std_tcp_transport() {
     {
         let coils = client.app().coil_reads.borrow();
         let (_, _, bits) = &coils[0];
-        assert_eq!(bits.values()[0] & 0x0F, 0b0000_1011);
+        assert_eq!(bits.raw_values()[0] & 0x0F, 0b0000_1011);
     }
 
     client
-        .write_single_coil(32, unit_id(1), 2, true)
+        .write_single_coil(32, unit_id(1), 2, mbus_core::models::coil::CoilState::On)
         .expect("queue FC05 request");
 
     poll_until(&mut client, |c| {
@@ -586,10 +586,10 @@ fn server_fc01_fc05_fc0f_coils_roundtrip_via_std_tcp_transport() {
     });
 
     let mut desired = Coils::new(0, 4).expect("create coil payload");
-    desired.set_value(0, true).expect("set c0");
-    desired.set_value(1, false).expect("set c1");
-    desired.set_value(2, true).expect("set c2");
-    desired.set_value(3, false).expect("set c3");
+    desired.set_value(0, mbus_core::models::coil::CoilState::On).expect("set c0");
+    desired.set_value(1, mbus_core::models::coil::CoilState::Off).expect("set c1");
+    desired.set_value(2, mbus_core::models::coil::CoilState::On).expect("set c2");
+    desired.set_value(3, mbus_core::models::coil::CoilState::Off).expect("set c3");
 
     client
         .write_multiple_coils(33, unit_id(1), 0, &desired)
@@ -607,7 +607,7 @@ fn server_fc01_fc05_fc0f_coils_roundtrip_via_std_tcp_transport() {
 
     let coils = client.app().coil_reads.borrow();
     let (_, _, bits) = &coils[1];
-    assert_eq!(bits.values()[0] & 0x0F, 0b0000_0101);
+    assert_eq!(bits.raw_values()[0] & 0x0F, 0b0000_0101);
     drop(coils);
 
     assert!(client.app().failed_requests.borrow().is_empty());
@@ -797,7 +797,7 @@ fn server_handles_concurrent_clients_without_deadlock() {
             poll_until(&mut client, |c| !c.app().holding_reads.borrow().is_empty());
 
             client
-                .write_single_coil(base + 1, unit_id(1), 0, i % 2 == 0)
+                .write_single_coil(base + 1, unit_id(1), 0, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off })
                 .expect("queue FC05 request");
             poll_until(&mut client, |c| {
                 !c.app().write_single_coils.borrow().is_empty()

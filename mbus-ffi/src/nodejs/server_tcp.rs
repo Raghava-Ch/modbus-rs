@@ -537,13 +537,14 @@ impl JsHandlerAdapter {
         &self,
         unit: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> ModbusResponse {
+        let is_on = value == mbus_core::models::coil::CoilState::On;
         if let Some(handler) = &self.on_write_single_coil {
             let js_req = WriteSingleCoilRequest {
                 unit_id: u8::from(unit),
                 address,
-                value,
+                value: is_on,
             };
             match handler.call_async(js_req).await {
                 Ok(promise) => match promise.await {
@@ -551,7 +552,7 @@ impl JsHandlerAdapter {
                         HandlerReturn::Exception(e) => {
                             ModbusResponse::exception(FunctionCode::WriteSingleCoil, e)
                         }
-                        _ => ModbusResponse::echo_coil(address, value),
+                        _ => ModbusResponse::echo_coil(address, is_on),
                     },
                     Err(_) => ModbusResponse::exception(
                         FunctionCode::WriteSingleCoil,

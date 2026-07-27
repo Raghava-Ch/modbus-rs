@@ -261,6 +261,8 @@ where
                 gateway_log_debug!("upstream recv error: {:?}", e);
                 break;
             }
+            #[allow(unreachable_patterns)]
+            _ => break,
         };
 
         #[cfg(feature = "traffic")]

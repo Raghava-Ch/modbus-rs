@@ -126,12 +126,12 @@ impl ServerCoilHandler for DemoApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         if address >= 4 {
             return Err(MbusError::InvalidAddress);
         }
-        if value {
+        if value == mbus_core::models::coil::CoilState::On {
             self.coils |= 1 << address;
         } else {
             self.coils &= !(1 << address);

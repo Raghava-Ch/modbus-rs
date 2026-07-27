@@ -9,6 +9,7 @@
 //! `cargo run -p mbus-server --example write_hooks`
 
 use mbus_core::errors::MbusError;
+use mbus_core::models::coil::CoilState;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use mbus_server::ServerCoilHandler;
 use mbus_server::ServerHoldingRegisterHandler;
@@ -138,12 +139,12 @@ fn main() -> Result<(), MbusError> {
 
     println!();
     println!("1. Single FC05 write uses on_write_0 and can reject");
-    let disable_result = app.write_single_coil_request(1, unit_id(1), 0, false);
+    let disable_result = app.write_single_coil_request(1, unit_id(1), 0, CoilState::Off);
     println!("   disabling run_enable while compressor is running -> {disable_result:?}");
     println!("   run_enable after rejection -> {}", app.coils.run_enable);
 
     app.compressor_running = false;
-    app.write_single_coil_request(2, unit_id(1), 0, true)?;
+    app.write_single_coil_request(2, unit_id(1), 0, CoilState::On)?;
     println!(
         "   enabling run_enable after stop -> {}",
         app.coils.run_enable
@@ -151,7 +152,7 @@ fn main() -> Result<(), MbusError> {
 
     println!();
     println!("2. Single writes can be forwarded to the batch hook with notify_via_batch");
-    app.write_single_coil_request(3, unit_id(1), 1, true)?;
+    app.write_single_coil_request(3, unit_id(1), 1, CoilState::On)?;
     app.write_single_register_request(4, unit_id(1), 11, 55)?;
     println!(
         "   alarm_ack={} fan_speed={} %",

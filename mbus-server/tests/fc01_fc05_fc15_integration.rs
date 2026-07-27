@@ -86,10 +86,11 @@ impl ServerCoilHandler for CoilApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         self.fc05_calls.fetch_add(1, Ordering::SeqCst);
-        *self.fc05_last.lock().expect("fc05 mutex poisoned") = Some((address, value));
+        *self.fc05_last.lock().expect("fc05 mutex poisoned") =
+            Some((address, state == mbus_core::models::coil::CoilState::On));
 
         match self.mode_fc05 {
             CoilMode::Success => Ok(()),

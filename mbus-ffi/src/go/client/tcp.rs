@@ -416,7 +416,7 @@ pub unsafe extern "C" fn mbus_go_tcp_client_write_single_coil(
                 unsafe { *out_address = addr };
             }
             if !out_value.is_null() {
-                unsafe { *out_value = on as u8 };
+                unsafe { *out_value = st.to_bit() };
             }
             MbusGoStatus::MbusOk
         }

@@ -220,7 +220,7 @@ impl ServerCoilHandler for ProbeApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _address: u16,
-        _value: bool,
+        _state: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         self.fc05_calls.fetch_add(1, Ordering::SeqCst);
         self.call_order

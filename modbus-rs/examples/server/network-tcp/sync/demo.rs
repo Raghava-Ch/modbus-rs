@@ -3,6 +3,7 @@ use core::cell::RefCell;
 use heapless::Vec;
 use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
 use mbus_core::errors::MbusError;
+use mbus_core::models::coil::CoilState;
 use mbus_core::transport::{
     ModbusConfig, ModbusTcpConfig, Transport, TransportError, TransportType, UnitIdOrSlaveAddr,
 };
@@ -123,7 +124,7 @@ impl ServerCoilHandler for DemoServerCompat {
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) -> Result<(), MbusError> {
         <DemoServer as ServerCoilHandler>::write_single_coil_request(
             &mut self.inner,

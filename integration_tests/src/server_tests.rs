@@ -73,9 +73,9 @@ fn fc06_routes_and_updates_model() {
 fn fc01_fc05_route_through_coil_map() {
     let mut app = HvacApp::default();
 
-    app.write_single_coil_request(3, unit_id(1), 0, true)
+    app.write_single_coil_request(3, unit_id(1), 0, mbus_core::models::coil::CoilState::On)
         .expect("FC05 route should succeed");
-    app.write_single_coil_request(4, unit_id(1), 1, true)
+    app.write_single_coil_request(4, unit_id(1), 1, mbus_core::models::coil::CoilState::On)
         .expect("FC05 route should succeed");
 
     let mut out = [0u8; 1];

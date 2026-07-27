@@ -498,7 +498,7 @@ impl<T: WasmAsyncTransportTrait> WasmClientTask<T> {
                     for i in 0..*quantity {
                         let byte_idx = (i / 8) as usize;
                         let bit_idx = i % 8;
-                        let val = (coils.values()[byte_idx] & (1 << bit_idx)) != 0;
+                        let val = (coils.raw_values()[byte_idx] & (1 << bit_idx)) != 0;
                         vec.push(val);
                     }
                     WasmResponse::BoolArray(vec)

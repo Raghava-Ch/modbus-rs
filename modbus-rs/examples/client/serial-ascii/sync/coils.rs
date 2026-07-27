@@ -37,10 +37,10 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: modbus_rs::mbus_core::models::coil::CoilState,
     ) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {}",
+            "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {:?}",
             txn_id,
             unit_id.get(),
             address,
@@ -52,10 +52,10 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: modbus_rs::mbus_core::models::coil::CoilState,
     ) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Write Single Coil (Addr: {}, Value: {}) Success",
+            "Response [Txn: {}, Unit: {}]: Write Single Coil (Addr: {}, Value: {:?}) Success",
             txn_id,
             unit_id.get(),
             address,

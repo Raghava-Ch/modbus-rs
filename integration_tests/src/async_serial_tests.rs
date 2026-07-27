@@ -1,4 +1,5 @@
 use anyhow::Result;
+use mbus_core::models::coil::CoilState;
 use heapless::Vec as HVec;
 use modbus_rs::mbus_async::{AsyncError, AsyncRtuClient, AsyncSerialClient};
 use modbus_rs::{
@@ -239,9 +240,9 @@ async fn test_async_serial_e2e_read_multiple_coils_rtu() -> Result<()> {
 
     assert_eq!(coils.from_address(), 0x000A);
     assert_eq!(coils.quantity(), 3);
-    assert!(coils.value(0x000A)?);
-    assert!(!coils.value(0x000B)?);
-    assert!(coils.value(0x000C)?);
+    assert_eq!(coils.value(0x000A)?, CoilState::On);
+    assert_eq!(coils.value(0x000B)?, CoilState::Off);
+    assert_eq!(coils.value(0x000C)?, CoilState::On);
 
     let frames = sent.lock().expect("sent_frames lock poisoned");
     assert_eq!(frames.len(), 1);

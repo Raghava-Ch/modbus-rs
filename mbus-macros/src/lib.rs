@@ -1286,7 +1286,7 @@ fn build_write_single_coil_route_with_hooks(
                             &self.#field_ident, address, 1u16, &mut __old_buf,
                         );
                         let __old_val = (__old_buf[0] & 1u8) != 0u8;
-                        self.#hook_fn(address, __old_val, value)?;
+                        self.#hook_fn(address, __old_val, value == ::mbus_core::models::coil::CoilState::On)?;
                         true
                     }
                 }
@@ -1297,7 +1297,7 @@ fn build_write_single_coil_route_with_hooks(
             quote! {
                 if !__hook_dispatched {
                     if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
-                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        let __packed: u8 = value.to_bit();
                         self.#batch_fn(address, 1u16, &[__packed])?;
                     }
                 }
@@ -1317,7 +1317,7 @@ fn build_write_single_coil_route_with_hooks(
                 };
                 #batch_notify_block
                 <#field_ty as ::mbus_server::CoilMap>::write_single(
-                    &mut self.#field_ident, address, value,
+                    &mut self.#field_ident, address, value == ::mbus_core::models::coil::CoilState::On,
                 )?;
                 wrote = true;
             } else {
@@ -2120,7 +2120,7 @@ fn expand_modbus_app_struct(
                 txn_id: u16,
                 unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
                 address: u16,
-                value: bool,
+                value: ::mbus_core::models::coil::CoilState,
             ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
                 let _ = (txn_id, unit_id_or_slave_addr);
                 let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
@@ -2683,7 +2683,7 @@ fn build_async_write_single_coil_route(
                             &self.#field_ident, address, 1u16, &mut __old_buf,
                         );
                         let __old_val = (__old_buf[0] & 1u8) != 0u8;
-                        if let Err(__e) = self.#hook_fn(address, __old_val, value).await {
+                        if let Err(__e) = self.#hook_fn(address, __old_val, state == ::mbus_core::models::coil::CoilState::On).await {
                             return ::mbus_async::server::ModbusResponse::exception(
                                 ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
                                 mbus_err_to_exception(__e),
@@ -2699,7 +2699,7 @@ fn build_async_write_single_coil_route(
             quote! {
                 if !__hook_dispatched {
                     if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
-                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        let __packed: u8 = state.to_bit();
                         if let Err(__e) = self.#batch_fn(address, 1u16, &[__packed]).await {
                             return ::mbus_async::server::ModbusResponse::exception(
                                 ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
@@ -2724,7 +2724,7 @@ fn build_async_write_single_coil_route(
                 };
                 #batch_notify_block
                 if let Err(__e) = <#field_ty as ::mbus_server::CoilMap>::write_single(
-                    &mut self.#field_ident, address, value,
+                    &mut self.#field_ident, address, state == ::mbus_core::models::coil::CoilState::On,
                 ) {
                     return ::mbus_async::server::ModbusResponse::exception(
                         ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
@@ -3123,7 +3123,7 @@ fn generate_async_handler_impl(
     let write_single_coil_arm = if !coil_fields.is_empty() {
         quote! {
             #[cfg(feature = "coils")]
-            ::mbus_async::server::ModbusRequest::WriteSingleCoil { address, value, .. } => {
+            ::mbus_async::server::ModbusRequest::WriteSingleCoil { address, state, .. } => {
                 let mut wrote = false;
                 #coil_write_single_route
                 if !wrote {
@@ -3132,7 +3132,7 @@ fn generate_async_handler_impl(
                         ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                ::mbus_async::server::ModbusResponse::echo_coil(address, value)
+                ::mbus_async::server::ModbusResponse::echo_coil(address, state)
             }
         }
     } else {

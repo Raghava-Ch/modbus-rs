@@ -76,6 +76,7 @@ pub mod transport {
     }
 }
 
+pub mod models { pub mod coil { #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum CoilState { On, Off } } }
 pub mod app {
     pub trait ServerExceptionHandler {}
     pub trait ServerCoilHandler {}
@@ -86,7 +87,6 @@ pub mod app {
     pub trait ServerFileRecordHandler {}
     pub trait ServerDiagnosticsHandler {}
 }
-
 use mbus_macros::{CoilsModel, modbus_app};
 
 #[derive(Default, CoilsModel)]
@@ -102,7 +102,12 @@ struct App {
 
 impl App {
     #[allow(unused_variables)]
-    fn on_run_enable(&mut self, address: u16, old: bool, new: bool) -> Result<(), errors::MbusError> {
+    fn on_run_enable(
+        &mut self,
+        address: u16,
+        old: bool,
+        new: crate::models::coil::CoilState,
+    ) -> Result<(), errors::MbusError> {
         Ok(())
     }
 }

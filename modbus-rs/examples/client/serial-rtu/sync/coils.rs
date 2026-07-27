@@ -1,4 +1,5 @@
 use anyhow::Result;
+use mbus_core::models::coil::CoilState;
 #[cfg(feature = "traffic")]
 use modbus_rs::TrafficNotifier;
 use modbus_rs::{
@@ -37,14 +38,14 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: CoilState,
     ) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {}",
+            "Response [Txn: {}, Unit: {}]: Read Single Coil (Addr: {}): {:?}",
             txn_id,
             unit_id.get(),
             address,
-            value
+            state
         );
     }
     fn write_single_coil_response(
@@ -52,7 +53,7 @@ impl CoilResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: modbus_rs::mbus_core::models::coil::CoilState,
     ) {
         println!(
             "Response [Txn: {}, Unit: {}]: Write Single Coil (Addr: {}, Value: {}) Success",
@@ -145,7 +146,12 @@ fn main() -> Result<()> {
     println!("\n[1] Sending Write Single Coil (Addr: 0, Value: ON)...");
     client
         .coils()
-        .write_single_coil(1, target_unit_id, 0, true)
+        .write_single_coil(
+            1,
+            target_unit_id,
+            0,
+            modbus_rs::mbus_core::models::coil::CoilState::On,
+        )
         .map_err(|e| anyhow::anyhow!(e))?;
     while client.has_pending_requests() {
         client.poll();
@@ -165,9 +171,15 @@ fn main() -> Result<()> {
     println!("\n[3] Sending Write Multiple Coils (Addr: 10, Qty: 3)...");
     let mut multi_coils = Coils::new(10, 3).unwrap();
     // Initialize with some test data
-    multi_coils.set_value(10, true).unwrap();
-    multi_coils.set_value(11, false).unwrap();
-    multi_coils.set_value(12, true).unwrap();
+    multi_coils
+        .set_value(10, modbus_rs::mbus_core::models::coil::CoilState::On)
+        .unwrap();
+    multi_coils
+        .set_value(11, modbus_rs::mbus_core::models::coil::CoilState::Off)
+        .unwrap();
+    multi_coils
+        .set_value(12, modbus_rs::mbus_core::models::coil::CoilState::On)
+        .unwrap();
 
     client
         .coils()

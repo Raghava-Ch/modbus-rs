@@ -8,6 +8,8 @@ use heapless::Vec;
 use mbus_core::data_unit::common::{MAX_ADU_FRAME_LEN, MAX_PDU_DATA_LEN, Pdu, compile_adu_frame};
 use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
+#[cfg(feature = "coils")]
+use mbus_core::models::coil::CoilState;
 #[cfg(feature = "file-record")]
 use mbus_core::models::file_record::{FileRecordReadSubRequest, MAX_SUB_REQUESTS_PER_PDU};
 use mbus_core::transport::{TransportType, UnitIdOrSlaveAddr};
@@ -115,7 +117,7 @@ pub enum ModbusRequest {
         /// Coil address.
         address: u16,
         /// Value to write.
-        value: bool,
+        state: CoilState,
     },
     /// FC0F — Write Multiple Coils.
     #[cfg(feature = "coils")]
@@ -609,10 +611,10 @@ impl ModbusResponse {
     }
 
     /// Echo a single-coil write (FC05).
-    pub fn echo_coil(address: u16, on: bool) -> Self {
+    pub fn echo_coil(address: u16, state: CoilState) -> Self {
         ModbusResponse::EchoCoil {
             address,
-            raw_value: if on { 0xFF00 } else { 0x0000 },
+            raw_value: state.to_u16(),
         }
     }
 

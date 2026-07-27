@@ -80,7 +80,7 @@ fn test_client_services_read_single_coil() -> Result<()> {
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), 1);
-    assert_eq!(&rcv_coils.values()[..1], &[0x01]); // Value should be 0x01 for true
+    assert_eq!(&rcv_coils.raw_values()[..1], &[0x01]); // Value should be 0x01 for true
     assert_eq!(rcv_quantity, 1);
     server_handle.join().unwrap()?;
     Ok(())
@@ -161,7 +161,7 @@ fn test_client_services_read_coils() -> Result<()> {
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_coils.from_address(), address);
     assert_eq!(rcv_coils.quantity(), quantity);
-    assert_eq!(&rcv_coils.values()[..1], &[0x05]);
+    assert_eq!(&rcv_coils.raw_values()[..1], &[0x05]);
     assert_eq!(rcv_quantity, quantity);
 
     server_handle.join().unwrap()?;
@@ -220,7 +220,7 @@ fn test_client_services_write_single_coil() -> Result<()> {
     let txn_id = 3;
     let unit_id = UnitIdOrSlaveAddr::try_from(1).unwrap();
     let address = 10;
-    let value = true;
+    let value = mbus_core::models::coil::CoilState::On;
 
     client
         .write_single_coil(txn_id, unit_id, address, value)
@@ -311,7 +311,16 @@ fn test_client_services_write_multiple_coils() -> Result<()> {
     // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
     let mut values = Coils::new(address, quantity).unwrap();
     for i in 0..quantity {
-        values.set_value(address + i, i % 2 == 0).unwrap();
+        values
+            .set_value(
+                address + i,
+                if i % 2 == 0 {
+                    mbus_core::models::coil::CoilState::On
+                } else {
+                    mbus_core::models::coil::CoilState::Off
+                },
+            )
+            .unwrap();
     }
 
     client

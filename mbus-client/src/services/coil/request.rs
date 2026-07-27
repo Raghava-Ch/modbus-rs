@@ -51,10 +51,11 @@ impl ReqPduCompiler {
     ///
     /// # Returns
     /// A `Result` containing the constructed `Pdu` or an `MbusError`.
-    pub(super) fn write_single_coil_request(address: u16, value: bool) -> Result<Pdu, MbusError> {
-        // Modbus protocol uses 0xFF00 for ON and 0x0000 for OFF
-        let coil_value: u16 = if value { 0xFF00 } else { 0x0000 };
-        Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, address, coil_value)
+    pub(super) fn write_single_coil_request(
+        address: u16,
+        state: mbus_core::models::coil::CoilState,
+    ) -> Result<Pdu, MbusError> {
+        Pdu::build_write_single_coil(address, state)
     }
 
     /// Creates a Modbus PDU for a Write Multiple Coils (FC 0x0F) request.
@@ -88,7 +89,7 @@ impl ReqPduCompiler {
             FunctionCode::WriteMultipleCoils,
             address,
             quantity,
-            &values.values()[..byte_count],
+            &values.raw_values()[..byte_count],
         )
     }
 }

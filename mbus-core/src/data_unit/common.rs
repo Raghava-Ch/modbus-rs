@@ -236,8 +236,9 @@ pub fn validate_quantity(fc: FunctionCode, quantity: u16) -> Result<(), MbusErro
         | FunctionCode::ReadWriteMultipleRegisters => quantity <= MAX_READ_REGISTERS_QUANTITY,
 
         #[cfg(all(feature = "holding-registers", not(feature = "input-registers")))]
-        FunctionCode::ReadHoldingRegisters
-        | FunctionCode::ReadWriteMultipleRegisters => quantity <= MAX_READ_REGISTERS_QUANTITY,
+        FunctionCode::ReadHoldingRegisters | FunctionCode::ReadWriteMultipleRegisters => {
+            quantity <= MAX_READ_REGISTERS_QUANTITY
+        }
 
         #[cfg(all(not(feature = "holding-registers"), feature = "input-registers"))]
         FunctionCode::ReadInputRegisters => quantity <= MAX_READ_REGISTERS_QUANTITY,
@@ -990,13 +991,11 @@ impl Pdu {
     }
 
     /// Builds a PDU for FC05 Write Single Coil requests.
-    #[cfg(feature = "coils")]
-    pub fn build_write_single_coil(address: u16, value: bool) -> Result<Self, MbusError> {
-        Self::build_write_single_u16(
-            FunctionCode::WriteSingleCoil,
-            address,
-            coil_bool_to_u16(value),
-        )
+    pub fn build_write_single_coil(
+        address: u16,
+        state: crate::models::coil::CoilState,
+    ) -> Result<Self, MbusError> {
+        Self::build_write_single_u16(FunctionCode::WriteSingleCoil, address, state.to_u16())
     }
 
     /// Builds a PDU with `[address, quantity, byte_count, values...]` layout.
@@ -1739,7 +1738,8 @@ impl Pdu {
             .map_err(|_| MbusError::BufferTooSmall)?;
         Self::build_mei_type(
             FunctionCode::EncapsulatedInterfaceTransport,
-            crate::function_codes::public::EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
+            crate::function_codes::public::EncapsulatedInterfaceType::ReadDeviceIdentification
+                as u8,
             &mei_data,
         )
     }

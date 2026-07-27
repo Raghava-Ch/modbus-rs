@@ -13,11 +13,13 @@ use std::vec::Vec; // Import standard Vec for the type alias
 type ReceivedEncapsulatedInterfaceTransportResponse =
     (u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>);
 
+use mbus_core::models::coil::CoilState;
+
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MockApp {
     pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>, // Corrected duplicate
-    pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool)>>,
+    pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, CoilState)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     pub received_discrete_input_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
@@ -39,7 +41,7 @@ impl CoilResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) {
         let mut coils = Coils::new(address, 1).unwrap();
         coils.set_value(address, value).unwrap();
@@ -53,7 +55,7 @@ impl CoilResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) {
         self.received_write_single_coil_responses
             .borrow_mut()

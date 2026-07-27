@@ -158,8 +158,8 @@ where
         };
 
         let value = match raw_value {
-            0xFF00 => true,
-            0x0000 => false,
+            0xFF00 => mbus_core::models::coil::CoilState::On,
+            0x0000 => mbus_core::models::coil::CoilState::Off,
             _ => {
                 self.send_exception_response(
                     txn_id,
@@ -234,8 +234,8 @@ where
         };
 
         let value = match raw_value {
-            0xFF00 => true,
-            0x0000 => false,
+            0xFF00 => mbus_core::models::coil::CoilState::On,
+            0x0000 => mbus_core::models::coil::CoilState::Off,
             _ => {
                 server_log_debug!(
                     "FC05 broadcast ignored due to invalid coil value: txn_id={}, raw_value=0x{:04X}",

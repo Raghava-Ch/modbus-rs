@@ -108,7 +108,7 @@ pub unsafe extern "C" fn mbus_coils_values_ptr(coils: *const MbusCoils) -> *cons
     if coils.is_null() {
         return core::ptr::null();
     }
-    unsafe { (*coils).inner().values().as_ptr() }
+    unsafe { (*coils).inner().raw_values().as_ptr() }
 }
 
 #[cfg(test)]
@@ -123,7 +123,7 @@ mod tests {
         MbusCoils(
             Coils::new(from_address, quantity)
                 .unwrap()
-                .with_values(&vals, quantity)
+                .with_raw_values(&vals, quantity)
                 .unwrap(),
         )
     }

@@ -43,7 +43,7 @@ impl AsyncAppHandler for JsServerHandlers {
                 ModbusRequest::WriteSingleCoil {
                     unit,
                     address,
-                    value,
+                    state: value,
                     ..
                 } => Self::handle_write_single_coil(&handlers, unit, address, value).await,
                 #[cfg(feature = "coils")]
@@ -239,7 +239,7 @@ impl JsServerHandlers {
         handlers: &JsValue,
         unit: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: mbus_core::models::coil::CoilState,
     ) -> ModbusResponse {
         let fc = FunctionCode::WriteSingleCoil;
         if let Some(func) = get_handler_fn(handlers, "onWriteSingleCoil") {
@@ -257,7 +257,7 @@ impl JsServerHandlers {
             let _ = js_sys::Reflect::set(
                 &req,
                 &JsValue::from_str("value"),
-                &JsValue::from_f64(if value { 1.0 } else { 0.0 }),
+                &JsValue::from_f64(state.to_bit() as f64),
             );
 
             match call_handler(&func, &req.into()).await {
@@ -265,13 +265,16 @@ impl JsServerHandlers {
                     if let Some(exc) = get_exception_code(&val) {
                         ModbusResponse::exception(fc, exc)
                     } else {
-                        ModbusResponse::echo_coil(address, value)
+                        ModbusResponse::echo_coil(
+                            address,
+                            state == mbus_core::models::coil::CoilState::On,
+                        )
                     }
                 }
                 Err(_) => ModbusResponse::exception(fc, ExceptionCode::ServerDeviceFailure),
             }
         } else {
-            ModbusResponse::echo_coil(address, value)
+            ModbusResponse::echo_coil(address, state)
         }
     }
 

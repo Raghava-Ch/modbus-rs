@@ -154,16 +154,16 @@ fn decode_read_coils(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     // We reconstruct Coils from packed bytes; use address=0 as placeholder — the caller
     // overwrites via its own context if it needs the real from_address.
     let bit_count = (bcp.byte_count as u16) * 8;
-    let coils = Coils::new(0, bit_count)?.with_values(bcp.payload, bit_count)?;
+    let coils = Coils::new(0, bit_count)?.with_raw_values(bcp.payload, bit_count)?;
     Ok(ClientResponse::Coils(coils))
 }
 
 #[cfg(feature = "coils")]
 fn decode_write_single_coil(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fields = pdu.write_single_u16_fields()?;
-    let value = fields.is_on();
+    let state = mbus_core::models::coil::CoilState::from_u16(fields.value);
     let mut coils = Coils::new(fields.address, 1)?;
-    coils.set_value(fields.address, value)?;
+    coils.set_value(fields.address, state)?;
     Ok(ClientResponse::Coils(coils))
 }
 

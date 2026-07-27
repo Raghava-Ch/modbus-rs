@@ -144,7 +144,7 @@ where
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: coil::CoilState,
     ) -> Result<(), MbusError> {
         let transport_type = TRANSPORT::TRANSPORT_TYPE; // Access self.transport directly
 
@@ -153,7 +153,7 @@ where
             txn_id,
             unit_id_slave_addr,
             address,
-            value,
+            state,
             transport_type,
         )?;
 
@@ -171,8 +171,8 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Single(Single {
-                    address,             // Address of the coil
-                    value: value as u16, // Value written (0x0000 or 0xFF00)
+                    address,               // Address of the coil
+                    value: state.to_u16(), // Value written (0x0000 or 0xFF00)
                 }),
                 Self::handle_write_single_coil_response,
             )?;

@@ -331,8 +331,14 @@ impl TcpModbusClient {
     fn write_coil(&self, py: Python<'_>, address: u16, value: bool) -> PyResult<(u16, bool)> {
         let rt = get_runtime();
         let uid = self.unit_id;
+        let state = if value {
+            mbus_core::models::coil::CoilState::On
+        } else {
+            mbus_core::models::coil::CoilState::Off
+        };
         py.detach(|| {
-            rt.block_on(self.inner.write_single_coil(uid, address, value))
+            rt.block_on(self.inner.write_single_coil(uid, address, state))
+                .map(|(addr, st)| (addr, st == mbus_core::models::coil::CoilState::On))
                 .map_err(async_error_to_py)
         })
     }
@@ -676,10 +682,16 @@ impl AsyncTcpModbusClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
         let uid = self.unit_id;
+        let state = if value {
+            mbus_core::models::coil::CoilState::On
+        } else {
+            mbus_core::models::coil::CoilState::Off
+        };
         future_into_py(py, async move {
             client
-                .write_single_coil(uid, address, value)
+                .write_single_coil(uid, address, state)
                 .await
+                .map(|(addr, st)| (addr, st == mbus_core::models::coil::CoilState::On))
                 .map_err(async_error_to_py)
         })
     }

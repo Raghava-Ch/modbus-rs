@@ -52,10 +52,10 @@ pub(crate) fn encode_write_single_coil(
     txn_id: u16,
     unit: UnitIdOrSlaveAddr,
     address: u16,
-    value: bool,
+    state: mbus_core::models::coil::CoilState,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let pdu = Pdu::build_write_single_coil(address, value)?;
+    let pdu = Pdu::build_write_single_coil(address, state)?;
     common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn encode_write_multiple_coils(
         FunctionCode::WriteMultipleCoils,
         address,
         quantity,
-        &coils.values()[..byte_count],
+        &coils.raw_values()[..byte_count],
     )?;
     common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }

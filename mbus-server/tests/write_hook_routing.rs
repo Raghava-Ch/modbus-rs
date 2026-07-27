@@ -2,6 +2,8 @@ use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
 #[cfg(feature = "coils")]
+use mbus_core::models::coil::CoilState;
+#[cfg(feature = "coils")]
 use mbus_server::CoilsModel;
 #[cfg(feature = "holding-registers")]
 use mbus_server::HoldingRegistersModel;
@@ -79,7 +81,7 @@ fn single_coil_on_write_hook_runs_before_commit_and_can_reject() {
     };
 
     let err = app
-        .write_single_coil_request(41, unit_id(1), 0, true)
+        .write_single_coil_request(41, unit_id(1), 0, CoilState::On)
         .expect_err("individual coil hook rejection must abort the write");
 
     assert_eq!(err, MbusError::InvalidValue);
@@ -91,7 +93,7 @@ fn single_coil_on_write_hook_runs_before_commit_and_can_reject() {
     assert!(!app.coils.direct);
 
     app.reject_direct = false;
-    app.write_single_coil_request(42, unit_id(1), 0, true)
+    app.write_single_coil_request(42, unit_id(1), 0, CoilState::On)
         .expect("approved individual coil hook should commit the write");
 
     assert_eq!(app.direct_calls, 2);
@@ -103,7 +105,7 @@ fn single_coil_on_write_hook_runs_before_commit_and_can_reject() {
 fn single_coil_notify_via_batch_uses_batch_hook_with_qty_one() {
     let mut app = CoilHookApp::default();
 
-    app.write_single_coil_request(43, unit_id(1), 1, true)
+    app.write_single_coil_request(43, unit_id(1), 1, CoilState::On)
         .expect("notify_via_batch coil write should succeed");
 
     assert_eq!(app.direct_calls, 0);
@@ -123,7 +125,7 @@ fn single_coil_notify_via_batch_rejection_aborts_commit() {
     };
 
     let err = app
-        .write_single_coil_request(43, unit_id(1), 1, true)
+        .write_single_coil_request(43, unit_id(1), 1, CoilState::On)
         .expect_err("notify_via_batch coil rejection must abort the write");
 
     assert_eq!(err, MbusError::InvalidValue);

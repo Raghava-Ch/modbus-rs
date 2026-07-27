@@ -5,6 +5,55 @@ pub const MAX_COILS_PER_PDU: usize = 2000;
 /// Maximum number of bytes needed to represent the coil states for 2000 coils (250 bytes).
 pub const MAX_COIL_BYTES: usize = MAX_COILS_PER_PDU.div_ceil(8); // 250 bytes for 2000 coils
 
+/// Represents the state of a single Modbus coil (On or Off).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoilState {
+    /// Coil is active / energised / high (1).
+    On,
+    /// Coil is inactive / de-energised / low (0).
+    Off,
+}
+
+impl CoilState {
+    /// Returns `true` if the coil state is [`CoilState::On`].
+    #[inline]
+    pub fn to_bit(&self) -> u8 {
+        match self {
+            CoilState::On => 1,
+            CoilState::Off => 0,
+        }
+    }
+
+    /// Converts a 16-bit raw Modbus coil representation (`0xFF00` or `0x0000`) into a [`CoilState`].
+    #[inline]
+    pub fn from_u16(raw: u16) -> Self {
+        if crate::data_unit::common::is_coil_on(raw) {
+            CoilState::On
+        } else {
+            CoilState::Off
+        }
+    }
+
+    /// Converts this [`CoilState`] into its 16-bit raw Modbus coil representation (`0xFF00` for `On`, `0x0000` for `Off`).
+    #[inline]
+    pub fn to_u16(&self) -> u16 {
+        match self {
+            CoilState::On => crate::data_unit::common::COIL_VALUE_ON,
+            CoilState::Off => crate::data_unit::common::COIL_VALUE_OFF,
+        }
+    }
+}
+
+#[cfg(feature = "error-trait")]
+impl core::fmt::Display for CoilState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CoilState::On => write!(f, "ON"),
+            CoilState::Off => write!(f, "OFF"),
+        }
+    }
+}
+
 /// Represents the state of a block of contiguous coils.
 ///
 /// In the Modbus protocol, coils are 1-bit boolean values (ON = `true`, OFF = `false`) used to represent
@@ -20,54 +69,31 @@ pub const MAX_COIL_BYTES: usize = MAX_COILS_PER_PDU.div_ceil(8); // 250 bytes fo
 /// # Examples
 ///
 /// ```rust
-/// use mbus_core::models::coil::Coils;
+/// use mbus_core::models::coil::{Coils, CoilState};
 /// use mbus_core::errors::MbusError;
 ///
 /// // Initialize a block of 8 coils starting at Modbus address 100.
 /// // Initially all coils are OFF (0).
 /// let mut coils = Coils::new(100, 8).unwrap();
 ///
-/// // Verify initial state: all coils are false
-/// assert_eq!(coils.value(100).unwrap(), false);
-/// assert_eq!(coils.value(107).unwrap(), false);
+/// // Verify initial state: all coils are false / Off
+/// assert_eq!(coils.value(100).unwrap(), CoilState::Off);
+/// assert_eq!(coils.value(107).unwrap(), CoilState::Off);
 ///
 /// // Set coil at address 100 (offset 0) to ON
-/// // Internal values: `values[0]` becomes `0b0000_0001`
-/// coils.set_value(100, true).unwrap();
-/// assert_eq!(coils.value(100).unwrap(), true);
-/// assert_eq!(coils.values()[..1], [0b0000_0001]);
+/// coils.set_value(100, CoilState::On).unwrap();
+/// assert_eq!(coils.value(100).unwrap(), CoilState::On);
 /// assert_eq!(coils.values()[..1], [0b0000_0001]);
 ///
 /// // Set coil at address 102 (offset 2) to ON
-/// // Internal values: `values[0]` becomes `0b0000_0101`
-/// coils.set_value(102, true).unwrap();
-/// assert_eq!(coils.value(102).unwrap(), true);
+/// coils.set_value(102, CoilState::On).unwrap();
+/// assert_eq!(coils.value(102).unwrap(), CoilState::On);
 /// assert_eq!(coils.values()[..1], [0b0000_0101]);
-/// assert_eq!(coils.values()[..1], [0b0000_0101]);
-///
-/// // Set coil at address 101 (offset 1) to ON
-/// // Internal values: `values[0]` becomes `0b0000_0111`
-/// coils.set_value(101, true).unwrap();
-/// assert_eq!(coils.value(101).unwrap(), true);
-/// assert_eq!(coils.values()[..1], [0b0000_0111]);
-/// assert_eq!(coils.values()[..1], [0b0000_0111]);
 ///
 /// // Set coil at address 100 back to OFF
-/// // Internal values: `values[0]` becomes `0b0000_0110`
-/// coils.set_value(100, false).unwrap();
-/// assert_eq!(coils.value(100).unwrap(), false);
-/// assert_eq!(coils.values()[..1], [0b0000_0110]);
-/// assert_eq!(coils.values()[..1], [0b0000_0110]);
-///
-/// // Example with `with_values` for loading pre-packed data
-/// let pre_packed_data = [0b1010_1010, 0b0101_0101]; // Two bytes for 16 coils
-/// let mut loaded_coils = Coils::new(200, 16).unwrap()
-///     .with_values(&pre_packed_data, 16)
-///     .expect("Valid quantity and data");
-///
-/// assert_eq!(loaded_coils.value(200).unwrap(), false); // LSB of 0b1010_1010 is 0
-/// assert_eq!(loaded_coils.value(201).unwrap(), true);  // Next bit is 1
-/// assert_eq!(loaded_coils.value(208).unwrap(), true);  // LSB of 0b0101_0101 is 1 (first bit of second byte)
+/// coils.set_value(100, CoilState::Off).unwrap();
+/// assert_eq!(coils.value(100).unwrap(), CoilState::Off);
+/// assert_eq!(coils.values()[..1], [0b0000_0100]);
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Coils {
@@ -84,19 +110,19 @@ pub struct Coils {
 impl Coils {
     /// Creates a new `Coils` instance representing a continuous block of coil states.
     ///
+    /// Validates `quantity` using [`crate::data_unit::common::validate_quantity`].
+    ///
     /// # Arguments
     /// * `from_address` - The Modbus starting address for this block of coils.
     /// * `quantity` - The total number of consecutive coils managed by this instance.
-    /// * `values` - The tightly bit-packed byte array representing the states of the coils.
-    ///   The first byte represents coils `from_address` to `from_address + 7`,
-    ///   where the LSB (Least Significant Bit) is `from_address`.
     ///
     /// # Returns
-    /// A new initialized `Coils` instance.
+    /// A new initialized `Coils` instance, or an `Err(MbusError::InvalidQuantity)` if quantity is 0 or exceeds limits.
     pub fn new(from_address: u16, quantity: u16) -> Result<Self, MbusError> {
-        if quantity > MAX_COILS_PER_PDU as u16 {
-            return Err(MbusError::InvalidQuantity);
-        }
+        crate::data_unit::common::validate_quantity(
+            crate::function_codes::public::FunctionCode::ReadCoils,
+            quantity,
+        )?;
         Ok(Self {
             from_address,
             quantity,
@@ -114,17 +140,17 @@ impl Coils {
     /// This `bit_index` is then used to determine the `byte_index` (`bit_index / 8`)
     /// and the `bit_in_byte` (`bit_index % 8`).
     ///
-    /// To set a bit to `true` (ON), a bitwise OR operation (`|=`) is used with a mask `(1 << bit_in_byte)`.
-    /// To set a bit to `false` (OFF), a bitwise AND NOT operation (`&= !(1 << bit_in_byte)`) is used.
+    /// To set a bit to [`CoilState::On`], a bitwise OR operation (`|=`) is used with a mask `(1 << bit_in_byte)`.
+    /// To set a bit to [`CoilState::Off`], a bitwise AND NOT operation (`&= !(1 << bit_in_byte)`) is used.
     ///
     /// # Arguments
     /// * `address` - The Modbus address of the coil to set.
-    /// * `value` - The boolean state to set (`true` for ON, `false` for OFF).
+    /// * `value` - The state to set (accepts [`CoilState`], `true` for ON, `false` for OFF).
     ///
     /// # Returns
     /// `Ok(())` if the value was successfully set, or `Err(MbusError::InvalidAddress)` if the
     /// calculated address is out of bounds.
-    pub fn set_value(&mut self, address: u16, value: bool) -> Result<(), MbusError> {
+    pub fn set_value(&mut self, address: u16, state: CoilState) -> Result<(), MbusError> {
         // Ensure the target address is within the range of this block
         if address < self.from_address || address >= self.from_address + self.quantity {
             return Err(MbusError::InvalidAddress);
@@ -134,7 +160,7 @@ impl Coils {
         let byte_index = bit_index / 8;
         let bit_in_byte = bit_index % 8;
 
-        if value {
+        if state == CoilState::On {
             self.values[byte_index] |= 1 << bit_in_byte; // Set bit to 1
         } else {
             self.values[byte_index] &= !(1 << bit_in_byte); // Set bit to 0
@@ -156,7 +182,11 @@ impl Coils {
     /// # Errors
     /// Returns `MbusError::InvalidQuantity` if the provided `bits_length` does not match
     /// the `quantity` initialized in the struct.
-    pub fn with_values(mut self, values: &[u8], bits_length: u16) -> Result<Self, MbusError> {
+    pub fn with_raw_values(
+        mut self,
+        raw_values: &[u8],
+        bits_length: u16,
+    ) -> Result<Self, MbusError> {
         // Ensure we aren't receiving a different number of bits than the quantity we expect to manage
         if bits_length != self.quantity {
             return Err(MbusError::InvalidQuantity);
@@ -165,7 +195,7 @@ impl Coils {
         // Calculate how many bytes are needed to represent the bits_length (round up)
         let byte_length = bits_length.div_ceil(8);
         // Copy the relevant portion of the input slice into the internal fixed-size buffer
-        self.values[..byte_length as usize].copy_from_slice(&values[..byte_length as usize]);
+        self.values[..byte_length as usize].copy_from_slice(&raw_values[..byte_length as usize]);
         Ok(self)
     }
 
@@ -180,11 +210,11 @@ impl Coils {
     }
 
     /// Returns a reference to the array of bytes representing the coil states.
-    pub fn values(&self) -> &[u8; MAX_COIL_BYTES] {
+    pub fn raw_values(&self) -> &[u8; MAX_COIL_BYTES] {
         &self.values
     }
 
-    /// Retrieves the boolean state of a specific coil by its address.
+    /// Retrieves the [`CoilState`] of a specific coil by its address.
     ///
     /// This method calculates the `bit_index` as `address - self.from_address`.
     /// This `bit_index` is then used to determine the `byte_index` (`bit_index / 8`)
@@ -192,14 +222,14 @@ impl Coils {
     /// for the specific bit within that byte.
     ///
     /// A bitwise AND operation (`&`) with the `bit_mask` is performed on the relevant byte.
-    /// If the result is non-zero, the bit is set (coil is ON); otherwise, it's OFF.
+    /// If the result is non-zero, the bit is set ([`CoilState::On`]); otherwise, it's [`CoilState::Off`].
     ///
     /// # Arguments
     /// * `address` - The Modbus address of the coil to read.
     ///
     /// # Returns
-    /// `Ok(true)` if the coil is ON, `Ok(false)` if the coil is OFF, or `Err(MbusError::InvalidAddress)` if the address is out of bounds.
-    pub fn value(&self, address: u16) -> Result<bool, MbusError> {
+    /// `Ok(CoilState::On)` if the coil is ON, `Ok(CoilState::Off)` if the coil is OFF, or `Err(MbusError::InvalidAddress)` if the address is out of bounds.
+    pub fn value(&self, address: u16) -> Result<CoilState, MbusError> {
         if address < self.from_address || address >= self.from_address + self.quantity {
             return Err(MbusError::InvalidAddress);
         }
@@ -207,6 +237,10 @@ impl Coils {
         let byte_index = bit_index / 8;
         let bit_mask = 1u8 << (bit_index % 8);
 
-        Ok(self.values[byte_index] & bit_mask != 0)
+        if self.values[byte_index] & bit_mask != 0 {
+            Ok(CoilState::On)
+        } else {
+            Ok(CoilState::Off)
+        }
     }
 }

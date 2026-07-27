@@ -88,7 +88,7 @@ impl ResponseParser {
     ) -> Result<Coils, MbusError> {
         let coil_response = Self::parse_read_coils_response(pdu, expected_quantity)?;
         let coils = Coils::new(from_address, expected_quantity)?
-            .with_values(&coil_response, expected_quantity)?;
+            .with_raw_values(&coil_response, expected_quantity)?;
 
         Ok(coils)
     }
@@ -153,7 +153,7 @@ impl ResponseParser {
     pub(super) fn parse_write_single_coil_response(
         pdu: &Pdu,
         expected_address: u16,
-        expected_value: bool,
+        expected_state: coil::CoilState,
     ) -> Result<(), MbusError> {
         if pdu.function_code() != FunctionCode::WriteSingleCoil {
             return Err(MbusError::InvalidFunctionCode);
@@ -165,7 +165,7 @@ impl ResponseParser {
             return Err(MbusError::InvalidAddress);
         }
 
-        let expected_response_value = if expected_value { 0xFF00 } else { 0x0000 };
+        let expected_response_value = expected_state.to_u16();
         if fields.value != expected_response_value {
             return Err(MbusError::InvalidValue);
         }
@@ -245,7 +245,7 @@ where
         let pdu = message.pdu();
         let function_code = pdu.function_code();
         let address = ctx.operation_meta.address();
-        let value = ctx.operation_meta.value() != 0;
+        let value = mbus_core::models::coil::CoilState::from_u16(ctx.operation_meta.value());
         let transaction_id = ctx.txn_id;
         let unit_id_or_slave_addr = message.unit_id_or_slave_addr();
 

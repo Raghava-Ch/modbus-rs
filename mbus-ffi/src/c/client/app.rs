@@ -244,7 +244,7 @@ impl mbus_client::app::CoilResponse for CApp {
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) {
         if let Some(cb) = self.callbacks.on_write_single_coil {
             let ctx = MbusWriteSingleCoilCtx {

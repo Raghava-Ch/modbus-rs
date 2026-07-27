@@ -297,16 +297,16 @@ impl AsyncClientCore {
         }
     }
 
-    /// Writes a single coil (FC 05) at `address` with the given boolean `value`.
+    /// Writes a single coil (FC 05) at `address` with the given `CoilState`.
     ///
-    /// Returns `(address, value)` echoed back by the server.
+    /// Returns `(address, CoilState)` echoed back by the server.
     #[cfg(feature = "coils")]
     pub async fn write_single_coil(
         &self,
         unit_id: u8,
         address: u16,
-        value: bool,
-    ) -> Result<(u16, bool), AsyncError> {
+        value: mbus_core::models::coil::CoilState,
+    ) -> Result<(u16, mbus_core::models::coil::CoilState), AsyncError> {
         let unit = UnitIdOrSlaveAddr::new(unit_id).map_err(AsyncError::Mbus)?;
         #[allow(unreachable_patterns)]
         match self
@@ -318,7 +318,7 @@ impl AsyncClientCore {
             .await?
         {
             ClientResponse::Coils(coils) => {
-                let v = coils.value(coils.from_address()).unwrap_or(false);
+                let v = coils.value(coils.from_address()).unwrap_or(mbus_core::models::coil::CoilState::Off);
                 Ok((coils.from_address(), v))
             }
             _ => Err(AsyncError::UnexpectedResponseType),

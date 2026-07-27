@@ -1,5 +1,8 @@
 use core::ffi::c_void;
 
+#[cfg(feature = "coils")]
+use mbus_client::services::coil;
+
 use crate::c::error::MbusStatusCode;
 
 // ── Opaque Model Types ───────────────────────────────────────────────────────
@@ -61,7 +64,7 @@ pub struct MbusWriteSingleCoilCtx {
     /// Coil address.
     pub address: u16,
     /// Written value (1 = ON, 0 = OFF).
-    pub value: u8,
+    pub value: coil::CoilState,
     /// User-provided opaque pointer.
     pub userdata: *mut c_void,
 }

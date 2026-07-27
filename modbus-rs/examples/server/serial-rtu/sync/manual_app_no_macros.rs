@@ -9,6 +9,7 @@ use mbus_server::ServerInputRegisterHandler;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_core::models::coil::CoilState;
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
     ModbusSerialConfig, Parity, SerialMode, StdRtuTransport, UnitIdOrSlaveAddr,
@@ -147,10 +148,10 @@ impl ServerCoilHandler for ManualServerApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: CoilState,
     ) -> Result<(), MbusError> {
         let (start, _) = Self::check_range(address, 1, self.coils.len())?;
-        self.coils[start] = value;
+        self.coils[start] = state == CoilState::On;
         Ok(())
     }
 

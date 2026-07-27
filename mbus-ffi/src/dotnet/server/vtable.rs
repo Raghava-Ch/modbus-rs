@@ -235,7 +235,7 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
                     ExceptionCode::IllegalFunction,
                 );
             };
-            let rc = unsafe { f(vt.ctx, address, value as u8) };
+            let rc = unsafe { f(vt.ctx, address, value.to_bit()) };
             if rc != 0 {
                 return exception_from_i32(FunctionCode::WriteSingleCoil, rc);
             }

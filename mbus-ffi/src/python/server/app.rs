@@ -359,7 +359,11 @@ async fn dispatch_request(
 
         // FC05 — Write Single Coil
         #[cfg(feature = "coils")]
-        ModbusRequest::WriteSingleCoil { address, value, .. } => {
+        ModbusRequest::WriteSingleCoil {
+            address,
+            state: value,
+            ..
+        } => {
             let result = eval_python_call!(|py| {
                 app.bind(py)
                     .call_method1("handle_write_coil", (address, value))

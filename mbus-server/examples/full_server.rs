@@ -199,13 +199,13 @@ impl ServerCoilHandler for FullApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         let idx = address as usize;
         if idx >= self.coils.len() {
             return Err(MbusError::InvalidAddress);
         }
-        self.coils[idx] = value;
+        self.coils[idx] = value == mbus_core::models::coil::CoilState::On;
         Ok(())
     }
 
@@ -642,7 +642,7 @@ fn main() {
     // FC01 / FC05 / FC0F: coils
     #[cfg(feature = "coils")]
     {
-        app.write_single_coil_request(10, uid, 3, true)
+        app.write_single_coil_request(10, uid, 3, mbus_core::models::coil::CoilState::On)
             .expect("FC05");
         app.write_multiple_coils_request(11, uid, 8, 4, &[0b0000_1010])
             .expect("FC0F");

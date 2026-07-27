@@ -11,10 +11,13 @@ use std::cell::RefCell;
 // --- MockApp for Client ---
 // This struct implements the CoilResponse trait and is used by the client
 // to receive and store responses from the Modbus server.
+use modbus_rs::mbus_core::models::coil::CoilState;
+
 #[derive(Debug, Default)]
 struct ClientMockApp {
     pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils), 10>>,
-    pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
+    pub received_write_single_coil_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, CoilState), 10>>,
     pub received_write_multiple_coils_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
 }
@@ -31,13 +34,10 @@ impl CoilResponse for ClientMockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: CoilState,
     ) {
-        let val_byte = if value { 1 } else { 0 };
-        let coils = Coils::new(address, 1)
-            .unwrap()
-            .with_values(&[val_byte], 1)
-            .unwrap();
+        let mut coils = Coils::new(address, 1).unwrap();
+        coils.set_value(address, state).unwrap();
 
         self.received_coil_responses
             .borrow_mut()
@@ -49,7 +49,7 @@ impl CoilResponse for ClientMockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) {
         self.received_write_single_coil_responses
             .borrow_mut()
@@ -127,15 +127,15 @@ fn main() -> Result<()> {
         assert_eq!(received_read_single.len(), 1);
         let (_, _, coils) = &received_read_single[0];
         println!(
-            "Client: Read single coil at address {}: {}",
+            "Client: Read single coil at address {}: {:?}",
             read_single_address,
             coils.value(read_single_address)?
         );
-        assert!(coils.value(read_single_address)?); // Initialized to true
+        assert_eq!(coils.value(read_single_address)?, CoilState::On); // Initialized to true
     }
     println!("\n--- Testing Write Single Coil ---");
     let write_single_address = 0;
-    let write_single_value = true;
+    let write_single_value = CoilState::On;
     let txn_id_write_single = 101; // This line is fine
     client
         .coils()
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
         let received_write_single = client.app().received_write_single_coil_responses.borrow();
         assert_eq!(received_write_single.len(), 1);
         let (_, _, addr, val) = &received_write_single[0];
-        println!("Client: Wrote single coil at address {}: {}", addr, val);
+        println!("Client: Wrote single coil at address {}: {:?}", addr, val);
         assert_eq!(*addr, write_single_address);
         assert_eq!(*val, write_single_value);
     }
@@ -214,14 +214,14 @@ fn main() -> Result<()> {
         for i in 0..read_multi_quantity {
             let current_address = read_multi_address + i;
             println!(
-                "  Coil {}: {}",
+                "  Coil {}: {:?}",
                 current_address,
                 coils_multi.value(current_address)?
             );
         }
-        assert!(coils_multi.value(10)?);
-        assert!(!coils_multi.value(11)?);
-        assert!(coils_multi.value(12)?);
+        assert_eq!(coils_multi.value(10)?, CoilState::On);
+        assert_eq!(coils_multi.value(11)?, CoilState::Off);
+        assert_eq!(coils_multi.value(12)?, CoilState::On);
     }
 
     println!("\n--- Testing Write Multiple Coils ---");
@@ -230,13 +230,13 @@ fn main() -> Result<()> {
 
     let mut write_multi_coils = Coils::new(write_multi_address, write_multi_quantity).unwrap();
     write_multi_coils
-        .set_value(write_multi_address, false)
+        .set_value(write_multi_address, CoilState::Off)
         .unwrap();
     write_multi_coils
-        .set_value(write_multi_address + 1, true)
+        .set_value(write_multi_address + 1, CoilState::On)
         .unwrap();
     write_multi_coils
-        .set_value(write_multi_address + 2, true)
+        .set_value(write_multi_address + 2, CoilState::On)
         .unwrap();
 
     let txn_id_write_multi = 103; // This line is fine
@@ -293,11 +293,11 @@ fn main() -> Result<()> {
             write_multi_address, write_multi_quantity
         );
 
-        let expected_values = [false, true, true];
+        let expected_values = [CoilState::Off, CoilState::On, CoilState::On];
         for i in 0..write_multi_quantity {
             let current_address = write_multi_address + i;
             println!(
-                "  Coil {}: {}",
+                "  Coil {}: {:?}",
                 current_address,
                 coils_read_back_multi.value(current_address)?
             );
@@ -312,7 +312,7 @@ fn main() -> Result<()> {
     // Demonstrates batching multiple coil requests in a single scoped mutable borrow.
     client.with_coils(|coils| {
         coils
-            .write_single_coil(104, unit_id, 12, false)
+            .write_single_coil(104, unit_id, 12, CoilState::Off)
             .map_err(|e| anyhow::anyhow!("Batch write_single_coil failed: {:?}", e))?;
         coils
             .read_single_coil(105, unit_id, 12)
@@ -329,11 +329,11 @@ fn main() -> Result<()> {
         assert_eq!(received_writes.len(), 2);
         let (_, _, batch_write_addr, batch_write_val) = &received_writes[1];
         println!(
-            "Batch: Wrote single coil at address {} => {}",
+            "Batch: Wrote single coil at address {} => {:?}",
             batch_write_addr, batch_write_val
         );
         assert_eq!(*batch_write_addr, 12);
-        assert!(!*batch_write_val);
+        assert_eq!(*batch_write_val, CoilState::Off);
     }
 
     {
@@ -341,10 +341,10 @@ fn main() -> Result<()> {
         assert_eq!(received_reads.len(), 5);
         let (_, _, batch_read_coils) = &received_reads[4];
         println!(
-            "Batch: Read back coil at address 12 => {}",
+            "Batch: Read back coil at address 12 => {:?}",
             batch_read_coils.value(12)?
         );
-        assert!(!batch_read_coils.value(12)?);
+        assert_eq!(batch_read_coils.value(12)?, CoilState::Off);
     }
 
     // In a real application, you'd need a mechanism to gracefully shut down the server thread.
