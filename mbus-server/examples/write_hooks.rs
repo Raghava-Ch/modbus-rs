@@ -20,11 +20,11 @@ use mbus_server::{CoilsModel, HoldingRegistersModel, modbus_app};
 #[derive(Debug, Default, CoilsModel)]
 struct CoilMapDemo {
     #[coil(addr = 0)]
-    run_enable: bool,
+    run_enable: CoilState,
     #[coil(addr = 1, notify_via_batch = true)]
-    alarm_ack: bool,
+    alarm_ack: CoilState,
     #[coil(addr = 2, notify_via_batch = true)]
-    maintenance_mode: bool,
+    maintenance_mode: CoilState,
 }
 
 #[derive(Debug, Default, HoldingRegistersModel)]
@@ -55,13 +55,13 @@ struct HookedApp {
 impl TrafficNotifier for HookedApp {}
 
 impl HookedApp {
-    fn on_run_enable_write(&mut self, address: u16, old: bool, new: bool) -> Result<(), MbusError> {
+    fn on_run_enable_write(&mut self, address: u16, old: bool, new: CoilState) -> Result<(), MbusError> {
         self.audit_log.push(format!(
-            "single coil hook: addr={} old={} new={}",
+            "single coil hook: addr={} old={} new={:?}",
             address, old, new
         ));
 
-        if self.compressor_running && !new {
+        if self.compressor_running && new == CoilState::Off {
             self.audit_log
                 .push("reject: cannot disable run_enable while compressor is running".into());
             return Err(MbusError::InvalidValue);
@@ -130,7 +130,7 @@ fn main() -> Result<(), MbusError> {
 
     println!("=== Hooked writes example ===");
     println!(
-        "initial state: run_enable={} setpoint={:.1} {} fan_speed={} %",
+        "initial state: run_enable={:?} setpoint={:.1} {} fan_speed={} %",
         app.coils.run_enable,
         app.registers.temperature_setpoint_scaled(),
         HoldingMapDemo::temperature_setpoint_unit(),
@@ -141,12 +141,12 @@ fn main() -> Result<(), MbusError> {
     println!("1. Single FC05 write uses on_write_0 and can reject");
     let disable_result = app.write_single_coil_request(1, unit_id(1), 0, CoilState::Off);
     println!("   disabling run_enable while compressor is running -> {disable_result:?}");
-    println!("   run_enable after rejection -> {}", app.coils.run_enable);
+    println!("   run_enable after rejection -> {:?}", app.coils.run_enable);
 
     app.compressor_running = false;
     app.write_single_coil_request(2, unit_id(1), 0, CoilState::On)?;
     println!(
-        "   enabling run_enable after stop -> {}",
+        "   enabling run_enable after stop -> {:?}",
         app.coils.run_enable
     );
 
@@ -155,7 +155,7 @@ fn main() -> Result<(), MbusError> {
     app.write_single_coil_request(3, unit_id(1), 1, CoilState::On)?;
     app.write_single_register_request(4, unit_id(1), 11, 55)?;
     println!(
-        "   alarm_ack={} fan_speed={} %",
+        "   alarm_ack={:?} fan_speed={} %",
         app.coils.alarm_ack,
         app.registers.fan_speed_pct()
     );
@@ -165,7 +165,7 @@ fn main() -> Result<(), MbusError> {
     app.write_multiple_coils_request(5, unit_id(1), 1, 2, &[0b0000_0011])?;
     app.write_multiple_registers_request(6, unit_id(1), 10, &[240, 65])?;
     println!(
-        "   maintenance_mode={} setpoint={:.1} {} fan_speed={} %",
+        "   maintenance_mode={:?} setpoint={:.1} {} fan_speed={} %",
         app.coils.maintenance_mode,
         app.registers.temperature_setpoint_scaled(),
         HoldingMapDemo::temperature_setpoint_unit(),

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use mbus_core::models::coil::CoilState;
 use mbus_server::{
     CoilsModel, HoldingRegistersModel, InputRegistersModel, ResilienceConfig, ServerServices,
     modbus_app,
@@ -30,13 +31,13 @@ struct InputRegs {
 #[derive(Debug, Default, CoilsModel)]
 struct CoilBank {
     #[coil(addr = 0)]
-    run_enable: bool,
+    run_enable: CoilState,
     #[coil(addr = 1)]
-    pump_enable: bool,
+    pump_enable: CoilState,
     #[coil(addr = 2)]
-    alarm_ack: bool,
+    alarm_ack: CoilState,
     #[coil(addr = 3)]
-    remote_mode: bool,
+    remote_mode: CoilState,
 }
 
 #[derive(Debug, Default)]
@@ -121,10 +122,10 @@ fn seed_app() -> DemoServer {
     app.input.set_temperature_tenths_c(245);
     app.input.set_pressure_kpa(1013);
 
-    app.coils.run_enable = true;
-    app.coils.pump_enable = true;
-    app.coils.alarm_ack = false;
-    app.coils.remote_mode = true;
+    app.coils.run_enable = CoilState::On;
+    app.coils.pump_enable = CoilState::On;
+    app.coils.alarm_ack = CoilState::Off;
+    app.coils.remote_mode = CoilState::On;
 
     app
 }

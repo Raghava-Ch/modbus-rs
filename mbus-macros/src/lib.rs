@@ -260,6 +260,7 @@ struct CoilField {
     /// When true, a single FC05 write with no individual hook falls through to the
     /// map-level `on_batch_write` hook (called with qty = 1) if that hook exists.
     notify_via_batch: bool,
+    is_coil_state: bool,
 }
 
 /// Field for `#[derive(DiscreteInputsModel)]`: a read-only `bool` at a fixed address.
@@ -294,15 +295,28 @@ fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, E
     let encode_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! { #addr => self.#ident, }
+        if f.is_coil_state {
+            quote! { #addr => self.#ident == ::mbus_core::models::coil::CoilState::On, }
+        } else {
+            quote! { #addr => self.#ident, }
+        }
     });
     let write_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! {
-            #addr => {
-                self.#ident = value;
-                ::core::result::Result::Ok(())
+        if f.is_coil_state {
+            quote! {
+                #addr => {
+                    self.#ident = if value { ::mbus_core::models::coil::CoilState::On } else { ::mbus_core::models::coil::CoilState::Off };
+                    ::core::result::Result::Ok(())
+                }
+            }
+        } else {
+            quote! {
+                #addr => {
+                    self.#ident = value;
+                    ::core::result::Result::Ok(())
+                }
             }
         }
     });
@@ -447,19 +461,27 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
         })?;
 
         let ty = &field.ty;
+        let mut is_coil_state = false;
         let ty_ok = match ty {
             syn::Type::Path(p) => p
                 .path
                 .segments
                 .last()
-                .map(|seg| seg.ident == "bool")
+                .map(|seg| {
+                    if seg.ident == "CoilState" {
+                        is_coil_state = true;
+                        true
+                    } else {
+                        seg.ident == "bool"
+                    }
+                })
                 .unwrap_or(false),
             _ => false,
         };
         if !ty_ok {
             return Err(Error::new_spanned(
                 ty,
-                "CoilsModel fields must be bool (phase 1 limitation); change this field type to bool",
+                "CoilsModel fields must be CoilState or bool; change this field type to CoilState",
             ));
         }
 
@@ -491,6 +513,7 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
             ident,
             addr,
             notify_via_batch,
+            is_coil_state,
         });
     }
 
@@ -1286,7 +1309,7 @@ fn build_write_single_coil_route_with_hooks(
                             &self.#field_ident, address, 1u16, &mut __old_buf,
                         );
                         let __old_val = (__old_buf[0] & 1u8) != 0u8;
-                        self.#hook_fn(address, __old_val, value == ::mbus_core::models::coil::CoilState::On)?;
+                        self.#hook_fn(address, __old_val, value)?;
                         true
                     }
                 }
@@ -1915,7 +1938,7 @@ fn expand_modbus_app_struct(
                     &mut Self,
                     u16,
                     bool,
-                    bool,
+                    ::mbus_core::models::coil::CoilState,
                 ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#hook_ident;
             });
         }
@@ -2683,7 +2706,7 @@ fn build_async_write_single_coil_route(
                             &self.#field_ident, address, 1u16, &mut __old_buf,
                         );
                         let __old_val = (__old_buf[0] & 1u8) != 0u8;
-                        if let Err(__e) = self.#hook_fn(address, __old_val, state == ::mbus_core::models::coil::CoilState::On).await {
+                        if let Err(__e) = self.#hook_fn(address, __old_val, state).await {
                             return ::mbus_async::server::ModbusResponse::exception(
                                 ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
                                 mbus_err_to_exception(__e),

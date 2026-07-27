@@ -23,7 +23,7 @@
 //! // Set coil at address 100 (offset 0) to ON
 //! coils.set_value(100, CoilState::On).unwrap();
 //! assert_eq!(coils.value(100).unwrap(), CoilState::On);
-//! assert_eq!(coils.values()[..1], [0b0000_0001]);
+//! assert_eq!(coils.raw_values()[..1], [0b0000_0001]);
 //!
 //! // Set coil at address 102 (offset 2) to ON
 //! coils.set_value(102, CoilState::On).unwrap();

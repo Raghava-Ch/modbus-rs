@@ -63,21 +63,21 @@ struct InputRegs {
 #[derive(Debug, Default, CoilsModel)]
 struct CoilBank {
     #[coil(addr = 0)]
-    run_enable: bool,
+    run_enable: CoilState,
     #[coil(addr = 1)]
-    pump_enable: bool,
+    pump_enable: CoilState,
     #[coil(addr = 2)]
-    alarm_ack: bool,
+    alarm_ack: CoilState,
     #[coil(addr = 3)]
-    remote_mode: bool,
+    remote_mode: CoilState,
     #[coil(addr = 4)]
-    valve_a_open: bool,
+    valve_a_open: CoilState,
     #[coil(addr = 5)]
-    valve_b_open: bool,
+    valve_b_open: CoilState,
     #[coil(addr = 6)]
-    fan_enable: bool,
+    fan_enable: CoilState,
     #[coil(addr = 7)]
-    heater_enable: bool,
+    heater_enable: CoilState,
 }
 
 #[derive(Debug, Default)]
@@ -401,14 +401,14 @@ fn seed_app() -> DemoServerCompat {
     app.holding.set_reg_30(3000);
     app.holding.set_reg_31(3001);
 
-    app.coils.run_enable = true;
-    app.coils.pump_enable = true;
-    app.coils.alarm_ack = false;
-    app.coils.remote_mode = true;
-    app.coils.valve_a_open = false;
-    app.coils.valve_b_open = true;
-    app.coils.fan_enable = false;
-    app.coils.heater_enable = true;
+    app.coils.run_enable = CoilState::On;
+    app.coils.pump_enable = CoilState::On;
+    app.coils.alarm_ack = CoilState::Off;
+    app.coils.remote_mode = CoilState::On;
+    app.coils.valve_a_open = CoilState::Off;
+    app.coils.valve_b_open = CoilState::On;
+    app.coils.fan_enable = CoilState::Off;
+    app.coils.heater_enable = CoilState::On;
 
     DemoServerCompat { inner: app }
 }

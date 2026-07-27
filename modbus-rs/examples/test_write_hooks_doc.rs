@@ -3,14 +3,15 @@
 //! Run: cargo run -p modbus-rs --example test_write_hooks_doc --features server
 
 use mbus_core::errors::MbusError;
+use mbus_core::models::coil::CoilState;
 use mbus_server::{CoilsModel, HoldingRegistersModel, modbus_app};
 
 #[derive(Default, CoilsModel)]
 struct MyCoils {
     #[coil(addr = 0)]
-    motor_enable: bool,
+    motor_enable: CoilState,
     #[coil(addr = 1)]
-    heater_enable: bool,
+    heater_enable: CoilState,
 }
 
 #[derive(Default, HoldingRegistersModel)]
@@ -35,16 +36,16 @@ impl App1 {
         &mut self,
         address: u16,
         old_value: bool,
-        new_value: bool,
+        new_value: CoilState,
     ) -> Result<(), MbusError> {
-        if !old_value && new_value {
+        if !old_value && new_value == CoilState::On {
             println!("Motor starting (addr: {})", address);
         }
         Ok(())
     }
 
-    fn on_write_1(&mut self, address: u16, _old: bool, new: bool) -> Result<(), MbusError> {
-        if new {
+    fn on_write_1(&mut self, address: u16, _old: bool, new: CoilState) -> Result<(), MbusError> {
+        if new == CoilState::On {
             println!("Heater enabled (addr: {})", address);
         }
         Ok(())

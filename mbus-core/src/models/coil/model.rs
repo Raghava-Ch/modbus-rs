@@ -6,11 +6,12 @@ pub const MAX_COILS_PER_PDU: usize = 2000;
 pub const MAX_COIL_BYTES: usize = MAX_COILS_PER_PDU.div_ceil(8); // 250 bytes for 2000 coils
 
 /// Represents the state of a single Modbus coil (On or Off).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CoilState {
     /// Coil is active / energised / high (1).
     On,
     /// Coil is inactive / de-energised / low (0).
+    #[default]
     Off,
 }
 
@@ -83,17 +84,17 @@ impl core::fmt::Display for CoilState {
 /// // Set coil at address 100 (offset 0) to ON
 /// coils.set_value(100, CoilState::On).unwrap();
 /// assert_eq!(coils.value(100).unwrap(), CoilState::On);
-/// assert_eq!(coils.values()[..1], [0b0000_0001]);
+/// assert_eq!(coils.raw_values()[..1], [0b0000_0001]);
 ///
 /// // Set coil at address 102 (offset 2) to ON
 /// coils.set_value(102, CoilState::On).unwrap();
 /// assert_eq!(coils.value(102).unwrap(), CoilState::On);
-/// assert_eq!(coils.values()[..1], [0b0000_0101]);
+/// assert_eq!(coils.raw_values()[..1], [0b0000_0101]);
 ///
 /// // Set coil at address 100 back to OFF
 /// coils.set_value(100, CoilState::Off).unwrap();
 /// assert_eq!(coils.value(100).unwrap(), CoilState::Off);
-/// assert_eq!(coils.values()[..1], [0b0000_0100]);
+/// assert_eq!(coils.raw_values()[..1], [0b0000_0100]);
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Coils {

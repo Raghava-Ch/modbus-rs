@@ -22,9 +22,9 @@ fn unit_id(v: u8) -> UnitIdOrSlaveAddr {
 #[derive(Debug, Default, CoilsModel)]
 struct HookCoils {
     #[coil(addr = 0)]
-    direct: bool,
+    direct: CoilState,
     #[coil(addr = 1, notify_via_batch = true)]
-    via_batch: bool,
+    via_batch: CoilState,
 }
 
 #[cfg(feature = "coils")]
@@ -38,7 +38,7 @@ struct CoilHookApp {
     batch_calls: u16,
     last_direct_address: u16,
     last_direct_old: bool,
-    last_direct_new: bool,
+    last_direct_new: CoilState,
     last_batch_start: u16,
     last_batch_qty: u16,
     last_batch_byte: u8,
@@ -46,7 +46,7 @@ struct CoilHookApp {
 
 #[cfg(feature = "coils")]
 impl CoilHookApp {
-    fn on_direct_coil(&mut self, address: u16, old: bool, new: bool) -> Result<(), MbusError> {
+    fn on_direct_coil(&mut self, address: u16, old: bool, new: CoilState) -> Result<(), MbusError> {
         self.direct_calls += 1;
         self.last_direct_address = address;
         self.last_direct_old = old;
@@ -89,15 +89,15 @@ fn single_coil_on_write_hook_runs_before_commit_and_can_reject() {
     assert_eq!(app.batch_calls, 0);
     assert_eq!(app.last_direct_address, 0);
     assert!(!app.last_direct_old);
-    assert!(app.last_direct_new);
-    assert!(!app.coils.direct);
+    assert_eq!(app.last_direct_new, CoilState::On);
+    assert_eq!(app.coils.direct, CoilState::Off);
 
     app.reject_direct = false;
     app.write_single_coil_request(42, unit_id(1), 0, CoilState::On)
         .expect("approved individual coil hook should commit the write");
 
     assert_eq!(app.direct_calls, 2);
-    assert!(app.coils.direct);
+    assert_eq!(app.coils.direct, CoilState::On);
 }
 
 #[cfg(feature = "coils")]
@@ -113,7 +113,7 @@ fn single_coil_notify_via_batch_uses_batch_hook_with_qty_one() {
     assert_eq!(app.last_batch_start, 1);
     assert_eq!(app.last_batch_qty, 1);
     assert_eq!(app.last_batch_byte, 0b0000_0001);
-    assert!(app.coils.via_batch);
+    assert_eq!(app.coils.via_batch, CoilState::On);
 }
 
 #[cfg(feature = "coils")]
@@ -134,7 +134,7 @@ fn single_coil_notify_via_batch_rejection_aborts_commit() {
     assert_eq!(app.last_batch_start, 1);
     assert_eq!(app.last_batch_qty, 1);
     assert_eq!(app.last_batch_byte, 0b0000_0001);
-    assert!(!app.coils.via_batch);
+    assert_eq!(app.coils.via_batch, CoilState::Off);
 }
 
 #[cfg(feature = "coils")]
@@ -154,8 +154,8 @@ fn multiple_coil_batch_hook_rejection_keeps_write_atomic() {
     assert_eq!(app.last_batch_start, 0);
     assert_eq!(app.last_batch_qty, 2);
     assert_eq!(app.last_batch_byte, 0b0000_0011);
-    assert!(!app.coils.direct);
-    assert!(!app.coils.via_batch);
+    assert_eq!(app.coils.direct, CoilState::Off);
+    assert_eq!(app.coils.via_batch, CoilState::Off);
 }
 
 #[cfg(feature = "coils")]
@@ -170,8 +170,8 @@ fn multiple_coil_batch_hook_success_commits_values() {
     assert_eq!(app.last_batch_start, 0);
     assert_eq!(app.last_batch_qty, 2);
     assert_eq!(app.last_batch_byte, 0b0000_0011);
-    assert!(app.coils.direct);
-    assert!(app.coils.via_batch);
+    assert_eq!(app.coils.direct, CoilState::On);
+    assert_eq!(app.coils.via_batch, CoilState::On);
 }
 
 #[cfg(feature = "holding-registers")]
