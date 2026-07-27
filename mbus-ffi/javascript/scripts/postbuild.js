@@ -274,7 +274,7 @@ module.exports.ModbusErrorCode = {
  */
 module.exports.getModbusErrorCode = function getModbusErrorCode(err) {
   if (!err || typeof err.message !== 'string') return undefined
-  const m = err.message.match(/^\\[([A-Z_]+)(?::[^\\]]*)?\\]/)
+  const m = err.message.match(/^\[([A-Z_]+)(?::[^\]]*)?\]/)
   return m ? m[1] : undefined
 }
 
@@ -508,6 +508,29 @@ if (fs.existsSync(wasmNpmDir)) {
       console.log(`Processed and aligned typings in ${dtsFile}`);
     }
   }
+
+  const modbusErrorCodeExport = `
+  export const ModbusErrorCode = {
+    EXCEPTION: 'MODBUS_EXCEPTION',
+    TIMEOUT: 'MODBUS_TIMEOUT',
+    TRANSPORT: 'MODBUS_TRANSPORT',
+    INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT',
+    CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED',
+    INTERNAL: 'MODBUS_INTERNAL',
+  };
+`;
+
+  const bundlerJsPath = path.join(wasmNpmDir, 'dist/bundler/modbus-rs.js');
+  const webJsPath = path.join(wasmNpmDir, 'dist/web/modbus-rs.js');
+
+  if (!fs.existsSync(bundlerJsPath) || !fs.existsSync(webJsPath)) {
+    throw new Error('Could not find WASM bundler or web JS output to append ModbusErrorCode export');
+  }
+
+  fs.appendFileSync(bundlerJsPath, modbusErrorCodeExport);
+  fs.appendFileSync(webJsPath, modbusErrorCodeExport);
+  console.log('Appended ModbusErrorCode export to WASM build files.');
+
   console.log('WASM postbuild tasks complete.');
 }
 
