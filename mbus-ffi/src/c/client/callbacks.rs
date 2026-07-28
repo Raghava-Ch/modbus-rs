@@ -1,8 +1,5 @@
 use core::ffi::c_void;
 
-#[cfg(feature = "coils")]
-use mbus_client::services::coil;
-
 use crate::c::error::MbusStatusCode;
 
 // ── Opaque Model Types ───────────────────────────────────────────────────────

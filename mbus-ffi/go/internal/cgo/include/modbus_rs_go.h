@@ -556,13 +556,6 @@ typedef enum MbusServerExceptionCode {
 } MbusServerExceptionCode;
 #endif
 
-#if (defined(MBUS_TARGET_WASM32) && defined(MBUS_TARGET_WASM32))
-/**
- * Represents a Modbus coil or discrete input state.
- */
-typedef struct CoilState CoilState;
-#endif
-
 #if (defined(MBUS_FEATURE_DOTNET) && !defined(MBUS_TARGET_WASM32))
 /**
  * Opaque handle to an asynchronous Modbus serial client (RTU or ASCII).
