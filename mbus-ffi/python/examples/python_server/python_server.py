@@ -66,6 +66,7 @@ _bootstrap_venv()
 del _bootstrap_venv
 
 import modbus_rs
+from modbus_rs import CoilState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,10 +89,10 @@ class DeviceState:
         self._lock = threading.Lock()
 
         # Coils: digital outputs (writeable)
-        self.coils = [False] * self.COIL_COUNT
+        self.coils = [CoilState.Off] * self.COIL_COUNT
 
         # Discrete inputs: digital inputs (read-only)
-        self.discrete_inputs = [False] * self.DI_COUNT
+        self.discrete_inputs = [CoilState.Off] * self.DI_COUNT
 
         # Holding registers: 16-bit process values (writeable)
         # 0: setpoint (°C * 10)   1: output %   2-7: spare
@@ -155,22 +156,22 @@ class DeviceState:
 
     # ── thread-safe accessors ─────────────────────────────────────────────────
 
-    def read_coils(self, address: int, count: int) -> list[bool]:
+    def read_coils(self, address: int, count: int) -> list[CoilState]:
         with self._lock:
             return self.coils[address : address + count]
 
-    def write_coil(self, address: int, value: bool):
+    def write_coil(self, address: int, value: CoilState):
         with self._lock:
             self.coils[address] = value
             log.info("coil[%d] ← %s", address, value)
 
-    def write_coils(self, address: int, values: list[bool]):
+    def write_coils(self, address: int, values: list[CoilState]):
         with self._lock:
             for i, val in enumerate(values):
                 self.coils[address + i] = val
             log.info("coils[%d..%d] written", address, address + len(values) - 1)
 
-    def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
+    def read_discrete_inputs(self, address: int, count: int) -> list[CoilState]:
         with self._lock:
             return self.discrete_inputs[address : address + count]
 

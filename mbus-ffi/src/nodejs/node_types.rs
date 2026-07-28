@@ -107,8 +107,7 @@ pub struct WriteSingleCoilOptions<'a> {
     /// The coil address.
     pub address: u16,
     /// The coil state (CoilState.On = 1, CoilState.Off = 0).
-    #[napi(ts_type = "CoilState")]
-    pub value: u8,
+    pub value: CoilState,
     /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }
@@ -119,8 +118,7 @@ pub struct WriteMultipleCoilsOptions<'a> {
     /// Starting coil address.
     pub address: u16,
     /// An array of coil states to write.
-    #[napi(ts_type = "CoilState[]")]
-    pub values: Vec<u8>,
+    pub values: Vec<CoilState>,
     /// An optional `AbortSignal` to cancel the asynchronous operation.
     pub signal: Option<Object<'a>>,
 }

@@ -131,7 +131,7 @@ where
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: coil::CoilState,
     ) -> Result<(), MbusError> {
         self.client
             .write_single_coil(txn_id, unit_id_slave_addr, address, value)
@@ -1942,7 +1942,7 @@ mod tests {
     struct MockApp {
         pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils), 10>>, // Corrected duplicate
         pub received_write_single_coil_responses:
-            RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool), 10>>,
+            RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, coil::CoilState), 10>>,
         pub received_write_multiple_coils_responses:
             RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16), 10>>,
         pub received_discrete_input_responses:
@@ -2001,15 +2001,10 @@ mod tests {
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
-            value: bool,
+            value: coil::CoilState,
         ) {
-            // For single coil, we create a Coils struct with quantity 1 and the single value
-            let mut values_vec = [0x00, 1];
-            values_vec[0] = if value { 0x01 } else { 0x00 }; // Store the single bit in a byte
-            let coils = Coils::new(address, 1)
-                .unwrap()
-                .with_values(&values_vec, 1)
-                .unwrap();
+            let mut coils = Coils::new(address, 1).unwrap();
+            coils.set_value(address, value).unwrap();
             self.received_coil_responses
                 .borrow_mut()
                 .push((txn_id, unit_id_slave_addr, coils))
@@ -2021,7 +2016,7 @@ mod tests {
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
-            value: bool,
+            value: coil::CoilState,
         ) {
             self.received_write_single_coil_responses
                 .borrow_mut()
@@ -2066,10 +2061,10 @@ mod tests {
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
-            value: bool,
+            value: mbus_core::models::discrete_input::DiscreteInputState,
         ) {
             let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
-            values[0] = if value { 0x01 } else { 0x00 };
+            values[0] = if value == mbus_core::models::discrete_input::DiscreteInputState::On { 0x01 } else { 0x00 };
             let inputs = DiscreteInputs::new(address, 1)
                 .unwrap()
                 .with_values(&values, 1)
@@ -2883,7 +2878,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_coils.from_address(), address);
         assert_eq!(rcv_coils.quantity(), 1); // Quantity should be 1
-        assert_eq!(&rcv_coils.values()[..1], &[0x01]); // Value should be 0x01 for true
+        assert_eq!(&rcv_coils.raw_values()[..1], &[0x01]); // Value should be 0x01 for true
         assert_eq!(rcv_quantity, 1);
 
         // 4. Assert that the expected response was removed from the queue
@@ -2946,7 +2941,7 @@ mod tests {
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x000A;
-        let value = true;
+        let value = coil::CoilState::On;
 
         client_services
             .write_single_coil(txn_id, unit_id, address, value) // current_millis() is called internally
@@ -2974,7 +2969,9 @@ mod tests {
         let expected_address = client_services.expected_responses[0]
             .operation_meta
             .address();
-        let expected_value = client_services.expected_responses[0].operation_meta.value() != 0;
+        let expected_value = mbus_core::models::coil::CoilState::from_u16(
+            client_services.expected_responses[0].operation_meta.value(),
+        );
 
         assert_eq!(expected_address, address);
         assert_eq!(expected_value, value);
@@ -2993,7 +2990,7 @@ mod tests {
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let address = 0x000A;
-        let value = true;
+        let value = coil::CoilState::On;
 
         // 1. Send a Write Single Coil request
         client_services // current_millis() is called internally
@@ -3069,7 +3066,7 @@ mod tests {
         // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
         let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
-            values.set_value(address + i, i % 2 == 0).unwrap();
+            values.set_value(address + i, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off }).unwrap();
         }
 
         client_services
@@ -3125,7 +3122,7 @@ mod tests {
         // Initialize a Coils instance with alternating true/false values
         let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
-            values.set_value(address + i, i % 2 == 0).unwrap();
+            values.set_value(address + i, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off }).unwrap();
         }
 
         // 1. Send a Write Multiple Coils request
@@ -3257,7 +3254,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_coils.from_address(), address);
         assert_eq!(rcv_coils.quantity(), quantity);
-        assert_eq!(&rcv_coils.values()[..1], &[0xB3]);
+        assert_eq!(&rcv_coils.raw_values()[..1], &[0xB3]);
         assert_eq!(rcv_quantity, quantity);
 
         // 4. Assert that the expected response was removed from the queue
@@ -4026,16 +4023,16 @@ mod tests {
         let txn_id = 0x2001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let mut values = Coils::new(0x0000, 10).unwrap();
-        values.set_value(0x0000, true).unwrap();
-        values.set_value(0x0001, false).unwrap();
-        values.set_value(0x0002, true).unwrap();
-        values.set_value(0x0003, false).unwrap();
-        values.set_value(0x0004, true).unwrap();
-        values.set_value(0x0005, false).unwrap();
-        values.set_value(0x0006, true).unwrap();
-        values.set_value(0x0007, false).unwrap();
-        values.set_value(0x0008, true).unwrap();
-        values.set_value(0x0009, false).unwrap();
+        values.set_value(0x0000, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0001, mbus_core::models::coil::CoilState::Off).unwrap();
+        values.set_value(0x0002, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0003, mbus_core::models::coil::CoilState::Off).unwrap();
+        values.set_value(0x0004, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0005, mbus_core::models::coil::CoilState::Off).unwrap();
+        values.set_value(0x0006, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0007, mbus_core::models::coil::CoilState::Off).unwrap();
+        values.set_value(0x0008, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0009, mbus_core::models::coil::CoilState::Off).unwrap();
 
         client_services
             .write_multiple_coils(txn_id, unit_id, 0x0000, &values)
@@ -4825,7 +4822,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_inputs.from_address(), address);
         assert_eq!(rcv_inputs.quantity(), 1);
-        assert!(rcv_inputs.value(address).unwrap());
+        assert_eq!(rcv_inputs.value(address).unwrap(), mbus_core::models::discrete_input::DiscreteInputState::On);
         assert_eq!(*rcv_quantity, 1);
     }
 
@@ -5139,7 +5136,7 @@ mod tests {
 
         let txn_id = 0x0002;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
-        let res = client_services.write_single_coil(txn_id, unit_id, 0x0000, true);
+        let res = client_services.write_single_coil(txn_id, unit_id, 0x0000, coil::CoilState::On);
         assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);
     }
 
@@ -5156,8 +5153,8 @@ mod tests {
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
         let mut values = Coils::new(0x0000, 2).unwrap();
-        values.set_value(0x0000, true).unwrap();
-        values.set_value(0x0001, false).unwrap();
+        values.set_value(0x0000, mbus_core::models::coil::CoilState::On).unwrap();
+        values.set_value(0x0001, mbus_core::models::coil::CoilState::Off).unwrap();
 
         let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, &values);
         assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);

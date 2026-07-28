@@ -44,5 +44,5 @@ pub fn build_exception_adu(
         .map_err(|_| MbusError::Unexpected)?;
 
     // Compile the ADU with the exception function code (no bit manipulation needed)
-    common::compile_adu_frame(txn_id, unit_id_or_slave_addr.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit_id_or_slave_addr, pdu, transport_type)
 }

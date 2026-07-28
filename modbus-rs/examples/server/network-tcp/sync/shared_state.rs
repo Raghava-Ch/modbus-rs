@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use mbus_core::models::coil::CoilState;
 use mbus_core::transport::{ModbusConfig, ModbusTcpConfig, UnitIdOrSlaveAddr};
 use mbus_network::StdTcpServerTransport;
 use mbus_server::{
@@ -29,13 +30,13 @@ struct HvacInputRegs {
 #[derive(Debug, Default, CoilsModel)]
 struct HvacCoils {
     #[coil(addr = 0)]
-    compressor_enable: bool,
+    compressor_enable: CoilState,
     #[coil(addr = 1)]
-    fan_enable: bool,
+    fan_enable: CoilState,
     #[coil(addr = 2)]
-    alarm_ack: bool,
+    alarm_ack: CoilState,
     #[coil(addr = 3)]
-    remote_override: bool,
+    remote_override: CoilState,
 }
 
 #[derive(Debug, Default)]
@@ -135,10 +136,10 @@ fn seed_server_app() -> HvacServerApp {
     app.holding.set_fan_mode(2); // auto
     app.input.set_zone_temp_tenths_c(245); // 24.5C
     app.input.set_discharge_temp_tenths_c(301); // 30.1C
-    app.coils.compressor_enable = false;
-    app.coils.fan_enable = true;
-    app.coils.alarm_ack = false;
-    app.coils.remote_override = true;
+    app.coils.compressor_enable = CoilState::Off;
+    app.coils.fan_enable = CoilState::On;
+    app.coils.alarm_ack = CoilState::Off;
+    app.coils.remote_override = CoilState::On;
     app
 }
 

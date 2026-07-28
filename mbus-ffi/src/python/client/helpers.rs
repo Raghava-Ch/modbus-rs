@@ -33,22 +33,30 @@ pub fn enter_runtime() -> tokio::runtime::EnterGuard<'static> {
 
 // ── Response converters ──────────────────────────────────────────────────────
 
-/// Convert a `Coils` value into a Python `list[bool]`.
+use crate::python::PyCoilState;
+
+/// Convert a `Coils` value into a Python `list[CoilState]`.
 pub fn coils_to_py(py: Python<'_>, coils: Coils) -> PyResult<Py<PyAny>> {
     let qty = coils.quantity(); // already u16
     let base = coils.from_address();
-    let list: Vec<bool> = (0..qty)
-        .map(|i| coils.value(base + i).unwrap_or(false))
+    let list: Vec<PyCoilState> = (0..qty)
+        .map(|i| match coils.value(base + i) {
+            Ok(s) => PyCoilState::from_core(s),
+            Err(_) => PyCoilState::Off,
+        })
         .collect();
     Ok(list.into_pyobject(py)?.into_any().unbind())
 }
 
-/// Convert a `DiscreteInputs` value into a Python `list[bool]`.
+/// Convert a `DiscreteInputs` value into a Python `list[CoilState]`.
 pub fn discrete_inputs_to_py(py: Python<'_>, di: DiscreteInputs) -> PyResult<Py<PyAny>> {
     let qty = di.quantity(); // already u16
     let base = di.from_address();
-    let list: Vec<bool> = (0..qty)
-        .map(|i| di.value(base + i).unwrap_or(false))
+    let list: Vec<PyCoilState> = (0..qty)
+        .map(|i| match di.value(base + i) {
+            Ok(s) => PyCoilState::from_core(s),
+            Err(_) => PyCoilState::Off,
+        })
         .collect();
     Ok(list.into_pyobject(py)?.into_any().unbind())
 }

@@ -54,7 +54,7 @@ pub struct WriteSingleCoilRequest {
     pub address: u16,
     #[doc = "The coil state (CoilState.On = 1, CoilState.Off = 0)."]
     #[napi(ts_type = "CoilState")]
-    pub value: bool,
+    pub value: u8,
 }
 
 /// Handler request for writing multiple coils.
@@ -67,7 +67,7 @@ pub struct WriteMultipleCoilsRequest {
     pub address: u16,
     #[doc = "The array of coil states to write."]
     #[napi(ts_type = "CoilState[]")]
-    pub values: Vec<bool>,
+    pub values: Vec<u8>,
 }
 
 /// Handler request for reading discrete inputs.
@@ -537,13 +537,13 @@ impl JsHandlerAdapter {
         &self,
         unit: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> ModbusResponse {
         if let Some(handler) = &self.on_write_single_coil {
             let js_req = WriteSingleCoilRequest {
                 unit_id: u8::from(unit),
                 address,
-                value,
+                value: value.to_bit(),
             };
             match handler.call_async(js_req).await {
                 Ok(promise) => match promise.await {
@@ -581,11 +581,12 @@ impl JsHandlerAdapter {
             for i in 0..count {
                 let byte_idx = (i / 8) as usize;
                 let bit_idx = i % 8;
-                if byte_idx < data.len() {
-                    values.push((data[byte_idx] & (1 << bit_idx)) != 0);
+                let bit = if byte_idx < data.len() && (data[byte_idx] & (1 << bit_idx)) != 0 {
+                    1u8
                 } else {
-                    values.push(false);
-                }
+                    0u8
+                };
+                values.push(bit);
             }
             let js_req = WriteMultipleCoilsRequest {
                 unit_id: u8::from(unit),
@@ -1345,7 +1346,7 @@ impl AsyncAppHandler for JsHandlerAdapter {
             #[cfg(feature = "coils")]
             ModbusRequest::WriteSingleCoil {
                 address,
-                value,
+                state: value,
                 unit,
                 ..
             } => self.handle_write_single_coil(unit, address, value).await,

@@ -314,7 +314,7 @@ pub struct TcpModbusClient {
 impl TcpModbusClient {
     // ── Coils ────────────────────────────────────────────────────────────
 
-    /// Read coils (FC 01). Returns ``list[bool]``.
+    /// Read coils (FC 01). Returns ``list[CoilState]``.
     #[pyo3(signature = (address, quantity))]
     fn read_coils(&self, py: Python<'_>, address: u16, quantity: u16) -> PyResult<Py<PyAny>> {
         let rt = get_runtime();
@@ -328,18 +328,25 @@ impl TcpModbusClient {
 
     /// Write a single coil (FC 05). Returns ``(address, value)`` echo.
     #[pyo3(signature = (address, value))]
-    fn write_coil(&self, py: Python<'_>, address: u16, value: bool) -> PyResult<(u16, bool)> {
+    fn write_coil(&self, py: Python<'_>, address: u16, value: crate::python::PyCoilState) -> PyResult<(u16, crate::python::PyCoilState)> {
         let rt = get_runtime();
         let uid = self.unit_id;
+        let state = value.into_core();
         py.detach(|| {
-            rt.block_on(self.inner.write_single_coil(uid, address, value))
+            rt.block_on(self.inner.write_single_coil(uid, address, state))
+                .map(|(addr, st)| (addr, crate::python::PyCoilState::from_core(st)))
                 .map_err(async_error_to_py)
         })
     }
 
     /// Write multiple coils (FC 0F). Returns ``(start_address, quantity)`` echo.
     #[pyo3(signature = (address, values))]
-    fn write_coils(&self, py: Python<'_>, address: u16, values: Vec<bool>) -> PyResult<(u16, u16)> {
+    fn write_coils(
+        &self,
+        py: Python<'_>,
+        address: u16,
+        values: Vec<crate::python::PyCoilState>,
+    ) -> PyResult<(u16, u16)> {
         let rt = get_runtime();
         let uid = self.unit_id;
         let qty = values.len() as u16;
@@ -347,7 +354,7 @@ impl TcpModbusClient {
             Coils::new(address, qty).map_err(crate::python::errors::mbus_error_to_py)?;
         for (i, &v) in values.iter().enumerate() {
             coils
-                .set_value(address + i as u16, v)
+                .set_value(address + i as u16, v.into_core())
                 .map_err(crate::python::errors::mbus_error_to_py)?;
         }
         py.detach(|| {
@@ -672,14 +679,16 @@ impl AsyncTcpModbusClient {
         &self,
         py: Python<'py>,
         address: u16,
-        value: bool,
+        value: crate::python::PyCoilState,
     ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
         let uid = self.unit_id;
+        let state = value.into_core();
         future_into_py(py, async move {
             client
-                .write_single_coil(uid, address, value)
+                .write_single_coil(uid, address, state)
                 .await
+                .map(|(addr, st)| (addr, crate::python::PyCoilState::from_core(st)))
                 .map_err(async_error_to_py)
         })
     }
@@ -689,7 +698,7 @@ impl AsyncTcpModbusClient {
         &self,
         py: Python<'py>,
         address: u16,
-        values: Vec<bool>,
+        values: Vec<crate::python::PyCoilState>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
         let uid = self.unit_id;
@@ -698,7 +707,7 @@ impl AsyncTcpModbusClient {
             Coils::new(address, qty).map_err(crate::python::errors::mbus_error_to_py)?;
         for (i, &v) in values.iter().enumerate() {
             coils
-                .set_value(address + i as u16, v)
+                .set_value(address + i as u16, v.into_core())
                 .map_err(crate::python::errors::mbus_error_to_py)?;
         }
         future_into_py(py, async move {

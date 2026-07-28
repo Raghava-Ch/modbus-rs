@@ -38,8 +38,7 @@ use mbus_core::{
     transport::UnitIdOrSlaveAddr,
 };
 
-// #[cfg(feature = "coils")]
-// use crate::Coils;
+use mbus_core::models::coil::CoilState;
 // #[cfg(feature = "diagnostics")]
 // use crate::DeviceIdentificationResponse;
 // #[cfg(feature = "discrete-inputs")]
@@ -142,7 +141,7 @@ pub trait ServerCoilHandler {
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) -> Result<(), MbusError> {
         Err(MbusError::InvalidFunctionCode)
     }
@@ -578,7 +577,7 @@ where
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) -> Result<(), MbusError> {
         self.inner.with_app_mut(|app| {
             app.write_single_coil_request(txn_id, unit_id_or_slave_addr, address, value)

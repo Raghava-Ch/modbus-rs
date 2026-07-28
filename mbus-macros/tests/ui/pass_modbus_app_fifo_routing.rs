@@ -17,9 +17,18 @@ pub mod transport {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct UnitIdOrSlaveAddr(pub u8);
 }
-
+pub mod models {
+    pub mod coil {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum CoilState {
+            On,
+            Off,
+        }
+    }
+}
 pub mod app {
     use crate::errors::MbusError;
+    use crate::models;
     use crate::transport::UnitIdOrSlaveAddr;
 
     pub trait ServerExceptionHandler {}
@@ -39,7 +48,7 @@ pub mod app {
             _txn_id: u16,
             _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
             _address: u16,
-            _value: bool,
+            _state: models::coil::CoilState,
         ) -> Result<(), MbusError> {
             Err(MbusError::InvalidAddress)
         }

@@ -21,7 +21,7 @@ use mbus_core::transport::UnitIdOrSlaveAddr;
 #[cfg(feature = "diagnostics")]
 use mbus_core::function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType};
 #[cfg(feature = "coils")]
-use mbus_core::models::coil::Coils;
+use mbus_core::models::coil::{CoilState, Coils};
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 #[cfg(feature = "file-record")]
@@ -60,7 +60,7 @@ pub enum ClientRequest {
         /// Address to write.
         address: u16,
         /// Value to write.
-        value: bool,
+        value: CoilState,
     },
     /// Write multiple coils (FC 15 / 0F).
     #[cfg(feature = "coils")]

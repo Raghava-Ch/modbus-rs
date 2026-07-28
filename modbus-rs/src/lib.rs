@@ -62,7 +62,7 @@ pub use mbus_client::app::*;
 #[cfg(feature = "client")]
 pub use mbus_client::services::{ClientServices, SerialClientServices};
 #[cfg(feature = "coils")]
-pub use mbus_core::models::coil::{Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};
+pub use mbus_core::models::coil::{CoilState, Coils, MAX_COIL_BYTES, MAX_COILS_PER_PDU};
 #[cfg(feature = "diagnostics")]
 pub use mbus_core::models::diagnostic::{
     BasicObjectId, ConformityLevel, DeviceIdObject, DeviceIdObjectIterator,
@@ -70,7 +70,7 @@ pub use mbus_core::models::diagnostic::{
 };
 #[cfg(feature = "discrete-inputs")]
 pub use mbus_core::models::discrete_input::{
-    DiscreteInputs, MAX_DISCRETE_INPUT_BYTES, MAX_DISCRETE_INPUTS_PER_PDU,
+    DiscreteInputState, DiscreteInputs, MAX_DISCRETE_INPUT_BYTES, MAX_DISCRETE_INPUTS_PER_PDU,
 };
 #[cfg(feature = "fifo")]
 pub use mbus_core::models::fifo_queue::{FifoQueue, MAX_FIFO_QUEUE_COUNT_PER_PDU};

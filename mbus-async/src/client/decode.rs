@@ -24,6 +24,13 @@ use mbus_core::{
     function_codes::public::FunctionCode,
     transport::{TransportType, UnitIdOrSlaveAddr},
 };
+#[cfg(any(
+    feature = "holding-registers",
+    feature = "input-registers",
+    feature = "fifo",
+    feature = "diagnostics"
+))]
+use mbus_core::data_unit::common::be_bytes_to_u16_iter;
 
 use crate::client::response::ClientResponse;
 
@@ -35,10 +42,6 @@ use mbus_core::models::coil::Coils;
 use mbus_core::models::discrete_input::DiscreteInputs;
 #[cfg(feature = "fifo")]
 use mbus_core::models::fifo_queue::FifoQueue;
-#[cfg(feature = "file-record")]
-use mbus_core::models::file_record::{
-    FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SubRequestParams,
-};
 #[cfg(feature = "holding-registers")]
 use mbus_core::models::register::HoldingRegisters;
 #[cfg(feature = "input-registers")]
@@ -151,16 +154,16 @@ fn decode_read_coils(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     // We reconstruct Coils from packed bytes; use address=0 as placeholder — the caller
     // overwrites via its own context if it needs the real from_address.
     let bit_count = (bcp.byte_count as u16) * 8;
-    let coils = Coils::new(0, bit_count)?.with_values(bcp.payload, bit_count)?;
+    let coils = Coils::new(0, bit_count)?.with_raw_values(bcp.payload, bit_count)?;
     Ok(ClientResponse::Coils(coils))
 }
 
 #[cfg(feature = "coils")]
 fn decode_write_single_coil(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fields = pdu.write_single_u16_fields()?;
-    let value = fields.value == 0xFF00;
+    let state = mbus_core::models::coil::CoilState::from_u16(fields.value);
     let mut coils = Coils::new(fields.address, 1)?;
-    coils.set_value(fields.address, value)?;
+    coils.set_value(fields.address, state)?;
     Ok(ClientResponse::Coils(coils))
 }
 
@@ -191,11 +194,8 @@ fn decode_read_holding_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError>
     }
     let quantity = bcp.byte_count as u16 / 2;
     let mut registers = HoldingRegisters::new(0, quantity)?;
-    for (i, chunk) in bcp.payload.chunks(2).enumerate() {
-        if chunk.len() == 2 {
-            let val = u16::from_be_bytes([chunk[0], chunk[1]]);
-            registers.set_value(i as u16, val)?;
-        }
+    for (i, val) in be_bytes_to_u16_iter(bcp.payload).enumerate() {
+        registers.set_value(i as u16, val)?;
     }
     Ok(ClientResponse::HoldingRegisters(registers))
 }
@@ -208,9 +208,9 @@ fn decode_read_input_registers(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     }
     let quantity = bcp.byte_count as u16 / 2;
     let mut values = [0u16; MAX_REGISTERS_PER_PDU];
-    for (i, chunk) in bcp.payload.chunks(2).enumerate() {
-        if chunk.len() == 2 && i < values.len() {
-            values[i] = u16::from_be_bytes([chunk[0], chunk[1]]);
+    for (i, val) in be_bytes_to_u16_iter(bcp.payload).enumerate() {
+        if i < values.len() {
+            values[i] = val;
         }
     }
     let registers =
@@ -244,22 +244,15 @@ fn decode_mask_write_register(_pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 #[cfg(feature = "fifo")]
 fn decode_read_fifo_queue(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let fp = pdu.fifo_payload()?;
+    fp.validate()?;
     let fifo_count = fp.fifo_count as usize;
-    let fifo_byte_count = fp.fifo_byte_count as usize;
-
-    if fp.values.len() + 2 != fifo_byte_count {
-        return Err(MbusError::InvalidAduLength);
-    }
-    if fifo_byte_count != 2 + fifo_count * 2 {
-        return Err(MbusError::ParseError);
-    }
 
     let mut values = [0u16; mbus_core::models::fifo_queue::MAX_FIFO_QUEUE_COUNT_PER_PDU];
-    for (i, chunk) in fp.values.chunks_exact(2).enumerate() {
+    for (i, val) in be_bytes_to_u16_iter(fp.values).enumerate() {
         if i >= values.len() {
             return Err(MbusError::BufferLenMissmatch);
         }
-        values[i] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        values[i] = val;
     }
 
     let fifo_queue = FifoQueue::new(0).with_values(values, fifo_count);
@@ -270,53 +263,7 @@ fn decode_read_fifo_queue(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
 
 #[cfg(feature = "file-record")]
 fn decode_read_file_record(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
-    let bcp = pdu.byte_count_payload()?;
-    let mut sub_requests: Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU> = Vec::new();
-    let mut i = 0;
-
-    while i < bcp.payload.len() {
-        if i + 2 > bcp.payload.len() {
-            return Err(MbusError::ParseError);
-        }
-        let file_resp_len = bcp.payload[i] as usize;
-        let ref_type = bcp.payload[i + 1];
-
-        if ref_type != FILE_RECORD_REF_TYPE {
-            return Err(MbusError::ParseError);
-        }
-        if file_resp_len < 1 {
-            return Err(MbusError::ParseError);
-        }
-        let data_len = file_resp_len - 1;
-        if i + 1 + file_resp_len > bcp.payload.len() {
-            return Err(MbusError::ParseError);
-        }
-
-        let raw_data = &bcp.payload[i + 2..i + 2 + data_len];
-        if !raw_data.len().is_multiple_of(2) {
-            return Err(MbusError::ParseError);
-        }
-
-        let mut record_data: Vec<u16, { mbus_core::data_unit::common::MAX_PDU_DATA_LEN }> =
-            Vec::new();
-        for chunk in raw_data.chunks(2) {
-            record_data
-                .push(u16::from_be_bytes([chunk[0], chunk[1]]))
-                .map_err(|_| MbusError::BufferTooSmall)?;
-        }
-
-        sub_requests
-            .push(SubRequestParams {
-                file_number: 0,
-                record_number: 0,
-                record_length: record_data.len() as u16,
-                record_data: Some(record_data),
-            })
-            .map_err(|_| MbusError::BufferTooSmall)?;
-
-        i += 1 + file_resp_len;
-    }
-
+    let sub_requests = pdu.file_record_read_response_sub_requests()?;
     Ok(ClientResponse::FileRecordRead(sub_requests))
 }
 
@@ -370,11 +317,9 @@ fn decode_diagnostics(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let sfp = pdu.sub_function_payload()?;
     let sub_function = DiagnosticSubFunction::try_from(sfp.sub_function)?;
     let mut data: Vec<u16, MAX_PDU_DATA_LEN> = Vec::new();
-    for chunk in sfp.payload.chunks(2) {
-        if chunk.len() == 2 {
-            data.push(u16::from_be_bytes([chunk[0], chunk[1]]))
-                .map_err(|_| MbusError::BufferLenMissmatch)?;
-        }
+    for val in be_bytes_to_u16_iter(sfp.payload) {
+        data.push(val)
+            .map_err(|_| MbusError::BufferLenMissmatch)?;
     }
     Ok(ClientResponse::DiagnosticsData { sub_function, data })
 }
@@ -390,24 +335,17 @@ fn decode_get_comm_event_counter(pdu: &Pdu) -> Result<ClientResponse, MbusError>
 
 #[cfg(feature = "diagnostics")]
 fn decode_get_comm_event_log(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
-    let bcp = pdu.byte_count_payload()?;
-    if bcp.byte_count < 6 {
-        return Err(MbusError::InvalidByteCount);
-    }
-    let p = bcp.payload;
-    let status = u16::from_be_bytes([p[0], p[1]]);
-    let event_count = u16::from_be_bytes([p[2], p[3]]);
-    let message_count = u16::from_be_bytes([p[4], p[5]]);
+    let cel = pdu.comm_event_log_payload()?;
     let mut events: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
-    if p.len() > 6 {
+    if !cel.events.is_empty() {
         events
-            .extend_from_slice(&p[6..])
+            .extend_from_slice(cel.events)
             .map_err(|_| MbusError::BufferTooSmall)?;
     }
     Ok(ClientResponse::CommEventLog {
-        status,
-        event_count,
-        message_count,
+        status: cel.status,
+        event_count: cel.event_count,
+        message_count: cel.message_count,
         events,
     })
 }

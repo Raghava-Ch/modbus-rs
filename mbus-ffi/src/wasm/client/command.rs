@@ -40,7 +40,7 @@ pub(crate) enum WasmCommand {
     WriteSingleCoil {
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
         resp: OneshotSender<Result<WasmResponse, String>>,
     },
     #[allow(dead_code)]
@@ -54,7 +54,7 @@ pub(crate) enum WasmCommand {
     WriteMultipleCoils {
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        values: Vec<bool>,
+        values: Vec<mbus_core::models::coil::CoilState>,
         resp: OneshotSender<Result<WasmResponse, String>>,
     },
     #[allow(dead_code)]

@@ -24,8 +24,8 @@ mod tests {
         service::ServiceDecompiler,
     };
     use mbus_core::{
-        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
-        transport::TransportType,
+        UnitIdOrSlaveAddr, data_unit::common::Pdu, errors::MbusError,
+        function_codes::public::FunctionCode, transport::TransportType,
     };
 
     // --- Read File Record (FC 20) Tests ---
@@ -215,7 +215,7 @@ mod tests {
         sub_req.add_read_sub_request(4, 1, 2).unwrap();
 
         let txn_id = 0x1234;
-        let unit_id = 0x01;
+        let unit_id = UnitIdOrSlaveAddr::try_from(0x01).unwrap();
         let adu =
             ServiceBuilder::read_file_record(txn_id, unit_id, &sub_req, TransportType::StdTcp)
                 .unwrap();
@@ -241,7 +241,7 @@ mod tests {
         sub_req.add_write_sub_request(4, 1, 1, data).unwrap();
 
         let txn_id = 0x5678;
-        let unit_id = 0x02;
+        let unit_id = UnitIdOrSlaveAddr::try_from(0x02).unwrap();
         let adu =
             ServiceBuilder::write_file_record(txn_id, unit_id, &sub_req, TransportType::StdTcp)
                 .unwrap();

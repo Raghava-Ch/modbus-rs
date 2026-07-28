@@ -51,7 +51,7 @@ modbus-rs = { version = "0.15.0", default-features = false, features = [
 ```rust
 use modbus_rs::{
     ClientServices, MbusError, ModbusConfig, ModbusTcpConfig,
-    CoilResponse, Coils, RequestErrorNotifier, TimeKeeper,
+    CoilResponse, CoilState, Coils, RequestErrorNotifier, TimeKeeper,
     UnitIdOrSlaveAddr, StdTcpTransport,
 };
 
@@ -70,10 +70,10 @@ impl RequestErrorNotifier for App {
 // All methods use &mut self to allow state updates in your application
 impl CoilResponse for App {
     fn read_coils_response(&mut self, txn_id: u16, uid: UnitIdOrSlaveAddr, coils: &Coils) {
-        println!("Received {} coils: {:?}", coils.quantity(), coils.values());
+        println!("Received {} coils: {:?}", coils.quantity(), coils.raw_values());
     }
-    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
+    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 

@@ -30,6 +30,7 @@ use mbus_client::{
 use mbus_core::{
   data_unit::common::MAX_ADU_FRAME_LEN,
   errors::MbusError,
+  models::coil::CoilState,
   transport::{ModbusConfig, ModbusTcpConfig, TimeKeeper, Transport, TransportType, UnitIdOrSlaveAddr},
 };
 use heapless::Vec;
@@ -40,8 +41,8 @@ impl RequestErrorNotifier for App {
 }
 impl CoilResponse for App {
   fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
+  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
   fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 impl TimeKeeper for App {
@@ -285,8 +286,8 @@ impl RequestErrorNotifier for App {
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
   fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+  fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: mbus_core::models::coil::CoilState) {}
+  fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: mbus_core::models::coil::CoilState) {}
   fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 
@@ -314,7 +315,7 @@ fn main() -> Result<(), MbusError> {
 #[cfg(feature = "coils")]
     client.with_coils(|coils| {
       coils.read_single_coil(2, UnitIdOrSlaveAddr::new(1)?, 0)?;
-      coils.write_single_coil(3, UnitIdOrSlaveAddr::new(1)?, 0, true)?;
+      coils.write_single_coil(3, UnitIdOrSlaveAddr::new(1)?, 0, mbus_core::models::coil::CoilState::On)?;
       Ok::<(), MbusError>(())
     })?;
 

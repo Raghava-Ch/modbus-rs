@@ -44,7 +44,7 @@ where
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::read_coils_request
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             quantity,
             TRANSPORT::TRANSPORT_TYPE,
@@ -101,7 +101,7 @@ where
         let transport_type = TRANSPORT::TRANSPORT_TYPE;
         let frame = coil::service::ServiceBuilder::read_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             1,
             transport_type,
@@ -144,16 +144,16 @@ where
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: coil::CoilState,
     ) -> Result<(), MbusError> {
         let transport_type = TRANSPORT::TRANSPORT_TYPE; // Access self.transport directly
 
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_single_coil_request
         let frame = coil::service::ServiceBuilder::write_single_coil(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
-            value,
+            state,
             transport_type,
         )?;
 
@@ -171,8 +171,8 @@ where
                 unit_id_slave_addr,
                 &frame,
                 OperationMeta::Single(Single {
-                    address,             // Address of the coil
-                    value: value as u16, // Value written (0x0000 or 0xFF00)
+                    address,               // Address of the coil
+                    value: state.to_u16(), // Value written (0x0000 or 0xFF00)
                 }),
                 Self::handle_write_single_coil_response,
             )?;
@@ -210,7 +210,7 @@ where
         // Traces to: coil::service::ServiceBuilder -> ReqPduCompiler::write_multiple_coils_request
         let frame = coil::service::ServiceBuilder::write_multiple_coils(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             values.quantity(),
             values,

@@ -261,6 +261,8 @@ where
                 gateway_log_debug!("upstream recv error: {:?}", e);
                 break;
             }
+            #[allow(unreachable_patterns)]
+            _ => break,
         };
 
         #[cfg(feature = "traffic")]
@@ -349,7 +351,7 @@ where
         let downstream_type = DS::TRANSPORT_TYPE;
         let ds_adu = match compile_adu_frame(
             internal_txn,
-            downstream_unit.get(),
+            downstream_unit,
             msg.pdu.clone(),
             downstream_type,
         ) {
@@ -402,6 +404,8 @@ where
                     .await;
                     continue;
                 }
+                #[allow(unreachable_patterns)]
+                _ => continue,
             }
         };
 
@@ -421,18 +425,14 @@ where
         };
 
         // ── Re-encode for upstream ─────────────────────────────────────────
-        let us_adu = match compile_adu_frame(
-            upstream_txn,
-            unit.get(),
-            response_msg.pdu.clone(),
-            upstream_type,
-        ) {
-            Ok(adu) => adu,
-            Err(e) => {
-                gateway_log_debug!("failed to encode upstream response: {:?}", e);
-                continue;
-            }
-        };
+        let us_adu =
+            match compile_adu_frame(upstream_txn, unit, response_msg.pdu.clone(), upstream_type) {
+                Ok(adu) => adu,
+                Err(e) => {
+                    gateway_log_debug!("failed to encode upstream response: {:?}", e);
+                    continue;
+                }
+            };
 
         gateway_log_trace!(
             "sending upstream response: txn={}, {} bytes",
@@ -493,6 +493,6 @@ pub(crate) async fn send_async_exception<T: AsyncTransport>(
     };
     let pdu = Pdu::build_byte_payload(exception_fc, exception_code as u8)
         .map_err(|_| MbusError::Unexpected)?;
-    let adu = compile_adu_frame(txn_id, unit.get(), pdu, transport_type)?;
+    let adu = compile_adu_frame(txn_id, unit, pdu, transport_type)?;
     upstream.send(&adu).await
 }

@@ -511,7 +511,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_read_coils(
         Ok(c) => c,
         Err(e) => return status::from_async(e),
     };
-    let src = coils.values();
+    let src = coils.raw_values();
     let dst = unsafe { slice::from_raw_parts_mut(out_buf, byte_count as usize) };
     dst.copy_from_slice(&src[..byte_count as usize]);
     unsafe { *out_count = byte_count };
@@ -538,13 +538,14 @@ pub unsafe extern "C" fn mbus_go_serial_client_write_single_coil(
         None => return MbusGoStatus::MbusErrNullPointer,
     };
     let rt = runtime::get();
-    match rt.block_on(client.write_single_coil(unit_id, address, value != 0)) {
-        Ok((addr, on)) => {
+    let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+    match rt.block_on(client.write_single_coil(unit_id, address, state)) {
+        Ok((addr, st)) => {
             if !out_address.is_null() {
                 unsafe { *out_address = addr };
             }
             if !out_value.is_null() {
-                unsafe { *out_value = on as u8 };
+                unsafe { *out_value = st.to_bit() };
             }
             MbusGoStatus::MbusOk
         }
@@ -581,7 +582,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_write_multiple_coils(
         Ok(c) => c,
         Err(e) => return status::from_mbus(e),
     };
-    let coils = match coils.with_values(packed, coil_count) {
+    let coils = match coils.with_raw_values(packed, coil_count) {
         Ok(c) => c,
         Err(e) => return status::from_mbus(e),
     };
@@ -634,7 +635,7 @@ pub unsafe extern "C" fn mbus_go_serial_client_read_discrete_inputs(
         Ok(d) => d,
         Err(e) => return status::from_async(e),
     };
-    let src = di.values();
+    let src = di.raw_values();
     let n = src.len().min(byte_count as usize);
     let dst = unsafe { slice::from_raw_parts_mut(out_buf, n) };
     dst.copy_from_slice(&src[..n]);

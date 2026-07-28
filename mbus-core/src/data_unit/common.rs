@@ -158,6 +158,104 @@ pub const PDU_FIFO_COUNT_OFFSET_2B: usize = 3;
 /// Offset of the FIFO values payload in FC18 PDU data.
 pub const PDU_FIFO_VALUES_OFFSET: usize = 4;
 
+/// Offset of status hi byte in FC0C (Get Comm Event Log) inner payload.
+pub const PDU_FC0C_STATUS_OFFSET_1B: usize = 0;
+/// Offset of status lo byte in FC0C inner payload.
+pub const PDU_FC0C_STATUS_OFFSET_2B: usize = 1;
+/// Offset of event count hi byte in FC0C inner payload.
+pub const PDU_FC0C_EVENT_COUNT_OFFSET_1B: usize = 2;
+/// Offset of event count lo byte in FC0C inner payload.
+pub const PDU_FC0C_EVENT_COUNT_OFFSET_2B: usize = 3;
+/// Offset of message count hi byte in FC0C inner payload.
+pub const PDU_FC0C_MESSAGE_COUNT_OFFSET_1B: usize = 4;
+/// Offset of message count lo byte in FC0C inner payload.
+pub const PDU_FC0C_MESSAGE_COUNT_OFFSET_2B: usize = 5;
+/// Byte offset where event bytes begin in FC0C inner payload.
+pub const PDU_FC0C_EVENTS_OFFSET: usize = 6;
+/// Minimum inner payload length for FC0C (status + event_count + message_count).
+pub const PDU_FC0C_MIN_PAYLOAD_LEN: usize = 6;
+
+/// Byte offset of the record length high byte in a File Record write sub-request header.
+pub const PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_1B: usize = 5;
+/// Byte Offset of the record length low byte in a File Record write sub-request header.
+pub const PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_2B: usize = 6;
+
+/// Modbus coil ON value representation in PDU data (0xFF00).
+pub const COIL_VALUE_ON: u16 = 0xFF00;
+/// Modbus coil OFF value representation in PDU data (0x0000).
+pub const COIL_VALUE_OFF: u16 = 0x0000;
+
+/// Maximum number of coils that can be read in a single Read Coils / Read Discrete Inputs PDU (2000).
+pub const MAX_READ_COILS_QUANTITY: u16 = 2000;
+/// Maximum number of coils that can be written in a single Write Multiple Coils PDU (1968).
+pub const MAX_WRITE_COILS_QUANTITY: u16 = 1968;
+/// Maximum number of registers that can be read in a single Read Holding / Input Registers PDU (125).
+pub const MAX_READ_REGISTERS_QUANTITY: u16 = 125;
+/// Maximum number of registers that can be written in a single Write Multiple Registers PDU (123).
+pub const MAX_WRITE_REGISTERS_QUANTITY: u16 = 123;
+
+/// Converts a boolean value to its Modbus coil 16-bit representation (0xFF00 for true, 0x0000 for false).
+#[inline]
+pub fn coil_bool_to_u16(value: bool) -> u16 {
+    if value { COIL_VALUE_ON } else { COIL_VALUE_OFF }
+}
+
+/// Checks if a 16-bit coil value representation is ON (0xFF00).
+#[inline]
+pub fn is_coil_on(value: u16) -> bool {
+    value == COIL_VALUE_ON
+}
+
+/// Converts an iterator or slice of `u16` values into a byte iterator yielding big-endian byte pairs.
+#[inline]
+pub fn u16_slice_to_be_bytes_iter(values: &[u16]) -> impl Iterator<Item = u8> + '_ {
+    values.iter().flat_map(|v| v.to_be_bytes())
+}
+
+/// Validates that a quantity field complies with the Modbus specification limits for the given function code.
+pub fn validate_quantity(fc: FunctionCode, quantity: u16) -> Result<(), MbusError> {
+    if quantity == 0 {
+        return Err(MbusError::InvalidQuantity);
+    }
+    let valid = match fc {
+        #[cfg(all(feature = "coils", feature = "discrete-inputs"))]
+        FunctionCode::ReadCoils | FunctionCode::ReadDiscreteInputs => {
+            quantity <= MAX_READ_COILS_QUANTITY
+        }
+        #[cfg(all(feature = "coils", not(feature = "discrete-inputs")))]
+        FunctionCode::ReadCoils => quantity <= MAX_READ_COILS_QUANTITY,
+        #[cfg(all(not(feature = "coils"), feature = "discrete-inputs"))]
+        FunctionCode::ReadDiscreteInputs => quantity <= MAX_READ_COILS_QUANTITY,
+
+        #[cfg(feature = "coils")]
+        FunctionCode::WriteMultipleCoils => quantity <= MAX_WRITE_COILS_QUANTITY,
+
+        #[cfg(all(feature = "holding-registers", feature = "input-registers"))]
+        FunctionCode::ReadHoldingRegisters
+        | FunctionCode::ReadInputRegisters
+        | FunctionCode::ReadWriteMultipleRegisters => quantity <= MAX_READ_REGISTERS_QUANTITY,
+
+        #[cfg(all(feature = "holding-registers", not(feature = "input-registers")))]
+        FunctionCode::ReadHoldingRegisters | FunctionCode::ReadWriteMultipleRegisters => {
+            quantity <= MAX_READ_REGISTERS_QUANTITY
+        }
+
+        #[cfg(all(not(feature = "holding-registers"), feature = "input-registers"))]
+        FunctionCode::ReadInputRegisters => quantity <= MAX_READ_REGISTERS_QUANTITY,
+
+        #[cfg(feature = "holding-registers")]
+        FunctionCode::WriteMultipleRegisters => quantity <= MAX_WRITE_REGISTERS_QUANTITY,
+
+        #[allow(unreachable_patterns)]
+        _ => true,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(MbusError::InvalidQuantity)
+    }
+}
+
 /// Checks if the given function code byte indicates an exception (error bit is set).
 ///
 /// # Arguments
@@ -180,6 +278,20 @@ pub fn is_exception_code(function_code_byte: u8) -> bool {
 #[inline]
 pub fn clear_exception_bit(function_code_byte: u8) -> u8 {
     function_code_byte & FUNCTION_CODE_MASK
+}
+
+/// Converts a byte slice of big-endian encoded 16-bit words into an iterator of `u16` values.
+///
+/// Yields one `u16` per complete 2-byte chunk. Any trailing odd byte is ignored.
+#[inline]
+pub fn be_bytes_to_u16_iter(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
+    bytes.chunks(2).filter_map(|chunk| {
+        if chunk.len() == 2 {
+            Some(u16::from_be_bytes([chunk[0], chunk[1]]))
+        } else {
+            None
+        }
+    })
 }
 
 /// Modbus Protocol Data Unit (PDU).
@@ -210,10 +322,17 @@ pub struct ReadWindow {
 /// Parsed write-single request fields for FC05/FC06-style PDUs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteSingleU16Fields {
-    /// Target address from request bytes 0-1.
+    /// Starting register/coil address.
     pub address: u16,
-    /// Raw 16-bit value from request bytes 2-3.
+    /// 16-bit value payload.
     pub value: u16,
+}
+
+impl WriteSingleU16Fields {
+    /// Checks if the written value represents coil ON (0xFF00).
+    pub fn is_on(&self) -> bool {
+        is_coil_on(self.value)
+    }
 }
 
 /// Parsed write-multiple request fields for FC0F/FC10-style PDUs.
@@ -304,6 +423,37 @@ pub struct FifoPayload<'a> {
     pub values: &'a [u8],
 }
 
+impl FifoPayload<'_> {
+    /// Validates cross-field byte count and register count consistency.
+    pub fn validate(&self) -> Result<(), MbusError> {
+        let fifo_count = self.fifo_count as usize;
+        let fifo_byte_count = self.fifo_byte_count as usize;
+        if self.values.len() + 2 != fifo_byte_count {
+            return Err(MbusError::InvalidAduLength);
+        }
+        if fifo_byte_count != 2 + fifo_count * 2 {
+            return Err(MbusError::ParseError);
+        }
+        Ok(())
+    }
+}
+
+/// Parsed inner payload for FC0C (Get Comm Event Log) responses.
+///
+/// The outer `[byte_count, ...]` wrapper is already peeled by `byte_count_payload()`.
+/// Layout: `[status_hi, status_lo, event_count_hi, event_count_lo, message_count_hi, message_count_lo, events...]`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommEventLogPayload<'a> {
+    /// Communication status word.
+    pub status: u16,
+    /// Number of Modbus messages processed.
+    pub event_count: u16,
+    /// Number of Modbus messages detected.
+    pub message_count: u16,
+    /// Raw event bytes (zero or more, one byte per event).
+    pub events: &'a [u8],
+}
+
 /// Parsed FC2B / MEI 0x0E (Read Device Identification) response header fields.
 ///
 /// All values are stored as raw bytes. Callers are responsible for converting to
@@ -359,6 +509,14 @@ impl MbapHeader {
             length,
             unit_id,
         }
+    }
+
+    /// Serializes the MBAP header into 7 big-endian bytes.
+    pub fn to_bytes(&self) -> [u8; 7] {
+        let tid = self.transaction_id.to_be_bytes();
+        let pid = self.protocol_id.to_be_bytes();
+        let len = self.length.to_be_bytes();
+        [tid[0], tid[1], pid[0], pid[1], len[0], len[1], self.unit_id]
     }
 }
 
@@ -832,6 +990,15 @@ impl Pdu {
         Ok(Pdu::new(fc, data, 4))
     }
 
+    /// Builds a PDU for FC05 Write Single Coil requests.
+    #[cfg(feature = "coils")]
+    pub fn build_write_single_coil(
+        address: u16,
+        state: crate::models::coil::CoilState,
+    ) -> Result<Self, MbusError> {
+        Self::build_write_single_u16(FunctionCode::WriteSingleCoil, address, state.to_u16())
+    }
+
     /// Builds a PDU with `[address, quantity, byte_count, values...]` layout.
     ///
     /// `values` must already be the packed byte representation (coil bits or register word bytes).
@@ -1160,6 +1327,33 @@ impl Pdu {
         })
     }
 
+    /// Parses FC0C (Get Comm Event Log) response inner payload.
+    ///
+    /// Internally calls `byte_count_payload()` then validates the inner structure.
+    /// Returns `InvalidByteCount` if the inner payload is shorter than 6 bytes.
+    pub fn comm_event_log_payload(&self) -> Result<CommEventLogPayload<'_>, MbusError> {
+        let bcp = self.byte_count_payload()?;
+        if (bcp.byte_count as usize) < PDU_FC0C_MIN_PAYLOAD_LEN {
+            return Err(MbusError::InvalidByteCount);
+        }
+        let p = bcp.payload;
+        Ok(CommEventLogPayload {
+            status: u16::from_be_bytes([
+                p[PDU_FC0C_STATUS_OFFSET_1B],
+                p[PDU_FC0C_STATUS_OFFSET_2B],
+            ]),
+            event_count: u16::from_be_bytes([
+                p[PDU_FC0C_EVENT_COUNT_OFFSET_1B],
+                p[PDU_FC0C_EVENT_COUNT_OFFSET_2B],
+            ]),
+            message_count: u16::from_be_bytes([
+                p[PDU_FC0C_MESSAGE_COUNT_OFFSET_1B],
+                p[PDU_FC0C_MESSAGE_COUNT_OFFSET_2B],
+            ]),
+            events: &p[PDU_FC0C_EVENTS_OFFSET..],
+        })
+    }
+
     /// Parses FC17 read/write multiple registers payload.
     pub fn read_write_multiple_fields(&self) -> Result<ReadWriteMultipleFields<'_>, MbusError> {
         if (self.data_len as usize) < PDU_FC17_WRITE_VALUES_OFFSET {
@@ -1453,6 +1647,119 @@ impl Pdu {
         Ok(out)
     }
 
+    /// Parses FC14 (Read File Record) responses into validated sub-request parameter structs.
+    #[cfg(feature = "file-record")]
+    pub fn file_record_read_response_sub_requests(
+        &self,
+    ) -> Result<
+        heapless::Vec<
+            crate::models::file_record::SubRequestParams,
+            { crate::models::file_record::MAX_SUB_REQUESTS_PER_PDU },
+        >,
+        MbusError,
+    > {
+        use crate::models::file_record::{
+            FILE_RECORD_REF_TYPE, MAX_SUB_REQUESTS_PER_PDU, SubRequestParams,
+        };
+
+        let bcp = self.byte_count_payload()?;
+        let mut sub_requests: heapless::Vec<SubRequestParams, MAX_SUB_REQUESTS_PER_PDU> =
+            heapless::Vec::new();
+        let mut i = 0;
+
+        while i < bcp.payload.len() {
+            if i + 2 > bcp.payload.len() {
+                return Err(MbusError::ParseError);
+            }
+            let file_resp_len = bcp.payload[i] as usize;
+            let ref_type = bcp.payload[i + 1];
+
+            if ref_type != FILE_RECORD_REF_TYPE {
+                return Err(MbusError::ParseError);
+            }
+            if file_resp_len < 1 {
+                return Err(MbusError::ParseError);
+            }
+            let data_len = file_resp_len - 1;
+            if i + 1 + file_resp_len > bcp.payload.len() {
+                return Err(MbusError::ParseError);
+            }
+
+            let raw_data = &bcp.payload[i + 2..i + 2 + data_len];
+            if !raw_data.len().is_multiple_of(2) {
+                return Err(MbusError::ParseError);
+            }
+
+            let mut record_data: heapless::Vec<u16, MAX_PDU_DATA_LEN> = heapless::Vec::new();
+            for val in be_bytes_to_u16_iter(raw_data) {
+                record_data
+                    .push(val)
+                    .map_err(|_| MbusError::BufferTooSmall)?;
+            }
+
+            sub_requests
+                .push(SubRequestParams {
+                    file_number: 0,
+                    record_number: 0,
+                    record_length: record_data.len() as u16,
+                    record_data: Some(record_data),
+                })
+                .map_err(|_| MbusError::BufferTooSmall)?;
+
+            i += 1 + file_resp_len;
+        }
+
+        Ok(sub_requests)
+    }
+
+    /// Builds a PDU for FC2B / MEI 0x0E Read Device Identification response.
+    #[cfg(feature = "diagnostics")]
+    pub fn build_read_device_id_response(
+        read_device_id_code: u8,
+        conformity_level: u8,
+        more_follows: bool,
+        next_object_id: u8,
+        objects: &[u8],
+    ) -> Result<Self, MbusError> {
+        let n_objects = count_mei_objects(objects)?;
+        let more_byte: u8 = if more_follows { 0xFF } else { 0x00 };
+        let header = [
+            read_device_id_code,
+            conformity_level,
+            more_byte,
+            next_object_id,
+            n_objects,
+        ];
+        let mut mei_data: Vec<u8, MAX_PDU_DATA_LEN> = Vec::new();
+        mei_data
+            .extend_from_slice(&header)
+            .map_err(|_| MbusError::BufferTooSmall)?;
+        mei_data
+            .extend_from_slice(objects)
+            .map_err(|_| MbusError::BufferTooSmall)?;
+        Self::build_mei_type(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            crate::function_codes::public::EncapsulatedInterfaceType::ReadDeviceIdentification
+                as u8,
+            &mei_data,
+        )
+    }
+
+    /// Builds a PDU for FC2B / MEI 0x0E (Read Device Identification) requests.
+    #[cfg(feature = "diagnostics")]
+    pub fn build_read_device_identification(
+        read_device_id_code: crate::models::diagnostic::ReadDeviceIdCode,
+        object_id: crate::models::diagnostic::ObjectId,
+    ) -> Result<Self, MbusError> {
+        let payload: [u8; 2] = [read_device_id_code as u8, u8::from(object_id)];
+        Self::build_mei_type(
+            FunctionCode::EncapsulatedInterfaceTransport,
+            crate::function_codes::public::EncapsulatedInterfaceType::ReadDeviceIdentification
+                as u8,
+            &payload,
+        )
+    }
+
     /// Parses FC2B / MEI 0x0E (Read Device Identification) response structural fields.
     ///
     /// Validates the 6-byte header minimum length, walks through all declared objects
@@ -1576,36 +1883,94 @@ impl Pdu {
 /// Helper to build the ADU from PDU based on transport type.
 pub fn compile_adu_frame(
     txn_id: u16,
-    unit_id: u8,
+    unit_id: UnitIdOrSlaveAddr,
     pdu: Pdu,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    compile_raw_pdu_adu_frame(txn_id, unit_id.get(), &pdu.to_bytes()?, transport_type)
+}
+
+/// Helper to build an ADU frame from raw PDU bytes `[fc, payload...]` based on transport type.
+pub fn compile_raw_pdu_adu_frame(
+    txn_id: u16,
+    unit_id: u8,
+    raw_pdu_bytes: &[u8],
+    transport_type: TransportType,
+) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    if raw_pdu_bytes.len() > MAX_PDU_DATA_LEN + 1 {
+        return Err(MbusError::InvalidPduLength);
+    }
     match transport_type {
         TransportType::StdTcp | TransportType::CustomTcp => {
-            let pdu_bytes_len = pdu.to_bytes()?.len() as u16;
+            let pdu_bytes_len = raw_pdu_bytes.len() as u16;
             let mbap_header = MbapHeader::new(txn_id, pdu_bytes_len + 1, unit_id);
-            ModbusMessage::new(AdditionalAddress::MbapHeader(mbap_header), pdu).to_bytes()
+            let mut adu_bytes: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+            adu_bytes
+                .extend_from_slice(&mbap_header.to_bytes())
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+            adu_bytes
+                .extend_from_slice(raw_pdu_bytes)
+                .map_err(|_| MbusError::BufferLenMissmatch)?;
+            Ok(adu_bytes)
         }
         TransportType::StdSerial(serial_mode) | TransportType::CustomSerial(serial_mode) => {
             let slave_address = SlaveAddress(unit_id);
             let adu_bytes = match serial_mode {
                 SerialMode::Rtu => {
-                    let mut adu_bytes =
-                        ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
-                            .to_bytes()?;
-                    // Calculate the 16-bit CRC for the Slave Address + PDU.
-                    let crc16 = checksum::crc16(adu_bytes.as_slice());
-                    // Modbus RTU transmits CRC in Little-Endian (LSB first) according to the spec.
-                    let crc_bytes = crc16.to_le_bytes();
-                    adu_bytes
-                        .extend_from_slice(&crc_bytes)
+                    let mut payload: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                    payload
+                        .push(slave_address.0)
                         .map_err(|_| MbusError::Unexpected)?;
-
-                    adu_bytes
+                    payload
+                        .extend_from_slice(raw_pdu_bytes)
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    let crc = checksum::crc16(&payload);
+                    payload
+                        .extend_from_slice(&crc.to_le_bytes())
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    payload
                 }
                 SerialMode::Ascii => {
-                    ModbusMessage::new(AdditionalAddress::SlaveAddress(slave_address), pdu)
-                        .to_ascii_bytes()?
+                    let mut payload: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                    payload
+                        .push(slave_address.0)
+                        .map_err(|_| MbusError::Unexpected)?;
+                    payload
+                        .extend_from_slice(raw_pdu_bytes)
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    let lrc = checksum::lrc(&payload);
+
+                    let mut ascii_bytes: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
+                    ascii_bytes
+                        .push(b':')
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+
+                    for &b in &payload {
+                        let (high, low) = ((b >> 4) & 0x0F, b & 0x0F);
+                        ascii_bytes
+                            .push(nibble_to_hex(high))
+                            .map_err(|_| MbusError::BufferLenMissmatch)?;
+                        ascii_bytes
+                            .push(nibble_to_hex(low))
+                            .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    }
+
+                    let (lrc_high, lrc_low) = ((lrc >> 4) & 0x0F, lrc & 0x0F);
+                    ascii_bytes
+                        .push(nibble_to_hex(lrc_high))
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    ascii_bytes
+                        .push(nibble_to_hex(lrc_low))
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+
+                    ascii_bytes
+                        .push(b'\r')
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+                    ascii_bytes
+                        .push(b'\n')
+                        .map_err(|_| MbusError::BufferLenMissmatch)?;
+
+                    ascii_bytes
                 }
             };
 
@@ -1810,12 +2175,31 @@ fn get_byte_count_from_frame(
 }
 
 /// Helper function to convert a 4-bit nibble to its ASCII hex representation.
-fn nibble_to_hex(nibble: u8) -> u8 {
+pub fn nibble_to_hex(nibble: u8) -> u8 {
     match nibble {
         0..=9 => b'0' + nibble,
         10..=15 => b'A' + (nibble - 10),
         _ => b'?', // Should not happen for a valid nibble
     }
+}
+
+/// Counts the `[id(1), len(1), value(N)...]` object triples in a FC2B/MEI 0x0E objects payload.
+#[cfg(feature = "diagnostics")]
+pub fn count_mei_objects(payload: &[u8]) -> Result<u8, MbusError> {
+    let mut offset = 0usize;
+    let mut count: u8 = 0;
+    while offset < payload.len() {
+        if offset + 2 > payload.len() {
+            return Err(MbusError::InvalidPduLength);
+        }
+        let val_len = payload[offset + 1] as usize;
+        offset += 2 + val_len;
+        if offset > payload.len() {
+            return Err(MbusError::InvalidPduLength);
+        }
+        count = count.checked_add(1).ok_or(MbusError::InvalidPduLength)?;
+    }
+    Ok(count)
 }
 
 /// Helper function to convert a hex character to its 4-bit nibble value.

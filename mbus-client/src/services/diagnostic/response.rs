@@ -8,7 +8,7 @@ use crate::{
     services::{ClientCommon, ClientServices, ExpectedResponse},
 };
 use mbus_core::{
-    data_unit::common::{MAX_PDU_DATA_LEN, ModbusMessage, Pdu},
+    data_unit::common::{MAX_PDU_DATA_LEN, ModbusMessage, Pdu, be_bytes_to_u16_iter},
     errors::MbusError,
     function_codes::public::{DiagnosticSubFunction, EncapsulatedInterfaceType, FunctionCode},
     transport::Transport,
@@ -26,24 +26,15 @@ impl ResponseParser {
         if pdu.function_code() != FunctionCode::GetCommEventLog {
             return Err(MbusError::InvalidFunctionCode);
         }
-        let bcp = pdu.byte_count_payload()?;
-        // Byte count includes: Status(2) + EventCount(2) + MsgCount(2) + Events(N); minimum 6
-        if bcp.byte_count < 6 {
-            return Err(MbusError::InvalidByteCount);
-        }
-        let p = bcp.payload;
-        let status = u16::from_be_bytes([p[0], p[1]]);
-        let event_count = u16::from_be_bytes([p[2], p[3]]);
-        let message_count = u16::from_be_bytes([p[4], p[5]]);
-
+        let cel = pdu.comm_event_log_payload()?;
         let mut events = Vec::new();
-        if p.len() > 6 {
+        if !cel.events.is_empty() {
             events
-                .extend_from_slice(&p[6..])
+                .extend_from_slice(cel.events)
                 .map_err(|_| MbusError::BufferTooSmall)?;
         }
 
-        Ok((status, event_count, message_count, events))
+        Ok((cel.status, cel.event_count, cel.message_count, events))
     }
 
     /// Parses a Report Server ID (FC 0x11) response PDU.
@@ -136,8 +127,7 @@ impl ResponseParser {
         }
         let sfp = pdu.sub_function_payload()?;
         let mut values = Vec::new();
-        for chunk in sfp.payload.chunks(2) {
-            let val = u16::from_be_bytes([chunk[0], chunk[1]]);
+        for val in be_bytes_to_u16_iter(sfp.payload) {
             values
                 .push(val)
                 .map_err(|_| MbusError::BufferLenMissmatch)?;

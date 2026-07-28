@@ -1,8 +1,9 @@
 use modbus_rs::{
     CoilResponse, Coils, DeviceIdentificationResponse, DiagnosticSubFunction, DiagnosticsResponse,
-    DiscreteInputResponse, DiscreteInputs, EncapsulatedInterfaceType, FifoQueue, FifoQueueResponse,
-    FileRecordResponse, HoldingRegisters, InputRegisters, MAX_DISCRETE_INPUT_BYTES, MbusError,
-    RegisterResponse, RequestErrorNotifier, SubRequestParams, TimeKeeper, UnitIdOrSlaveAddr,
+    DiscreteInputResponse, DiscreteInputState, DiscreteInputs, EncapsulatedInterfaceType,
+    FifoQueue, FifoQueueResponse, FileRecordResponse, HoldingRegisters, InputRegisters,
+    MAX_DISCRETE_INPUT_BYTES, MbusError, RegisterResponse, RequestErrorNotifier, SubRequestParams,
+    TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,11 +14,14 @@ use std::vec::Vec; // Import standard Vec for the type alias
 type ReceivedEncapsulatedInterfaceTransportResponse =
     (u16, UnitIdOrSlaveAddr, EncapsulatedInterfaceType, Vec<u8>);
 
+use mbus_core::models::coil::CoilState;
+
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct MockApp {
     pub received_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>, // Corrected duplicate
-    pub received_write_single_coil_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, bool)>>,
+    pub received_write_single_coil_responses:
+        RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, CoilState)>>,
     pub received_write_multiple_coils_responses: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     pub received_discrete_input_responses:
         RefCell<Vec<(u16, UnitIdOrSlaveAddr, DiscreteInputs, u16)>>,
@@ -39,7 +43,7 @@ impl CoilResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) {
         let mut coils = Coils::new(address, 1).unwrap();
         coils.set_value(address, value).unwrap();
@@ -53,7 +57,7 @@ impl CoilResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: CoilState,
     ) {
         self.received_write_single_coil_responses
             .borrow_mut()
@@ -93,12 +97,16 @@ impl DiscreteInputResponse for MockApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: DiscreteInputState,
     ) {
         // Create a DiscreteInputs container for a single bit.
         // The value is packed into the first byte of the heapless Vec.
         let mut values = [0u8; MAX_DISCRETE_INPUT_BYTES];
-        values[0] = if value { 0x01 } else { 0x00 };
+        values[0] = if state == DiscreteInputState::On {
+            0x01
+        } else {
+            0x00
+        };
 
         let inputs = DiscreteInputs::new(address, 1)
             .expect("Failed to create DiscreteInputs")

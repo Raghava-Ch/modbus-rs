@@ -41,11 +41,9 @@ pub(crate) fn encode_read_coils(
     quantity: u16,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    if !(1..=2000).contains(&quantity) {
-        return Err(MbusError::InvalidQuantity);
-    }
+    common::validate_quantity(FunctionCode::ReadCoils, quantity)?;
     let pdu = Pdu::build_read_window(FunctionCode::ReadCoils, address, quantity)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "coils")]
@@ -54,12 +52,11 @@ pub(crate) fn encode_write_single_coil(
     txn_id: u16,
     unit: UnitIdOrSlaveAddr,
     address: u16,
-    value: bool,
+    state: mbus_core::models::coil::CoilState,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let coil_value: u16 = if value { 0xFF00 } else { 0x0000 };
-    let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, address, coil_value)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    let pdu = Pdu::build_write_single_coil(address, state)?;
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "coils")]
@@ -72,17 +69,15 @@ pub(crate) fn encode_write_multiple_coils(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let quantity = coils.quantity();
-    if !(1..=1968).contains(&quantity) {
-        return Err(MbusError::InvalidPduLength);
-    }
+    common::validate_quantity(FunctionCode::WriteMultipleCoils, quantity)?;
     let byte_count = quantity.div_ceil(8) as usize;
     let pdu = Pdu::build_write_multiple(
         FunctionCode::WriteMultipleCoils,
         address,
         quantity,
-        &coils.values()[..byte_count],
+        &coils.raw_values()[..byte_count],
     )?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 // ─── Registers (FC 03 / 04 / 06 / 10 / 16 / 17) ─────────────────────────────
@@ -96,11 +91,9 @@ pub(crate) fn encode_read_holding_registers(
     quantity: u16,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    if !(1..=125).contains(&quantity) {
-        return Err(MbusError::InvalidQuantity);
-    }
+    common::validate_quantity(FunctionCode::ReadHoldingRegisters, quantity)?;
     let pdu = Pdu::build_read_window(FunctionCode::ReadHoldingRegisters, address, quantity)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "input-registers")]
@@ -112,11 +105,9 @@ pub(crate) fn encode_read_input_registers(
     quantity: u16,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    if !(1..=125).contains(&quantity) {
-        return Err(MbusError::InvalidQuantity);
-    }
+    common::validate_quantity(FunctionCode::ReadInputRegisters, quantity)?;
     let pdu = Pdu::build_read_window(FunctionCode::ReadInputRegisters, address, quantity)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "holding-registers")]
@@ -129,7 +120,7 @@ pub(crate) fn encode_write_single_register(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, address, value)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "holding-registers")]
@@ -142,18 +133,16 @@ pub(crate) fn encode_write_multiple_registers(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let quantity = values.len() as u16;
-    if !(1..=123).contains(&quantity) {
-        return Err(MbusError::InvalidQuantity);
-    }
+    common::validate_quantity(FunctionCode::WriteMultipleRegisters, quantity)?;
     let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> =
-        values.iter().flat_map(|v| v.to_be_bytes()).collect();
+        common::u16_slice_to_be_bytes_iter(values).collect();
     let pdu = Pdu::build_write_multiple(
         FunctionCode::WriteMultipleRegisters,
         address,
         quantity,
         &byte_pairs,
     )?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "holding-registers")]
@@ -167,9 +156,11 @@ pub(crate) fn encode_read_write_multiple_registers(
     write_values: &[u16],
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+    common::validate_quantity(FunctionCode::ReadHoldingRegisters, read_quantity)?;
     let write_quantity = write_values.len() as u16;
+    common::validate_quantity(FunctionCode::WriteMultipleRegisters, write_quantity)?;
     let byte_pairs: Vec<u8, { MAX_ADU_FRAME_LEN }> =
-        write_values.iter().flat_map(|v| v.to_be_bytes()).collect();
+        common::u16_slice_to_be_bytes_iter(write_values).collect();
     let pdu = Pdu::build_read_write_multiple(
         read_address,
         read_quantity,
@@ -177,7 +168,7 @@ pub(crate) fn encode_read_write_multiple_registers(
         write_quantity,
         &byte_pairs,
     )?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "holding-registers")]
@@ -191,7 +182,7 @@ pub(crate) fn encode_mask_write_register(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_mask_write_register(address, and_mask, or_mask)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 // ─── Discrete inputs (FC 02) ─────────────────────────────────────────────────
@@ -205,11 +196,9 @@ pub(crate) fn encode_read_discrete_inputs(
     quantity: u16,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    if !(1..=2000).contains(&quantity) {
-        return Err(MbusError::InvalidQuantity);
-    }
+    common::validate_quantity(FunctionCode::ReadDiscreteInputs, quantity)?;
     let pdu = Pdu::build_read_window(FunctionCode::ReadDiscreteInputs, address, quantity)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 // ─── FIFO queue (FC 18) ───────────────────────────────────────────────────────
@@ -223,7 +212,7 @@ pub(crate) fn encode_read_fifo_queue(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_u16_payload(FunctionCode::ReadFifoQueue, address)?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 // ─── File record (FC 14 / 15) ─────────────────────────────────────────────────
@@ -242,7 +231,7 @@ pub(crate) fn encode_read_file_record(
     // do NOT pass through `build_byte_count_payload` (that would add a second one).
     let data_len = payload_bytes.len() as u8;
     let pdu = Pdu::new(FunctionCode::ReadFileRecord, payload_bytes, data_len);
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "file-record")]
@@ -259,7 +248,7 @@ pub(crate) fn encode_write_file_record(
     // do NOT pass through `build_byte_count_payload` (that would add a second one).
     let data_len = payload_bytes.len() as u8;
     let pdu = Pdu::new(FunctionCode::WriteFileRecord, payload_bytes, data_len);
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 // ─── Diagnostics (FC 07 / 08 / 0B / 0C / 11 / 2B) ───────────────────────────
@@ -273,14 +262,8 @@ pub(crate) fn encode_read_device_identification(
     object_id: ObjectId,
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-    let object_id_byte = u8::from(object_id);
-    let payload: [u8; 2] = [read_device_id_code as u8, object_id_byte];
-    let pdu = Pdu::build_mei_type(
-        FunctionCode::EncapsulatedInterfaceTransport,
-        EncapsulatedInterfaceType::ReadDeviceIdentification as u8,
-        &payload,
-    )?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    let pdu = Pdu::build_read_device_identification(read_device_id_code, object_id)?;
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -297,7 +280,7 @@ pub(crate) fn encode_encapsulated_interface_transport(
         mei_type as u8,
         data,
     )?;
-    common::compile_adu_frame(txn_id, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(txn_id, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -308,7 +291,7 @@ pub(crate) fn encode_read_exception_status(
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_empty(FunctionCode::ReadExceptionStatus);
     // txn_id is unused on serial; pass 0
-    common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(0, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -320,7 +303,7 @@ pub(crate) fn encode_diagnostics(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_sub_function(FunctionCode::Diagnostics, sub_function as u16, data)?;
-    common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(0, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -330,7 +313,7 @@ pub(crate) fn encode_get_comm_event_counter(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_empty(FunctionCode::GetCommEventCounter);
-    common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(0, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -340,7 +323,7 @@ pub(crate) fn encode_get_comm_event_log(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_empty(FunctionCode::GetCommEventLog);
-    common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(0, unit, pdu, transport_type)
 }
 
 #[cfg(feature = "diagnostics")]
@@ -350,7 +333,7 @@ pub(crate) fn encode_report_server_id(
     transport_type: TransportType,
 ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
     let pdu = Pdu::build_empty(FunctionCode::ReportServerId);
-    common::compile_adu_frame(0, unit.get(), pdu, transport_type)
+    common::compile_adu_frame(0, unit, pdu, transport_type)
 }
 
 // ─── Top-level dispatcher ─────────────────────────────────────────────────────

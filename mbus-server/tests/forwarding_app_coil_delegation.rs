@@ -59,20 +59,19 @@ impl ServerCoilHandler for CoilApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         if let Some(err) = self.fail_fc05 {
             return Err(err);
         }
-
         if address >= 8 {
             return Err(MbusError::InvalidAddress);
         }
-
-        if value {
-            self.coils |= 1 << address;
+        let bit = 1u8 << address;
+        if value == mbus_core::models::coil::CoilState::On {
+            self.coils |= bit;
         } else {
-            self.coils &= !(1 << address);
+            self.coils &= !bit;
         }
         Ok(())
     }
@@ -152,9 +151,9 @@ fn forwarding_app_with_mutex_access_forwards_coil_read_and_write() {
     let mut app = ForwardingApp::new(access);
 
     // FC05: set coil 0 and coil 2.
-    app.write_single_coil_request(10, unit_id(1), 0, true)
+    app.write_single_coil_request(10, unit_id(1), 0, mbus_core::models::coil::CoilState::On)
         .expect("fc05 coil 0 should succeed");
-    app.write_single_coil_request(11, unit_id(1), 2, true)
+    app.write_single_coil_request(11, unit_id(1), 2, mbus_core::models::coil::CoilState::On)
         .expect("fc05 coil 2 should succeed");
 
     // FC01: read back coils, expect bits 0 and 2 set.
@@ -201,7 +200,7 @@ fn forwarding_app_propagates_coil_write_errors() {
     let mut app = ForwardingApp::new(access);
 
     let err = app
-        .write_single_coil_request(30, unit_id(1), 0, true)
+        .write_single_coil_request(30, unit_id(1), 0, mbus_core::models::coil::CoilState::On)
         .expect_err("fc05 should return configured app error");
 
     assert_eq!(err, MbusError::InvalidAddress);

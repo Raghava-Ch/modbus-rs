@@ -1,6 +1,6 @@
 [package]
 name = "mbus-server"
-version = "0.15.0"
+version = "0.16.0"
 edition.workspace = true
 authors.workspace = true
 license-file = "LICENSE"
@@ -35,6 +35,7 @@ default = [
 coils = ["mbus-core/coils"] # Enables Modbus Coil (FC 0x01, 0x05, 0x0F) services
 holding-registers = [
     "mbus-core/holding-registers",
+    "mbus-core/coils",
 ] # Enables holding-register services (FC 0x03, 0x06, 0x10)
 input-registers = [
     "mbus-core/input-registers",

@@ -12,7 +12,7 @@ Build the Rust FFI crate first (from repository root):
 cargo build -p mbus-ffi --features nodejs,full --release
 ```
 
-Then in `mbus-ffi/nodejs`, run:
+Then in `mbus-ffi/javascript`, run:
 
 ```bash
 npm install
@@ -110,7 +110,7 @@ node dist/examples/12-typescript-client.js
 
 * **`Error: Cannot find module 'modbus-rs'`** (or
   **`ERR_MODULE_NOT_FOUND: Cannot find package 'modbus-rs'`**) — from
-  repository root and then `mbus-ffi/nodejs`, run:
+  repository root and then `mbus-ffi/javascript`, run:
 
   ```bash
   cargo build -p mbus-ffi --features nodejs,full --release

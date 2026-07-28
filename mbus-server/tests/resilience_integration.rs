@@ -220,7 +220,7 @@ impl ServerCoilHandler for ProbeApp {
         _txn_id: u16,
         _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         _address: u16,
-        _value: bool,
+        _state: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         self.fc05_calls.fetch_add(1, Ordering::SeqCst);
         self.call_order
@@ -320,7 +320,10 @@ fn build_fc06_write_request(txn_id: u16) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     )
 }
 
-fn build_fc06_write_request_for_unit(txn_id: u16, wire_unit: u8) -> HVec<u8, MAX_ADU_FRAME_LEN> {
+fn build_fc06_write_request_for_unit(
+    txn_id: u16,
+    wire_unit: UnitIdOrSlaveAddr,
+) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
         .expect("valid FC06 payload");
     compile_adu_frame(txn_id, wire_unit, pdu, TransportType::StdTcp)
@@ -329,7 +332,7 @@ fn build_fc06_write_request_for_unit(txn_id: u16, wire_unit: u8) -> HVec<u8, MAX
 
 fn build_serial_fc06_write_request_for_unit(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleRegister, 0x0002, 0xABCD)
         .expect("valid serial FC06 payload");
@@ -345,7 +348,7 @@ fn build_serial_fc06_write_request_for_unit(
 #[cfg(feature = "coils")]
 fn build_serial_fc05_write_request_for_unit(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     let pdu = Pdu::build_write_single_u16(FunctionCode::WriteSingleCoil, 0x0002, 0xFF00)
         .expect("valid serial FC05 payload");
@@ -361,7 +364,7 @@ fn build_serial_fc05_write_request_for_unit(
 #[cfg(feature = "coils")]
 fn build_serial_fc0f_write_request_for_unit(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     // address=0x0005, quantity=3, coil bytes=[0x05]
     let pdu = Pdu::build_write_multiple(FunctionCode::WriteMultipleCoils, 0x0005, 3, &[0x05])
@@ -377,7 +380,7 @@ fn build_serial_fc0f_write_request_for_unit(
 
 fn build_serial_fc10_write_request_for_unit(
     txn_id: u16,
-    wire_unit: u8,
+    wire_unit: UnitIdOrSlaveAddr,
 ) -> HVec<u8, MAX_ADU_FRAME_LEN> {
     // address=0x0010, quantity=2, register bytes=[0x12,0x34,0x56,0x78]
     let pdu = Pdu::build_write_multiple(
@@ -1295,7 +1298,7 @@ fn misaddressed_frame_is_silently_dropped_even_under_back_pressure() {
     for txn_id in 1..=7u16 {
         recv_queue.push_back(build_fc06_write_request(txn_id));
     }
-    recv_queue.push_back(build_fc06_write_request_for_unit(8, 2));
+    recv_queue.push_back(build_fc06_write_request_for_unit(8, unit_id(2)));
 
     let transport = ScriptedTransport {
         recv_queue,
@@ -1365,7 +1368,7 @@ fn broadcast_frame_is_silently_dropped_even_under_back_pressure() {
     for txn_id in 1..=7u16 {
         recv_queue.push_back(build_fc06_write_request(txn_id));
     }
-    recv_queue.push_back(build_fc06_write_request_for_unit(8, 0));
+    recv_queue.push_back(build_fc06_write_request_for_unit(8, unit_id(0)));
 
     let transport = ScriptedTransport {
         recv_queue,
@@ -1433,9 +1436,9 @@ fn serial_broadcast_write_is_applied_without_response_under_back_pressure() {
 
     let mut recv_queue = VecDeque::new();
     for txn_id in 1..=7u16 {
-        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, unit_id(1)));
     }
-    recv_queue.push_back(build_serial_fc06_write_request_for_unit(8, 0));
+    recv_queue.push_back(build_serial_fc06_write_request_for_unit(8, unit_id(0)));
 
     let transport = ScriptedSerialTransport {
         recv_queue,
@@ -1498,9 +1501,9 @@ fn serial_broadcast_write_single_coil_is_applied_without_response_under_back_pre
 
     let mut recv_queue = VecDeque::new();
     for txn_id in 1..=7u16 {
-        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, unit_id(1)));
     }
-    recv_queue.push_back(build_serial_fc05_write_request_for_unit(8, 0));
+    recv_queue.push_back(build_serial_fc05_write_request_for_unit(8, unit_id(0)));
 
     let transport = ScriptedSerialTransport {
         recv_queue,
@@ -1562,9 +1565,9 @@ fn serial_broadcast_write_multiple_coils_is_applied_without_response_under_back_
 
     let mut recv_queue = VecDeque::new();
     for txn_id in 1..=7u16 {
-        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, unit_id(1)));
     }
-    recv_queue.push_back(build_serial_fc0f_write_request_for_unit(8, 0));
+    recv_queue.push_back(build_serial_fc0f_write_request_for_unit(8, unit_id(0)));
 
     let transport = ScriptedSerialTransport {
         recv_queue,
@@ -1625,9 +1628,9 @@ fn serial_broadcast_write_multiple_registers_is_applied_without_response_under_b
 
     let mut recv_queue = VecDeque::new();
     for txn_id in 1..=7u16 {
-        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, 1));
+        recv_queue.push_back(build_serial_fc06_write_request_for_unit(txn_id, unit_id(1)));
     }
-    recv_queue.push_back(build_serial_fc10_write_request_for_unit(8, 0));
+    recv_queue.push_back(build_serial_fc10_write_request_for_unit(8, unit_id(0)));
 
     let transport = ScriptedSerialTransport {
         recv_queue,
@@ -1723,7 +1726,7 @@ impl Transport for TimingTestTransport {
 fn framing_error_clears_receive_buffer_without_disconnecting() {
     reset_manual_clock_us(0);
 
-    let fc06_full = build_serial_fc06_write_request_for_unit(1, 1);
+    let fc06_full = build_serial_fc06_write_request_for_unit(1, unit_id(1));
 
     // Split the frame: send partial, trigger framing error, then send full frame again
     let partial_frame = HVec::from_slice(&fc06_full[0..3]).unwrap();
@@ -1794,7 +1797,7 @@ fn framing_error_clears_receive_buffer_without_disconnecting() {
 fn turnaround_delay_defers_response_transmission() {
     reset_manual_clock_us(0);
 
-    let fc06_full = build_serial_fc06_write_request_for_unit(1, 1);
+    let fc06_full = build_serial_fc06_write_request_for_unit(1, unit_id(1));
     let valid_frame = HVec::from_slice(&fc06_full).unwrap();
 
     let mut actions = VecDeque::new();

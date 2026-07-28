@@ -73,6 +73,7 @@ _bootstrap_venv()
 del _bootstrap_venv
 
 import modbus_rs
+from modbus_rs import CoilState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,10 +97,10 @@ class AsyncDeviceState:
         self._lock = asyncio.Lock()
 
         # Coils: digital outputs (writeable)
-        self.coils = [False] * self.COIL_COUNT
+        self.coils = [CoilState.Off] * self.COIL_COUNT
 
         # Discrete inputs: digital inputs (read-only)
-        self.discrete_inputs = [False] * self.DI_COUNT
+        self.discrete_inputs = [CoilState.Off] * self.DI_COUNT
 
         # Holding registers: 16-bit process values (writeable)
         # 0: setpoint (°C * 10)   1: output %   2-7: spare
@@ -167,25 +168,25 @@ class AsyncDeviceState:
         """Simulate an asynchronous network request or database query (e.g. 15ms)."""
         await asyncio.sleep(0.015)
 
-    async def read_coils(self, address: int, count: int) -> list[bool]:
+    async def read_coils(self, address: int, count: int) -> list[CoilState]:
         await self.simulate_db_latency()
         async with self._lock:
             return self.coils[address : address + count]
 
-    async def write_coil(self, address: int, value: bool):
+    async def write_coil(self, address: int, value: CoilState):
         await self.simulate_db_latency()
         async with self._lock:
             self.coils[address] = value
             log.info("coil[%d] ← %s (Async)", address, value)
 
-    async def write_coils(self, address: int, values: list[bool]):
+    async def write_coils(self, address: int, values: list[CoilState]):
         await self.simulate_db_latency()
         async with self._lock:
             for i, val in enumerate(values):
                 self.coils[address + i] = val
             log.info("coils[%d..%d] written (Async)", address, address + len(values) - 1)
 
-    async def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
+    async def read_discrete_inputs(self, address: int, count: int) -> list[CoilState]:
         await self.simulate_db_latency()
         async with self._lock:
             return self.discrete_inputs[address : address + count]

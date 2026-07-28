@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
@@ -23,7 +24,7 @@ impl ServiceBuilder {
     /// Sends a Read File Record request.
     pub fn read_file_record(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         sub_request: &SubRequest,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
@@ -34,7 +35,7 @@ impl ServiceBuilder {
     /// Sends a Write File Record request.
     pub fn write_file_record(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         sub_request: &SubRequest,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {

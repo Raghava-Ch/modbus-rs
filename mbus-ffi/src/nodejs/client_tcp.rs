@@ -391,7 +391,7 @@ impl AsyncTcpModbusClient {
         &self,
         env: Env,
         options: ReadBitsOptions<'_>,
-    ) -> Result<PromiseRaw<'static, Vec<u8>>> {
+    ) -> Result<PromiseRaw<'static, Vec<CoilState>>> {
         let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, options.signal)?;
         let unit_id = self.unit_id;
@@ -413,7 +413,11 @@ impl AsyncTcpModbusClient {
 
             let mut result = Vec::with_capacity(quantity as usize);
             for i in 0..quantity {
-                result.push(if coils.value(address + i).unwrap_or(false) { 1 } else { 0 });
+                let state = match coils.value(address + i) {
+                    Ok(mbus_core::models::coil::CoilState::On) => CoilState::On,
+                    _ => CoilState::Off,
+                };
+                result.push(state);
             }
             Ok(result)
         })?;
@@ -432,7 +436,7 @@ impl AsyncTcpModbusClient {
     #[doc = ""]
     #[doc = "@example"]
     #[doc = "```javascript"]
-    #[doc = "await client.writeSingleCoil({ address: 10, value: 1 });"]
+    #[doc = "await client.writeSingleCoil({ address: 10, value: CoilState.On });"]
     #[doc = "```"]
     pub fn write_single_coil(
         &self,
@@ -443,7 +447,10 @@ impl AsyncTcpModbusClient {
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, options.signal)?;
         let unit_id = self.unit_id;
         let address = options.address;
-        let value = options.value != 0;
+        let value = match options.value {
+            CoilState::On => mbus_core::models::coil::CoilState::On,
+            CoilState::Off => mbus_core::models::coil::CoilState::Off,
+        };
 
         let promise = env.spawn_future(async move {
             let fut = client.write_single_coil(unit_id, address, value);
@@ -474,7 +481,7 @@ impl AsyncTcpModbusClient {
     #[doc = ""]
     #[doc = "@example"]
     #[doc = "```javascript"]
-    #[doc = "await client.writeMultipleCoils({ address: 20, values: [1, 0, 1, 1] });"]
+    #[doc = "await client.writeMultipleCoils({ address: 20, values: [CoilState.On, CoilState.Off] });"]
     #[doc = "```"]
     pub fn write_multiple_coils(
         &self,
@@ -489,14 +496,17 @@ impl AsyncTcpModbusClient {
         let address = options.address;
         let values = options.values;
 
-        // Build Coils from bool array synchronously
         let qty = values.len() as u16;
         let mut coils =
             Coils::new(address, qty).map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
 
         for (i, &value) in values.iter().enumerate() {
+            let state = match value {
+                CoilState::On => mbus_core::models::coil::CoilState::On,
+                CoilState::Off => mbus_core::models::coil::CoilState::Off,
+            };
             coils
-                .set_value(address + i as u16, value != 0)
+                .set_value(address + i as u16, state)
                 .map_err(|e| to_napi_err(ERR_MODBUS_INVALID_ARGUMENT, e))?;
         }
 
@@ -537,7 +547,7 @@ impl AsyncTcpModbusClient {
         &self,
         env: Env,
         options: ReadBitsOptions<'_>,
-    ) -> Result<PromiseRaw<'static, Vec<u8>>> {
+    ) -> Result<PromiseRaw<'static, Vec<CoilState>>> {
         let client = self.inner.clone();
         let abort_rx = crate::nodejs::errors::setup_abort_listener(&env, options.signal)?;
         let unit_id = self.unit_id;
@@ -559,7 +569,11 @@ impl AsyncTcpModbusClient {
 
             let mut result = Vec::with_capacity(quantity as usize);
             for i in 0..quantity {
-                result.push(if inputs.value(address + i).unwrap_or(false) { 1 } else { 0 });
+                let state = match inputs.value(address + i) {
+                    Ok(mbus_core::models::coil::CoilState::On) => CoilState::On,
+                    _ => CoilState::Off,
+                };
+                result.push(state);
             }
             Ok(result)
         })?;

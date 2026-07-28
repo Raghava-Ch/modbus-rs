@@ -548,7 +548,7 @@ fn fix_up_response(
         ) => {
             use mbus_core::models::coil::Coils;
             Coils::new(*address, *quantity)
-                .and_then(|c| c.with_values(raw.values(), *quantity))
+                .and_then(|c| c.with_raw_values(raw.raw_values(), *quantity))
                 .map(R::Coils)
                 .unwrap_or_else(|_| R::Coils(raw))
         }

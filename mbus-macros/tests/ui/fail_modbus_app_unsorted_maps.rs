@@ -16,7 +16,7 @@ pub mod transport {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct UnitIdOrSlaveAddr(pub u8);
 }
-
+pub mod models { pub mod coil { #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum CoilState { On, Off } } }
 pub mod app {
     use crate::errors::MbusError;
     use crate::transport::UnitIdOrSlaveAddr;

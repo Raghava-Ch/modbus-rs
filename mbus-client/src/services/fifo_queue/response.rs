@@ -17,7 +17,7 @@ use crate::app::FifoQueueResponse;
 use crate::services::fifo_queue::MAX_FIFO_QUEUE_COUNT_PER_PDU;
 use crate::services::{ClientCommon, ClientServices, ExpectedResponse, fifo_queue};
 use mbus_core::{
-    data_unit::common::{ModbusMessage, Pdu},
+    data_unit::common::{ModbusMessage, Pdu, be_bytes_to_u16_iter},
     errors::MbusError,
     function_codes::public::FunctionCode,
     transport::Transport,
@@ -55,11 +55,11 @@ impl ResponseParser {
 
         let mut values = [0u16; MAX_FIFO_QUEUE_COUNT_PER_PDU];
         let mut index = 0;
-        for chunk in fp.values.chunks_exact(2) {
+        for val in be_bytes_to_u16_iter(fp.values) {
             if index >= MAX_FIFO_QUEUE_COUNT_PER_PDU {
                 return Err(MbusError::BufferLenMissmatch);
             }
-            values[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+            values[index] = val;
             index += 1;
         }
 

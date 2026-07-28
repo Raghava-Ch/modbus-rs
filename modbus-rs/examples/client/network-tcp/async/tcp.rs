@@ -1,6 +1,6 @@
 use anyhow::Result;
-use modbus_rs::Coils;
 use modbus_rs::mbus_async::AsyncTcpClient;
+use modbus_rs::mbus_core::models::coil::CoilState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
         coils.from_address()
     );
     for addr in coils.from_address()..coils.from_address() + coils.quantity() {
-        println!("  coil[{}] = {}", addr, coils.value(addr).unwrap());
+        println!("  coil[{}] = {:?}", addr, coils.value(addr).unwrap());
     }
 
     let discrete = client.read_discrete_inputs(unit_id, 0, 8).await?;
@@ -69,31 +69,30 @@ async fn main() -> Result<()> {
     }
 
     // --- Coil writes ---
-    let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, true).await?;
-    println!("Wrote coil[{}] = {}", wr_addr, wr_val);
+    let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, CoilState::On).await?;
+    println!("Wrote coil[{}] = {:?}", wr_addr, wr_val);
 
     // Read back and verify
     let verify_coils = client.read_multiple_coils(unit_id, 0, 1).await?;
-    assert!(
+    assert_eq!(
         verify_coils.value(0)?,
+        CoilState::On,
         "Single coil write verification failed"
     );
-    println!("✓ Single coil write verified");
 
-    let mut write_coils = Coils::new(0, 8)?;
+    let mut multi_coils = modbus_rs::Coils::new(0, 8)?;
     for i in (0u16..8).step_by(2) {
-        write_coils.set_value(i, true)?;
+        multi_coils.set_value(i, CoilState::On)?;
     }
-    let (wmc_addr, wmc_qty) = client
-        .write_multiple_coils(unit_id, 0, &write_coils)
-        .await?;
+    let (wmc_addr, wmc_qty) = client.write_multiple_coils(unit_id, 0, &multi_coils).await?;
     println!("Wrote {} coils starting at address {}", wmc_qty, wmc_addr);
 
     // Read back and verify
     let verify_multi_coils = client.read_multiple_coils(unit_id, 0, 8).await?;
     for i in (0u16..8).step_by(2) {
-        assert!(
+        assert_eq!(
             verify_multi_coils.value(i)?,
+            CoilState::On,
             "Coil[{}] write verification failed",
             i
         );

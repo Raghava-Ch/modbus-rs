@@ -193,11 +193,11 @@ fn coils_segmented_write_many_can_span_contiguous_maps() {
 #[test]
 fn coils_segmented_read_across_gap_returns_invalid_address() {
     let mut app = CoilsGapApp::default();
-    app.write_single_coil_request(23, unit_id(1), 0, true)
+    app.write_single_coil_request(23, unit_id(1), 0, mbus_core::models::coil::CoilState::On)
         .expect("set c0");
-    app.write_single_coil_request(23, unit_id(1), 1, false)
+    app.write_single_coil_request(23, unit_id(1), 1, mbus_core::models::coil::CoilState::Off)
         .expect("set c1");
-    app.write_single_coil_request(23, unit_id(1), 3, true)
+    app.write_single_coil_request(23, unit_id(1), 3, mbus_core::models::coil::CoilState::On)
         .expect("set c3");
 
     let mut out = [0u8; 1];

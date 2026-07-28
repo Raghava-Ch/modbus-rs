@@ -36,9 +36,9 @@ use mbus_macros::CoilsModel;
 #[derive(Default, CoilsModel)]
 struct Coils {
     #[coil(addr = 0)]
-    a: bool,
+    a: crate::models::coil::CoilState,
     #[coil(addr = 0)]
-    b: bool,
+    b: crate::models::coil::CoilState,
 }
 
 fn main() {}

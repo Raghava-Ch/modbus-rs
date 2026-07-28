@@ -193,8 +193,8 @@ mod tests {
     #[test]
     fn test_write_single_coil_request_on() {
         let address = 0x0005;
-        let value = true;
-        let pdu = ReqPduCompiler::write_single_coil_request(address, value).unwrap();
+        let state = mbus_core::models::coil::CoilState::On;
+        let pdu = ReqPduCompiler::write_single_coil_request(address, state).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteSingleCoil);
         assert_eq!(pdu.data_len(), 4);
@@ -205,8 +205,8 @@ mod tests {
     #[test]
     fn test_write_single_coil_request_off() {
         let address = 0x0005;
-        let value = false;
-        let pdu = ReqPduCompiler::write_single_coil_request(address, value).unwrap();
+        let state = mbus_core::models::coil::CoilState::Off;
+        let pdu = ReqPduCompiler::write_single_coil_request(address, state).unwrap();
 
         assert_eq!(pdu.function_code(), FunctionCode::WriteSingleCoil);
         assert_eq!(pdu.data_len(), 4);
@@ -220,7 +220,7 @@ mod tests {
     fn test_parse_write_single_coil_response_valid() {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF, 0x00]; // FC, Address, Value
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, mbus_core::models::coil::CoilState::On);
         assert!(result.is_ok());
     }
 
@@ -229,7 +229,7 @@ mod tests {
     fn test_parse_write_single_coil_response_wrong_fc() {
         let response_bytes = [0x03, 0x00, 0x05, 0xFF, 0x00]; // Wrong FC
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, mbus_core::models::coil::CoilState::On);
         assert_eq!(result.unwrap_err(), MbusError::InvalidFunctionCode);
     }
 
@@ -238,7 +238,7 @@ mod tests {
     fn test_parse_write_single_coil_response_address_mismatch() {
         let response_bytes = [0x05, 0x00, 0x06, 0xFF, 0x00]; // Address 0x0006, expected 0x0005
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, mbus_core::models::coil::CoilState::On);
         assert_eq!(result.unwrap_err(), MbusError::InvalidAddress);
     }
 
@@ -247,7 +247,7 @@ mod tests {
     fn test_parse_write_single_coil_response_value_mismatch() {
         let response_bytes = [0x05, 0x00, 0x05, 0x00, 0x00]; // Value OFF, expected ON
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, mbus_core::models::coil::CoilState::On);
         assert_eq!(result.unwrap_err(), MbusError::InvalidValue);
     }
 
@@ -256,7 +256,7 @@ mod tests {
     fn test_parse_write_single_coil_response_invalid_len() {
         let response_bytes = [0x05, 0x00, 0x05, 0xFF]; // Too short
         let pdu = Pdu::from_bytes(&response_bytes).unwrap();
-        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, true);
+        let result = ResponseParser::parse_write_single_coil_response(&pdu, 0x0005, mbus_core::models::coil::CoilState::On);
         assert_eq!(result.unwrap_err(), MbusError::InvalidPduLength);
     }
 
@@ -273,7 +273,7 @@ mod tests {
         // 0x01 = 0b0000_0001 (Bit 8 is ON)
         let mut coils = Coils::new(address, quantity).unwrap();
         for i in (0..quantity).step_by(2) {
-            coils.set_value(address + i, true).unwrap();
+            coils.set_value(address + i, mbus_core::models::coil::CoilState::On).unwrap();
         }
 
         let pdu = ReqPduCompiler::write_multiple_coils_request(address, quantity, &coils).unwrap();

@@ -40,7 +40,7 @@ where
 
         let frame = discrete_input::service::ServiceBuilder::read_discrete_inputs(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             quantity,
             TRANSPORT::TRANSPORT_TYPE,
@@ -91,7 +91,7 @@ where
 
         let frame = discrete_input::service::ServiceBuilder::read_discrete_inputs(
             txn_id,
-            unit_id_slave_addr.get(),
+            unit_id_slave_addr,
             address,
             1,
             TRANSPORT::TRANSPORT_TYPE,

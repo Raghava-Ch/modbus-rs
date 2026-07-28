@@ -39,6 +39,8 @@ ModbusInvalidArgument — invalid argument passed to a Modbus call
 from importlib.metadata import version, PackageNotFoundError
 
 from ._modbus_rs import (
+    # types
+    CoilState,
     # clients/transports
     TcpTransport,
     AsyncTcpTransport,
@@ -66,6 +68,8 @@ from ._modbus_rs import (
     ModbusInvalidArgument,
 )
 
+DiscreteInputState = CoilState
+
 # Gateway classes are only available when the extension is built with the
 # `python-gateway` feature.
 try:
@@ -84,6 +88,8 @@ except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "CoilState",
+    "DiscreteInputState",
     # clients/transports
     "TcpTransport",
     "AsyncTcpTransport",

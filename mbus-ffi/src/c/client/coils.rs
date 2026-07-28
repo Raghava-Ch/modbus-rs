@@ -145,7 +145,8 @@ pub extern "C" fn mbus_tcp_write_single_coil(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        match inner.write_single_coil(txn_id, uid, address, value != 0) {
+        let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+        match inner.write_single_coil(txn_id, uid, address, state) {
             Ok(()) => MbusStatusCode::MbusOk,
             Err(e) => MbusStatusCode::from(e),
         }
@@ -171,7 +172,8 @@ pub extern "C" fn mbus_serial_write_single_coil(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        match inner.write_single_coil(txn_id, uid, address, value != 0) {
+        let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+        match inner.write_single_coil(txn_id, uid, address, state) {
             Ok(()) => MbusStatusCode::MbusOk,
             Err(e) => MbusStatusCode::from(e),
         }
@@ -213,7 +215,7 @@ pub unsafe extern "C" fn mbus_tcp_write_multiple_coils(
             Ok(c) => c,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let coils = match coils.with_values(value_slice, quantity) {
+        let coils = match coils.with_raw_values(value_slice, quantity) {
             Ok(c) => c,
             Err(e) => return MbusStatusCode::from(e),
         };
@@ -258,7 +260,7 @@ pub unsafe extern "C" fn mbus_serial_write_multiple_coils(
             Ok(c) => c,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let coils = match coils.with_values(value_slice, quantity) {
+        let coils = match coils.with_raw_values(value_slice, quantity) {
             Ok(c) => c,
             Err(e) => return MbusStatusCode::from(e),
         };

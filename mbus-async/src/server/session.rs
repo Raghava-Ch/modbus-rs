@@ -725,7 +725,7 @@ fn parse_coil_request(
                 txn_id,
                 unit,
                 address: f.address,
-                value: f.value == 0xFF00,
+                state: mbus_core::models::coil::CoilState::from_u16(f.value),
             })
         }
         _ => {

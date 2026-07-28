@@ -10,14 +10,15 @@
 //! Both public client types use the same internal app/router layer so JS-facing
 //! response shapes stay consistent across transports.
 
+mod client_serial;
+mod client_tcp;
 mod command;
 pub(crate) mod helpers;
-mod client_tcp;
 mod response;
-mod client_serial;
 mod task;
 
-pub use client_tcp::{WasmModbusClient, WasmTcpTransport};
 pub use client_serial::{
-    WasmSerialModbusClient, WasmSerialPortHandle, WasmRtuTransport, WasmAsciiTransport, request_serial_port,
+    WasmAsciiTransport, WasmRtuTransport, WasmSerialModbusClient, WasmSerialPortHandle,
+    request_serial_port,
 };
+pub use client_tcp::{WasmModbusClient, WasmWsTransport};

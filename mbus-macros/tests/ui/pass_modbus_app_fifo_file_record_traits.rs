@@ -17,6 +17,16 @@ pub mod transport {
     pub struct UnitIdOrSlaveAddr(pub u8);
 }
 
+pub mod models {
+    pub mod coil {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum CoilState {
+            On,
+            Off,
+        }
+    }
+}
+
 pub mod app {
     use crate::errors::MbusError;
     use crate::transport::UnitIdOrSlaveAddr;
@@ -39,7 +49,7 @@ pub mod app {
             _txn_id: u16,
             _unit_id_or_slave_addr: UnitIdOrSlaveAddr,
             _address: u16,
-            _value: bool,
+            _state: mbus_core::models::coil::CoilState,
         ) -> Result<(), MbusError> {
             Err(MbusError::InvalidAddress)
         }
@@ -126,7 +136,12 @@ pub trait HoldingRegisterMap {
     const WORD_COUNT: usize;
     const HAS_BATCH_NOTIFIED_FIELDS: bool = false;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError>;
+    fn encode(
+        &self,
+        _address: u16,
+        _quantity: u16,
+        _out: &mut [u8],
+    ) -> Result<u8, errors::MbusError>;
     fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError>;
     fn write_many(&mut self, _address: u16, _values: &[u16]) -> Result<(), errors::MbusError>;
     fn is_batch_notified(_addr: u16) -> bool {
@@ -142,7 +157,12 @@ impl HoldingRegisterMap for LowRange {
     const ADDR_MAX: u16 = 5;
     const WORD_COUNT: usize = 6;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
+    fn encode(
+        &self,
+        _address: u16,
+        _quantity: u16,
+        _out: &mut [u8],
+    ) -> Result<u8, errors::MbusError> {
         Ok(0)
     }
     fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError> {
@@ -159,7 +179,12 @@ impl HoldingRegisterMap for HighRange {
     const ADDR_MAX: u16 = 15;
     const WORD_COUNT: usize = 6;
 
-    fn encode(&self, _address: u16, _quantity: u16, _out: &mut [u8]) -> Result<u8, errors::MbusError> {
+    fn encode(
+        &self,
+        _address: u16,
+        _quantity: u16,
+        _out: &mut [u8],
+    ) -> Result<u8, errors::MbusError> {
         Ok(0)
     }
     fn write_single(&mut self, _address: u16, _value: u16) -> Result<(), errors::MbusError> {

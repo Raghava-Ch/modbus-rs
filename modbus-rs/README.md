@@ -13,7 +13,7 @@ binary size.
 
 ```rust
 use anyhow::Result;
-use modbus_rs::Coils;
+use modbus_rs::{CoilState, Coils};
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
@@ -27,11 +27,11 @@ async fn main() -> Result<()> {
 
     let coils: Coils = client.read_multiple_coils(unit_id, 0, 8).await?;
 	for addr in 0..8 {
-		println!("coil[{}] = {}", addr, coils.value(addr)?);
+		println!("coil[{}] = {:?}", addr, coils.value(addr)?);
 	}
 
-    let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, true).await?;
-    println!("Wrote coil[{}] = {}", wr_addr, wr_val);
+    let (wr_addr, wr_val) = client.write_single_coil(unit_id, 0, CoilState::On).await?;
+    println!("Wrote coil[{}] = {:?}", wr_addr, wr_val);
 
 	Ok(())
 }
@@ -467,7 +467,7 @@ use modbus_rs::heapless::Vec;
 
 #[allow(unexpected_cfgs)]
 #[cfg(feature = "coils")]
-use modbus_rs::{CoilResponse, Coils};
+use modbus_rs::{CoilResponse, CoilState, Coils};
 
 struct MockTransport;
 
@@ -493,8 +493,8 @@ impl RequestErrorNotifier for App {
 #[cfg(feature = "coils")]
 impl CoilResponse for App {
 	fn read_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: &Coils) {}
-	fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-	fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+	fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
+	fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
 	fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 

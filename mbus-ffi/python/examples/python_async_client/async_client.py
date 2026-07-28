@@ -48,6 +48,7 @@ _bootstrap_venv()
 del _bootstrap_venv
 
 import modbus_rs
+from modbus_rs import CoilState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,7 +120,8 @@ async def write_demo(client: modbus_rs.AsyncTcpModbusClient):
 
     # Toggle coil 1
     coils = await client.read_coils(1, 1)
-    await client.write_coil(1, not coils[0])
+    next_state = CoilState.Off if coils[0] == CoilState.On else CoilState.On
+    await client.write_coil(1, next_state)
 
     # Mask-write holding[2]: set bit 0, clear bits 4-7
     await client.mask_write_register(2, and_mask=0xFF0F, or_mask=0x0001)

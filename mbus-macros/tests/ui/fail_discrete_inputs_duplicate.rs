@@ -12,6 +12,17 @@ pub mod errors {
     }
 }
 
+pub mod models {
+    pub mod discrete_input {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+        pub enum DiscreteInputState {
+            On,
+            #[default]
+            Off,
+        }
+    }
+}
+
 pub trait DiscreteInputMap {
     const ADDR_MIN: u16;
     const ADDR_MAX: u16;
@@ -21,18 +32,19 @@ pub trait DiscreteInputMap {
 }
 
 use mbus_macros::DiscreteInputsModel;
+use models::discrete_input::DiscreteInputState;
 
 #[derive(DiscreteInputsModel)]
 struct BadDiscreteInputs {
     #[discrete_input(addr = 0)]
-    first: bool,
+    first: DiscreteInputState,
     #[discrete_input(addr = 0)]
-    second: bool,
+    second: DiscreteInputState,
 }
 
 fn main() {
     let _ = BadDiscreteInputs {
-        first: false,
-        second: true,
+        first: DiscreteInputState::Off,
+        second: DiscreteInputState::On,
     };
 }

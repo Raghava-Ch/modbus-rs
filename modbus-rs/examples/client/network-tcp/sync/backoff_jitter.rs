@@ -36,12 +36,12 @@ impl CoilResponse for ClientApp {
             unit_id.get(),
             coils.from_address(),
             coils.quantity(),
-            coils.values()
+            coils.raw_values()
         );
     }
 
-    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: modbus_rs::mbus_core::models::coil::CoilState) {}
+    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: modbus_rs::mbus_core::models::coil::CoilState) {}
     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 

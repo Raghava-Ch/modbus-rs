@@ -109,7 +109,7 @@ impl CoilResponse for TrafficApp {
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _address: u16,
-        _value: bool,
+        _value: modbus_rs::mbus_core::models::coil::CoilState,
     ) {
     }
 
@@ -118,7 +118,7 @@ impl CoilResponse for TrafficApp {
         _txn_id: u16,
         _unit_id: UnitIdOrSlaveAddr,
         _address: u16,
-        _value: bool,
+        _value: modbus_rs::mbus_core::models::coil::CoilState,
     ) {
     }
 

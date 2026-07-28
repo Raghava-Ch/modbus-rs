@@ -9,6 +9,7 @@ use mbus_core::errors::{ExceptionCode, MbusError};
 use mbus_core::function_codes::public::FunctionCode;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
+use mbus_core::models::coil::CoilState;
 use mbus_server::{
     CoilsModel, HoldingRegistersModel, ResilienceConfig, ServerServices, modbus_app,
 };
@@ -17,9 +18,9 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Default, Clone, CoilsModel)]
 struct HookCoils {
     #[coil(addr = 0)]
-    direct: bool,
+    direct: CoilState,
     #[coil(addr = 1, notify_via_batch = true)]
-    via_batch: bool,
+    via_batch: CoilState,
 }
 
 #[derive(Debug, Default, Clone, HoldingRegistersModel)]
@@ -50,7 +51,7 @@ struct DispatchHookApp {
 impl TrafficNotifier for DispatchHookApp {}
 
 impl DispatchHookApp {
-    fn on_direct_coil(&mut self, _address: u16, _old: bool, _new: bool) -> Result<(), MbusError> {
+    fn on_direct_coil(&mut self, _address: u16, _old: bool, _new: CoilState) -> Result<(), MbusError> {
         self.coil_direct_calls += 1;
         Ok(())
     }
@@ -142,7 +143,7 @@ fn fc05_notify_via_batch_rejection_returns_exception_and_preserves_state() {
     );
     assert_eq!(app_after.coil_batch_calls, 1);
     assert_eq!(app_after.coil_direct_calls, 0);
-    assert!(!app_after.coils.via_batch);
+    assert_eq!(app_after.coils.via_batch, CoilState::Off);
 }
 
 #[test]
@@ -177,8 +178,8 @@ fn fc0f_batch_success_commits_values() {
     assert_eq!(response[7], 0x0F);
     assert_eq!(&response[8..12], &[0x00, 0x00, 0x00, 0x02]);
     assert_eq!(app_after.coil_batch_calls, 1);
-    assert!(app_after.coils.direct);
-    assert!(app_after.coils.via_batch);
+    assert_eq!(app_after.coils.direct, CoilState::On);
+    assert_eq!(app_after.coils.via_batch, CoilState::On);
 }
 
 #[test]

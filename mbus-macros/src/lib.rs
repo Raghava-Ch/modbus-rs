@@ -260,13 +260,15 @@ struct CoilField {
     /// When true, a single FC05 write with no individual hook falls through to the
     /// map-level `on_batch_write` hook (called with qty = 1) if that hook exists.
     notify_via_batch: bool,
+    is_coil_state: bool,
 }
 
-/// Field for `#[derive(DiscreteInputsModel)]`: a read-only `bool` at a fixed address.
+/// Field for `#[derive(DiscreteInputsModel)]`: a read-only `DiscreteInputState` or `bool` at a fixed address.
 #[derive(Debug, Clone)]
 struct DiscreteInputField {
     ident: Ident,
     addr: u16,
+    is_discrete_input_state: bool,
 }
 
 /// Simple field for `#[derive(HoldingRegistersModel)]`: always a `u16` at a fixed address.
@@ -294,15 +296,28 @@ fn expand_coils_model(input: &DeriveInput) -> Result<proc_macro2::TokenStream, E
     let encode_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! { #addr => self.#ident, }
+        if f.is_coil_state {
+            quote! { #addr => self.#ident == ::mbus_core::models::coil::CoilState::On, }
+        } else {
+            quote! { #addr => self.#ident, }
+        }
     });
     let write_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! {
-            #addr => {
-                self.#ident = value;
-                ::core::result::Result::Ok(())
+        if f.is_coil_state {
+            quote! {
+                #addr => {
+                    self.#ident = if value { ::mbus_core::models::coil::CoilState::On } else { ::mbus_core::models::coil::CoilState::Off };
+                    ::core::result::Result::Ok(())
+                }
+            }
+        } else {
+            quote! {
+                #addr => {
+                    self.#ident = value;
+                    ::core::result::Result::Ok(())
+                }
             }
         }
     });
@@ -447,19 +462,27 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
         })?;
 
         let ty = &field.ty;
+        let mut is_coil_state = false;
         let ty_ok = match ty {
             syn::Type::Path(p) => p
                 .path
                 .segments
                 .last()
-                .map(|seg| seg.ident == "bool")
+                .map(|seg| {
+                    if seg.ident == "CoilState" {
+                        is_coil_state = true;
+                        true
+                    } else {
+                        seg.ident == "bool"
+                    }
+                })
                 .unwrap_or(false),
             _ => false,
         };
         if !ty_ok {
             return Err(Error::new_spanned(
                 ty,
-                "CoilsModel fields must be bool (phase 1 limitation); change this field type to bool",
+                "CoilsModel fields must be CoilState or bool; change this field type to CoilState",
             ));
         }
 
@@ -491,6 +514,7 @@ fn parse_coils_fields(input: &DeriveInput) -> Result<Vec<CoilField>, Error> {
             ident,
             addr,
             notify_via_batch,
+            is_coil_state,
         });
     }
 
@@ -568,7 +592,11 @@ fn expand_discrete_inputs_model(input: &DeriveInput) -> Result<proc_macro2::Toke
     let encode_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! { #addr => self.#ident, }
+        if f.is_discrete_input_state {
+            quote! { #addr => self.#ident == ::mbus_core::models::discrete_input::DiscreteInputState::On, }
+        } else {
+            quote! { #addr => self.#ident, }
+        }
     });
 
     Ok(quote! {
@@ -652,19 +680,27 @@ fn parse_discrete_inputs_fields(input: &DeriveInput) -> Result<Vec<DiscreteInput
         })?;
 
         let ty = &field.ty;
+        let mut is_discrete_input_state = false;
         let ty_ok = match ty {
             syn::Type::Path(p) => p
                 .path
                 .segments
                 .last()
-                .map(|seg| seg.ident == "bool")
+                .map(|seg| {
+                    if seg.ident == "DiscreteInputState" || seg.ident == "CoilState" {
+                        is_discrete_input_state = true;
+                        true
+                    } else {
+                        seg.ident == "bool"
+                    }
+                })
                 .unwrap_or(false),
             _ => false,
         };
         if !ty_ok {
             return Err(Error::new_spanned(
                 ty,
-                "DiscreteInputsModel fields must be bool; change this field type to bool",
+                "DiscreteInputsModel fields must be DiscreteInputState or bool; change this field type to DiscreteInputState",
             ));
         }
 
@@ -687,7 +723,11 @@ fn parse_discrete_inputs_fields(input: &DeriveInput) -> Result<Vec<DiscreteInput
             )
         })?;
 
-        out.push(DiscreteInputField { ident, addr });
+        out.push(DiscreteInputField {
+            ident,
+            addr,
+            is_discrete_input_state,
+        });
     }
 
     Ok(out)
@@ -1297,7 +1337,7 @@ fn build_write_single_coil_route_with_hooks(
             quote! {
                 if !__hook_dispatched {
                     if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
-                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        let __packed: u8 = value.to_bit();
                         self.#batch_fn(address, 1u16, &[__packed])?;
                     }
                 }
@@ -1317,7 +1357,7 @@ fn build_write_single_coil_route_with_hooks(
                 };
                 #batch_notify_block
                 <#field_ty as ::mbus_server::CoilMap>::write_single(
-                    &mut self.#field_ident, address, value,
+                    &mut self.#field_ident, address, value == ::mbus_core::models::coil::CoilState::On,
                 )?;
                 wrote = true;
             } else {
@@ -1915,7 +1955,7 @@ fn expand_modbus_app_struct(
                     &mut Self,
                     u16,
                     bool,
-                    bool,
+                    ::mbus_core::models::coil::CoilState,
                 ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> = Self::#hook_ident;
             });
         }
@@ -2120,7 +2160,7 @@ fn expand_modbus_app_struct(
                 txn_id: u16,
                 unit_id_or_slave_addr: ::mbus_core::transport::UnitIdOrSlaveAddr,
                 address: u16,
-                value: bool,
+                value: ::mbus_core::models::coil::CoilState,
             ) -> ::core::result::Result<(), ::mbus_core::errors::MbusError> {
                 let _ = (txn_id, unit_id_or_slave_addr);
                 let result: ::core::result::Result<(), ::mbus_core::errors::MbusError> = (|| {
@@ -2683,7 +2723,7 @@ fn build_async_write_single_coil_route(
                             &self.#field_ident, address, 1u16, &mut __old_buf,
                         );
                         let __old_val = (__old_buf[0] & 1u8) != 0u8;
-                        if let Err(__e) = self.#hook_fn(address, __old_val, value).await {
+                        if let Err(__e) = self.#hook_fn(address, __old_val, state).await {
                             return ::mbus_async::server::ModbusResponse::exception(
                                 ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
                                 mbus_err_to_exception(__e),
@@ -2699,7 +2739,7 @@ fn build_async_write_single_coil_route(
             quote! {
                 if !__hook_dispatched {
                     if <#field_ty as ::mbus_server::CoilMap>::is_batch_notified(address) {
-                        let __packed: u8 = if value { 1u8 } else { 0u8 };
+                        let __packed: u8 = state.to_bit();
                         if let Err(__e) = self.#batch_fn(address, 1u16, &[__packed]).await {
                             return ::mbus_async::server::ModbusResponse::exception(
                                 ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
@@ -2724,7 +2764,7 @@ fn build_async_write_single_coil_route(
                 };
                 #batch_notify_block
                 if let Err(__e) = <#field_ty as ::mbus_server::CoilMap>::write_single(
-                    &mut self.#field_ident, address, value,
+                    &mut self.#field_ident, address, state == ::mbus_core::models::coil::CoilState::On,
                 ) {
                     return ::mbus_async::server::ModbusResponse::exception(
                         ::mbus_core::function_codes::public::FunctionCode::WriteSingleCoil,
@@ -3123,7 +3163,7 @@ fn generate_async_handler_impl(
     let write_single_coil_arm = if !coil_fields.is_empty() {
         quote! {
             #[cfg(feature = "coils")]
-            ::mbus_async::server::ModbusRequest::WriteSingleCoil { address, value, .. } => {
+            ::mbus_async::server::ModbusRequest::WriteSingleCoil { address, state, .. } => {
                 let mut wrote = false;
                 #coil_write_single_route
                 if !wrote {
@@ -3132,7 +3172,7 @@ fn generate_async_handler_impl(
                         ::mbus_core::errors::ExceptionCode::IllegalDataAddress,
                     );
                 }
-                ::mbus_async::server::ModbusResponse::echo_coil(address, value)
+                ::mbus_async::server::ModbusResponse::echo_coil(address, state)
             }
         }
     } else {

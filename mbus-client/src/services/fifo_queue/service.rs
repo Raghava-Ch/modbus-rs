@@ -2,6 +2,7 @@ use heapless::Vec;
 
 use crate::services::fifo_queue::{FifoQueue, request::ReqPduCompiler, response::ResponseParser};
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
@@ -16,7 +17,7 @@ impl ServiceBuilder {
     /// Sends a Read FIFO Queue request.
     pub(crate) fn read_fifo_queue(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {

@@ -2,9 +2,11 @@ use heapless::Vec;
 
 use crate::services::coil::{Coils, request::ReqPduCompiler, response::ResponseParser};
 use mbus_core::{
+    UnitIdOrSlaveAddr,
     data_unit::common::{self, MAX_ADU_FRAME_LEN, Pdu},
     errors::MbusError,
     function_codes::public::FunctionCode,
+    models::coil,
     transport::TransportType,
 };
 
@@ -25,7 +27,7 @@ impl ServiceBuilder {
     ///
     pub fn read_coils(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         transport_type: TransportType,
@@ -45,19 +47,19 @@ impl ServiceBuilder {
     /// A `Result` containing the raw bytes of the Modbus ADU to be sent, or an `MbusError` if the request could not be created.
     pub fn write_single_coil(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: coil::CoilState,
         transport_type: TransportType,
     ) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        let pdu = ReqPduCompiler::write_single_coil_request(address, value)?;
+        let pdu = ReqPduCompiler::write_single_coil_request(address, state)?;
         common::compile_adu_frame(txn_id, unit_id, pdu, transport_type)
     }
 
     /// Sends a Write Multiple Coils request to a Modbus server and registers the expected response.
     pub fn write_multiple_coils(
         txn_id: u16,
-        unit_id: u8,
+        unit_id: UnitIdOrSlaveAddr,
         address: u16,
         quantity: u16,
         values: &Coils,
@@ -87,12 +89,12 @@ impl ServiceBuilder {
         function_code: FunctionCode,
         pdu: &Pdu,
         address: u16,
-        value: bool,
+        state: coil::CoilState,
     ) -> Result<(), MbusError> {
         if function_code != FunctionCode::WriteSingleCoil {
             return Err(MbusError::InvalidFunctionCode);
         }
-        if ResponseParser::parse_write_single_coil_response(pdu, address, value).is_ok() {
+        if ResponseParser::parse_write_single_coil_response(pdu, address, state).is_ok() {
             Ok(())
         } else {
             Err(MbusError::ParseError)

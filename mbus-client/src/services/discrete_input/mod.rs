@@ -35,8 +35,12 @@ mod tests {
         self, request::ReqPduCompiler, response::ResponseParser,
     };
     use mbus_core::{
-        data_unit::common::Pdu, errors::MbusError, function_codes::public::FunctionCode,
-        models::discrete_input::DiscreteInputs, transport::TransportType,
+        UnitIdOrSlaveAddr,
+        data_unit::common::Pdu,
+        errors::MbusError,
+        function_codes::public::FunctionCode,
+        models::discrete_input::{DiscreteInputState, DiscreteInputs},
+        transport::TransportType,
     };
 
     // --- Request Creation Tests ---
@@ -165,9 +169,9 @@ mod tests {
             .with_values(&values, 22)
             .expect("Should load values");
 
-        assert!(!inputs.value(196).unwrap()); // Bit 0 of 0xAC is 0
-        assert!(inputs.value(198).unwrap());
-        assert!(inputs.value(203).unwrap());
+        assert_eq!(inputs.value(196).unwrap(), DiscreteInputState::Off); // Bit 0 of 0xAC is 0
+        assert_eq!(inputs.value(198).unwrap(), DiscreteInputState::On);
+        assert_eq!(inputs.value(203).unwrap(), DiscreteInputState::On);
 
         // Boundary checks
         assert_eq!(inputs.value(195).unwrap_err(), MbusError::InvalidAddress); // Too low
@@ -183,7 +187,7 @@ mod tests {
     fn test_service_read_discrete_inputs_tcp() {
         let adu = discrete_input::service::ServiceBuilder::read_discrete_inputs(
             0x1234,
-            1,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
             0,
             10,
             TransportType::StdTcp,

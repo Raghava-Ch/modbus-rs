@@ -32,6 +32,7 @@
 //! use mbus_core::errors::MbusError;
 //!
 //! # use mbus_core::data_unit::common::MAX_ADU_FRAME_LEN;
+//! # use mbus_core::models::coil::CoilState;
 //! # use mbus_client::app::{CoilResponse, RequestErrorNotifier};
 //! # #[cfg(feature = "traffic")]
 //! # use mbus_client::app::TrafficNotifier;
@@ -60,8 +61,8 @@
 //!         // Handle the data here
 //!     }
 //!     // Implement other CoilResponse methods or use default empty implementations if not needed
-//!     fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-//!     fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
+//!     fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
+//!     fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
 //!     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 //! }
 //! # impl RequestErrorNotifier for MyDevice {

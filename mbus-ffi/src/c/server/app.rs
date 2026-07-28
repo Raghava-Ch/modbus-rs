@@ -122,7 +122,7 @@ impl ServerCoilHandler for CServerApp {
         txn_id: u16,
         unit_id_or_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: mbus_core::models::coil::CoilState,
     ) -> Result<(), MbusError> {
         let Some(cb) = self.handlers.on_write_single_coil else {
             return Err(MbusError::InvalidFunctionCode);
@@ -131,7 +131,7 @@ impl ServerCoilHandler for CServerApp {
             unit_id: unit_id_or_slave_addr.get(),
             txn_id,
             address,
-            value,
+            value: state == mbus_core::models::coil::CoilState::On,
         };
         let exc = unsafe { cb(&req, self.handlers.userdata) };
         if exc != MbusServerExceptionCode::Ok {

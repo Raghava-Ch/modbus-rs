@@ -74,6 +74,7 @@ pub mod transport {
     }
 }
 
+pub mod models { pub mod coil { #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum CoilState { On, Off } } }
 pub mod app {
     pub trait ServerExceptionHandler {}
     pub trait ServerCoilHandler {}
@@ -92,7 +93,6 @@ struct Holding {
     #[reg(addr = 0)]
     setpoint: u16,
 }
-
 #[modbus_app(holding_registers(holding, on_write_0 = on_setpoint))]
 struct App {
     holding: Holding,
