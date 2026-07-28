@@ -10,6 +10,7 @@ export default defineConfig({
   plugins: [wasm(), topLevelAwait()],
   resolve: {
     alias: {
+      'modbus-rs/web': path.resolve(__dirname, './dist/index.web.js'),
       'modbus-rs': path.resolve(__dirname, './dist/index.browser.js'),
     },
   },

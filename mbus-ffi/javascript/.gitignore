@@ -14,6 +14,7 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
+**__screenshots__**
 
 # Per-platform stub package READMEs are committed; their .node binaries are not.
 npm/*/*.node

@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import init, { WasmWsModbusServer } from 'modbus-rs';
-
-await init(); // initialise WASM in browser context
+import { WasmWsModbusServer } from 'modbus-rs/web';
 
 const WS_PORT = (import.meta as any).env.VITE_WS_TEST_PORT; // injected by globalSetup
 
