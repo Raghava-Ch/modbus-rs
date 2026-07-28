@@ -460,10 +460,7 @@ for (const [name, content] of Object.entries(wrappers)) {
 
 // Consolidated WASM postbuild logic (only if wasm output exists in dist/npm/wasm)
 const wasmNpmDir = path.join(distDir, 'npm/wasm');
-const bundlerJsPath = path.join(wasmNpmDir, 'dist/bundler/modbus-rs.js');
-const webJsPath = path.join(wasmNpmDir, 'dist/web/modbus-rs.js');
-
-if (fs.existsSync(bundlerJsPath) && fs.existsSync(webJsPath)) {
+if (fs.existsSync(wasmNpmDir)) {
   const filesToDelete = [
     'dist/web/.gitignore',
     'dist/bundler/.gitignore',
@@ -513,23 +510,35 @@ if (fs.existsSync(bundlerJsPath) && fs.existsSync(webJsPath)) {
   }
 
   const modbusErrorCodeExport = `
-  export const ModbusErrorCode = {
-    EXCEPTION: 'MODBUS_EXCEPTION',
-    TIMEOUT: 'MODBUS_TIMEOUT',
-    TRANSPORT: 'MODBUS_TRANSPORT',
-    INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT',
-    CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED',
-    INTERNAL: 'MODBUS_INTERNAL',
-  };
+export const ModbusErrorCode = {
+  EXCEPTION: 'MODBUS_EXCEPTION',
+  TIMEOUT: 'MODBUS_TIMEOUT',
+  TRANSPORT: 'MODBUS_TRANSPORT',
+  INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT',
+  CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED',
+  INTERNAL: 'MODBUS_INTERNAL',
+};
 `;
 
-  if (!fs.readFileSync(bundlerJsPath, 'utf8').includes('ModbusErrorCode')) {
-    fs.appendFileSync(bundlerJsPath, modbusErrorCodeExport);
+  const bundlerJsPath = path.join(wasmNpmDir, 'dist/bundler/modbus-rs.js');
+  const webJsPath = path.join(wasmNpmDir, 'dist/web/modbus-rs.js');
+
+  const targetsToAppend = [bundlerJsPath, webJsPath];
+  let appendedAny = false;
+
+  for (const targetPath of targetsToAppend) {
+    if (fs.existsSync(targetPath)) {
+      const content = fs.readFileSync(targetPath, 'utf8');
+      if (!content.includes('export const ModbusErrorCode')) {
+        fs.appendFileSync(targetPath, modbusErrorCodeExport);
+        appendedAny = true;
+      }
+    }
   }
-  if (!fs.readFileSync(webJsPath, 'utf8').includes('ModbusErrorCode')) {
-    fs.appendFileSync(webJsPath, modbusErrorCodeExport);
+
+  if (appendedAny) {
+    console.log('Appended ModbusErrorCode export to WASM build files.');
   }
-  console.log('Appended ModbusErrorCode export to WASM build files.');
 
   console.log('WASM postbuild tasks complete.');
 }
