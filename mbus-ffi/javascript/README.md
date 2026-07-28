@@ -8,19 +8,31 @@ High-performance Modbus TCP/RTU/ASCII client, server, and gateway for Node.js an
 - **TCP Client** - Full Modbus TCP/IP client implementation (supports communicating with multiple unit IDs behind a single IP address and a serial port)
 - **Serial Client** - Modbus RTU and ASCII over serial port
 - **TCP & Serial Servers** - Build Modbus TCP servers, or Serial RTU and ASCII servers, using custom JavaScript handlers to respond to incoming requests
-- **Modbus Gateway** - Deploy high-performance gateways supporting WebSockets, TCP, and Serial (RTU/ASCII) as upstream channels, and TCP/Serial (RTU/ASCII) as downstream channels (WebSocket downstream support planned for a future release), dynamically routing requests based on unit ID mapping tables
+- **Modbus Gateway** - Deploy high-performance gateways supporting WebSockets, TCP, and Serial (RTU/ASCII) as upstream channels, and TCP/Serial (RTU/ASCII) as downstream channels, dynamically routing requests based on unit ID mapping tables
+- **Automatic WebAssembly Initialization** - Browser WASM transports and servers auto-initialize WebAssembly memory natively on demand
 - **Thread Safety & Concurrency** - Rust-backed concurrent architecture ensures safe access across multiple async execution contexts
 - **Safety Locks** - Integrated bus locking to prevent command collisions and state corruption
 - **Multi-drop Serial Support** - Manage and communicate with multiple device unit IDs on a single physical RTU/ASCII bus
 - **High Performance** - Native Rust core with napi-rs bindings for Node.js and wasm-bindgen for the browser
 - **Type Safe** - Full TypeScript definitions included
-- **Cross Platform** - Pre-built binaries for Linux, macOS, Windows, and WebAssembly. Can also be built locally for platform specifi native Node.js.
+- **Cross Platform** - Pre-built binaries for Linux, macOS, Windows, and WebAssembly. Can also be built locally for platform-specific native Node.js.
 
 ## Installation
 
 ```bash
 npm install modbus-rs
 ```
+
+## Import Subpaths & Target Selection
+
+| Import Subpath | Target Build | Recommended Use Case |
+| :--- | :--- | :--- |
+| `import from 'modbus-rs'` | Node.js N-API / Browser Bundler | Auto-selects native Node.js binary or bundler WASM build |
+| `import from 'modbus-rs/browser'` | Bundler WASM (`--target bundler`) | Webpack 5, Vite (with `vite-plugin-wasm`), Rollup |
+| `import from 'modbus-rs/bundler'` | Bundler WASM (`--target bundler`) | Explicit alias for `--target bundler` |
+| `import from 'modbus-rs/web'` | Web WASM (`--target web`) | Raw browser script tags, Vite, or CDN |
+
+---
 
 ## Quick Start
 
@@ -145,55 +157,64 @@ async function main() {
 
   console.log('Gateway listening on port 502');
   
-  process.on('SIGINT', async () => {
-    await gateway.shutdown();
-    process.exit(0);
-  });
+  process.exit(0);
 }
 
 main().catch(console.error);
 ```
 
-### Browser / WebAssembly (WebSocket Client)
+---
+
+## WebAssembly / Browser Usage & Auto-Initialization
+
+### Automatic WebAssembly Initialization (`modbus-rs/web`)
+
+When importing from `'modbus-rs/web'`, **manual `await init()` calls are no longer required**. 
+
+Calling factory entry points (`WasmWsTransport.connect`, `WasmRtuTransport.open`, `WasmWsModbusServer.bind`, `WasmSerialModbusServer.bindRtu`, etc.) automatically triggers internal WebAssembly initialization (`ensureInit`) prior to execution:
 
 ```javascript
-import { WasmWsTransport } from 'modbus-rs';
+import { WasmWsTransport } from 'modbus-rs/web';
 
-async function main() {
-  // Connect via WebSocket gateway bridge
-  const transport = await WasmWsTransport.connect({
-    wsUrl: 'ws://127.0.0.1:8080/modbus',
-    requestTimeoutMs: 3000,
-  });
+// No manual await init() needed! WASM auto-initializes on connect():
+const transport = await WasmWsTransport.connect({
+  wsUrl: 'ws://127.0.0.1:8080/modbus',
+  requestTimeoutMs: 3000,
+});
 
-  // Create client bound to Unit ID 1
-  const client = transport.createClient({ unitId: 1 });
+const client = transport.createClient({ unitId: 1 });
+const registers = await client.readHoldingRegisters({ address: 0, quantity: 10 });
+console.log('Registers:', Array.from(registers));
 
-  try {
-    // Read holding registers (FC03)
-    const registers = await client.readHoldingRegisters({
-      address: 0,
-      quantity: 10,
-    });
-    console.log('Registers:', Array.from(registers));
-  } finally {
-    transport.close();
-  }
-}
+transport.close();
+```
 
-main().catch(console.error);
+### Manual or Custom WASM Binary Path Loading
+
+If you prefer to initialize WebAssembly upfront or provide a custom `.wasm` URL/path, `ensureInit` (or default `init`) remains fully supported:
+
+```javascript
+import init, { ensureInit, WasmWsTransport } from 'modbus-rs/web';
+
+// Option A: Explicit initialization upfront
+await init();
+
+// Option B: Provide a custom WASM binary URL or path
+await ensureInit('/static/custom_modbus_bg.wasm');
+
+const transport = await WasmWsTransport.connect({ wsUrl: 'ws://127.0.0.1:8080' });
 ```
 
 ### Browser / WebAssembly (Web Serial Client)
 
 ```javascript
-import { requestSerialPort, WasmRtuTransport } from 'modbus-rs';
+import { requestSerialPort, WasmRtuTransport } from 'modbus-rs/web';
 
 async function connectSerialDevice() {
   // Request Web Serial port handle (must be called from a user gesture)
   const portHandle = await requestSerialPort();
 
-  // Open serial transport for physical RTU serial port
+  // Open serial transport for physical RTU serial port (auto-initializes WASM)
   const transport = await WasmRtuTransport.open(portHandle, {
     baudRate: 9600,
     dataBits: 8,
@@ -217,17 +238,20 @@ async function connectSerialDevice() {
 }
 ```
 
+---
+
 ## Migration Guide
 
 Detailed step-by-step migration guides are available in the [Migration Guides](https://github.com/Raghava-Ch/modbus-rs/tree/main/documentation/migrations) directory.
 
+---
 
 ## Error Handling with Code Constants
 
-Error code constants are now exported:
+Error code constants are exported for both Node.js and Browser targets:
 
-```js
-const { getModbusErrorCode, ModbusErrorCode } = require('modbus-rs');
+```javascript
+import { getModbusErrorCode, ModbusErrorCode } from 'modbus-rs';
 
 try {
   await client.readHoldingRegisters({ address: 0, quantity: 10 });
@@ -242,16 +266,19 @@ try {
 }
 ```
 
+---
+
 ## Known Limitations
 
 - **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **64 routing entries**. Attempting to add more will throw at `bind()` time.
-- **Gateway Downstream**: WebSockets are currently not supported as a downstream channel (support is planned for a future release).
 
-> *If any of these limitations are a high priority for your project, please [create a GitHub Issue](https://github.com/Raghava-Ch/modbus-rs/issues) and will give high priority.*
+> *If any of these limitations are a high priority for your project, please [create a GitHub Issue](https://github.com/Raghava-Ch/modbus-rs/issues).*
+
+---
 
 ## API Reference
 
-### AsyncTcpTransport
+### AsyncTcpTransport (Node.js)
 
 - `static connect(opts: TcpTransportOptions): Promise<AsyncTcpTransport>` - Connect to a Modbus TCP server
 - `close(): Promise<void>` - Close the connection
@@ -261,7 +288,7 @@ try {
 - `clearRequestTimeout(): void` - Clear the global request timeout
 - `pendingRequests: boolean` - (Getter) Returns whether there are requests currently in flight
 
-### AsyncRtuTransport / AsyncAsciiTransport
+### AsyncRtuTransport / AsyncAsciiTransport (Node.js)
 
 - `static open(opts: RtuTransportOptions | AsciiTransportOptions): Promise<AsyncRtuTransport | AsyncAsciiTransport>` - Open the serial port
 - `close(): Promise<void>` - Close the connection
@@ -273,23 +300,31 @@ try {
 
 ### WasmWsTransport (Browser WebSockets)
 
-- `static connect(opts: WasmWsTransportOptions): Promise<WasmWsTransport>` - Connect to a Modbus WebSocket gateway
+- `static connect(opts: WasmWsTransportOptions): Promise<WasmWsTransport>` - Connect to a Modbus WebSocket gateway (auto-initializes WASM)
 - `close(): void` - Close the WebSocket connection
 - `createClient(opts: CreateClientOptions): WasmWsModbusClient` - Create a logical client instance bound to a specific unit ID (required)
 
-### WasmRtuTransport / WasmAsciiTransport (Web Serial)
+### WasmRtuTransport / WasmAsciiTransport (Browser Web Serial)
 
-- `static open(port: SerialPort, opts: WasmSerialTransportOptions): Promise<WasmRtuTransport | WasmAsciiTransport>` - Open a Web Serial port in RTU or ASCII mode
+- `static open(port: SerialPort, opts: WasmSerialTransportOptions): Promise<WasmRtuTransport | WasmAsciiTransport>` - Open a Web Serial port in RTU or ASCII mode (auto-initializes WASM)
 - `close(): void` - Close the serial connection
 - `createClient(opts: CreateClientOptions): WasmSerialModbusClient` - Create a logical client instance bound to a specific unit ID (required)
 
 ### requestSerialPort (Web Serial Helper)
 
-- `requestSerialPort(): Promise<SerialPort>` - Request Web Serial port handle from user (must be invoked from a user gesture like a button click)
+- `requestSerialPort(): Promise<SerialPort>` - Request Web Serial port handle from user (auto-initializes WASM; must be invoked from a user gesture like a button click)
 
-### AsyncTcpModbusClient / AsyncSerialModbusClient / WasmWsModbusClient / WasmSerialModbusClient
+### WasmWsModbusServer / WasmSerialModbusServer (Browser WebAssembly Servers)
 
-These logical clients contain all the Modbus function code methods:
+- `static bind(opts, handlers): Promise<WasmWsModbusServer>` - Create and bind a WebSocket Modbus server (auto-initializes WASM)
+- `static bindRtu(opts, handlers): Promise<WasmSerialModbusServer>` - Create and bind a Web Serial RTU Modbus server (auto-initializes WASM)
+- `static bindAscii(opts, handlers): Promise<WasmSerialModbusServer>` - Create and bind a Web Serial ASCII Modbus server (auto-initializes WASM)
+- `serve(): Promise<void>` - Start listening and serving requests
+- `shutdown(): void` - Stop the WASM server
+
+### Logical Clients (All Targets)
+
+Logical clients (`AsyncTcpModbusClient`, `AsyncSerialModbusClient`, `WasmWsModbusClient`, `WasmSerialModbusClient`) expose standard Modbus function code methods:
 
 - `readCoils(opts)` - FC01: Read Coils
 - `readDiscreteInputs(opts)` - FC02: Read Discrete Inputs
@@ -307,23 +342,25 @@ These logical clients contain all the Modbus function code methods:
 - `diagnostics(opts)` - FC08: Diagnostics
 - `readDeviceIdentification(opts)` - FC43/14: Read Device Identification
 
-### AsyncTcpModbusServer
+### AsyncTcpModbusServer (Node.js)
 
 - `static bind(opts, handlers): Promise<AsyncTcpModbusServer>` - Create and start a TCP server
 - `shutdown(): Promise<void>` - Stop the server
 
-### AsyncSerialModbusServer
+### AsyncSerialModbusServer (Node.js)
 
 - `static bindRtu(opts, handlers): Promise<AsyncSerialModbusServer>` - Create and start a Serial RTU server
 - `static bindAscii(opts, handlers): Promise<AsyncSerialModbusServer>` - Create and start a Serial ASCII server
 - `shutdown(): Promise<void>` - Stop the server
 
-### AsyncTcpGateway
+### AsyncTcpGateway (Node.js)
 
 - `static bind(opts, config): Promise<AsyncTcpGateway>` - Create and start a gateway
 - `shutdown(): Promise<void>` - Stop the gateway
 
-## Supported platforms
+---
+
+## Supported Platforms
 
 Pre-built binaries are published for:
 
@@ -335,7 +372,9 @@ Pre-built binaries are published for:
 Other targets can be built locally via `cargo build -p mbus-ffi --features nodejs,full`
 followed by `npm run build`.
 
+---
+
 ## License
 
 GPL-3.0-only — see [LICENSE](./LICENSE).
-A commercial license is available for proprietary use; contact ch.raghava44@gmail.com.
+A commercial license is available for proprietary use; contact [ch.raghava44@gmail.com](mailto:ch.raghava44@gmail.com).

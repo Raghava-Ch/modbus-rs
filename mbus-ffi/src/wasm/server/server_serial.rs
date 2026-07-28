@@ -105,6 +105,7 @@ impl WasmSerialServer {
     ///
     /// @returns {Promise<void>} A promise that completes when the server stops
     /// or rejects with the error that caused the server to stop.
+    #[wasm_bindgen]
     pub async fn serve(&self) -> Result<(), JsValue> {
         let fut = self
             .task_fut
@@ -118,6 +119,7 @@ impl WasmSerialServer {
     /// Stops the server and releases the serial port.
     ///
     /// @returns {Promise<void>} A promise that resolves when the shutdown is complete.
+    #[wasm_bindgen]
     pub async fn shutdown(&self) -> Result<(), JsValue> {
         if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
             let _ = tx.send(());

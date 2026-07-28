@@ -967,7 +967,7 @@ export class WasmRtuTransport {
     /**
      * Closes the serial port connection and terminates the background task.
      */
-    close(): void;
+    close(): Promise<void>;
     /**
      * Returns `true` if there are any in-flight Modbus requests pending a response.
      */
@@ -1026,7 +1026,7 @@ export class WasmAsciiTransport {
     /**
      * Closes the serial port connection and terminates the background task.
      */
-    close(): void;
+    close(): Promise<void>;
     /**
      * Returns `true` if there are any in-flight Modbus requests pending a response.
      */

@@ -95,6 +95,7 @@ impl WasmTcpServer {
     ///
     /// @returns {Promise<void>} A promise that completes when the server stops
     /// or rejects with the error that caused the server to stop.
+    #[wasm_bindgen]
     pub async fn serve(&self) -> Result<(), JsValue> {
         let fut = self
             .task_fut
@@ -108,6 +109,7 @@ impl WasmTcpServer {
     /// Stops the server and closes the WebSocket connection.
     ///
     /// @returns {Promise<void>} A promise that resolves when the shutdown is complete.
+    #[wasm_bindgen]
     pub async fn shutdown(&self) -> Result<(), JsValue> {
         if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
             let _ = tx.send(());

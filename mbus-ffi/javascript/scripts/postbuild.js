@@ -521,15 +521,24 @@ if (fs.existsSync(wasmNpmDir)) {
     }
   }
 
-  // Copy README.md and LICENSE to dist/npm/wasm/
+  // Write minimal target-specific README.md and copy LICENSE to dist/npm/wasm/
   const rootDir = path.join(__dirname, '../../..');
-  const readmeSrc = path.join(rootDir, 'README.md');
   const licenseSrc = path.join(rootDir, 'LICENSE');
 
-  if (fs.existsSync(readmeSrc)) {
-    fs.copyFileSync(readmeSrc, path.join(wasmNpmDir, 'README.md'));
-    console.log('Copied README.md');
-  }
+  const wasmReadmeContent = [
+    `# \`modbus-rs-wasm\``,
+    ``,
+    `Prebuilt WebAssembly package for [\`modbus-rs\`](https://www.npmjs.com/package/modbus-rs).`,
+    ``,
+    `Installed automatically by \`modbus-rs\` via \`optionalDependencies\`. You do not need to install this package directly.`,
+    ``,
+    `License: GPL-3.0-only`,
+    ``,
+    `Commercial licenses are also available for proprietary use; contact ch.raghava44@gmail.com.`,
+    ``
+  ].join('\n');
+  fs.writeFileSync(path.join(wasmNpmDir, 'README.md'), wasmReadmeContent, 'utf8');
+  console.log('Generated minimal WASM README.md');
   if (fs.existsSync(licenseSrc)) {
     fs.copyFileSync(licenseSrc, path.join(wasmNpmDir, 'LICENSE'));
     console.log('Copied LICENSE');

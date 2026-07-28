@@ -340,6 +340,7 @@ impl WasmRtuTransport {
     }
 
     /// Closes the serial port connection and terminates the background task.
+    #[wasm_bindgen]
     pub fn close(&mut self) -> Promise {
         *self.cmd_tx.borrow_mut() = futures_channel::mpsc::unbounded::<WasmCommand>().0;
         self.pending_count.set(0);
@@ -560,6 +561,7 @@ impl WasmAsciiTransport {
     }
 
     /// Closes the serial port connection and terminates the background task.
+    #[wasm_bindgen]
     pub fn close(&mut self) -> Promise {
         *self.cmd_tx.borrow_mut() = futures_channel::mpsc::unbounded::<WasmCommand>().0;
         self.pending_count.set(0);
