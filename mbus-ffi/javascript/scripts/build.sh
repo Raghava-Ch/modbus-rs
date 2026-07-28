@@ -8,7 +8,7 @@
 #     The serialport crate's transitive dependency requires the udev headers.
 #       sudo apt-get install -y libudev-dev
 #
-# Outputs `mbus-ffi/nodejs/modbus-rs.<triple>.node`.
+# Outputs `mbus-ffi/javascript/modbus-rs.<triple>.node`.
 
 set -euo pipefail
 

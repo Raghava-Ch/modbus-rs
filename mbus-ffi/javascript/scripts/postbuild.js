@@ -274,7 +274,7 @@ module.exports.ModbusErrorCode = {
  */
 module.exports.getModbusErrorCode = function getModbusErrorCode(err) {
   if (!err || typeof err.message !== 'string') return undefined
-  const m = err.message.match(/^\[([A-Z_]+)(?::[^\]]*)?\]/)
+  const m = err.message.match(/^\\[([A-Z_]+)(?::[^\\]]*)?\\]/)
   return m ? m[1] : undefined
 }
 
