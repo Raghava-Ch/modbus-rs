@@ -1,6 +1,6 @@
 {
   "name": "modbus-rs-linux-x64-gnu",
-  "version": "0.15.8",
+  "version": "0.15.9",
   "os": [
     "linux"
   ],

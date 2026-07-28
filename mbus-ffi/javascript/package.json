@@ -101,11 +101,11 @@
     "LICENSE"
   ],
   "optionalDependencies": {
-    "modbus-rs-darwin-arm64": "0.15.8",
-    "modbus-rs-darwin-x64": "0.15.8",
-    "modbus-rs-linux-arm64-gnu": "0.15.8",
-    "modbus-rs-linux-x64-gnu": "0.15.8",
-    "modbus-rs-wasm": "0.15.8",
-    "modbus-rs-win32-x64-msvc": "0.15.8"
+    "modbus-rs-darwin-arm64": "0.15.9",
+    "modbus-rs-darwin-x64": "0.15.9",
+    "modbus-rs-linux-arm64-gnu": "0.15.9",
+    "modbus-rs-linux-x64-gnu": "0.15.9",
+    "modbus-rs-wasm": "0.15.9",
+    "modbus-rs-win32-x64-msvc": "0.15.9"
   }
 }
