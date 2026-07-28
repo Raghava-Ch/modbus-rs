@@ -957,7 +957,7 @@ typedef struct MbusWriteSingleCoilCtx {
     /**
      * Written value (1 = ON, 0 = OFF).
      */
-    struct CoilState value;
+    uint8_t value;
     /**
      * User-provided opaque pointer.
      */

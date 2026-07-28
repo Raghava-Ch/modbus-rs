@@ -26,7 +26,7 @@ class EchoApp(modbus_rs.ModbusApp):
 
     def __init__(self):
         super().__init__()
-        self._coils = [False] * 256
+        self._coils = [modbus_rs.CoilState.Off] * 256
         self._holding = [0] * 256
         self._input = list(range(256))
 
@@ -258,16 +258,16 @@ class TestTcpClientIntegration:
     def test_write_coil_and_read_back(self, server_port):
         with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
             client = transport.create_client(unit_id=1)
-            client.write_coil(5, True)
+            client.write_coil(5, modbus_rs.CoilState.On)
             coils = client.read_coils(5, 1)
-        assert coils == [True]
+        assert coils == [modbus_rs.CoilState.On]
 
     def test_write_multiple_coils(self, server_port):
         with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
             client = transport.create_client(unit_id=1)
-            client.write_coils(0, [True, False, True])
+            client.write_coils(0, [modbus_rs.CoilState.On, modbus_rs.CoilState.Off, modbus_rs.CoilState.On])
             coils = client.read_coils(0, 3)
-        assert coils == [True, False, True]
+        assert coils == [modbus_rs.CoilState.On, modbus_rs.CoilState.Off, modbus_rs.CoilState.On]
 
     def test_write_multiple_registers(self, server_port):
         with modbus_rs.TcpTransport.connect("127.0.0.1", port=server_port) as transport:
@@ -378,7 +378,7 @@ class AsyncEchoApp(modbus_rs.ModbusApp):
 
     def __init__(self):
         super().__init__()
-        self._coils = [False] * 256
+        self._coils = [modbus_rs.CoilState.Off] * 256
         self._holding = [0] * 256
 
     async def handle_read_coils(self, address, count):
@@ -442,9 +442,9 @@ class TestAsyncHandlersIntegration:
     def test_async_write_coil_and_read_back(self, async_server_port):
         with modbus_rs.TcpTransport.connect("127.0.0.1", port=async_server_port) as transport:
             client = transport.create_client(unit_id=1)
-            client.write_coil(5, True)
+            client.write_coil(5, modbus_rs.CoilState.On)
             coils = client.read_coils(5, 1)
-        assert coils == [True]
+        assert coils == [modbus_rs.CoilState.On]
 
 
 # ---------------------------------------------------------------------------
@@ -466,9 +466,9 @@ class TestSerialClientIntegration:
             serial_server_ports, baud_rate=9600
         ) as transport:
             client = transport.create_client(unit_id=1)
-            client.write_coil(3, True)
+            client.write_coil(3, modbus_rs.CoilState.On)
             coils = client.read_coils(3, 1)
-        assert coils == [True]
+        assert coils == [modbus_rs.CoilState.On]
 
     def test_sync_serial_multi_client_same_transport(self, serial_server_ports):
         with modbus_rs.RtuTransport.open(

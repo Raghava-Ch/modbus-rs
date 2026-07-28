@@ -64,7 +64,7 @@ pub struct MbusWriteSingleCoilCtx {
     /// Coil address.
     pub address: u16,
     /// Written value (1 = ON, 0 = OFF).
-    pub value: coil::CoilState,
+    pub value: u8,
     /// User-provided opaque pointer.
     pub userdata: *mut c_void,
 }

@@ -251,7 +251,7 @@ impl mbus_client::app::CoilResponse for CApp {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
                 address,
-                value,
+                value: value.to_bit(),
                 userdata: self.callbacks.userdata,
             };
             unsafe {

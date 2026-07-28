@@ -460,7 +460,10 @@ for (const [name, content] of Object.entries(wrappers)) {
 
 // Consolidated WASM postbuild logic (only if wasm output exists in dist/npm/wasm)
 const wasmNpmDir = path.join(distDir, 'npm/wasm');
-if (fs.existsSync(wasmNpmDir)) {
+const bundlerJsPath = path.join(wasmNpmDir, 'dist/bundler/modbus-rs.js');
+const webJsPath = path.join(wasmNpmDir, 'dist/web/modbus-rs.js');
+
+if (fs.existsSync(bundlerJsPath) && fs.existsSync(webJsPath)) {
   const filesToDelete = [
     'dist/web/.gitignore',
     'dist/bundler/.gitignore',
@@ -520,15 +523,12 @@ if (fs.existsSync(wasmNpmDir)) {
   };
 `;
 
-  const bundlerJsPath = path.join(wasmNpmDir, 'dist/bundler/modbus-rs.js');
-  const webJsPath = path.join(wasmNpmDir, 'dist/web/modbus-rs.js');
-
-  if (!fs.existsSync(bundlerJsPath) || !fs.existsSync(webJsPath)) {
-    throw new Error('Could not find WASM bundler or web JS output to append ModbusErrorCode export');
+  if (!fs.readFileSync(bundlerJsPath, 'utf8').includes('ModbusErrorCode')) {
+    fs.appendFileSync(bundlerJsPath, modbusErrorCodeExport);
   }
-
-  fs.appendFileSync(bundlerJsPath, modbusErrorCodeExport);
-  fs.appendFileSync(webJsPath, modbusErrorCodeExport);
+  if (!fs.readFileSync(webJsPath, 'utf8').includes('ModbusErrorCode')) {
+    fs.appendFileSync(webJsPath, modbusErrorCodeExport);
+  }
   console.log('Appended ModbusErrorCode export to WASM build files.');
 
   console.log('WASM postbuild tasks complete.');
