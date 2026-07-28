@@ -38,7 +38,6 @@ use mbus_core::{
     transport::UnitIdOrSlaveAddr,
 };
 
-#[cfg(feature = "coils")]
 use mbus_core::models::coil::CoilState;
 // #[cfg(feature = "diagnostics")]
 // use crate::DeviceIdentificationResponse;

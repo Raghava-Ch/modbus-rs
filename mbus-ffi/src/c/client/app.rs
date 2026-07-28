@@ -220,7 +220,7 @@ impl mbus_client::app::CoilResponse for CApp {
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         _address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) {
         // Single coil: pack into the general read_coils callback with quantity=1
         if let Some(cb) = self.callbacks.on_read_coils {
@@ -251,7 +251,7 @@ impl mbus_client::app::CoilResponse for CApp {
                 txn_id,
                 unit_id: unit_id_slave_addr.get(),
                 address,
-                value: if value { 1 } else { 0 },
+                value,
                 userdata: self.callbacks.userdata,
             };
             unsafe {
@@ -524,12 +524,12 @@ impl mbus_client::app::DiscreteInputResponse for CApp {
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: mbus_core::models::coil::CoilState,
     ) {
         if let Some(cb) = self.callbacks.on_read_discrete_inputs {
             let discrete_inputs =
                 mbus_client::services::discrete_input::DiscreteInputs::new(address, 1).unwrap();
-            let byte_val: u8 = if value { 1 } else { 0 };
+            let byte_val: u8 = value.to_bit();
             let discrete_inputs = discrete_inputs.with_values(&[byte_val], 1).unwrap();
             let opaque_discrete_inputs = MbusDiscreteInputs::new(discrete_inputs);
             let ctx = MbusReadDiscreteInputsCtx {

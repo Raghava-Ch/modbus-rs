@@ -61,7 +61,7 @@ pub unsafe extern "C" fn mbus_coils_value(
 
     match unsafe { (*coils).inner().value(address) } {
         Ok(value) => {
-            unsafe { *out_value = value };
+            unsafe { *out_value = value == mbus_core::models::coil::CoilState::On };
             MbusStatusCode::MbusOk
         }
         Err(e) => MbusStatusCode::from(e),
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn mbus_coils_value_at_index(
     let address = inner.from_address().saturating_add(index);
     match inner.value(address) {
         Ok(value) => {
-            unsafe { *out_value = value };
+            unsafe { *out_value = value == mbus_core::models::coil::CoilState::On };
             MbusStatusCode::MbusOk
         }
         Err(e) => MbusStatusCode::from(e),

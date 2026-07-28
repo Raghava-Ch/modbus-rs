@@ -2061,10 +2061,10 @@ mod tests {
             txn_id: u16,
             unit_id_slave_addr: UnitIdOrSlaveAddr,
             address: u16,
-            value: bool,
+            value: mbus_core::models::discrete_input::DiscreteInputState,
         ) {
             let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
-            values[0] = if value { 0x01 } else { 0x00 };
+            values[0] = if value == mbus_core::models::discrete_input::DiscreteInputState::On { 0x01 } else { 0x00 };
             let inputs = DiscreteInputs::new(address, 1)
                 .unwrap()
                 .with_values(&values, 1)
@@ -4822,7 +4822,7 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_inputs.from_address(), address);
         assert_eq!(rcv_inputs.quantity(), 1);
-        assert!(rcv_inputs.value(address).unwrap());
+        assert_eq!(rcv_inputs.value(address).unwrap(), mbus_core::models::discrete_input::DiscreteInputState::On);
         assert_eq!(*rcv_quantity, 1);
     }
 

@@ -1,8 +1,9 @@
 use crate::mock_app::MockApp;
 use anyhow::Result;
 use modbus_rs::{
-    ClientServices, Coils, ConformityLevel, EncapsulatedInterfaceType, MbusError, ModbusConfig,
-    ModbusTcpConfig, ObjectId, ReadDeviceIdCode, StdTcpTransport, UnitIdOrSlaveAddr,
+    ClientServices, Coils, ConformityLevel, DiscreteInputState, EncapsulatedInterfaceType,
+    MbusError, ModbusConfig, ModbusTcpConfig, ObjectId, ReadDeviceIdCode, StdTcpTransport,
+    UnitIdOrSlaveAddr,
 };
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -678,7 +679,7 @@ fn test_client_services_read_single_discrete_input() -> Result<()> {
     assert_eq!(*rcv_unit_id, unit_id);
     assert_eq!(rcv_inputs.from_address(), address);
     assert_eq!(rcv_inputs.quantity(), 1);
-    assert!(rcv_inputs.value(address).unwrap());
+    assert_eq!(rcv_inputs.value(address).unwrap(), DiscreteInputState::On);
     assert_eq!(*rcv_quantity, 1);
 
     server_handle.join().unwrap()?;

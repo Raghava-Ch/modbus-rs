@@ -267,7 +267,7 @@ impl JsServerHandlers {
                     } else {
                         ModbusResponse::echo_coil(
                             address,
-                            state == mbus_core::models::coil::CoilState::On,
+                            state,
                         )
                     }
                 }

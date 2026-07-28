@@ -19,7 +19,7 @@ try {
   process.exit(0);
 }
 
-const { AsyncTcpTransport, AsyncTcpModbusServer, AsyncTcpGateway } = modbus;
+const { AsyncTcpTransport, AsyncTcpModbusServer, AsyncTcpGateway, CoilState } = modbus;
 
 const PORT = 25502;
 
@@ -159,9 +159,9 @@ test('round-trip reads/writes with JS server handlers', async (t) => {
   assert.deepEqual(regs, new Uint16Array([5, 6, 7]));
 
   // Test coils round-trip
-  await client.writeSingleCoil({ address: 5, value: 1 });
+  await client.writeSingleCoil({ address: 5, value: CoilState.On });
   let coilsVal = await client.readCoils({ address: 5, quantity: 1 });
-  assert.deepEqual(coilsVal, [1]);
+  assert.deepEqual(coilsVal, [CoilState.On]);
 });
 
 test('server exception handling: returning custom error exceptions', async (t) => {

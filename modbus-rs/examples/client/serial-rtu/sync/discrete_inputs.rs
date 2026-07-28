@@ -2,9 +2,9 @@ use anyhow::Result;
 #[cfg(feature = "traffic")]
 use modbus_rs::TrafficNotifier;
 use modbus_rs::{
-    BackoffStrategy, BaudRate, ClientServices, DataBits, DiscreteInputResponse, DiscreteInputs,
-    JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity, RequestErrorNotifier,
-    SerialMode, StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    BackoffStrategy, BaudRate, ClientServices, DataBits, DiscreteInputResponse, DiscreteInputState,
+    DiscreteInputs, JitterStrategy, MbusError, ModbusConfig, ModbusSerialConfig, Parity,
+    RequestErrorNotifier, SerialMode, StdRtuTransport, TimeKeeper, UnitIdOrSlaveAddr,
 };
 use std::env;
 use std::str::FromStr;
@@ -32,7 +32,7 @@ impl DiscreteInputResponse for ClientApp {
         for i in 0..quantity {
             let addr = inputs.from_address() + i;
             match inputs.value(addr) {
-                Ok(val) => println!("  Input {}: {}", addr, val),
+                Ok(val) => println!("  Input {}: {:?}", addr, val),
                 Err(e) => println!("  Input {}: Error: {:?}", addr, e),
             }
         }
@@ -43,10 +43,10 @@ impl DiscreteInputResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: DiscreteInputState,
     ) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Read Single Discrete Input (Addr: {}): {}",
+            "Response [Txn: {}, Unit: {}]: Read Single Discrete Input (Addr: {}): {:?}",
             txn_id,
             unit_id.get(),
             address,

@@ -870,7 +870,11 @@ impl WasmSerialModbusClient {
     #[wasm_bindgen(js_name = "writeSingleCoil", skip_typescript)]
     pub fn write_single_coil(&mut self, options: WriteSingleCoilOptions) -> Promise {
         let address = options.address;
-        let value = options.value;
+        let value = if options.value {
+            mbus_core::models::coil::CoilState::On
+        } else {
+            mbus_core::models::coil::CoilState::Off
+        };
         let signal = options.signal;
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();
@@ -897,7 +901,17 @@ impl WasmSerialModbusClient {
     #[wasm_bindgen(js_name = "writeMultipleCoils", skip_typescript)]
     pub fn write_multiple_coils(&mut self, options: WriteMultipleCoilsOptions) -> Promise {
         let address = options.address;
-        let values = options.values;
+        let values = options
+            .values
+            .into_iter()
+            .map(|b| {
+                if b {
+                    mbus_core::models::coil::CoilState::On
+                } else {
+                    mbus_core::models::coil::CoilState::Off
+                }
+            })
+            .collect();
         let signal = options.signal;
         let (tx, rx) = futures_channel::oneshot::channel();
         let unit_id = UnitIdOrSlaveAddr::new(self.unit_id).unwrap_or_default();

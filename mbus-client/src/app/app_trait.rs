@@ -34,7 +34,7 @@ use crate::services::coil::Coils;
 #[cfg(feature = "diagnostics")]
 use crate::services::diagnostic::DeviceIdentificationResponse;
 #[cfg(feature = "discrete-inputs")]
-use crate::services::discrete_input::DiscreteInputs;
+use crate::services::discrete_input::{DiscreteInputState, DiscreteInputs};
 #[cfg(feature = "fifo")]
 use crate::services::fifo_queue::FifoQueue;
 #[cfg(feature = "file-record")]
@@ -536,13 +536,13 @@ pub trait DiscreteInputResponse {
     ///   - `unit_id`: if transport is tcp
     ///   - `slave_addr`: if transport is serial
     /// - `address`: The address of the input that was read.
-    /// - `value`: The boolean state of the read input.
+    /// - `state`: The [`DiscreteInputState`] of the read input.
     fn read_single_discrete_input_response(
         &mut self,
         txn_id: u16,
         unit_id_slave_addr: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        state: DiscreteInputState,
     );
 }
 

@@ -263,11 +263,12 @@ struct CoilField {
     is_coil_state: bool,
 }
 
-/// Field for `#[derive(DiscreteInputsModel)]`: a read-only `bool` at a fixed address.
+/// Field for `#[derive(DiscreteInputsModel)]`: a read-only `DiscreteInputState` or `bool` at a fixed address.
 #[derive(Debug, Clone)]
 struct DiscreteInputField {
     ident: Ident,
     addr: u16,
+    is_discrete_input_state: bool,
 }
 
 /// Simple field for `#[derive(HoldingRegistersModel)]`: always a `u16` at a fixed address.
@@ -591,7 +592,11 @@ fn expand_discrete_inputs_model(input: &DeriveInput) -> Result<proc_macro2::Toke
     let encode_arms = fields.iter().map(|f| {
         let ident = &f.ident;
         let addr = f.addr;
-        quote! { #addr => self.#ident, }
+        if f.is_discrete_input_state {
+            quote! { #addr => self.#ident == ::mbus_core::models::discrete_input::DiscreteInputState::On, }
+        } else {
+            quote! { #addr => self.#ident, }
+        }
     });
 
     Ok(quote! {
@@ -675,19 +680,27 @@ fn parse_discrete_inputs_fields(input: &DeriveInput) -> Result<Vec<DiscreteInput
         })?;
 
         let ty = &field.ty;
+        let mut is_discrete_input_state = false;
         let ty_ok = match ty {
             syn::Type::Path(p) => p
                 .path
                 .segments
                 .last()
-                .map(|seg| seg.ident == "bool")
+                .map(|seg| {
+                    if seg.ident == "DiscreteInputState" || seg.ident == "CoilState" {
+                        is_discrete_input_state = true;
+                        true
+                    } else {
+                        seg.ident == "bool"
+                    }
+                })
                 .unwrap_or(false),
             _ => false,
         };
         if !ty_ok {
             return Err(Error::new_spanned(
                 ty,
-                "DiscreteInputsModel fields must be bool; change this field type to bool",
+                "DiscreteInputsModel fields must be DiscreteInputState or bool; change this field type to DiscreteInputState",
             ));
         }
 
@@ -710,7 +723,11 @@ fn parse_discrete_inputs_fields(input: &DeriveInput) -> Result<Vec<DiscreteInput
             )
         })?;
 
-        out.push(DiscreteInputField { ident, addr });
+        out.push(DiscreteInputField {
+            ident,
+            addr,
+            is_discrete_input_state,
+        });
     }
 
     Ok(out)

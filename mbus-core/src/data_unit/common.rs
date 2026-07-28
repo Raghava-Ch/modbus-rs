@@ -991,6 +991,7 @@ impl Pdu {
     }
 
     /// Builds a PDU for FC05 Write Single Coil requests.
+    #[cfg(feature = "coils")]
     pub fn build_write_single_coil(
         address: u16,
         state: crate::models::coil::CoilState,

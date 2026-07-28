@@ -11,7 +11,11 @@ A cross-platform, low-footprint Modbus client and server library for Rust.
 
 > [!IMPORTANT]  
 > **Active Development & Breaking Changes**  
-> This project is currently undergoing **active development**. While the core APIs are highly robust, heavily tested, and mostly stable, they are not yet finalized. You may expect occasional breaking changes as we refine internal structures, align feature gates, and polish macro interfaces.
+> This project is currently undergoing **active development**. While the core APIs are highly robust, heavily tested, and mostly stable, they are not yet finalized. You may expect occasional breaking changes on APIs as we refine internal structures, align feature gates, and polish macro interfaces.
+
+
+> [!IMPORTANT]
+> Share your opnion, issue, recomendations, suggestions with APIs in [Discussions](https://github.com/Raghava-Ch/modbus-rs/discussions) or create an [Issue](https://github.com/Raghava-Ch/modbus-rs/issues). To reach to version 1.0.0 need your support to improve the API's.
 
 ---
 
@@ -142,6 +146,7 @@ loop { client.poll(); }
 ### Async TCP Client
 
 ```rust
+use modbus_rs::CoilState;
 use modbus_rs::mbus_async::AsyncTcpClient;
 
 #[tokio::main]
@@ -159,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
         println!("reg[{}] = {}", addr, holding.value(addr)?);
     }
 
-    client.write_single_coil(1, 0, true).await?;
+    client.write_single_coil(1, 0, CoilState::On).await?;
     Ok(())
 }
 ```

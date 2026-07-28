@@ -65,6 +65,7 @@ _bootstrap_venv()
 del _bootstrap_venv
 
 import modbus_rs
+from modbus_rs import CoilState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -125,14 +126,15 @@ def run_demo_sync(client: modbus_rs.TcpModbusClient | modbus_rs.SerialModbusClie
 
     # ── Coils ─────────────────────────────────────────────────────────────────
     coils = client.read_coils(0, 8)
-    print(f"\n  Coils [0-7] : {_bool_list(coils)}")
+    print(f"\n  Coils [0-7] : {[str(c) for c in coils]}")
 
     # Toggle coil 0 each iteration
-    client.write_coil(0, not coils[0])
+    next_state = CoilState.Off if coils[0] == CoilState.On else CoilState.On
+    client.write_coil(0, next_state)
 
     # ── Discrete inputs ───────────────────────────────────────────────────────
     di = client.read_discrete_inputs(0, 8)
-    print(f"  DI    [0-7] : {_bool_list(di)}")
+    print(f"  DI    [0-7] : {[str(c) for c in di]}")
 
     # ── Exception status / alarms ─────────────────────────────────────────────
     # The server writes active alarm flags to holding[7] each tick so the

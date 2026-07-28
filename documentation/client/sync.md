@@ -172,11 +172,11 @@ Implement only the traits for function codes you use:
 // Coils (FC01, FC05, FC0F)
 impl CoilResponse for App {
     fn read_coils_response(&mut self, txn_id: u16, uid: UnitIdOrSlaveAddr, coils: &Coils) {
-        println!("Coils: {:?}", coils.values());
+        println!("Coils: {:?}", coils.raw_values());
     }
-    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: bool) {}
-    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, addr: u16, value: bool) {
-        println!("Wrote coil {} = {}", addr, value);
+    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: CoilState) {}
+    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, addr: u16, value: CoilState) {
+        println!("Wrote coil {} = {:?}", addr, value);
     }
     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, start: u16, qty: u16) {
         println!("Wrote {} coils starting at {}", qty, start);
@@ -200,7 +200,7 @@ impl RegisterResponse for App {
 // Discrete Inputs (FC02)
 impl DiscreteInputResponse for App {
     fn read_discrete_inputs_response(&self, _: u16, _: UnitIdOrSlaveAddr, inputs: &DiscreteInputs) {
-        println!("Discrete inputs: {:?}", inputs.values);
+        println!("Discrete inputs: {:?}", inputs.raw_values());
     }
 }
 ```

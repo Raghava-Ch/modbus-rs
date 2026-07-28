@@ -11,6 +11,55 @@ use pyo3::prelude::*;
 
 #[pyclass(
     module = "modbus_rs._modbus_rs",
+    name = "CoilState",
+    eq,
+    eq_int,
+    from_py_object
+)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PyCoilState {
+    Off = 0,
+    On = 1,
+}
+
+impl PyCoilState {
+    pub fn into_core(self) -> mbus_core::models::coil::CoilState {
+        match self {
+            Self::Off => mbus_core::models::coil::CoilState::Off,
+            Self::On => mbus_core::models::coil::CoilState::On,
+        }
+    }
+
+    pub fn from_core(state: mbus_core::models::coil::CoilState) -> Self {
+        match state {
+            mbus_core::models::coil::CoilState::Off => Self::Off,
+            mbus_core::models::coil::CoilState::On => Self::On,
+        }
+    }
+}
+
+#[pymethods]
+impl PyCoilState {
+    #[classattr]
+    const OFF: Self = Self::Off;
+
+    #[classattr]
+    const ON: Self = Self::On;
+
+    fn __repr__(&self) -> &'static str {
+        match self {
+            Self::On => "CoilState.On",
+            Self::Off => "CoilState.Off",
+        }
+    }
+
+    fn __bool__(&self) -> bool {
+        *self == Self::On
+    }
+}
+
+#[pyclass(
+    module = "modbus_rs._modbus_rs",
     name = "SerialMode",
     eq,
     eq_int,
@@ -69,6 +118,7 @@ pub fn _modbus_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     errors::register_exceptions(m)?;
 
     // Enums
+    m.add_class::<PyCoilState>()?;
     m.add_class::<PySerialMode>()?;
 
     // Client classes

@@ -181,7 +181,7 @@ export declare class AsyncSerialModbusClient {
    * @example
    * ```javascript
    * const coils = await client.readCoils({ address: 0, quantity: 8 });
-   * console.log(coils); // e.g., [1, 0, 1, ...]
+   * console.log(coils); // e.g., [CoilState.On, CoilState.Off, ...]
    * ```
    */
   readCoils(options: ReadBitsOptions): Promise<CoilState[]>;
@@ -196,7 +196,7 @@ export declare class AsyncSerialModbusClient {
    *
    * @example
    * ```javascript
-   * await client.writeSingleCoil({ address: 10, value: 1 });
+   * await client.writeSingleCoil({ address: 10, value: CoilState.On });
    * ```
    */
   writeSingleCoil(options: WriteSingleCoilOptions): Promise<void>;
@@ -211,7 +211,7 @@ export declare class AsyncSerialModbusClient {
    *
    * @example
    * ```javascript
-   * await client.writeMultipleCoils({ address: 20, values: [1, 0, 1, 1] });
+   * await client.writeMultipleCoils({ address: 20, values: [CoilState.On, CoilState.Off] });
    * ```
    */
   writeMultipleCoils(options: WriteMultipleCoilsOptions): Promise<void>;
@@ -222,14 +222,14 @@ export declare class AsyncSerialModbusClient {
    * @param {number} options.address - The starting discrete input address.
    * @param {number} options.quantity - The number of discrete inputs to read.
    * @param {AbortSignal} [options.signal] - An optional cancellation signal.
-   * @returns {Promise<DiscreteInputState[]>} - A promise that resolves to an array of states.
+   * @returns {Promise<CoilState[]>} - A promise that resolves to an array of states.
    *
    * @example
    * ```javascript
    * const inputs = await client.readDiscreteInputs({ address: 0, quantity: 4 });
    * ```
    */
-  readDiscreteInputs(options: ReadBitsOptions): Promise<DiscreteInputState[]>;
+  readDiscreteInputs(options: ReadBitsOptions): Promise<CoilState[]>;
   /**
    *  Reads FIFO queue (FC24).
    * Reads from a FIFO queue register (Function Code 24).
@@ -452,7 +452,7 @@ export declare class AsyncTcpModbusClient {
    *
    * @example
    * ```javascript
-   * await client.writeSingleCoil({ address: 10, value: 1 });
+   * await client.writeSingleCoil({ address: 10, value: CoilState.On });
    * ```
    */
   writeSingleCoil(options: WriteSingleCoilOptions): Promise<void>;
@@ -467,7 +467,7 @@ export declare class AsyncTcpModbusClient {
    *
    * @example
    * ```javascript
-   * await client.writeMultipleCoils({ address: 20, values: [1, 0, 1, 1] });
+   * await client.writeMultipleCoils({ address: 20, values: [CoilState.On, CoilState.Off] });
    * ```
    */
   writeMultipleCoils(options: WriteMultipleCoilsOptions): Promise<void>;
@@ -1073,7 +1073,7 @@ export interface WriteMultipleCoilsOptions {
   /** Starting coil address. */
   address: number;
   /** An array of coil states to write. */
-  values: CoilState[];
+  values: Array<CoilState>;
   /** An optional `AbortSignal` to cancel the asynchronous operation. */
   signal?: AbortSignal;
 }

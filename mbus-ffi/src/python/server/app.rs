@@ -39,9 +39,9 @@ impl ModbusApp {
 
     // ── FC01 / FC05 / FC0F — Coils ──────────────────────────────────────────
 
-    /// Handle FC01 Read Coils. Returns ``list[bool]``.
+    /// Handle FC01 Read Coils. Returns ``list[CoilState]``.
     #[pyo3(signature = (address, count))]
-    fn handle_read_coils(&self, address: u16, count: u16) -> PyResult<Vec<bool>> {
+    fn handle_read_coils(&self, address: u16, count: u16) -> PyResult<Vec<crate::python::PyCoilState>> {
         Err(PyNotImplementedError::new_err(format!(
             "handle_read_coils(address={address}, count={count}) not implemented"
         )))
@@ -49,15 +49,15 @@ impl ModbusApp {
 
     /// Handle FC05 Write Single Coil.
     #[pyo3(signature = (address, value))]
-    fn handle_write_coil(&self, address: u16, value: bool) -> PyResult<()> {
+    fn handle_write_coil(&self, address: u16, value: crate::python::PyCoilState) -> PyResult<()> {
         Err(PyNotImplementedError::new_err(format!(
-            "handle_write_coil(address={address}, value={value}) not implemented"
+            "handle_write_coil(address={address}, value={value:?}) not implemented"
         )))
     }
 
-    /// Handle FC0F Write Multiple Coils. ``values`` is a list of booleans.
+    /// Handle FC0F Write Multiple Coils. ``values`` is a list of CoilState.
     #[pyo3(signature = (address, values))]
-    fn handle_write_coils(&self, address: u16, values: Vec<bool>) -> PyResult<()> {
+    fn handle_write_coils(&self, address: u16, values: Vec<crate::python::PyCoilState>) -> PyResult<()> {
         Err(PyNotImplementedError::new_err(format!(
             "handle_write_coils(address={address}, values=<{} items>) not implemented",
             values.len()
@@ -66,9 +66,9 @@ impl ModbusApp {
 
     // ── FC02 — Discrete Inputs ──────────────────────────────────────────────
 
-    /// Handle FC02 Read Discrete Inputs. Returns ``list[bool]``.
+    /// Handle FC02 Read Discrete Inputs. Returns ``list[CoilState]``.
     #[pyo3(signature = (address, count))]
-    fn handle_read_discrete_inputs(&self, address: u16, count: u16) -> PyResult<Vec<bool>> {
+    fn handle_read_discrete_inputs(&self, address: u16, count: u16) -> PyResult<Vec<crate::python::PyCoilState>> {
         Err(PyNotImplementedError::new_err(format!(
             "handle_read_discrete_inputs(address={address}, count={count}) not implemented"
         )))
@@ -331,7 +331,7 @@ async fn dispatch_request(
             })
             .await;
             Python::attach(
-                |py| match result.and_then(|v| v.bind(py).extract::<Vec<bool>>()) {
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<crate::python::PyCoilState>>()) {
                     Ok(bits) if bits.len() == count as usize => {
                         let mut packed = heapless::Vec::<
                             u8,
@@ -340,7 +340,7 @@ async fn dispatch_request(
                         for chunk in bits.chunks(8) {
                             let mut byte: u8 = 0;
                             for (i, &b) in chunk.iter().enumerate() {
-                                if b {
+                                if b == crate::python::PyCoilState::On {
                                     byte |= 1 << i;
                                 }
                             }
@@ -365,8 +365,9 @@ async fn dispatch_request(
             ..
         } => {
             let result = eval_python_call!(|py| {
+                let py_val = crate::python::PyCoilState::from_core(value);
                 app.bind(py)
-                    .call_method1("handle_write_coil", (address, value))
+                    .call_method1("handle_write_coil", (address, py_val))
             })
             .await;
             Python::attach(|py| match result {
@@ -392,7 +393,11 @@ async fn dispatch_request(
                 } else {
                     false
                 };
-                values.push(val);
+                values.push(if val {
+                    crate::python::PyCoilState::On
+                } else {
+                    crate::python::PyCoilState::Off
+                });
             }
             let result = eval_python_call!(|py| {
                 app.bind(py)
@@ -418,7 +423,7 @@ async fn dispatch_request(
             })
             .await;
             Python::attach(
-                |py| match result.and_then(|v| v.bind(py).extract::<Vec<bool>>()) {
+                |py| match result.and_then(|v| v.bind(py).extract::<Vec<crate::python::PyCoilState>>()) {
                     Ok(bits) if bits.len() == count as usize => {
                         let mut packed = heapless::Vec::<
                             u8,
@@ -427,7 +432,7 @@ async fn dispatch_request(
                         for chunk in bits.chunks(8) {
                             let mut byte: u8 = 0;
                             for (i, &b) in chunk.iter().enumerate() {
-                                if b {
+                                if b == crate::python::PyCoilState::On {
                                     byte |= 1 << i;
                                 }
                             }

@@ -1,7 +1,6 @@
 use anyhow::Result;
-use modbus_rs::mbus_core::models::coil::CoilState;
-use modbus_rs::Coils;
 use modbus_rs::mbus_async::{AsyncError, AsyncTcpClient};
+use modbus_rs::{CoilState, Coils, DiscreteInputState};
 use modbus_rs::{EncapsulatedInterfaceType, ObjectId, ReadDeviceIdCode, SubRequest};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -197,10 +196,10 @@ async fn test_async_tcp_client_read_discrete_inputs() -> Result<()> {
     assert_eq!(di.from_address(), 0);
     assert_eq!(di.quantity(), 8);
     // 0xA5 = 1010_0101: bit 0 (addr 0) = 1, bit 1 (addr 1) = 0, bit 2 (addr 2) = 1
-    assert!(di.value(0)?);
-    assert!(!di.value(1)?);
-    assert!(di.value(2)?);
-    assert!(di.value(7)?);
+    assert_eq!(di.value(0)?, DiscreteInputState::On);
+    assert_eq!(di.value(1)?, DiscreteInputState::Off);
+    assert_eq!(di.value(2)?, DiscreteInputState::On);
+    assert_eq!(di.value(7)?, DiscreteInputState::On);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())
@@ -784,7 +783,7 @@ async fn test_async_tcp_client_read_single_discrete_input() -> Result<()> {
     let client = connected_tcp_client(addr.port()).await?;
     let inputs = client.read_discrete_inputs(1, 10, 1).await?;
     assert_eq!(inputs.quantity(), 1);
-    assert!(inputs.value(10)?);
+    assert_eq!(inputs.value(10)?, DiscreteInputState::On);
 
     server_handle.join().expect("server thread panicked")?;
     Ok(())

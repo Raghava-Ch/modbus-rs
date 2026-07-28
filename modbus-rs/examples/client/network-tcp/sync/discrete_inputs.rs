@@ -2,8 +2,9 @@ use anyhow::Result;
 #[cfg(feature = "traffic")]
 use modbus_rs::TrafficNotifier;
 use modbus_rs::{
-    ClientServices, DiscreteInputResponse, DiscreteInputs, MbusError, ModbusConfig,
-    ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper, UnitIdOrSlaveAddr,
+    ClientServices, DiscreteInputResponse, DiscreteInputState, DiscreteInputs, MbusError,
+    ModbusConfig, ModbusTcpConfig, RequestErrorNotifier, StdTcpTransport, TimeKeeper,
+    UnitIdOrSlaveAddr,
 };
 use std::env;
 
@@ -40,7 +41,7 @@ impl DiscreteInputResponse for ClientApp {
         for i in 0..quantity {
             let addr = inputs.from_address() + i;
             match inputs.value(addr) {
-                Ok(val) => println!("  Input {}: {}", addr, val),
+                Ok(val) => println!("  Input {}: {:?}", addr, val),
                 Err(e) => println!("  Input {}: Error accessing value: {:?}", addr, e),
             }
         }
@@ -51,10 +52,10 @@ impl DiscreteInputResponse for ClientApp {
         txn_id: u16,
         unit_id: UnitIdOrSlaveAddr,
         address: u16,
-        value: bool,
+        value: DiscreteInputState,
     ) {
         println!(
-            "Response [Txn: {}, Unit: {}]: Read Single Discrete Input (Addr: {}): {}",
+            "Response [Txn: {}, Unit: {}]: Read Single Discrete Input (Addr: {}): {:?}",
             txn_id,
             unit_id.get(),
             address,
