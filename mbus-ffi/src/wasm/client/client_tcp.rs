@@ -165,11 +165,12 @@ impl WasmWsTransport {
     ///
     /// All subsequent requests on clients created from this transport will fail.
     #[wasm_bindgen]
-    pub async fn close(&mut self) {
+    pub fn close(&mut self) -> Promise {
         // Drop the cmd_tx sender to terminate the task
         *self.cmd_tx.borrow_mut() = futures_channel::mpsc::unbounded::<WasmCommand>().0;
         self.pending_count.set(0);
         *self.active_transport.borrow_mut() = None;
+        Promise::resolve(&JsValue::UNDEFINED)
     }
 
     /// Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
