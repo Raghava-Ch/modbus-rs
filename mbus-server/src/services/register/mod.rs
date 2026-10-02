@@ -267,8 +267,8 @@ where
         }
 
         let mut registers = [0u16; FC16_MAX_QUANTITY as usize];
-        for (index, chunk) in values.chunks_exact(2).enumerate() {
-            registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        for (index, chunk) in values.as_chunks::<2>().0.iter().enumerate() {
+            registers[index] = u16::from_be_bytes(*chunk);
         }
 
         if let Err(err) = self.app.write_multiple_registers_request(
@@ -534,8 +534,8 @@ where
         }
 
         let mut registers = [0u16; FC16_MAX_QUANTITY as usize];
-        for (index, chunk) in values.chunks_exact(2).enumerate() {
-            registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        for (index, chunk) in values.as_chunks::<2>().0.iter().enumerate() {
+            registers[index] = u16::from_be_bytes(*chunk);
         }
 
         if let Err(_err) = self.app.write_multiple_registers_request(
@@ -641,8 +641,8 @@ where
         }
 
         let mut write_registers = [0u16; FC17_WRITE_MAX_QUANTITY as usize];
-        for (index, chunk) in fields.write_values.chunks_exact(2).enumerate() {
-            write_registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        for (index, chunk) in fields.write_values.as_chunks::<2>().0.iter().enumerate() {
+            write_registers[index] = u16::from_be_bytes(*chunk);
         }
 
         let mut buf = [0u8; MAX_PDU_DATA_LEN];

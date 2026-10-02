@@ -916,23 +916,39 @@ pub fn cmd_check_feature_subsets(root: &Path, opts: &Opts) -> Result<(), String>
             println!("FAIL");
             failed += 1;
             let stderr = String::from_utf8_lossy(&output.stderr);
-            // Collect the full error block: error line(s), location, note/help.
-            let err_block = stderr
+            let clean_stderr = strip_ansi(&stderr);
+            // Collect the full error/warning block: error line(s), location, note/help.
+            let err_block = clean_stderr
                 .lines()
-                .skip_while(|l| !l.starts_with("error"))
+                .skip_while(|l| {
+                    let t = l.trim();
+                    !t.starts_with("error") && !t.starts_with("warning")
+                })
                 .take_while(|l| {
                     let t = l.trim();
                     !t.is_empty()
                         && (t.starts_with("error")
+                            || t.starts_with("warning")
                             || t.starts_with("-->")
                             || t.starts_with("=")
                             || t.starts_with("|"))
                 })
-                .take(8)
+                .take(12)
                 .collect::<Vec<_>>()
                 .join("\n       ");
             let detail = if err_block.is_empty() {
-                "(no error line found)".to_string()
+                let fallback = clean_stderr
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .take(6)
+                    .collect::<Vec<_>>()
+                    .join("\n       ");
+                if fallback.is_empty() {
+                    "(no output on stderr)".to_string()
+                } else {
+                    fallback
+                }
             } else {
                 err_block
             };
@@ -952,4 +968,21 @@ pub fn cmd_check_feature_subsets(root: &Path, opts: &Opts) -> Result<(), String>
     }
 
     Ok(())
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_escape = false;
+    for c in s.chars() {
+        if in_escape {
+            if c.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+        } else if c == '\x1b' {
+            in_escape = true;
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
