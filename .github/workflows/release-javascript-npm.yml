@@ -50,11 +50,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24.16.0
+          node-version: 'lts/*'
 
       - name: Install dependencies
         working-directory: mbus-ffi/javascript
-        run: npm install
+        run: npm install --ignore-scripts --omit=optional
 
       - name: Additional setup
         if: matrix.settings.setup
@@ -78,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: mbus-ffi/javascript/**/*.node
+          path: mbus-ffi/javascript/dist/*.node
           if-no-files-found: error
 
   publish:
@@ -99,12 +99,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24.16.0
+          node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         working-directory: mbus-ffi/javascript
-        run: npm install
+        run: npm install --ignore-scripts --omit=optional
 
       - name: Build WASM package
         working-directory: mbus-ffi/javascript

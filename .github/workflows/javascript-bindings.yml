@@ -101,11 +101,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24.16.0
+          node-version: 'lts/*'
 
       - name: Install dependencies
         working-directory: mbus-ffi/javascript
-        run: npm install
+        run: npm install --ignore-scripts --omit=optional
 
       - name: Additional setup
         if: matrix.settings.setup
@@ -128,13 +128,13 @@ jobs:
       - name: List built native artifacts
         shell: bash
         run: |
-          find mbus-ffi/javascript -maxdepth 4 -name '*.node' -print
+          find mbus-ffi/javascript/dist -name '*.node' -print
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: mbus-ffi/javascript/**/*.node
+          path: mbus-ffi/javascript/dist/*.node
           if-no-files-found: error
 
   test:
@@ -146,7 +146,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: ['24.16.0']
+        node: ['lts/*']
     steps:
       - uses: actions/checkout@v5
 
@@ -154,6 +154,13 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        working-directory: mbus-ffi/javascript
+        shell: bash
+        run: |
+          npm install --ignore-scripts --omit=optional
+          rm -rf node_modules/modbus-rs-*
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -165,20 +172,28 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          find artifacts/ -name '*.node' -exec cp {} dist/ \;
+          find artifacts/ -name '*.node' -exec cp -v {} dist/ \;
           chmod +x dist/*.node 2>/dev/null || true
           if [ "$RUNNER_OS" = "macOS" ]; then
             codesign -f -s - dist/*.node 2>/dev/null || true
           fi
           ls -la dist/
 
-      - name: Install dependencies
-        working-directory: mbus-ffi/javascript
-        run: npm install --no-optional
-
       - name: Test imports
         working-directory: mbus-ffi/javascript
-        run: node -e "const m = require('.'); console.log('Loaded:', Object.keys(m))"
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            console.log('dist directory contents:', fs.readdirSync('dist'));
+            const m = require('.');
+            console.log('Loaded module keys count:', Object.keys(m).length);
+            if (typeof m.AsyncTcpTransport?.prototype?.setRequestTimeout !== 'function') {
+              console.error('CRITICAL: AsyncTcpTransport.prototype.setRequestTimeout missing!');
+              process.exit(1);
+            }
+            console.log('Native module verified successfully.');
+          "
 
       - name: Run npm tests
         working-directory: mbus-ffi/javascript
@@ -218,7 +233,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24.16.0
+          node-version: 'lts/*'
           cache: 'npm'
           cache-dependency-path: mbus-ffi/javascript/package-lock.json
 
