@@ -130,3 +130,17 @@ document.getElementById('connect-btn').addEventListener('click', async () => {
   }
 });
 ```
+
+---
+
+## Timeouts and Queue Behavior in WASM
+
+In the browser WebAssembly environment, requests are executed asynchronously over WebSocket or Web Serial directly through the browser event loop (`wasm-bindgen-futures` and `gloo-timers`).
+
+### Single Request Timeout Model
+Unlike the native Node.js runtime, WASM does not run an internal multi-tiered queuing engine:
+- The configured timeout functions as an **overall request deadline** (from method call until response frame receipt).
+- A separate queue-level admission timeout (distinguishing `requestTimeoutMs` as queue wait versus `responseTimeoutMs` as physical wire turnaround) is **ineffective in WASM**.
+- Based on ongoing RFC discussions, separate queue timeout parameters in WASM may be revised or removed in a future release. If you consider queue-level timeout controls mandatory for your browser architecture, please leave a comment on the GitHub RFC discussion.
+- For dynamic runtime adjustments, `transport.setRequestTimeout(ms)` and `transport.clearRequestTimeout()` adjust the active request deadline for subsequent calls.
+

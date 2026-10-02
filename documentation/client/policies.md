@@ -62,7 +62,7 @@ client.set_response_timeout(Duration::from_millis(1500)); // Max wire turnaround
 ```
 
 > [!NOTE]
-> **RFC Note**: The `request_timeout_ms` / queue timeout feature is effective in v0.15+. Based on ongoing RFC discussions, its API naming and relationship with transport policies might be revised in a future release. If you consider this queue admission timeout a mandatory feature for your application, please leave a comment on the GitHub RFC discussion.
+> **RFC Note**: The `request_timeout_ms` / queue timeout feature is effective in v0.15+ for native and Node.js runtimes. In browser WebAssembly (`modbus-rs-wasm`), there is no background queue stage and queue-level admission timeouts are ineffective. Based on ongoing RFC discussions, queue-level timeout parameters may be revised or removed in a future release. If you consider this queue admission timeout a mandatory feature for your application, please leave a comment on the GitHub RFC discussion.
 
 ---
 

@@ -263,10 +263,10 @@ fn make_rtu_client<const PORT_PATH_LEN: usize>(
     config: ModbusConfig<PORT_PATH_LEN>,
 ) -> Result<AsyncSerialClient<false>, AsyncError> {
     let client = spawn_serial_task(make_rtu_factory(Arc::new(config.clone())))?;
-    if let ModbusConfig::Serial(ref s) = config {
-        if s.response_timeout_ms > 0 {
-            client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
-        }
+    if let ModbusConfig::Serial(ref s) = config
+        && s.response_timeout_ms > 0
+    {
+        client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
     }
     Ok(client)
 }
@@ -277,10 +277,10 @@ fn make_ascii_client<const PORT_PATH_LEN: usize>(
     config: ModbusConfig<PORT_PATH_LEN>,
 ) -> Result<AsyncSerialClient<true>, AsyncError> {
     let client = spawn_serial_task(make_ascii_factory(Arc::new(config.clone())))?;
-    if let ModbusConfig::Serial(ref s) = config {
-        if s.response_timeout_ms > 0 {
-            client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
-        }
+    if let ModbusConfig::Serial(ref s) = config
+        && s.response_timeout_ms > 0
+    {
+        client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
     }
     Ok(client)
 }

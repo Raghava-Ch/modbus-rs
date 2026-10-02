@@ -34,6 +34,11 @@ export interface WasmWsTransportOptions {
   wsUrl: string
   /**
    * The maximum time in milliseconds to wait for a response from the Modbus device.
+   *
+   * Note: In browser WebAssembly, this governs the overall request deadline via the browser event loop.
+   * A separate queue admission timeout is ineffective in WASM and may be removed or revised in a future release
+   * based on ongoing RFC discussions.
+   *
    * @default 3000
    */
   requestTimeoutMs?: number
@@ -174,6 +179,9 @@ impl WasmWsTransport {
     }
 
     /// Sets a temporary request timeout override (in milliseconds) for all clients of this transport.
+    ///
+    /// Note: In browser WebAssembly, this overrides the overall request deadline via the browser event loop.
+    /// A separate queue admission timeout is ineffective in WASM and may be revised or removed in a future release.
     #[wasm_bindgen(js_name = "setRequestTimeout")]
     pub fn set_request_timeout(&self, ms: u32) {
         self.current_timeout_ms.set(ms);
