@@ -1,3 +1,4 @@
+use crate::PORT_PATH_STRING_LEN;
 use mbus_client_async::AsyncSerialClientKind as InnerAsyncSerialClient;
 #[cfg(feature = "diagnostics")]
 use mbus_client_async::{ObjectId, ReadDeviceIdCode};
@@ -33,10 +34,10 @@ fn make_serial_config(
     parity: Parity,
     stop_bits: u8,
     retry_attempts: u8,
-) -> PyResult<ModbusSerialConfig> {
-    let port_path = heapless::String::<64>::from_str(port).map_err(|_| {
+) -> PyResult<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::from_str(port).map_err(|_| {
         crate::python::errors::ModbusConfigError::new_err(format!(
-            "Port path too long (max 64 chars): {port}"
+            "Port path too long (max {PORT_PATH_STRING_LEN} chars): {port}"
         ))
     })?;
     Ok(ModbusSerialConfig {

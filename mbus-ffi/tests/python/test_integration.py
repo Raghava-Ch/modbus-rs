@@ -511,3 +511,32 @@ class TestAsyncSerialClientIntegration:
             transport.set_request_timeout(200)
             with pytest.raises(modbus_rs.ModbusError):
                 await client2.read_holding_registers(25, 1)
+
+
+# ---------------------------------------------------------------------------
+# Serial port path length validation
+# ---------------------------------------------------------------------------
+
+class TestSerialPortPathLimit:
+    def test_client_port_path_length_limit(self):
+        # 128 chars should pass config validation (even if opening dummy port fails)
+        long_port = "a" * 128
+        with pytest.raises(modbus_rs.ModbusError) as exc_info:
+            modbus_rs.RtuTransport.open(long_port)
+        assert not isinstance(exc_info.value, modbus_rs.ModbusConfigError)
+
+        # > 128 chars must fail with ModbusConfigError
+        too_long_port = "a" * 129
+        with pytest.raises(modbus_rs.ModbusConfigError) as exc_info:
+            modbus_rs.RtuTransport.open(too_long_port)
+        assert "Port path too long" in str(exc_info.value)
+        assert "128" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_async_server_port_path_length_limit(self):
+        too_long_port = "a" * 129
+        server = modbus_rs.AsyncSerialServer(too_long_port, app=EchoApp())
+        with pytest.raises(modbus_rs.ModbusConfigError) as exc_info:
+            await server.serve_forever()
+        assert "Port path too long" in str(exc_info.value)
+        assert "128" in str(exc_info.value)
