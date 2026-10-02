@@ -44,6 +44,7 @@ jobs:
   check:
     name: Check Rust
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -68,6 +69,7 @@ jobs:
     name: Build - ${{ matrix.settings.target }}
     runs-on: ${{ matrix.settings.os }}
     needs: check
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -139,6 +141,7 @@ jobs:
     name: Test - ${{ matrix.os }} - Node.js ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     needs: build
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -163,10 +166,12 @@ jobs:
         run: |
           mkdir -p dist
           find artifacts/ -name '*.node' -exec cp {} dist/ \;
+          chmod +x dist/*.node 2>/dev/null || true
+          ls -la dist/
 
       - name: Install dependencies
         working-directory: mbus-ffi/javascript
-        run: npm install
+        run: npm install --no-optional
 
       - name: Test imports
         working-directory: mbus-ffi/javascript
@@ -182,6 +187,7 @@ jobs:
   test-wasm:
     name: WASM (wasm32)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 

@@ -58,10 +58,11 @@ impl AsyncTcpTransport {
 
         client.connect().await.map_err(from_async_error)?;
 
-        let resp_timeout_ms = options.response_timeout_ms.or(options.request_timeout_ms);
-        if let Some(ms) = resp_timeout_ms {
-            client.set_response_timeout(Duration::from_millis(ms as u64));
-        }
+        let resp_timeout_ms = options
+            .response_timeout_ms
+            .or(options.request_timeout_ms)
+            .unwrap_or(1000);
+        client.set_response_timeout(Duration::from_millis(resp_timeout_ms as u64));
         if let Some(req_timeout_ms) = options.request_timeout_ms {
             client.set_queue_timeout(Duration::from_millis(req_timeout_ms as u64));
         }

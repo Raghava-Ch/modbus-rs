@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, unlinkSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 let modbus;
@@ -100,7 +100,7 @@ if (modbus) {
   // ─────────────────────────────────────────────────────────────────────────────
   // Issue 1: responseTimeoutMs effectively limits a request
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Issue 1: responseTimeoutMs limits a request on silent unit', async (t) => {
+  test('Issue 1: responseTimeoutMs limits a request on silent unit', { timeout: 3000 }, async (t) => {
     const server = await createMockServer({ replyDelayMs: 5 });
 
     // Configure responseTimeoutMs to 150ms on open/connect
@@ -139,7 +139,7 @@ if (modbus) {
   // Issue 2: A timeout on a silent unit does NOT close the handle for healthy units,
   //          and isConnected() stays true.
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Issue 2: timeout on silent unit does not disconnect healthy units; isConnected() stays true', async (t) => {
+  test('Issue 2: timeout on silent unit does not disconnect healthy units; isConnected() stays true', { timeout: 3000 }, async (t) => {
     const server = await createMockServer({ replyDelayMs: 5 });
 
     const transport = await AsyncTcpTransport.connect({
@@ -182,7 +182,7 @@ if (modbus) {
   // ─────────────────────────────────────────────────────────────────────────────
   // Issue 3: The timeout countdown starts when a request is sent, not when queued
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Issue 3: timeout starts when sent to wire, not while queued', async (t) => {
+  test('Issue 3: timeout starts when sent to wire, not while queued', { timeout: 3000 }, async (t) => {
     // Unit 1 takes 30ms, Unit 2 silent (times out after 150ms), Unit 3 takes 20ms
     const server = await createMockServer({ replyDelayMs: 30 });
 
@@ -228,7 +228,7 @@ if (modbus) {
   // ─────────────────────────────────────────────────────────────────────────────
   // Issue 4: An abort while a request is in flight does not break later requests
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Issue 4: in-flight request aborted via AbortSignal does not break later requests', async (t) => {
+  test('Issue 4: in-flight request aborted via AbortSignal does not break later requests', { timeout: 3000 }, async (t) => {
     const server = await createMockServer({ replyDelayMs: 25 });
 
     const transport = await AsyncTcpTransport.connect({
@@ -283,7 +283,7 @@ if (modbus) {
   // ─────────────────────────────────────────────────────────────────────────────
   // Option 1: responseTimeoutMs vs requestTimeoutMs independent budgets
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Option 1: responseTimeoutMs governs wire turnaround timeout independently', async (t) => {
+  test('Option 1: responseTimeoutMs governs wire turnaround timeout independently', { timeout: 3000 }, async (t) => {
     // Unit 2 is silent
     const server = await createMockServer({ replyDelayMs: 20 });
 
@@ -318,7 +318,7 @@ if (modbus) {
     );
   });
 
-  test('setRequestTimeout() and clearRequestTimeout() dynamically update timeout on active transport', async (t) => {
+  test('setRequestTimeout() and clearRequestTimeout() dynamically update timeout on active transport', { timeout: 3000 }, async (t) => {
     // Unit 2 is silent
     const server = await createMockServer({ replyDelayMs: 20 });
 
@@ -357,7 +357,7 @@ if (modbus) {
     transport.clearRequestTimeout();
   });
 
-  test('requestTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', async (t) => {
+  test('requestTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', { timeout: 3000 }, async (t) => {
     // Unit 2 is silent
     const server = await createMockServer({ replyDelayMs: 20 });
 
@@ -415,7 +415,7 @@ if (modbus) {
     transport.clearRequestTimeout();
   });
 
-  test('responseTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', async (t) => {
+  test('responseTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', { timeout: 3000 }, async (t) => {
     // Unit 2 is silent
     const server = await createMockServer({ replyDelayMs: 20 });
 
@@ -473,7 +473,7 @@ if (modbus) {
     transport.clearRequestTimeout();
   });
 
-  test('combination of responseTimeoutMs and requestTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', async (t) => {
+  test('combination of responseTimeoutMs and requestTimeoutMs on initialisation followed by dynamic setRequestTimeout() change', { timeout: 3000 }, async (t) => {
     // Unit 2 is silent, Unit 1 is healthy (20ms reply delay)
     const server = await createMockServer({ replyDelayMs: 20 });
 
@@ -543,9 +543,17 @@ if (modbus) {
   // ─────────────────────────────────────────────────────────────────────────────
   // RTU tests using socat PTY (runs on Linux/macOS when socat is available)
   // ─────────────────────────────────────────────────────────────────────────────
-  const hasSocat = process.platform !== 'win32';
+  let hasSocat = false;
+  if (process.platform !== 'win32') {
+    try {
+      const res = spawnSync('socat', ['-V'], { stdio: 'ignore' });
+      hasSocat = res.status === 0;
+    } catch {
+      hasSocat = false;
+    }
+  }
 
-  test('RTU: 4 timeout behaviors against simulated PTY bus', { skip: !hasSocat }, async (t) => {
+  test('RTU: 4 timeout behaviors against simulated PTY bus', { skip: !hasSocat, timeout: 5000 }, async (t) => {
     const portPath = `/tmp/mbrs-test-${process.pid}`;
     const crc16 = (bytes) => {
       let crc = 0xffff;
@@ -561,8 +569,14 @@ if (modbus) {
     const socat = spawn('socat', ['-d', `pty,raw,echo=0,link=${portPath}`, 'stdio'], {
       stdio: ['pipe', 'pipe', 'inherit'],
     });
+    socat.on('error', () => {});
     t.after(() => {
-      socat.kill();
+      try {
+        socat.kill();
+      } catch {}
+      try {
+        if (existsSync(portPath)) unlinkSync(portPath);
+      } catch {}
     });
 
     let pendingBuf = Buffer.alloc(0);
@@ -579,11 +593,22 @@ if (modbus) {
           fc === 3
             ? frame(Buffer.from([unit, 3, req[5] * 2, ...Buffer.alloc(req[5] * 2)]))
             : frame(Buffer.from(req.subarray(0, 6)));
-        setTimeout(() => socat.stdin.write(reply), 3);
+        setTimeout(() => {
+          try {
+            socat.stdin.write(reply);
+          } catch {}
+        }, 3);
       }
     });
 
-    while (!existsSync(portPath)) await sleep(10);
+    let attempts = 0;
+    while (!existsSync(portPath)) {
+      await sleep(10);
+      attempts += 1;
+      if (attempts > 50) {
+        throw new Error(`Timed out waiting for socat to create PTY symlink at ${portPath}`);
+      }
+    }
 
     // 1. responseTimeoutMs limits request
     {

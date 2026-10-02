@@ -96,7 +96,7 @@ impl AsyncClientCore {
             cmd_tx,
             pending_count_rx,
             transport_connected,
-            response_timeout_ns: Arc::new(AtomicU64::new(30 * 1_000_000_000)), // 30 seconds default
+            response_timeout_ns: Arc::new(AtomicU64::new(1_000_000_000)), // 1 second default
             queue_timeout_ns: Arc::new(AtomicU64::new(0)), // 0 = unbounded queue wait by default
             retry_attempts: Arc::new(AtomicU8::new(0)),
             retry_delay_ms: Arc::new(AtomicU64::new(0)),
