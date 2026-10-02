@@ -58,8 +58,12 @@ impl AsyncTcpTransport {
 
         client.connect().await.map_err(from_async_error)?;
 
-        if let Some(timeout_ms) = options.request_timeout_ms {
-            client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        let resp_timeout_ms = options.response_timeout_ms.or(options.request_timeout_ms);
+        if let Some(ms) = resp_timeout_ms {
+            client.set_response_timeout(Duration::from_millis(ms as u64));
+        }
+        if let Some(req_timeout_ms) = options.request_timeout_ms {
+            client.set_queue_timeout(Duration::from_millis(req_timeout_ms as u64));
         }
 
         let retry_attempts = options.retry_attempts.unwrap_or(0) as u8;
@@ -98,22 +102,30 @@ impl AsyncTcpTransport {
     }
 
     /// Sets the per-request timeout in milliseconds.
+    ///
+    /// Sets the timeout for individual Modbus requests made through this transport.
+    ///
+    /// Note: This feature is effective, but based on ongoing RFC discussions it might be
+    /// removed or revised in a future release. If you feel this is a mandatory feature for your use case,
+    /// it is suggested to leave a comment on the GitHub RFC discussion.
+    ///
+    /// @param timeout_ms The timeout duration in milliseconds.
     #[napi]
-    #[doc = "Sets the timeout for individual Modbus requests made through this transport."]
-    #[doc = ""]
-    #[doc = "@param timeout_ms - The timeout duration in milliseconds."]
     pub fn set_request_timeout(&self, timeout_ms: u32) -> Result<()> {
         let client = self.get_client()?;
-        client.set_request_timeout(Duration::from_millis(timeout_ms as u64));
+        client.set_response_timeout(Duration::from_millis(timeout_ms as u64));
+        client.set_queue_timeout(Duration::from_millis(timeout_ms as u64));
         Ok(())
     }
 
     /// Clears the per-request timeout.
+    ///
+    /// Clears any previously set per-request timeout, reverting to the default behavior.
     #[napi]
-    #[doc = "Clears any previously set per-request timeout, reverting to the default behavior."]
     pub fn clear_request_timeout(&self) -> Result<()> {
         let client = self.get_client()?;
-        client.clear_request_timeout();
+        client.clear_response_timeout();
+        client.clear_queue_timeout();
         Ok(())
     }
 

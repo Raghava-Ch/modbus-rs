@@ -80,6 +80,9 @@ struct PendingEntry {
     request: ClientRequest,
     retry_attempts: u8,
     retry_delay_ms: u64,
+    timeout_ms: u64,
+    /// Absolute deadline after which the request times out.
+    deadline: Option<tokio::time::Instant>,
 }
 
 // ─── ClientTask ───────────────────────────────────────────────────────────────
@@ -107,6 +110,8 @@ where
     in_flight: usize,
     /// Sender half of the pending-count watch.
     pending_count_tx: watch::Sender<usize>,
+    /// Shared atomic indicating whether the underlying transport is currently connected.
+    transport_connected: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Optional traffic-event notifier (guarded by `traffic` feature).
     #[cfg(feature = "traffic")]
     notifier: NotifierStore,
@@ -120,6 +125,7 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         connect_fn: ConnectFactory<T>,
         cmd_rx: mpsc::Receiver<TaskCommand>,
         pending_count_tx: watch::Sender<usize>,
+        transport_connected: std::sync::Arc<std::sync::atomic::AtomicBool>,
         #[cfg(feature = "traffic")] notifier: NotifierStore,
     ) -> Self {
         Self {
@@ -131,6 +137,7 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             next_txn_id: 1,
             in_flight: 0,
             pending_count_tx,
+            transport_connected,
             #[cfg(feature = "traffic")]
             notifier,
         }
@@ -157,8 +164,12 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     /// Calls the stored factory to open a fresh transport and stores it.
     async fn do_connect(&mut self) -> Result<(), MbusError> {
         self.transport = None;
+        self.transport_connected
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         let transport = (self.connect_fn)().await?;
         self.transport = Some(transport);
+        self.transport_connected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
@@ -167,24 +178,48 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     ///
     /// `Connect` variants arriving here are rejected with `MbusError::Unexpected`.
     async fn dispatch_request(&mut self, cmd: TaskCommand) {
-        let (params, resp_tx, mut retry_attempts, retry_delay_ms) = match cmd {
+        let (
+            params,
+            resp_tx,
+            mut retry_attempts,
+            retry_delay_ms,
+            response_timeout_ms,
+            queue_deadline,
+        ) = match cmd {
             TaskCommand::Request {
                 params,
                 resp_tx,
                 retry_attempts,
                 retry_delay_ms,
-            } => (params, resp_tx, retry_attempts, retry_delay_ms),
+                response_timeout_ms,
+                queue_deadline,
+            } => (
+                params,
+                resp_tx,
+                retry_attempts,
+                retry_delay_ms,
+                response_timeout_ms,
+                queue_deadline,
+            ),
             TaskCommand::Connect { resp_tx } => {
                 let _ = resp_tx.send(Err(MbusError::Unexpected));
                 return;
             }
             // Disconnect is handled in handle_command before reaching here.
             TaskCommand::Disconnect => return,
-            TaskCommand::Shutdown => {
-                println!("shutown reached and sending reply");
-                return;
-            }
+            TaskCommand::Shutdown => return,
         };
+
+        // If caller already aborted / dropped the receiver while in queue, don't send to wire.
+        if resp_tx.is_closed() {
+            return;
+        }
+
+        // If queue_deadline passed while waiting in queue, fail with timeout and don't send to wire.
+        if queue_deadline.is_some_and(|dl| tokio::time::Instant::now() >= dl) {
+            let _ = resp_tx.send(Err(MbusError::Timeout));
+            return;
+        }
 
         loop {
             // Bail early if disconnected and we have no retries left
@@ -234,6 +269,16 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 Ok(()) => {
                     #[cfg(feature = "traffic")]
                     self.fire_tx_frame(txn_id, unit, &frame);
+
+                    let deadline = if response_timeout_ms > 0 {
+                        Some(
+                            tokio::time::Instant::now()
+                                + std::time::Duration::from_millis(response_timeout_ms),
+                        )
+                    } else {
+                        None
+                    };
+
                     self.pending.insert(
                         txn_id,
                         PendingEntry {
@@ -241,6 +286,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                             request: params,
                             retry_attempts,
                             retry_delay_ms,
+                            timeout_ms: response_timeout_ms,
+                            deadline,
                         },
                     );
                     self.in_flight += 1;
@@ -253,6 +300,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
 
                     // Connection failed. We must set transport to None.
                     self.transport = None;
+                    self.transport_connected
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
 
                     // Option (b): fail or re-queue other in-flight requests
                     self.handle_connection_loss();
@@ -275,7 +324,7 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         }
         let ttype = T::TRANSPORT_TYPE;
 
-        let (decoded_txn_id, _unit, inner) = match decode_response(frame, ttype) {
+        let (decoded_txn_id, unit, inner) = match decode_response(frame, ttype) {
             Ok(v) => v,
             Err(e) => {
                 // Hard framing error — no txn_id recoverable; fail first pending entry.
@@ -284,7 +333,7 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
             }
         };
 
-        let key = self.resolve_key(decoded_txn_id);
+        let key = self.resolve_key(decoded_txn_id, unit);
         if let Some(k) = key
             && let Some(entry) = self.pending.remove(&k)
         {
@@ -300,29 +349,133 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         // Unsolicited frame → discard silently.
     }
 
-    /// Determines the pending-map key for a decoded txn_id.
+    /// Determines the pending-map key for a decoded txn_id and unit.
     ///
     /// - TCP (txn_id != 0): direct lookup in the map.
-    /// - Serial (txn_id == 0): take the first (and only for N=1) pending entry.
-    fn resolve_key(&self, decoded_txn_id: u16) -> Option<u16> {
+    /// - Serial (txn_id == 0): match pending entry whose target unit matches the response.
+    fn resolve_key(
+        &self,
+        decoded_txn_id: u16,
+        unit: mbus_core::transport::UnitIdOrSlaveAddr,
+    ) -> Option<u16> {
         if decoded_txn_id != 0 {
             self.pending
                 .contains_key(&decoded_txn_id)
                 .then_some(decoded_txn_id)
         } else {
-            // Serial fallback — any pending entry is the one (PIPELINE=1 enforces this).
-            self.pending.keys().next().copied()
+            // Serial fallback — match pending entry with matching unit
+            self.pending
+                .iter()
+                .find(|(_, entry)| entry.request.unit() == unit)
+                .map(|(&k, _)| k)
         }
     }
 
     /// Fails the pending entry best matching `raw_txn_id` with `error`.
     fn fail_entry(&mut self, raw_txn_id: u16, error: MbusError) {
-        if let Some(k) = self.resolve_key(raw_txn_id)
+        let key = if raw_txn_id != 0 {
+            self.pending.contains_key(&raw_txn_id).then_some(raw_txn_id)
+        } else {
+            self.pending.keys().next().copied()
+        };
+        if let Some(k) = key
             && let Some(entry) = self.pending.remove(&k)
         {
             self.in_flight = self.in_flight.saturating_sub(1);
             self.update_pending_count();
             let _ = entry.resp_tx.send(Err(error));
+        }
+    }
+
+    /// Prunes pending entries that have either timed out or had their response receiver closed (aborted).
+    /// Does NOT close the transport, allowing healthy units and subsequent requests on the bus to proceed.
+    fn prune_pending_timeouts_and_aborts(&mut self) {
+        if self.pending.is_empty() {
+            return;
+        }
+        let now = tokio::time::Instant::now();
+        let mut timed_out_keys = Vec::new();
+        let mut aborted_keys = Vec::new();
+
+        for (&txn_id, entry) in &self.pending {
+            if entry.resp_tx.is_closed() {
+                aborted_keys.push(txn_id);
+            } else if entry.deadline.is_some_and(|deadline| now >= deadline) {
+                timed_out_keys.push(txn_id);
+            }
+        }
+
+        for txn_id in timed_out_keys {
+            if let Some(entry) = self.pending.remove(&txn_id) {
+                self.in_flight = self.in_flight.saturating_sub(1);
+                let _ = entry.resp_tx.send(Err(MbusError::Timeout));
+            }
+        }
+
+        for txn_id in aborted_keys {
+            if self.pending.remove(&txn_id).is_some() {
+                self.in_flight = self.in_flight.saturating_sub(1);
+            }
+        }
+
+        self.update_pending_count();
+    }
+
+    /// Prunes queued entries that have either timed out waiting in the queue
+    /// or had their response receiver closed (aborted by caller).
+    fn prune_queued_timeouts_and_aborts(&mut self) {
+        if self.queued.is_empty() {
+            return;
+        }
+        let now = tokio::time::Instant::now();
+        let mut i = 0;
+        while i < self.queued.len() {
+            let should_remove = match &self.queued[i] {
+                TaskCommand::Request {
+                    resp_tx,
+                    queue_deadline,
+                    ..
+                } => resp_tx.is_closed() || queue_deadline.is_some_and(|dl| now >= dl),
+                _ => false,
+            };
+
+            if should_remove {
+                if let Some(TaskCommand::Request {
+                    resp_tx,
+                    queue_deadline,
+                    ..
+                }) = self.queued.remove(i)
+                    && !resp_tx.is_closed()
+                    && queue_deadline.is_some_and(|dl| now >= dl)
+                {
+                    let _ = resp_tx.send(Err(MbusError::Timeout));
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// Returns the earliest deadline among all in-flight pending requests and queued requests.
+    fn earliest_deadline(&self) -> Option<tokio::time::Instant> {
+        let pending_min = self.pending.values().filter_map(|e| e.deadline).min();
+        let queued_min = self
+            .queued
+            .iter()
+            .filter_map(|cmd| {
+                if let TaskCommand::Request { queue_deadline, .. } = cmd {
+                    *queue_deadline
+                } else {
+                    None
+                }
+            })
+            .min();
+
+        match (pending_min, queued_min) {
+            (Some(p), Some(q)) => Some(p.min(q)),
+            (Some(p), None) => Some(p),
+            (None, Some(q)) => Some(q),
+            (None, None) => None,
         }
     }
 
@@ -348,6 +501,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     /// re-queued at the front of `self.queued` (in original txn_id order) to be
     /// retried after reconnecting. Otherwise, they fail with `ConnectionClosed`.
     fn handle_connection_loss(&mut self) {
+        self.transport_connected
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         let mut pending_entries: Vec<(u16, PendingEntry)> = self.pending.drain().collect();
         pending_entries.sort_by_key(|(txn_id, _)| *txn_id);
 
@@ -358,6 +513,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                     resp_tx: entry.resp_tx,
                     retry_attempts: entry.retry_attempts - 1,
                     retry_delay_ms: entry.retry_delay_ms,
+                    response_timeout_ms: entry.timeout_ms,
+                    queue_deadline: None,
                 });
             } else {
                 let _ = entry.resp_tx.send(Err(MbusError::ConnectionClosed));
@@ -381,14 +538,20 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                 // clean.  A subsequent Connect command will reopen it.
                 self.drain_all();
                 self.transport = None;
+                self.transport_connected
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
             }
             TaskCommand::Shutdown => {
                 // Permanently shut down the communication task.
                 self.drain_all();
                 self.transport = None;
+                self.transport_connected
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
                 return false;
             }
             req_cmd => {
+                self.prune_pending_timeouts_and_aborts();
+                self.prune_queued_timeouts_and_aborts();
                 if self.in_flight < N {
                     self.dispatch_request(req_cmd).await;
                 } else {
@@ -450,6 +613,9 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
     /// `AsyncClientCore` handles have been dropped).
     pub(crate) async fn run(mut self) {
         loop {
+            self.prune_pending_timeouts_and_aborts();
+            self.prune_queued_timeouts_and_aborts();
+
             // Fill pipeline from backlog before blocking on select!.
             while self.in_flight < N {
                 match self.queued.pop_front() {
@@ -457,6 +623,8 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                     None => break,
                 }
             }
+
+            let earliest_deadline = self.earliest_deadline();
 
             tokio::select! {
                 // Receive a response frame from the transport.
@@ -467,9 +635,16 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
                         Ok(frame) => self.process_frame(&frame),
                         Err(_e) => {
                             self.transport = None;
+                            self.transport_connected
+                                .store(false, std::sync::atomic::Ordering::SeqCst);
                             self.handle_connection_loss();
                         }
                     }
+                }
+
+                _ = wait_timeout_or_abort(earliest_deadline) => {
+                    self.prune_pending_timeouts_and_aborts();
+                    self.prune_queued_timeouts_and_aborts();
                 }
 
                 // Receive a command from the public API.
@@ -502,6 +677,14 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
+
+/// Awaits either the earliest pending request deadline or queued request deadline.
+async fn wait_timeout_or_abort(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(d) => tokio::time::sleep_until(d).await,
+        None => std::future::pending::<()>().await,
+    }
+}
 
 /// Awaits one complete frame from the transport.
 ///

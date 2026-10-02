@@ -38,6 +38,7 @@ const MIN_INTER_FRAME_US: u64 = 1750;
 pub struct TokioSerialTransport<const ASCII: bool = false> {
     port: SerialStream,
     inter_frame_timeout: Duration,
+    rx_buf: Vec<u8, MAX_ADU_FRAME_LEN>,
 }
 
 /// Modbus RTU serial transport backed by tokio.
@@ -105,6 +106,7 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
         Ok(Self {
             port,
             inter_frame_timeout,
+            rx_buf: Vec::new(),
         })
     }
 
@@ -144,6 +146,14 @@ impl<const ASCII: bool> AsyncTransport for TokioSerialTransport<ASCII> {
     }
 
     async fn send(&mut self, adu: &[u8]) -> Result<(), MbusError> {
+        self.rx_buf.clear();
+        let mut discard = [0u8; 256];
+        while let Ok(Ok(n)) = timeout(Duration::from_millis(0), self.port.read(&mut discard)).await
+        {
+            if n == 0 {
+                break;
+            }
+        }
         self.port.write_all(adu).await.map_err(Self::map_io_error)?;
         self.port.flush().await.map_err(Self::map_io_error)
     }
@@ -160,45 +170,10 @@ impl<const ASCII: bool> AsyncTransport for TokioSerialTransport<ASCII> {
 impl<const ASCII: bool> TokioSerialTransport<ASCII> {
     /// RTU framing: accumulate bytes; return when inter-frame silence fires.
     async fn recv_rtu(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        let mut buf: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
         let mut scratch = [0u8; 1];
 
-        // Wait for the first byte (no timeout — block indefinitely until data arrives)
-        self.port.read_exact(&mut scratch).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                MbusError::ConnectionClosed
-            } else {
-                Self::map_io_error(e)
-            }
-        })?;
-        buf.push(scratch[0])
-            .map_err(|_| MbusError::BufferTooSmall)?;
-
-        // Now collect remaining bytes, resetting the silence timer after each one.
-        loop {
-            match timeout(self.inter_frame_timeout, self.port.read_exact(&mut scratch)).await {
-                Ok(Ok(_)) => {
-                    buf.push(scratch[0])
-                        .map_err(|_| MbusError::BufferTooSmall)?;
-                }
-                Ok(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Err(MbusError::ConnectionClosed);
-                }
-                Ok(Err(e)) => return Err(Self::map_io_error(e)),
-                Err(_elapsed) => {
-                    // Silence detected — frame is complete
-                    return Ok(buf);
-                }
-            }
-        }
-    }
-
-    /// ASCII framing: accumulate bytes until `\r\n` found, then return the frame.
-    async fn recv_ascii(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
-        let mut buf: Vec<u8, MAX_ADU_FRAME_LEN> = Vec::new();
-        let mut scratch = [0u8; 1];
-
-        loop {
+        if self.rx_buf.is_empty() {
+            // Wait for the first byte (no timeout — block indefinitely until data arrives)
             self.port.read_exact(&mut scratch).await.map_err(|e| {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
                     MbusError::ConnectionClosed
@@ -206,14 +181,61 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
                     Self::map_io_error(e)
                 }
             })?;
+            self.rx_buf
+                .push(scratch[0])
+                .map_err(|_| MbusError::BufferTooSmall)?;
+        }
 
-            buf.push(scratch[0])
+        // Now collect remaining bytes, resetting the silence timer after each one.
+        loop {
+            match timeout(self.inter_frame_timeout, self.port.read_exact(&mut scratch)).await {
+                Ok(Ok(_)) => {
+                    self.rx_buf
+                        .push(scratch[0])
+                        .map_err(|_| MbusError::BufferTooSmall)?;
+                }
+                Ok(Err(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    self.rx_buf.clear();
+                    return Err(MbusError::ConnectionClosed);
+                }
+                Ok(Err(e)) => {
+                    self.rx_buf.clear();
+                    return Err(Self::map_io_error(e));
+                }
+                Err(_elapsed) => {
+                    // Silence detected — frame is complete
+                    let frame = self.rx_buf.clone();
+                    self.rx_buf.clear();
+                    return Ok(frame);
+                }
+            }
+        }
+    }
+
+    /// ASCII framing: accumulate bytes until `\r\n` found, then return the frame.
+    async fn recv_ascii(&mut self) -> Result<Vec<u8, MAX_ADU_FRAME_LEN>, MbusError> {
+        let mut scratch = [0u8; 1];
+
+        loop {
+            self.port.read_exact(&mut scratch).await.map_err(|e| {
+                self.rx_buf.clear();
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    MbusError::ConnectionClosed
+                } else {
+                    Self::map_io_error(e)
+                }
+            })?;
+
+            self.rx_buf
+                .push(scratch[0])
                 .map_err(|_| MbusError::BufferTooSmall)?;
 
             // ASCII frame ends with CR LF
-            let len = buf.len();
-            if len >= 2 && buf[len - 2] == b'\r' && buf[len - 1] == b'\n' {
-                return Ok(buf);
+            let len = self.rx_buf.len();
+            if len >= 2 && self.rx_buf[len - 2] == b'\r' && self.rx_buf[len - 1] == b'\n' {
+                let frame = self.rx_buf.clone();
+                self.rx_buf.clear();
+                return Ok(frame);
             }
         }
     }

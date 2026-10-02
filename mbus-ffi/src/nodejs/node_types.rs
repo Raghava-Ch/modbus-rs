@@ -24,8 +24,10 @@ pub struct TcpTransportOptions {
     pub host: String,
     /// Target TCP port (typically 502).
     pub port: u16,
-    /// Per-request timeout in milliseconds. Note: This feature is currently ineffective and is reserved for future implementation. A GitHub RFC discussion is open to decide whether to implement or remove it.
+    /// Queue waiting timeout in milliseconds. If the transport pipeline is congested and the request cannot be dispatched onto the wire within this time, it fails early with ModbusErrorCode.TIMEOUT without reaching the wire. Note: This feature is effective, but based on ongoing RFC discussions it might be removed or revised in a future release. If you feel this is a mandatory feature for your use case, it is suggested to leave a comment on the GitHub RFC discussion.
     pub request_timeout_ms: Option<u32>,
+    /// Response turnaround timeout in milliseconds. Time to wait for the target server/device to respond once the request has been dispatched onto the wire.
+    pub response_timeout_ms: Option<u32>,
     /// Number of retry attempts on failure. Default: 0 (no retries).
     pub retry_attempts: Option<u32>,
     /// Delay between retry attempts in milliseconds.

@@ -187,7 +187,13 @@ impl<const ASCII: bool> AsyncSerialClient<ASCII> {
             Box::pin(async move { s.lock().unwrap().take().ok_or(MbusError::ConnectionClosed) })
         });
 
-        spawn_serial_task(connect_fn)
+        let client = spawn_serial_task(connect_fn)?;
+        if let ModbusConfig::Serial(ref s) = config
+            && s.response_timeout_ms > 0
+        {
+            client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
+        }
+        Ok(client)
     }
 }
 
@@ -201,6 +207,7 @@ fn spawn_serial_task<T: AsyncTransport + Send + 'static, const ASCII: bool>(
     let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
+    let transport_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     #[cfg(feature = "traffic")]
     let notifier = crate::client::notifier::new_notifier_store();
@@ -209,6 +216,7 @@ fn spawn_serial_task<T: AsyncTransport + Send + 'static, const ASCII: bool>(
         connect_fn,
         cmd_rx,
         pending_count_tx,
+        transport_connected.clone(),
         #[cfg(feature = "traffic")]
         notifier.clone(),
     );
@@ -218,6 +226,7 @@ fn spawn_serial_task<T: AsyncTransport + Send + 'static, const ASCII: bool>(
         core: AsyncClientCore::new(
             cmd_tx,
             pending_count_rx,
+            transport_connected,
             #[cfg(feature = "traffic")]
             notifier,
         ),
@@ -253,7 +262,13 @@ fn make_ascii_factory<const PORT_PATH_LEN: usize>(
 fn make_rtu_client<const PORT_PATH_LEN: usize>(
     config: ModbusConfig<PORT_PATH_LEN>,
 ) -> Result<AsyncSerialClient<false>, AsyncError> {
-    spawn_serial_task(make_rtu_factory(Arc::new(config)))
+    let client = spawn_serial_task(make_rtu_factory(Arc::new(config.clone())))?;
+    if let ModbusConfig::Serial(ref s) = config {
+        if s.response_timeout_ms > 0 {
+            client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
+        }
+    }
+    Ok(client)
 }
 
 /// Creates a full [`AsyncSerialClient`] for ASCII mode.
@@ -261,7 +276,13 @@ fn make_rtu_client<const PORT_PATH_LEN: usize>(
 fn make_ascii_client<const PORT_PATH_LEN: usize>(
     config: ModbusConfig<PORT_PATH_LEN>,
 ) -> Result<AsyncSerialClient<true>, AsyncError> {
-    spawn_serial_task(make_ascii_factory(Arc::new(config)))
+    let client = spawn_serial_task(make_ascii_factory(Arc::new(config.clone())))?;
+    if let ModbusConfig::Serial(ref s) = config {
+        if s.response_timeout_ms > 0 {
+            client.set_request_timeout(Duration::from_millis(s.response_timeout_ms as u64));
+        }
+    }
+    Ok(client)
 }
 
 /// Modbus RTU async client.

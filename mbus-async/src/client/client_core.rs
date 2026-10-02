@@ -27,11 +27,6 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
-#[cfg(any(
-    feature = "holding-registers",
-    feature = "input-registers",
-    feature = "diagnostics"
-))]
 use mbus_core::errors::MbusError;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 
@@ -77,7 +72,9 @@ pub struct AsyncClientCore {
     cmd_tx: mpsc::Sender<TaskCommand>,
     pending_count_rx: PendingCountReceiver,
     /// Per-request timeout in nanoseconds; 0 = disabled.
-    request_timeout_ns: Arc<AtomicU64>,
+    transport_connected: Arc<std::sync::atomic::AtomicBool>,
+    response_timeout_ns: Arc<AtomicU64>,
+    queue_timeout_ns: Arc<AtomicU64>,
     /// Number of retry attempts.
     retry_attempts: Arc<AtomicU8>,
     /// Delay between retry attempts in milliseconds.
@@ -92,12 +89,15 @@ impl AsyncClientCore {
     pub(super) fn new(
         cmd_tx: mpsc::Sender<TaskCommand>,
         pending_count_rx: PendingCountReceiver,
+        transport_connected: Arc<std::sync::atomic::AtomicBool>,
         #[cfg(feature = "traffic")] notifier: NotifierStore,
     ) -> Self {
         Self {
             cmd_tx,
             pending_count_rx,
-            request_timeout_ns: Arc::new(AtomicU64::new(30 * 1_000_000_000)), // 30 seconds default
+            transport_connected,
+            response_timeout_ns: Arc::new(AtomicU64::new(30 * 1_000_000_000)), // 30 seconds default
+            queue_timeout_ns: Arc::new(AtomicU64::new(0)), // 0 = unbounded queue wait by default
             retry_attempts: Arc::new(AtomicU8::new(0)),
             retry_delay_ms: Arc::new(AtomicU64::new(0)),
             is_closed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -113,21 +113,31 @@ impl AsyncClientCore {
             .store(delay.as_millis() as u64, Ordering::Relaxed);
     }
 
-    /// Checks if the client is connected to the background task (i.e. the task is still running).
+    /// Checks if the client is connected to the transport and the background task is running.
     pub fn is_connected(&self) -> bool {
-        !self.is_closed.load(Ordering::Relaxed) && !self.cmd_tx.is_closed()
+        self.transport_connected.load(Ordering::Relaxed)
+            && !self.is_closed.load(Ordering::Relaxed)
+            && !self.cmd_tx.is_closed()
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────
 
     /// Sends a [`ClientRequest`] to the background task and awaits the reply.
     ///
-    /// If a per-request timeout is set via [`set_request_timeout`](Self::set_request_timeout)
-    /// and no response arrives within that deadline, returns [`AsyncError::Timeout`].
+    /// The request timeout deadline begins only when the request is dispatched to the wire
+    /// by the background task, avoiding premature timeouts while queued.
     async fn send_request(&self, params: ClientRequest) -> Result<ClientResponse, AsyncError> {
         let (resp_tx, rx) = oneshot::channel();
         let retry_attempts = self.retry_attempts.load(Ordering::Relaxed);
         let retry_delay_ms = self.retry_delay_ms.load(Ordering::Relaxed);
+        let resp_timeout_ns = self.response_timeout_ns.load(Ordering::Relaxed);
+        let response_timeout_ms = resp_timeout_ns / 1_000_000;
+        let queue_timeout_ns = self.queue_timeout_ns.load(Ordering::Relaxed);
+        let queue_deadline = if queue_timeout_ns > 0 {
+            Some(tokio::time::Instant::now() + Duration::from_nanos(queue_timeout_ns))
+        } else {
+            None
+        };
 
         self.cmd_tx
             .send(TaskCommand::Request {
@@ -135,39 +145,18 @@ impl AsyncClientCore {
                 resp_tx,
                 retry_attempts,
                 retry_delay_ms,
+                response_timeout_ms,
+                queue_deadline,
             })
             .await
             .map_err(|_| AsyncError::WorkerClosed)?;
 
-        let timeout_ns = self.request_timeout_ns.load(Ordering::Relaxed);
-        if timeout_ns > 0 {
-            // When there are retry attempts, each attempt can take up to timeout_ns.
-            // In addition, there is retry_delay_ms between attempts.
-            // So we scale the outer oneshot timeout appropriately to avoid the caller
-            // timing out prematurely while the background task is actively retrying/reconnecting.
-            let total_attempts = retry_attempts as u64 + 1;
-            let total_delay_ns = retry_delay_ms * retry_attempts as u64 * 1_000_000;
-            let outer_timeout_ns = timeout_ns
-                .saturating_mul(total_attempts)
-                .saturating_add(total_delay_ns);
-
-            let outcome = tokio::time::timeout(Duration::from_nanos(outer_timeout_ns), rx).await;
-            if outcome.is_err() {
-                // Transport may be hung.  Send a non-blocking Disconnect so the
-                // background task drains the pipeline and closes the transport;
-                // the caller can then call connect() to recover.
-                let _ = self.cmd_tx.try_send(TaskCommand::Disconnect);
-                return Err(AsyncError::Timeout);
-            }
-            outcome
-                .unwrap()
-                .map_err(|_| AsyncError::WorkerClosed)?
-                .map_err(AsyncError::Mbus)
-        } else {
-            rx.await
-                .map_err(|_| AsyncError::WorkerClosed)?
-                .map_err(AsyncError::Mbus)
-        }
+        rx.await
+            .map_err(|_| AsyncError::WorkerClosed)?
+            .map_err(|e| match e {
+                MbusError::Timeout => AsyncError::Timeout,
+                other => AsyncError::Mbus(other),
+            })
     }
 
     // ── Connection ───────────────────────────────────────────────────────
@@ -221,30 +210,53 @@ impl AsyncClientCore {
     pub fn has_pending_requests(&self) -> bool {
         *self.pending_count_rx.borrow() > 0
     }
-    // ── Request timeout ──────────────────────────────────────────────────────────
+    // ── Timeout configuration ───────────────────────────────────────────────────
 
-    /// Sets a per-request deadline applied to every subsequent request call.
+    /// Sets the wire response turnaround timeout applied once a request is dispatched to the wire.
     ///
     /// If a response is not received within `timeout`, the method returns
-    /// [`AsyncError::Timeout`].  The in-flight entry remains in the background
-    /// task until the transport delivers or errors; calling
-    /// [`connect`](Self::connect) resets transport state.
-    ///
-    /// The timeout can be updated at any time and takes effect on the next
-    /// request.  Call [`clear_request_timeout`](Self::clear_request_timeout) to
-    /// remove it.
-    pub fn set_request_timeout(&self, timeout: Duration) {
-        self.request_timeout_ns.store(
+    /// [`AsyncError::Timeout`].
+    pub fn set_response_timeout(&self, timeout: Duration) {
+        self.response_timeout_ns.store(
             u64::try_from(timeout.as_nanos()).unwrap_or(u64::MAX),
             Ordering::Relaxed,
         );
     }
 
-    /// Removes the per-request timeout set by
-    /// [`set_request_timeout`](Self::set_request_timeout), allowing requests to
-    /// wait indefinitely for a server response.
+    /// Clears the wire response turnaround timeout.
+    pub fn clear_response_timeout(&self) {
+        self.response_timeout_ns.store(0, Ordering::Relaxed);
+    }
+
+    /// Sets the queue waiting timeout.
+    ///
+    /// If a request sits in the client queue longer than `timeout` before being
+    /// dispatched to the physical wire, it fails early with [`AsyncError::Timeout`]
+    /// without being transmitted over the wire.
+    pub fn set_queue_timeout(&self, timeout: Duration) {
+        self.queue_timeout_ns.store(
+            u64::try_from(timeout.as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Clears the queue waiting timeout, allowing requests to wait in queue until a transmission slot opens.
+    pub fn clear_queue_timeout(&self) {
+        self.queue_timeout_ns.store(0, Ordering::Relaxed);
+    }
+
+    /// Sets a per-request deadline applied to every subsequent request call.
+    ///
+    /// Alias for [`set_response_timeout`](Self::set_response_timeout).
+    pub fn set_request_timeout(&self, timeout: Duration) {
+        self.set_response_timeout(timeout);
+    }
+
+    /// Removes the per-request response timeout.
+    ///
+    /// Alias for [`clear_response_timeout`](Self::clear_response_timeout).
     pub fn clear_request_timeout(&self) {
-        self.request_timeout_ns.store(0, Ordering::Relaxed);
+        self.clear_response_timeout();
     }
     // ── Traffic notifier ─────────────────────────────────────────────────
 

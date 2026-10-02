@@ -183,35 +183,36 @@ if client.has_pending_requests() {
 
 ---
 
-## Per-Request Timeout
+## Timeouts and Queue Policies
 
-Set a deadline applied to every subsequent request:
+Configure independent queue and wire turnaround timeouts:
 
 <!-- validate: skip -->
 ```rust
 use std::time::Duration;
 
-client.set_request_timeout(Duration::from_millis(500));
+// 1. Queue waiting timeout:
+// Fails early with AsyncError::Timeout if congested and unable to reach the wire within 200ms
+client.set_queue_timeout(Duration::from_millis(200));
 
-// AsyncError::Timeout is returned if no response arrives within 500ms.
-// The pipeline is automatically drained and the transport closed.
-client.clear_request_timeout(); // remove the deadline
+// 2. Wire turnaround timeout:
+// Fails with AsyncError::Timeout if the addressed device does not reply within 1000ms after transmission
+client.set_response_timeout(Duration::from_millis(1000));
 ```
 
-After a timeout, call `client.connect().await?` to reopen the transport.
+On multi-drop RS-485 networks, a timeout on a silent or malfunctioning slave does **not** close the transport or disrupt communication with other healthy units on the bus. The transport handle remains open and connected.
 
 ---
 
-## Reconnect After Disconnect
+## Reconnect After Transport Loss
 
 `connect()` is safe to call at any time — it closes any active transport first, then opens a
-new connection. Use it after a transport error or `AsyncError::Timeout`:
+new connection. Use it after a physical socket or serial disconnection:
 
 <!-- validate: skip -->
 ```rust
-if let Err(_) = client.read_multiple_coils(1, 0, 8).await {
-    client.connect().await?; // reconnect and retry
-    let _ = client.read_multiple_coils(1, 0, 8).await?;
+if !client.is_connected() {
+    client.connect().await?; // reconnect
 }
 ```
 

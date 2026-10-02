@@ -7,6 +7,8 @@
 
 use std::ops::Deref;
 #[cfg(feature = "network-tcp")]
+use std::sync::Arc;
+#[cfg(feature = "network-tcp")]
 use std::time::Duration;
 
 #[cfg(feature = "network-tcp")]
@@ -101,10 +103,15 @@ impl AsyncTcpClient<1000> {
         tcp_config: ModbusTcpConfig,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
-        Self::from_connect_fn(make_tcp_factory(
+        let client = Self::from_connect_fn(make_tcp_factory(
             tcp_config.host.as_str().to_string(),
             tcp_config.port,
-        ))
+        ))?;
+        if tcp_config.response_timeout_ms > 0 {
+            client
+                .set_response_timeout(Duration::from_millis(tcp_config.response_timeout_ms as u64));
+        }
+        Ok(client)
     }
 }
 
@@ -188,6 +195,7 @@ impl<const N: usize> AsyncTcpClient<N> {
         let handle = tokio::runtime::Handle::try_current().map_err(|_| AsyncError::WorkerClosed)?;
         let (cmd_tx, cmd_rx) = mpsc::channel(N.max(10000));
         let (pending_count_tx, pending_count_rx) = watch::channel(0usize);
+        let transport_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         #[cfg(feature = "traffic")]
         let notifier = crate::client::notifier::new_notifier_store();
@@ -196,6 +204,7 @@ impl<const N: usize> AsyncTcpClient<N> {
             connect_fn,
             cmd_rx,
             pending_count_tx,
+            transport_connected.clone(),
             #[cfg(feature = "traffic")]
             notifier.clone(),
         );
@@ -205,6 +214,7 @@ impl<const N: usize> AsyncTcpClient<N> {
             core: AsyncClientCore::new(
                 cmd_tx,
                 pending_count_rx,
+                transport_connected,
                 #[cfg(feature = "traffic")]
                 notifier,
             ),

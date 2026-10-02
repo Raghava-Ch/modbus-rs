@@ -10,7 +10,8 @@ The client supports configurable resilience policies:
 
 | Policy | Purpose |
 |--------|---------|
-| **Response Timeout** | How long to wait for a response before timing out |
+| **Response Timeout** | How long to wait for a device response once dispatched to the wire |
+| **Queue Timeout** | How long a request may wait in the client queue during congestion before failing early |
 | **Retry Attempts** | How many times to retry a failed request |
 | **Backoff Strategy** | How to space out retry attempts |
 | **Jitter Strategy** | Add randomness to prevent thundering herd |
@@ -19,7 +20,7 @@ The client supports configurable resilience policies:
 
 ## Response Timeout
 
-Time in milliseconds to wait for a response from the server/device.
+Time in milliseconds to wait for a response from the server/device once the request frame has been transmitted onto the physical wire.
 
 ```rust
 use modbus_rs::{ModbusTcpConfig, ModbusSerialConfig};
@@ -41,6 +42,27 @@ config.response_timeout_ms = 1000;  // 1 second
 | TCP WAN | 3000-5000 ms | Internet/VPN |
 | Serial RTU | 500-1000 ms | Depends on baud rate |
 | Serial ASCII | 1000-2000 ms | Slower encoding |
+
+On multi-drop RS-485 serial buses, a response timeout on an unresponsive slave does **not** close the transport or disrupt communication with other healthy units; subsequent requests proceed without reconnecting.
+
+---
+
+## Queue Timeout
+
+Maximum time in milliseconds a request is allowed to wait in the client transmission queue before being dispatched onto the wire.
+
+In async client architectures—especially on serial RTU/ASCII lines where concurrency is limited to a single transaction at a time ($N=1$)—bursts of requests can accumulate in the queue. If a request is stuck behind slow transactions or retries and exceeds its queue timeout, it fails immediately with `AsyncError::Timeout` without ever touching the wire, preventing stale commands from being placed onto the bus.
+
+```rust
+use std::time::Duration;
+
+// Configure independent queue and response timeouts on an active async client:
+client.set_queue_timeout(Duration::from_millis(200));     // Max queue wait: 200ms
+client.set_response_timeout(Duration::from_millis(1500)); // Max wire turnaround: 1.5s
+```
+
+> [!NOTE]
+> **RFC Note**: The `request_timeout_ms` / queue timeout feature is effective in v0.15+. Based on ongoing RFC discussions, its API naming and relationship with transport policies might be revised in a future release. If you consider this queue admission timeout a mandatory feature for your application, please leave a comment on the GitHub RFC discussion.
 
 ---
 

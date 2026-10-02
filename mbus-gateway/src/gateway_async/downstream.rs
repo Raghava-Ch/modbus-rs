@@ -32,6 +32,7 @@ use mbus_serial::TokioAsciiTransport;
 /// When the inner transport is serial, ADU framing is automatically translated
 /// between Modbus TCP MBAP format (used internally by the session loop) and the
 /// wire format of the downstream (RTU CRC or ASCII LRC).
+#[allow(clippy::large_enum_variant)]
 pub enum GatewayTransport {
     /// Modbus TCP downstream.
     #[cfg(feature = "downstream-tcp")]

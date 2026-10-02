@@ -26,14 +26,22 @@ export declare class AsyncAsciiTransport {
    */
   createClient(options: CreateClientOptions): AsyncSerialModbusClient;
   /**
-   *  Sets the per-request timeout in milliseconds.
+   * Sets the per-request timeout in milliseconds.
+   *
    * Sets the timeout for individual Modbus requests made through this transport.
+   * On multi-drop buses, a timeout on a silent unit does not disconnect or close the transport.
+   *
+   * Note: This feature is effective, but based on ongoing RFC discussions it might be
+   * removed or revised in a future release. If you feel this is a mandatory feature for your use case,
+   * it is suggested to leave a comment on the GitHub RFC discussion.
+   *
    * @param timeout_ms The timeout duration in milliseconds.
    */
   setRequestTimeout(timeoutMs: number): void;
   /**
-   *  Clears the per-request timeout.
-   * Clears any previously set per-request timeout.
+   * Clears the per-request timeout.
+   *
+   * Clears any previously set per-request timeout, allowing requests to wait without a timeout.
    */
   clearRequestTimeout(): void;
   /**
@@ -79,14 +87,22 @@ export declare class AsyncRtuTransport {
    */
   createClient(options: CreateClientOptions): AsyncSerialModbusClient;
   /**
-   *  Sets the per-request timeout in milliseconds.
+   * Sets the per-request timeout in milliseconds.
+   *
    * Sets the timeout for individual Modbus requests made through this transport.
+   * On multi-drop buses, a timeout on a silent unit does not disconnect or close the transport.
+   *
+   * Note: This feature is effective, but based on ongoing RFC discussions it might be
+   * removed or revised in a future release. If you feel this is a mandatory feature for your use case,
+   * it is suggested to leave a comment on the GitHub RFC discussion.
+   *
    * @param timeout_ms The timeout duration in milliseconds.
    */
   setRequestTimeout(timeoutMs: number): void;
   /**
-   *  Clears the per-request timeout.
-   * Clears any previously set per-request timeout.
+   * Clears the per-request timeout.
+   *
+   * Clears any previously set per-request timeout, allowing requests to wait without a timeout.
    */
   clearRequestTimeout(): void;
   /**
@@ -602,14 +618,20 @@ export declare class AsyncTcpTransport {
    */
   createClient(options: CreateClientOptions): AsyncTcpModbusClient;
   /**
-   *  Sets the per-request timeout in milliseconds.
+   * Sets the per-request timeout in milliseconds.
+   *
    * Sets the timeout for individual Modbus requests made through this transport.
    *
-   * @param timeout_ms - The timeout duration in milliseconds.
+   * Note: This feature is effective, but based on ongoing RFC discussions it might be
+   * removed or revised in a future release. If you feel this is a mandatory feature for your use case,
+   * it is suggested to leave a comment on the GitHub RFC discussion.
+   *
+   * @param timeout_ms The timeout duration in milliseconds.
    */
   setRequestTimeout(timeoutMs: number): void;
   /**
-   *  Clears the per-request timeout.
+   * Clears the per-request timeout.
+   *
    * Clears any previously set per-request timeout, reverting to the default behavior.
    */
   clearRequestTimeout(): void;
@@ -632,7 +654,7 @@ export declare class AsyncTcpTransport {
 
 /** Connection options for the serial ASCII transport. */
 export interface AsciiTransportOptions {
-  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). */
+  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable). */
   portPath: string;
   /** Baud rate (e.g., 9600, 19200, 38400, 57600, 115200). */
   baudRate: number;
@@ -642,9 +664,9 @@ export interface AsciiTransportOptions {
   parity?: 'none' | 'even' | 'odd';
   /** Stop bits (1 or 2). */
   stopBits?: 1 | 2;
-  /** Response timeout in milliseconds. */
+  /** Response turnaround timeout in milliseconds. Time to wait for the target slave device to respond once the request has been dispatched onto the wire. */
   responseTimeoutMs?: number;
-  /** Per-request timeout in milliseconds. Note: This feature is currently ineffective and is reserved for future implementation. A GitHub RFC discussion is open to decide whether to implement or remove it. */
+  /** Queue waiting timeout in milliseconds. If the transport pipeline is congested and the request cannot be dispatched onto the wire within this time, it fails early with ModbusErrorCode.TIMEOUT without reaching the wire. Note: This feature is effective, but based on ongoing RFC discussions it might be removed or revised in a future release. If you feel this is a mandatory feature for your use case, it is suggested to leave a comment on the GitHub RFC discussion. */
   requestTimeoutMs?: number;
   /** Number of retry attempts on failure (0 = none). Default: 0. */
   retryAttempts?: number;
@@ -978,7 +1000,7 @@ export interface RouteEntry {
 
 /** Connection options for the serial RTU transport. */
 export interface RtuTransportOptions {
-  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). */
+  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable). */
   portPath: string;
   /** Baud rate (e.g., 9600, 19200, 38400, 57600, 115200). */
   baudRate: number;
@@ -988,9 +1010,9 @@ export interface RtuTransportOptions {
   parity?: 'none' | 'even' | 'odd';
   /** Stop bits (1 or 2). */
   stopBits?: 1 | 2;
-  /** Response timeout in milliseconds. */
+  /** Response turnaround timeout in milliseconds. Time to wait for the target slave device to respond once the request has been dispatched onto the wire. */
   responseTimeoutMs?: number;
-  /** Per-request timeout in milliseconds. Note: This feature is currently ineffective and is reserved for future implementation. A GitHub RFC discussion is open to decide whether to implement or remove it. */
+  /** Queue waiting timeout in milliseconds. If the transport pipeline is congested and the request cannot be dispatched onto the wire within this time, it fails early with ModbusErrorCode.TIMEOUT without reaching the wire. Note: This feature is effective, but based on ongoing RFC discussions it might be removed or revised in a future release. If you feel this is a mandatory feature for your use case, it is suggested to leave a comment on the GitHub RFC discussion. */
   requestTimeoutMs?: number;
   /** Number of retry attempts on failure (0 = none). Default: 0. */
   retryAttempts?: number;
@@ -1002,7 +1024,7 @@ export interface RtuTransportOptions {
 
 /** Server bind options for serial port. */
 export interface SerialServerOptions {
-  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). */
+  /** Serial port path (e.g., "/dev/ttyUSB0", "COM3"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable). */
   portPath: string;
   /** Baud rate (e.g., 9600, 19200, 38400, 57600, 115200). */
   baudRate: number;
@@ -1042,8 +1064,10 @@ export interface TcpTransportOptions {
   host: string;
   /** Target TCP port (typically 502). */
   port: number;
-  /** Per-request timeout in milliseconds. Note: This feature is currently ineffective and is reserved for future implementation. A GitHub RFC discussion is open to decide whether to implement or remove it. */
+  /** Queue waiting timeout in milliseconds. If the transport pipeline is congested and the request cannot be dispatched onto the wire within this time, it fails early with ModbusErrorCode.TIMEOUT without reaching the wire. Note: This feature is effective, but based on ongoing RFC discussions it might be removed or revised in a future release. If you feel this is a mandatory feature for your use case, it is suggested to leave a comment on the GitHub RFC discussion. */
   requestTimeoutMs?: number;
+  /** Response turnaround timeout in milliseconds. Time to wait for the target server/device to respond once the request has been dispatched onto the wire. */
+  responseTimeoutMs?: number;
   /** Number of retry attempts on failure. Default: 0 (no retries). */
   retryAttempts?: number;
   /** Delay between retry attempts in milliseconds. */
@@ -1147,195 +1171,6 @@ export interface WriteSingleRegisterRequest {
   /** The 16-bit value to write. */
   value: number;
 }
-
-/** Represents a Modbus discrete input pin state (alias for CoilState). */
-export type DiscreteInputState = CoilState;
-export declare const DiscreteInputState: typeof CoilState;
-
-/** Modbus exception returned from a server handler. */
-export interface ModbusException {
-  /** The Modbus exception code. */
-  exceptionCode: ModbusExceptionCode | number;
-}
-
-/**
- * Callback functions to handle Modbus server requests.
- * 
- * Each handler corresponds to a specific Modbus function code. If a handler is not provided,
- * the server will respond with an "Illegal Function" exception (0x01).
- * 
- * Handlers can return the expected data directly or return a Promise for async operations.
- * To return a Modbus exception, return an object matching the `ModbusException` interface.
- */
-export interface ServerHandlers {
-  /**
-   * Handle Read Coils (FC 01).
-   * @param req The request object.
-   * @param req.address The starting coil address (0x0000 to 0xFFFF).
-   * @param req.quantity The number of coils to read (1 to 2000).
-   * @returns An array of booleans representing the coil states, or a ModbusException.
-   */
-  onReadCoils?: (req: ReadCoilsRequest) => CoilState[] | ModbusException | Promise<CoilState[] | ModbusException>;
-
-  /**
-   * Handle Read Discrete Inputs (FC 02).
-   * @param req The request object.
-   * @param req.address The starting discrete input address (0x0000 to 0xFFFF).
-   * @param req.quantity The number of inputs to read (1 to 2000).
-   * @returns An array of discrete input states, or a ModbusException.
-   */
-  onReadDiscreteInputs?: (req: ReadDiscreteInputsRequest) => DiscreteInputState[] | ModbusException | Promise<DiscreteInputState[] | ModbusException>;
-
-  /**
-   * Handle Read Holding Registers (FC 03).
-   * @param req The request object.
-   * @param req.address The starting holding register address (0x0000 to 0xFFFF).
-   * @param req.quantity The number of registers to read (1 to 125).
-   * @returns An array of 16-bit numbers representing the registers, or a ModbusException.
-   */
-  onReadHoldingRegisters?: (req: ReadHoldingRegistersRequest) => Uint16Array | ModbusException | Promise<Uint16Array | ModbusException>;
-
-  /**
-   * Handle Read Input Registers (FC 04).
-   * @param req The request object.
-   * @param req.address The starting input register address (0x0000 to 0xFFFF).
-   * @param req.quantity The number of registers to read (1 to 125).
-   * @returns An array of 16-bit numbers representing the registers, or a ModbusException.
-   */
-  onReadInputRegisters?: (req: ReadInputRegistersRequest) => Uint16Array | ModbusException | Promise<Uint16Array | ModbusException>;
-
-  /**
-   * Handle Write Single Coil (FC 05).
-   * @param req The request object.
-   * @param req.address The address of the coil to write (0x0000 to 0xFFFF).
-   * @param req.value The boolean value to write (true for ON, false for OFF).
-   * @returns void on success, or a ModbusException.
-   */
-  onWriteSingleCoil?: (req: WriteSingleCoilRequest) => void | ModbusException | Promise<void | ModbusException>;
-
-  /**
-   * Handle Write Single Register (FC 06).
-   * @param req The request object.
-   * @param req.address The address of the register to write (0x0000 to 0xFFFF).
-   * @param req.value The 16-bit value to write.
-   * @returns void on success, or a ModbusException.
-   */
-  onWriteSingleRegister?: (req: WriteSingleRegisterRequest) => void | ModbusException | Promise<void | ModbusException>;
-
-  /**
-   * Handle Read Exception Status (FC 07).
-   * @param req The read exception status request object (empty).
-   * @returns An 8-bit exception status byte, or a ModbusException.
-   */
-  onReadExceptionStatus?: (req: ReadExceptionStatusRequest) => number | ModbusException | Promise<number | ModbusException>;
-
-  /**
-   * Handle Diagnostics (FC 08).
-   * @param req The diagnostics request object.
-   * @param req.subFunction The 16-bit sub-function code.
-   * @param req.data The 16-bit data payload for the sub-function.
-   * @returns A response containing the sub-function and data, or a ModbusException.
-   */
-  onDiagnostics?: (req: DiagnosticsRequest) => ServerDiagnosticsResponse | ModbusException | Promise<ServerDiagnosticsResponse | ModbusException>;
-
-  /**
-   * Handle Write Multiple Coils (FC 15).
-   * @param req The request object.
-   * @param req.address The starting address of the coils to write.
-   * @param req.values An array of booleans to write.
-   * @returns void on success, or a ModbusException.
-   */
-  onWriteMultipleCoils?: (req: WriteMultipleCoilsRequest) => void | ModbusException | Promise<void | ModbusException>;
-
-  /**
-   * Handle Write Multiple Registers (FC 16).
-   * @param req The request object.
-   * @param req.address The starting address of the registers to write.
-   * @param req.values An array of 16-bit numbers to write.
-   * @returns void on success, or a ModbusException.
-   */
-  onWriteMultipleRegisters?: (req: WriteMultipleRegistersRequest) => void | ModbusException | Promise<void | ModbusException>;
-
-  /**
-   * Handle Read File Record (FC 20).
-   * @param req The request object.
-   * @param req.requests An array of sub-requests, each with `fileNumber`, `recordNumber`, and `recordLength`.
-   * @returns An array of register arrays for each sub-request, or a ModbusException.
-   */
-  onReadFileRecord?: (req: ReadFileRecordRequest) => Uint16Array[] | ModbusException | Promise<Uint16Array[] | ModbusException>;
-
-  /**
-   * Handle Write File Record (FC 21).
-   * @param req The request object.
-   * @param req.requests An array of sub-requests, each with `fileNumber`, `recordNumber`, and `recordData` (a Uint16Array).
-   * @returns void on success, or a ModbusException.
-   */
-  onWriteFileRecord?: (req: WriteFileRecordRequest) => void | ModbusException | Promise<void | ModbusException>;
-
-  /**
-   * Handle Read/Write Multiple Registers (FC 23).
-   * @param req The request containing addresses and values to read and write.
-   * @param req.readAddress The starting address for the read operation.
-   * @param req.readQuantity The number of registers to read.
-   * @param req.writeAddress The starting address for the write operation.
-   * @param req.values An array of 16-bit numbers to write.
-   * @returns An array of 16-bit numbers read, or a ModbusException.
-   */
-  onReadWriteMultipleRegisters?: (req: ReadWriteMultipleRegistersRequest) => Uint16Array | ModbusException | Promise<Uint16Array | ModbusException>;
-
-  /**
-   * Handle Read FIFO Queue (FC 24).
-   * @param req The request object containing the FIFO pointer `address`.
-   * @returns An array of 16-bit numbers from the queue, or a ModbusException.
-   */
-  onReadFifoQueue?: (req: ReadFifoQueueRequest) => Uint16Array | ModbusException | Promise<Uint16Array | ModbusException>;
-
-  /**
-   * Handle Read Device Identification (FC 43/14).
-   * @param req The request object.
-   * @returns Device identification response, or a ModbusException.
-   */
-  onReadDeviceIdentification?: (req: ReadDeviceIdentificationRequest) => DeviceIdentificationResponse | ModbusException | Promise<DeviceIdentificationResponse | ModbusException>;
-}
-
-/**
- * Stable error codes for identifying Modbus-related errors.
- * These can be used with the `getModbusErrorCode` helper to check for specific error types.
- */
-export declare const ModbusErrorCode: {
-  /** A Modbus exception response was received from the server (e.g., illegal function). */
-  readonly EXCEPTION: 'MODBUS_EXCEPTION';
-  /** The request timed out waiting for a response. */
-  readonly TIMEOUT: 'MODBUS_TIMEOUT';
-  /** A transport-level error occurred (e.g., framing error, checksum mismatch). */
-  readonly TRANSPORT: 'MODBUS_TRANSPORT';
-  /** An invalid argument was provided to a client or server function. */
-  readonly INVALID_ARGUMENT: 'MODBUS_INVALID_ARGUMENT';
-  /** The underlying connection was closed. */
-  readonly CONNECTION_CLOSED: 'MODBUS_CONNECTION_CLOSED';
-  /** An unexpected internal error occurred within the library. */
-  readonly INTERNAL: 'MODBUS_INTERNAL';
-};
-
-/**
- * Extracts a stable error code from a Modbus error object.
- * @param err The error object.
- * @returns The corresponding code from `ModbusErrorCode`, or undefined if not a Modbus error.
- */
-export declare function getModbusErrorCode(err: Error): string | undefined;
-
-export {
-  WasmWsTransport,
-  WasmWsModbusClient,
-  WasmWsModbusServer,
-  WasmSerialModbusClient,
-  WasmSerialModbusServer,
-  WasmSerialPortHandle,
-  WasmRtuTransport,
-  WasmAsciiTransport,
-  WasmServerTransportKind,
-  requestSerialPort
-} from 'modbus-rs-wasm';
 
 /** Represents a Modbus discrete input pin state (alias for CoilState). */
 export type DiscreteInputState = CoilState;

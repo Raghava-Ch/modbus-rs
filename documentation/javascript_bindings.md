@@ -85,7 +85,7 @@ const server = AsyncTcpModbusServer.bind(
 const transport = await AsyncTcpTransport.connect({
   host: '127.0.0.1',
   port: 5502,
-  timeoutMs: 2000,
+  responseTimeoutMs: 2000,
 });
 
 // Create logical client from transport
@@ -96,6 +96,65 @@ console.log(regs); // [0, 1, 2, 3]
 
 await transport.close();
 await server.shutdown();
+```
+
+## Timeouts and Queue Management
+
+Modbus requests in `modbus-rs` operate on a two-phase independent timeout architecture:
+
+```text
+Application Call: client.readHoldingRegisters(...)
+            │
+            ▼
+┌───────────────────────────────────────────────┐
+│              PHASE 1: CLIENT QUEUE             │
+│                                               │
+│  • Bounded by: requestTimeoutMs               │
+│  • Clock starts: upon enqueueing              │
+│  • On Expiry: rejects with TIMEOUT;           │
+│    never dispatched to the physical wire      │
+└───────────────────────┬───────────────────────┘
+                        │ Transmission slot available (e.g. Serial N=1)
+                        ▼
+┌───────────────────────────────────────────────┐
+│             PHASE 2: PHYSICAL WIRE            │
+│                                               │
+│  • Bounded by: responseTimeoutMs              │
+│  • Clock starts: when written to transport    │
+│  • On Expiry: rejects with TIMEOUT;           │
+│    stale bytes drained; connection kept alive │
+└───────────────────────────────────────────────┘
+```
+
+### Options
+
+- `responseTimeoutMs` (number, default `1000`): **Wire Turnaround Timeout**. The maximum time in milliseconds to wait for a slave device or server to respond after the request frame has been transmitted onto the physical wire. On multi-drop RS-485 serial buses, a timeout on a silent unit does **not** close the transport or disrupt communication with other healthy units; subsequent requests continue normally.
+- `requestTimeoutMs` (number, optional): **Queue Waiting Timeout**. The maximum time in milliseconds a request may sit waiting in the internal transmission queue before being dispatched onto the physical wire. This is especially vital on single-transaction serial lines (RTU/ASCII) where heavy request rates or slow transactions could cause an application's commands to pile up. If a request does not get dispatched within `requestTimeoutMs`, it fails early with `ModbusErrorCode.TIMEOUT` without placing stale bytes onto the bus.
+
+> [!NOTE]
+> **RFC Note**: The `requestTimeoutMs` queue timeout feature is effective in v0.15+. Based on ongoing RFC discussions, its API naming and relationship with transport policies might be revised in a future release. If you consider this queue admission timeout a mandatory feature for your application, please leave a comment on the GitHub RFC discussion.
+
+### Example: Configuring Two-Phase Timeouts
+
+```js
+import { AsyncRtuTransport, ModbusErrorCode, getModbusErrorCode } from 'modbus-rs';
+
+const transport = await AsyncRtuTransport.open({
+  portPath: '/dev/ttyUSB0',
+  baudRate: 19200,
+  requestTimeoutMs: 200,   // Fail if queued longer than 200ms during congestion
+  responseTimeoutMs: 1500, // Wait up to 1.5s for device response on the wire
+});
+
+const client = transport.createClient({ unitId: 1 });
+
+try {
+  const regs = await client.readHoldingRegisters({ address: 0, quantity: 4 });
+} catch (err) {
+  if (getModbusErrorCode(err) === ModbusErrorCode.TIMEOUT) {
+    console.error('Request timed out (either in queue or on the wire):', err.message);
+  }
+}
 ```
 
 ## Examples

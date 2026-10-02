@@ -31,7 +31,7 @@ Everything you need to build Modbus client applications.
 | [Building Applications](client/building_applications.md) | Callbacks, poll loop, transport setup |
 | [Feature Flags](client/feature_flags.md) | Enable only what you need |
 | [Architecture](client/architecture.md) | State machine, transport layer, services |
-| [Policies](client/policies.md) | Retry, backoff, jitter, timeout configuration |
+| [Policies](client/policies.md) | Retry, backoff, jitter, queue & response timeout configuration |
 | [Async Development](client/async.md) | Tokio-based async client APIs |
 | [C/FFI Development](client/c_bindings.md) | Native C client bindings |
 | [WASM Development](client/wasm.md) | Browser WebSocket client |

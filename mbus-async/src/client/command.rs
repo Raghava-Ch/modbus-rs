@@ -301,6 +301,8 @@ pub(crate) enum TaskCommand {
         resp_tx: ResponseSender,
         retry_attempts: u8,
         retry_delay_ms: u64,
+        response_timeout_ms: u64,
+        queue_deadline: Option<tokio::time::Instant>,
     },
     /// Drain all in-flight and queued requests with `ConnectionClosed` and
     /// close the transport.  Issued automatically after a per-request timeout
