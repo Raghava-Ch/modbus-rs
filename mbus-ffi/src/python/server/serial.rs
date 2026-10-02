@@ -11,6 +11,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Notify;
 
 use super::app::{ModbusApp, PythonAppAdapter};
+use crate::PORT_PATH_STRING_LEN;
 use crate::python::client::helpers::get_runtime;
 use crate::python::errors::async_server_error_to_py;
 
@@ -26,10 +27,10 @@ fn make_serial_config(
     parity: Parity,
     stop_bits: u8,
     retry_attempts: u8,
-) -> PyResult<ModbusConfig> {
-    let port_path = heapless::String::<64>::from_str(port).map_err(|_| {
+) -> PyResult<ModbusConfig<PORT_PATH_STRING_LEN>> {
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::from_str(port).map_err(|_| {
         crate::python::errors::ModbusConfigError::new_err(format!(
-            "Port path too long (max 64 chars): {port}"
+            "Port path too long (max {PORT_PATH_STRING_LEN} chars): {port}"
         ))
     })?;
     let serial_cfg = ModbusSerialConfig {
