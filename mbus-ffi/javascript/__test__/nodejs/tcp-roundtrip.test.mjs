@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 let modbus;
 try {
-  modbus = await import('../dist/index.js');
+  modbus = await import('../../dist/index.js');
 } catch (err) {
   console.warn(
     `[skip] Native modbus-rs addon not loadable — did you run 'npm run build'?`,

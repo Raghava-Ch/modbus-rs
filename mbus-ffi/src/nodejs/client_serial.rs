@@ -141,7 +141,9 @@ fn parse_stop_bits(bits: u8) -> Result<u8> {
 }
 
 /// Builds a ModbusSerialConfig from RTU options.
-fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig> {
+fn build_rtu_config(
+    options: &RtuTransportOptions,
+) -> Result<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
     let baud_rate = parse_baud_rate(options.baud_rate)?;
     let data_bits = options
         .data_bits
@@ -193,7 +195,9 @@ fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig>
 }
 
 /// Builds a ModbusSerialConfig from ASCII options.
-fn build_ascii_config(options: &AsciiTransportOptions) -> Result<ModbusSerialConfig> {
+fn build_ascii_config(
+    options: &AsciiTransportOptions,
+) -> Result<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
     let baud_rate = parse_baud_rate(options.baud_rate)?;
     let data_bits = options
         .data_bits
@@ -1207,5 +1211,68 @@ impl AsyncSerialModbusClient {
             })
         })?;
         Ok(unsafe { extend_lifetime(promise) })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rtu_port_path_length_limit() {
+        let valid = RtuTransportOptions {
+            port_path: "COM1".to_string(),
+            baud_rate: 9600,
+            data_bits: None,
+            parity: None,
+            stop_bits: None,
+            response_timeout_ms: None,
+            request_timeout_ms: None,
+            retry_attempts: None,
+            retry_delay_ms: None,
+            retry_backoff_strategy: None,
+        };
+        assert!(build_rtu_config(&valid).is_ok());
+
+        let invalid = RtuTransportOptions {
+            port_path: "a".repeat(crate::PORT_PATH_STRING_LEN + 1),
+            ..valid
+        };
+        let err = build_rtu_config(&invalid).unwrap_err();
+        assert_eq!(err.status, Status::InvalidArg);
+        assert!(err.reason.contains("Port path too long"));
+        assert!(
+            err.reason
+                .contains(&format!("max {} chars", crate::PORT_PATH_STRING_LEN))
+        );
+    }
+
+    #[test]
+    fn test_ascii_port_path_length_limit() {
+        let valid = AsciiTransportOptions {
+            port_path: "COM1".to_string(),
+            baud_rate: 9600,
+            data_bits: None,
+            parity: None,
+            stop_bits: None,
+            response_timeout_ms: None,
+            request_timeout_ms: None,
+            retry_attempts: None,
+            retry_delay_ms: None,
+            retry_backoff_strategy: None,
+        };
+        assert!(build_ascii_config(&valid).is_ok());
+
+        let invalid = AsciiTransportOptions {
+            port_path: "a".repeat(crate::PORT_PATH_STRING_LEN + 1),
+            ..valid
+        };
+        let err = build_ascii_config(&invalid).unwrap_err();
+        assert_eq!(err.status, Status::InvalidArg);
+        assert!(err.reason.contains("Port path too long"));
+        assert!(
+            err.reason
+                .contains(&format!("max {} chars", crate::PORT_PATH_STRING_LEN))
+        );
     }
 }

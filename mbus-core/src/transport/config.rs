@@ -150,14 +150,14 @@ impl ModbusTcpConfig {
 
 /// Top-level configuration for Modbus communication, supporting different transport layers.
 #[derive(Debug, Clone)]
-pub enum ModbusConfig {
+pub enum ModbusConfig<const PORT_PATH_LEN: usize = 64> {
     /// Configuration for Modbus TCP/IP.
     Tcp(ModbusTcpConfig),
     /// Configuration for Modbus Serial (RTU or ASCII).
-    Serial(ModbusSerialConfig),
+    Serial(ModbusSerialConfig<PORT_PATH_LEN>),
 }
 
-impl ModbusConfig {
+impl<const PORT_PATH_LEN: usize> ModbusConfig<PORT_PATH_LEN> {
     /// Returns the number of retry attempts configured for the transport.
     pub fn retry_attempts(&self) -> u8 {
         match self {

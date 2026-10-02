@@ -57,7 +57,9 @@ impl<const ASCII: bool> TokioSerialTransport<ASCII> {
     ///
     /// Returns `Err(MbusError::InvalidConfiguration)` if `config` is not a
     /// `ModbusConfig::Serial` variant or if the mode does not match `ASCII`.
-    pub fn new(config: &ModbusConfig) -> Result<Self, MbusError> {
+    pub fn new<const PORT_PATH_LEN: usize>(
+        config: &ModbusConfig<PORT_PATH_LEN>,
+    ) -> Result<Self, MbusError> {
         let serial_cfg = match config {
             ModbusConfig::Serial(c) => c,
             _ => return Err(MbusError::InvalidConfiguration),
