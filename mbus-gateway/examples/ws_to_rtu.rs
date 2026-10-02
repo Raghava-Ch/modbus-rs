@@ -61,7 +61,7 @@ fn main() {
         .unwrap()
         .block_on(async {
             // ── Downstream RTU transport ──────────────────────────────────────
-            let serial_cfg = ModbusConfig::Serial(ModbusSerialConfig {
+            let serial_cfg: ModbusConfig = ModbusConfig::Serial(ModbusSerialConfig {
                 port_path: SERIAL_PORT.try_into().expect("serial port path too long"),
                 mode: SerialMode::Rtu,
                 baud_rate: BaudRate::Baud19200,

@@ -328,7 +328,12 @@ impl TcpModbusClient {
 
     /// Write a single coil (FC 05). Returns ``(address, value)`` echo.
     #[pyo3(signature = (address, value))]
-    fn write_coil(&self, py: Python<'_>, address: u16, value: crate::python::PyCoilState) -> PyResult<(u16, crate::python::PyCoilState)> {
+    fn write_coil(
+        &self,
+        py: Python<'_>,
+        address: u16,
+        value: crate::python::PyCoilState,
+    ) -> PyResult<(u16, crate::python::PyCoilState)> {
         let rt = get_runtime();
         let uid = self.unit_id;
         let state = value.into_core();

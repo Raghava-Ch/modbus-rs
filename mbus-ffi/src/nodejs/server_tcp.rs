@@ -2,11 +2,11 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::nodejs::node_types::ReadDeviceIdentificationRequest;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
 use serde_json::Value as JsValue;
-use crate::nodejs::node_types::ReadDeviceIdentificationRequest;
 
 use mbus_core::errors::ExceptionCode;
 use mbus_core::function_codes::public::FunctionCode;
@@ -223,7 +223,6 @@ pub struct DiagnosticsRequest {
     #[napi(ts_type = "Uint16Array")]
     pub data: Vec<u16>,
 }
-
 
 // ── Diagnostics Response ─────────────────────────────────────────────────────
 
@@ -1197,8 +1196,12 @@ impl JsHandlerAdapter {
                                 if let Some(exc) = try_exception_code(&v) {
                                     ModbusResponse::exception(fc, exc)
                                 } else if v.is_object() {
-                                    let (conformity_level, more_follows, next_object_id, objects_bytes) =
-                                        Self::parse_device_identification_response(&v);
+                                    let (
+                                        conformity_level,
+                                        more_follows,
+                                        next_object_id,
+                                        objects_bytes,
+                                    ) = Self::parse_device_identification_response(&v);
                                     ModbusResponse::read_device_id(
                                         read_device_id_code,
                                         conformity_level,
@@ -1207,10 +1210,16 @@ impl JsHandlerAdapter {
                                         &objects_bytes,
                                     )
                                 } else {
-                                    Self::default_device_id_response(read_device_id_code, start_object_id)
+                                    Self::default_device_id_response(
+                                        read_device_id_code,
+                                        start_object_id,
+                                    )
                                 }
                             } else {
-                                Self::default_device_id_response(read_device_id_code, start_object_id)
+                                Self::default_device_id_response(
+                                    read_device_id_code,
+                                    start_object_id,
+                                )
                             }
                         }
                         Err(_) => ModbusResponse::exception(fc, ExceptionCode::ServerDeviceFailure),
@@ -1227,26 +1236,35 @@ impl JsHandlerAdapter {
 
     #[cfg(feature = "diagnostics")]
     fn parse_device_identification_response(val: &serde_json::Value) -> (u8, bool, u8, Vec<u8>) {
-        let conformity_level = val.get("conformityLevel")
+        let conformity_level = val
+            .get("conformityLevel")
             .and_then(|c| c.as_u64())
             .map(|c| c as u8)
             .unwrap_or(0x82);
 
-        let more_follows = val.get("moreFollows")
+        let more_follows = val
+            .get("moreFollows")
             .and_then(|m| m.as_bool())
             .unwrap_or(false);
 
-        let next_object_id = val.get("nextObjectId")
+        let next_object_id = val
+            .get("nextObjectId")
             .and_then(|n| n.as_u64())
             .map(|n| n as u8)
             .unwrap_or(0);
 
-        let objects_bytes = val.get("objects")
+        let objects_bytes = val
+            .get("objects")
             .filter(|o| o.is_array())
             .map(Self::parse_device_identification_objects)
             .unwrap_or_default();
 
-        (conformity_level, more_follows, next_object_id, objects_bytes)
+        (
+            conformity_level,
+            more_follows,
+            next_object_id,
+            objects_bytes,
+        )
     }
 
     #[cfg(feature = "diagnostics")]
@@ -1255,12 +1273,14 @@ impl JsHandlerAdapter {
         if let Some(arr) = objs_val.as_array() {
             for item in arr {
                 if item.is_object() {
-                    let obj_id = item.get("id")
+                    let obj_id = item
+                        .get("id")
                         .and_then(|id| id.as_u64())
                         .map(|id| id as u8)
                         .unwrap_or(0);
 
-                    let obj_val_str = item.get("value")
+                    let obj_val_str = item
+                        .get("value")
                         .and_then(|val| val.as_str())
                         .unwrap_or_default();
 

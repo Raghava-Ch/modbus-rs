@@ -101,15 +101,15 @@ fn unit_id(u: u8) -> UnitIdOrSlaveAddr {
 #[test]
 fn gateway_forwards_request_and_returns_response() {
     let request_adu = build_tcp_request(
-        0x0001, // txn_id
-        unit_id(1),      // unit
+        0x0001,     // txn_id
+        unit_id(1), // unit
         FunctionCode::ReadCoils,
         &[0x00, 0x00, 0x00, 0x08], // address=0, quantity=8
     );
 
     let response_adu = build_tcp_request(
-        0x0000, // downstream txn (gateway assigns 0)
-        unit_id(1),      // unit
+        0x0000,     // downstream txn (gateway assigns 0)
+        unit_id(1), // unit
         FunctionCode::ReadCoils,
         &[0x01, 0xFF], // byte_count=1, coil_data=0xFF
     );

@@ -143,14 +143,20 @@ fn cmd_gen_client_header(root: &Path, args: &[String]) -> Result<(), String> {
     }
 
     build_args.push("--");
-    
+
     let has_lock_stubs = features_str.contains("internal-lock-stubs");
-    let is_windows = opts.target.as_ref().map(|t| t.contains("windows")).unwrap_or_else(|| cfg!(windows));
+    let is_windows = opts
+        .target
+        .as_ref()
+        .map(|t| t.contains("windows"))
+        .unwrap_or_else(|| cfg!(windows));
 
     if !is_bare_metal {
         // MSVC linker requires all symbols to be resolved at link time for a DLL.
         if is_windows && !has_lock_stubs {
-            println!("  (Passing /FORCE:UNRESOLVED on Windows to allow cdylib to build with missing symbols)");
+            println!(
+                "  (Passing /FORCE:UNRESOLVED on Windows to allow cdylib to build with missing symbols)"
+            );
             build_args.push("-C");
             build_args.push("link-arg=/FORCE:UNRESOLVED");
         }

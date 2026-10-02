@@ -2064,7 +2064,11 @@ mod tests {
             value: mbus_core::models::discrete_input::DiscreteInputState,
         ) {
             let mut values = [0u8; mbus_core::models::discrete_input::MAX_DISCRETE_INPUT_BYTES];
-            values[0] = if value == mbus_core::models::discrete_input::DiscreteInputState::On { 0x01 } else { 0x00 };
+            values[0] = if value == mbus_core::models::discrete_input::DiscreteInputState::On {
+                0x01
+            } else {
+                0x00
+            };
             let inputs = DiscreteInputs::new(address, 1)
                 .unwrap()
                 .with_values(&values, 1)
@@ -3066,7 +3070,16 @@ mod tests {
         // Initialize a Coils instance with alternating true/false values to produce 0x55, 0x01
         let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
-            values.set_value(address + i, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off }).unwrap();
+            values
+                .set_value(
+                    address + i,
+                    if i % 2 == 0 {
+                        mbus_core::models::coil::CoilState::On
+                    } else {
+                        mbus_core::models::coil::CoilState::Off
+                    },
+                )
+                .unwrap();
         }
 
         client_services
@@ -3122,7 +3135,16 @@ mod tests {
         // Initialize a Coils instance with alternating true/false values
         let mut values = Coils::new(address, quantity).unwrap();
         for i in 0..quantity {
-            values.set_value(address + i, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off }).unwrap();
+            values
+                .set_value(
+                    address + i,
+                    if i % 2 == 0 {
+                        mbus_core::models::coil::CoilState::On
+                    } else {
+                        mbus_core::models::coil::CoilState::Off
+                    },
+                )
+                .unwrap();
         }
 
         // 1. Send a Write Multiple Coils request
@@ -4023,16 +4045,36 @@ mod tests {
         let txn_id = 0x2001;
         let unit_id = UnitIdOrSlaveAddr::new(0x01).unwrap();
         let mut values = Coils::new(0x0000, 10).unwrap();
-        values.set_value(0x0000, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0001, mbus_core::models::coil::CoilState::Off).unwrap();
-        values.set_value(0x0002, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0003, mbus_core::models::coil::CoilState::Off).unwrap();
-        values.set_value(0x0004, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0005, mbus_core::models::coil::CoilState::Off).unwrap();
-        values.set_value(0x0006, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0007, mbus_core::models::coil::CoilState::Off).unwrap();
-        values.set_value(0x0008, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0009, mbus_core::models::coil::CoilState::Off).unwrap();
+        values
+            .set_value(0x0000, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0001, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
+        values
+            .set_value(0x0002, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0003, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
+        values
+            .set_value(0x0004, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0005, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
+        values
+            .set_value(0x0006, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0007, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
+        values
+            .set_value(0x0008, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0009, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
 
         client_services
             .write_multiple_coils(txn_id, unit_id, 0x0000, &values)
@@ -4822,7 +4864,10 @@ mod tests {
         assert_eq!(*rcv_unit_id, unit_id);
         assert_eq!(rcv_inputs.from_address(), address);
         assert_eq!(rcv_inputs.quantity(), 1);
-        assert_eq!(rcv_inputs.value(address).unwrap(), mbus_core::models::discrete_input::DiscreteInputState::On);
+        assert_eq!(
+            rcv_inputs.value(address).unwrap(),
+            mbus_core::models::discrete_input::DiscreteInputState::On
+        );
         assert_eq!(*rcv_quantity, 1);
     }
 
@@ -5153,8 +5198,12 @@ mod tests {
         let txn_id = 0x0003;
         let unit_id = UnitIdOrSlaveAddr::new_broadcast_address();
         let mut values = Coils::new(0x0000, 2).unwrap();
-        values.set_value(0x0000, mbus_core::models::coil::CoilState::On).unwrap();
-        values.set_value(0x0001, mbus_core::models::coil::CoilState::Off).unwrap();
+        values
+            .set_value(0x0000, mbus_core::models::coil::CoilState::On)
+            .unwrap();
+        values
+            .set_value(0x0001, mbus_core::models::coil::CoilState::Off)
+            .unwrap();
 
         let res = client_services.write_multiple_coils(txn_id, unit_id, 0x0000, &values);
         assert_eq!(res.unwrap_err(), MbusError::BroadcastNotAllowed);

@@ -84,7 +84,9 @@ async fn main() -> Result<()> {
     for i in (0u16..8).step_by(2) {
         multi_coils.set_value(i, CoilState::On)?;
     }
-    let (wmc_addr, wmc_qty) = client.write_multiple_coils(unit_id, 0, &multi_coils).await?;
+    let (wmc_addr, wmc_qty) = client
+        .write_multiple_coils(unit_id, 0, &multi_coils)
+        .await?;
     println!("Wrote {} coils starting at address {}", wmc_qty, wmc_addr);
 
     // Read back and verify

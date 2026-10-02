@@ -318,7 +318,9 @@ impl AsyncClientCore {
             .await?
         {
             ClientResponse::Coils(coils) => {
-                let v = coils.value(coils.from_address()).unwrap_or(mbus_core::models::coil::CoilState::Off);
+                let v = coils
+                    .value(coils.from_address())
+                    .unwrap_or(mbus_core::models::coil::CoilState::Off);
                 Ok((coils.from_address(), v))
             }
             _ => Err(AsyncError::UnexpectedResponseType),

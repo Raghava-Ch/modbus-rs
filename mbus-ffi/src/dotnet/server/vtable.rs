@@ -228,7 +228,11 @@ fn dispatch(vt: &MbusDnServerVtable, req: ModbusRequest) -> ModbusResponse {
 
         // ── FC05 — Write Single Coil ─────────────────────────────────────────
         #[cfg(feature = "coils")]
-        ModbusRequest::WriteSingleCoil { address, state: value, .. } => {
+        ModbusRequest::WriteSingleCoil {
+            address,
+            state: value,
+            ..
+        } => {
             let Some(f) = vt.write_single_coil else {
                 return ModbusResponse::exception(
                     FunctionCode::WriteSingleCoil,

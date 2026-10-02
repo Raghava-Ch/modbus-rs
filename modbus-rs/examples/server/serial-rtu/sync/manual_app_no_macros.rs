@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use mbus_core::errors::ExceptionCode;
 use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::models::coil::CoilState;
 use mbus_server::ResilienceConfig;
 use mbus_server::ServerCoilHandler;
 use mbus_server::ServerExceptionHandler;
@@ -9,7 +10,6 @@ use mbus_server::ServerInputRegisterHandler;
 use mbus_server::ServerServices;
 #[cfg(feature = "traffic")]
 use mbus_server::TrafficNotifier;
-use mbus_core::models::coil::CoilState;
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, JitterStrategy, MbusError, ModbusConfig,
     ModbusSerialConfig, Parity, SerialMode, StdRtuTransport, UnitIdOrSlaveAddr,

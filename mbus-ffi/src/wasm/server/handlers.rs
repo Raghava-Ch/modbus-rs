@@ -265,10 +265,7 @@ impl JsServerHandlers {
                     if let Some(exc) = get_exception_code(&val) {
                         ModbusResponse::exception(fc, exc)
                     } else {
-                        ModbusResponse::echo_coil(
-                            address,
-                            state,
-                        )
+                        ModbusResponse::echo_coil(address, state)
                     }
                 }
                 Err(_) => ModbusResponse::exception(fc, ExceptionCode::ServerDeviceFailure),

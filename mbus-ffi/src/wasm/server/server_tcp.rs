@@ -16,8 +16,8 @@ use wasm_bindgen::prelude::*;
 use super::binding_types::WasmTcpServerOptions;
 use super::handlers::JsServerHandlers;
 use super::task::WasmServerTask;
-use crate::wasm::wasm_types::ServerHandlers;
 use crate::wasm::client::helpers::{get_string, get_u8};
+use crate::wasm::wasm_types::ServerHandlers;
 
 use std::sync::Mutex;
 

@@ -16,8 +16,8 @@ mod wasm_types;
 
 #[cfg(feature = "wasm-client")]
 pub use client::{
-    WasmModbusClient, WasmSerialModbusClient, WasmSerialPortHandle, WasmRtuTransport, WasmAsciiTransport,
-    WasmWsTransport, request_serial_port,
+    WasmAsciiTransport, WasmModbusClient, WasmRtuTransport, WasmSerialModbusClient,
+    WasmSerialPortHandle, WasmWsTransport, request_serial_port,
 };
 
 #[cfg(feature = "wasm-client")]

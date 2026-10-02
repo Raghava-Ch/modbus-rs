@@ -1,10 +1,10 @@
 use heapless::Vec;
 
 use crate::services::register::{request::ReqPduCompiler, response::ResponseParser};
-#[cfg(feature = "input-registers")]
-use mbus_core::models::register::InputRegisters;
 #[cfg(feature = "holding-registers")]
 use mbus_core::models::register::HoldingRegisters;
+#[cfg(feature = "input-registers")]
+use mbus_core::models::register::InputRegisters;
 use mbus_core::{
     UnitIdOrSlaveAddr,
     data_unit::common::MAX_ADU_FRAME_LEN,

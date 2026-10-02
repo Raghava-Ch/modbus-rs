@@ -145,7 +145,11 @@ pub extern "C" fn mbus_tcp_write_single_coil(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+        let state = if value != 0 {
+            mbus_core::models::coil::CoilState::On
+        } else {
+            mbus_core::models::coil::CoilState::Off
+        };
         match inner.write_single_coil(txn_id, uid, address, state) {
             Ok(()) => MbusStatusCode::MbusOk,
             Err(e) => MbusStatusCode::from(e),
@@ -172,7 +176,11 @@ pub extern "C" fn mbus_serial_write_single_coil(
             Ok(u) => u,
             Err(e) => return MbusStatusCode::from(e),
         };
-        let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+        let state = if value != 0 {
+            mbus_core::models::coil::CoilState::On
+        } else {
+            mbus_core::models::coil::CoilState::Off
+        };
         match inner.write_single_coil(txn_id, uid, address, state) {
             Ok(()) => MbusStatusCode::MbusOk,
             Err(e) => MbusStatusCode::from(e),

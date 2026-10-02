@@ -152,8 +152,14 @@ mod tests {
             .unwrap();
 
         // Trying to set address 18 (10 base + 8 offset = 18), which is out of range [10, 17]
-        assert_eq!(coils.set_value(18, CoilState::On), Err(MbusError::InvalidAddress));
+        assert_eq!(
+            coils.set_value(18, CoilState::On),
+            Err(MbusError::InvalidAddress)
+        );
         // Target address totally outside the managed block range
-        assert_eq!(coils.set_value(50, CoilState::On), Err(MbusError::InvalidAddress));
+        assert_eq!(
+            coils.set_value(50, CoilState::On),
+            Err(MbusError::InvalidAddress)
+        );
     }
 }

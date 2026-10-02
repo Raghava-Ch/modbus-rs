@@ -1,6 +1,6 @@
 use anyhow::Result;
-use mbus_core::models::coil::CoilState;
 use heapless::Vec as HVec;
+use mbus_core::models::coil::CoilState;
 use modbus_rs::{
     BackoffStrategy, BaudRate, ClientServices, ConformityLevel, DataBits, DiagnosticSubFunction,
     JitterStrategy, MAX_ADU_FRAME_LEN, MbusError, ModbusConfig, ModbusSerialConfig, ObjectId,
@@ -350,7 +350,12 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
     client.connect()?;
 
-    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, mbus_core::models::coil::CoilState::On)?;
+    client.write_single_coil(
+        2,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        10,
+        mbus_core::models::coil::CoilState::On,
+    )?;
 
     // Verify Sent Frame (RTU)
     // ADU: [UnitID(1)] [FC(5)] [Addr(00 0A)] [Val(FF 00)] [CRC(AC 38)]
@@ -372,7 +377,12 @@ fn test_serial_write_single_coil_rtu() -> Result<()> {
     assert_eq!(received.len(), 1);
     assert_eq!(
         received[0],
-        (2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, CoilState::On)
+        (
+            2,
+            UnitIdOrSlaveAddr::try_from(1).unwrap(),
+            10,
+            CoilState::On
+        )
     );
 
     Ok(())
@@ -544,7 +554,12 @@ fn test_serial_write_single_coil_ascii() -> Result<()> {
     let mut client = ClientServices::<_, _, 1>::new(transport, app, config)?;
     client.connect()?;
 
-    client.write_single_coil(20, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, mbus_core::models::coil::CoilState::On)?;
+    client.write_single_coil(
+        20,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        10,
+        mbus_core::models::coil::CoilState::On,
+    )?;
 
     // Binary payload: 01 05 00 0A FF 00, LRC = F1
     {
@@ -800,7 +815,12 @@ fn test_serial_fragmented_frames_rtu() -> Result<()> {
     }
 
     // 4. Send Request 2 (Write Single Coil) - Only allowed to pipiline after Req 1 completes for serial
-    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, mbus_core::models::coil::CoilState::On)?;
+    client.write_single_coil(
+        2,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        10,
+        mbus_core::models::coil::CoilState::On,
+    )?;
     sent_data.borrow_mut().clear();
 
     // 5. Inject the remaining 4 bytes of Frame 2
@@ -853,7 +873,12 @@ fn test_serial_fragmented_frames_ascii() -> Result<()> {
     client.poll();
     assert_eq!(client.app().received_coil_responses.borrow()[0].0, 1);
 
-    client.write_single_coil(2, UnitIdOrSlaveAddr::try_from(1).unwrap(), 10, mbus_core::models::coil::CoilState::On)?;
+    client.write_single_coil(
+        2,
+        UnitIdOrSlaveAddr::try_from(1).unwrap(),
+        10,
+        mbus_core::models::coil::CoilState::On,
+    )?;
     recv_data.borrow_mut().extend_from_slice(&frame2[8..]);
     client.poll();
     assert_eq!(

@@ -99,8 +99,5 @@ pub(crate) fn get_u16_array(obj: &JsValue, key: &str) -> Result<Vec<u16>, String
         return Ok(u16_arr.to_vec());
     }
 
-    Err(format!(
-        "Property '{}' must be a Uint16Array",
-        key
-    ))
+    Err(format!("Property '{}' must be a Uint16Array", key))
 }
