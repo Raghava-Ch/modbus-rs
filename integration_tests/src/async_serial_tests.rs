@@ -1,6 +1,6 @@
 use anyhow::Result;
-use mbus_core::models::coil::CoilState;
 use heapless::Vec as HVec;
+use mbus_core::models::coil::CoilState;
 use modbus_rs::mbus_async::{AsyncError, AsyncRtuClient, AsyncSerialClient};
 use modbus_rs::{
     BackoffStrategy, BaudRate, DataBits, DiagnosticSubFunction, JitterStrategy, MAX_ADU_FRAME_LEN,

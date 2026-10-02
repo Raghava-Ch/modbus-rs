@@ -39,9 +39,25 @@ the serialport dependency.
 
 ```bash
 # 1) Build the native addon
-cd mbus-ffi/nodejs
+cd mbus-ffi/javascript
 npm install
 npm run build
+```
+
+### Custom Serial Port Path Length
+
+By default, pre-built npm binaries support serial port paths up to **128 characters** (e.g., `/dev/serial/by-id/...` or `COM1..256`).
+
+If your environment requires longer paths (such as nested `/dev/serial/by-path/...` symbolic links), you can compile with a custom limit via the `MBUS_PORT_PATH_STRING_LEN` environment variable:
+
+```bash
+# Linux / macOS (Bash)
+export MBUS_PORT_PATH_STRING_LEN=256
+npm run build:nodejs
+
+# Windows (PowerShell)
+$env:MBUS_PORT_PATH_STRING_LEN = "256"
+npm run build:nodejs
 ```
 
 Tests use Node's built-in `node:test` runner so no extra test framework

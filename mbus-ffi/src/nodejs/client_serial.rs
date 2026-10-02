@@ -19,14 +19,16 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
-use crate::nodejs::node_types::*;
 use crate::nodejs::errors::{
     ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
 };
+use crate::nodejs::node_types::*;
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
     unsafe { std::mem::transmute(p) }
 }
+
+use crate::PORT_PATH_STRING_LEN;
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct RtuTransportOptions {
-    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable)."]
     pub port_path: String,
     #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
@@ -63,7 +65,7 @@ pub struct RtuTransportOptions {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct AsciiTransportOptions {
-    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable)."]
     pub port_path: String,
     #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
@@ -139,7 +141,9 @@ fn parse_stop_bits(bits: u8) -> Result<u8> {
 }
 
 /// Builds a ModbusSerialConfig from RTU options.
-fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig> {
+fn build_rtu_config(
+    options: &RtuTransportOptions,
+) -> Result<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
     let baud_rate = parse_baud_rate(options.baud_rate)?;
     let data_bits = options
         .data_bits
@@ -167,8 +171,13 @@ fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig>
         .transpose()?
         .unwrap_or(BackoffStrategy::Immediate);
 
-    let port_path = heapless::String::try_from(options.port_path.as_str())
-        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::try_from(options.port_path.as_str())
+        .map_err(|_| {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("Port path too long (max {} chars)", PORT_PATH_STRING_LEN),
+            )
+        })?;
 
     Ok(ModbusSerialConfig {
         port_path,
@@ -186,7 +195,9 @@ fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig>
 }
 
 /// Builds a ModbusSerialConfig from ASCII options.
-fn build_ascii_config(options: &AsciiTransportOptions) -> Result<ModbusSerialConfig> {
+fn build_ascii_config(
+    options: &AsciiTransportOptions,
+) -> Result<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
     let baud_rate = parse_baud_rate(options.baud_rate)?;
     let data_bits = options
         .data_bits
@@ -214,8 +225,13 @@ fn build_ascii_config(options: &AsciiTransportOptions) -> Result<ModbusSerialCon
         .transpose()?
         .unwrap_or(BackoffStrategy::Immediate);
 
-    let port_path = heapless::String::try_from(options.port_path.as_str())
-        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::try_from(options.port_path.as_str())
+        .map_err(|_| {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("Port path too long (max {} chars)", PORT_PATH_STRING_LEN),
+            )
+        })?;
 
     Ok(ModbusSerialConfig {
         port_path,
@@ -1195,5 +1211,68 @@ impl AsyncSerialModbusClient {
             })
         })?;
         Ok(unsafe { extend_lifetime(promise) })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rtu_port_path_length_limit() {
+        let valid = RtuTransportOptions {
+            port_path: "COM1".to_string(),
+            baud_rate: 9600,
+            data_bits: None,
+            parity: None,
+            stop_bits: None,
+            response_timeout_ms: None,
+            request_timeout_ms: None,
+            retry_attempts: None,
+            retry_delay_ms: None,
+            retry_backoff_strategy: None,
+        };
+        assert!(build_rtu_config(&valid).is_ok());
+
+        let invalid = RtuTransportOptions {
+            port_path: "a".repeat(crate::PORT_PATH_STRING_LEN + 1),
+            ..valid
+        };
+        let err = build_rtu_config(&invalid).unwrap_err();
+        assert_eq!(err.status, Status::InvalidArg);
+        assert!(err.reason.contains("Port path too long"));
+        assert!(
+            err.reason
+                .contains(&format!("max {} chars", crate::PORT_PATH_STRING_LEN))
+        );
+    }
+
+    #[test]
+    fn test_ascii_port_path_length_limit() {
+        let valid = AsciiTransportOptions {
+            port_path: "COM1".to_string(),
+            baud_rate: 9600,
+            data_bits: None,
+            parity: None,
+            stop_bits: None,
+            response_timeout_ms: None,
+            request_timeout_ms: None,
+            retry_attempts: None,
+            retry_delay_ms: None,
+            retry_backoff_strategy: None,
+        };
+        assert!(build_ascii_config(&valid).is_ok());
+
+        let invalid = AsciiTransportOptions {
+            port_path: "a".repeat(crate::PORT_PATH_STRING_LEN + 1),
+            ..valid
+        };
+        let err = build_ascii_config(&invalid).unwrap_err();
+        assert_eq!(err.status, Status::InvalidArg);
+        assert!(err.reason.contains("Port path too long"));
+        assert!(
+            err.reason
+                .contains(&format!("max {} chars", crate::PORT_PATH_STRING_LEN))
+        );
     }
 }

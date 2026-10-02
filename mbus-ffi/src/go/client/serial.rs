@@ -538,7 +538,11 @@ pub unsafe extern "C" fn mbus_go_serial_client_write_single_coil(
         None => return MbusGoStatus::MbusErrNullPointer,
     };
     let rt = runtime::get();
-    let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+    let state = if value != 0 {
+        mbus_core::models::coil::CoilState::On
+    } else {
+        mbus_core::models::coil::CoilState::Off
+    };
     match rt.block_on(client.write_single_coil(unit_id, address, state)) {
         Ok((addr, st)) => {
             if !out_address.is_null() {

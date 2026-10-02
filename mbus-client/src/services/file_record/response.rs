@@ -31,9 +31,8 @@ use crate::{
 };
 use mbus_core::{
     data_unit::common::{
-        ModbusMessage, Pdu,
-        PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_1B,
-        PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_2B,
+        ModbusMessage, PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_1B,
+        PDU_FILE_RECORD_WRITE_SUB_REQ_RECORD_LEN_OFFSET_2B, Pdu,
     },
     errors::MbusError,
     function_codes::public::FunctionCode,

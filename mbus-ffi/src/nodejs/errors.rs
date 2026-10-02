@@ -95,7 +95,7 @@ pub fn setup_abort_listener(
         let abort_tx_clone = abort_tx_mutex.clone();
 
         use napi::bindgen_prelude::ToNapiValue;
-        
+
         let abort_cb = env.create_function_from_closure::<(), (), _>("onabort", move |_ctx| {
             if let Some(tx) = abort_tx_clone.lock().unwrap().take() {
                 let _ = tx.send(());
@@ -103,23 +103,25 @@ pub fn setup_abort_listener(
             Ok(())
         })?;
 
-        if let Ok(Some(add_listener)) = signal_obj.get::<napi::bindgen_prelude::Unknown>("addEventListener") {
+        if let Ok(Some(add_listener)) =
+            signal_obj.get::<napi::bindgen_prelude::Unknown>("addEventListener")
+        {
             let event_type = env.create_string("abort")?;
             let mut opts = Object::new(env)?;
             opts.set("once", true)?;
-            
+
             unsafe {
                 let mut result = std::ptr::null_mut();
-                
+
                 // Get raw napi_values
                 let this_val = ToNapiValue::to_napi_value(env.raw(), signal_obj)?;
                 let func_val = ToNapiValue::to_napi_value(env.raw(), add_listener)?;
                 let arg0 = ToNapiValue::to_napi_value(env.raw(), event_type)?;
                 let arg1 = ToNapiValue::to_napi_value(env.raw(), abort_cb)?;
                 let arg2 = ToNapiValue::to_napi_value(env.raw(), opts)?;
-                
+
                 let args = [arg0, arg1, arg2];
-                
+
                 napi::sys::napi_call_function(
                     env.raw(),
                     this_val,

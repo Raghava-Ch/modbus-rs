@@ -410,7 +410,11 @@ pub unsafe extern "C" fn mbus_dn_tcp_client_write_single_coil(
         None => return MbusDnStatus::MbusErrNullPointer,
     };
     let rt = runtime::get();
-    let state = if value != 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off };
+    let state = if value != 0 {
+        mbus_core::models::coil::CoilState::On
+    } else {
+        mbus_core::models::coil::CoilState::Off
+    };
     match rt.block_on(client.write_single_coil(unit_id, address, state)) {
         Ok((addr, st)) => {
             if !out_address.is_null() {

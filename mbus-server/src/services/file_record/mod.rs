@@ -228,8 +228,8 @@ where
                 return;
             }
 
-            for (index, chunk) in sub.record_data_bytes.chunks_exact(2).enumerate() {
-                registers[index] = u16::from_be_bytes([chunk[0], chunk[1]]);
+            for (index, chunk) in sub.record_data_bytes.as_chunks::<2>().0.iter().enumerate() {
+                registers[index] = u16::from_be_bytes(*chunk);
             }
 
             if let Err(err) = self.app.write_file_record_request(

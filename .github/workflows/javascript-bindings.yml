@@ -58,6 +58,9 @@ jobs:
       - name: cargo check (nodejs feature)
         run: cargo check -p mbus-ffi --features nodejs-full
 
+      - name: cargo fmt check
+        run: cargo fmt --all -- --check
+
       - name: cargo clippy (nodejs feature)
         run: cargo clippy -p mbus-ffi --features nodejs-full -- -D warnings
 
@@ -118,6 +121,7 @@ jobs:
         shell: bash
         env:
           CARGO_BUILD_TARGET: ${{ matrix.settings.target }}
+          MBUS_PORT_PATH_STRING_LEN: 128
 
       - name: List built native artifacts
         shell: bash

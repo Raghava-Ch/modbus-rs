@@ -52,15 +52,17 @@ impl AsyncSerialClient<false> {
     /// Use [`AsyncSerialClient::new_rtu`] and then call `client.connect().await?`.
     #[cfg(feature = "serial-rtu")]
     #[deprecated(note = "use AsyncSerialClient::new_rtu(...) and then client.connect().await")]
-    pub fn connect_rtu(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
+    pub fn connect_rtu<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
+    ) -> Result<Self, AsyncError> {
         Self::new_rtu(serial_config)
     }
 
     /// Deprecated constructor alias.
     #[cfg(feature = "serial-rtu")]
     #[deprecated(note = "use AsyncSerialClient::new_rtu(...) and then client.connect().await")]
-    pub fn connect_rtu_with_poll_interval(
-        serial_config: ModbusSerialConfig,
+    pub fn connect_rtu_with_poll_interval<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_rtu(serial_config)
@@ -72,7 +74,9 @@ impl AsyncSerialClient<false> {
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
     #[cfg(feature = "serial-rtu")]
-    pub fn new_rtu(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
+    pub fn new_rtu<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
+    ) -> Result<Self, AsyncError> {
         if serial_config.mode != SerialMode::Rtu {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
@@ -83,8 +87,8 @@ impl AsyncSerialClient<false> {
     ///
     /// The poll interval is ignored in the async implementation.
     #[cfg(feature = "serial-rtu")]
-    pub fn new_rtu_with_poll_interval(
-        serial_config: ModbusSerialConfig,
+    pub fn new_rtu_with_poll_interval<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_rtu(serial_config)
@@ -95,15 +99,17 @@ impl AsyncSerialClient<true> {
     /// Deprecated constructor alias.
     #[cfg(feature = "serial-ascii")]
     #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
-    pub fn connect_ascii(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
+    pub fn connect_ascii<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
+    ) -> Result<Self, AsyncError> {
         Self::new_ascii(serial_config)
     }
 
     /// Deprecated constructor alias.
     #[cfg(feature = "serial-ascii")]
     #[deprecated(note = "use AsyncSerialClient::new_ascii(...) and then client.connect().await")]
-    pub fn connect_ascii_with_poll_interval(
-        serial_config: ModbusSerialConfig,
+    pub fn connect_ascii_with_poll_interval<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_ascii(serial_config)
@@ -115,7 +121,9 @@ impl AsyncSerialClient<true> {
     /// Call [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
     #[cfg(feature = "serial-ascii")]
-    pub fn new_ascii(serial_config: ModbusSerialConfig) -> Result<Self, AsyncError> {
+    pub fn new_ascii<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
+    ) -> Result<Self, AsyncError> {
         if serial_config.mode != SerialMode::Ascii {
             return Err(AsyncError::Mbus(MbusError::InvalidConfiguration));
         }
@@ -126,8 +134,8 @@ impl AsyncSerialClient<true> {
     ///
     /// The poll interval is ignored in the async implementation.
     #[cfg(feature = "serial-ascii")]
-    pub fn new_ascii_with_poll_interval(
-        serial_config: ModbusSerialConfig,
+    pub fn new_ascii_with_poll_interval<const PORT_PATH_LEN: usize>(
+        serial_config: ModbusSerialConfig<PORT_PATH_LEN>,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError> {
         Self::new_ascii(serial_config)
@@ -139,9 +147,9 @@ impl<const ASCII: bool> AsyncSerialClient<ASCII> {
     #[deprecated(
         note = "use AsyncSerialClient::new_with_transport(...) and then client.connect().await"
     )]
-    pub fn connect_with_transport<T>(
+    pub fn connect_with_transport<T, const PORT_PATH_LEN: usize>(
         transport: T,
-        config: ModbusConfig,
+        config: ModbusConfig<PORT_PATH_LEN>,
         poll_interval: Duration,
     ) -> Result<Self, AsyncError>
     where
@@ -159,9 +167,9 @@ impl<const ASCII: bool> AsyncSerialClient<ASCII> {
     /// `AsyncError::Mbus(MbusError::InvalidTransport)`.  Call
     /// [`AsyncClientCore::connect`] on the returned client before sending
     /// requests.
-    pub fn new_with_transport<T>(
+    pub fn new_with_transport<T, const PORT_PATH_LEN: usize>(
         transport: T,
-        config: ModbusConfig,
+        config: ModbusConfig<PORT_PATH_LEN>,
         _poll_interval: Duration,
     ) -> Result<Self, AsyncError>
     where
@@ -219,7 +227,9 @@ fn spawn_serial_task<T: AsyncTransport + Send + 'static, const ASCII: bool>(
 /// Builds an RTU [`ConnectFactory`] that opens a fresh serial connection each
 /// time it is called.
 #[cfg(feature = "serial-rtu")]
-fn make_rtu_factory(config: Arc<ModbusConfig>) -> ConnectFactory<TokioRtuTransport> {
+fn make_rtu_factory<const PORT_PATH_LEN: usize>(
+    config: Arc<ModbusConfig<PORT_PATH_LEN>>,
+) -> ConnectFactory<TokioRtuTransport> {
     Box::new(move || {
         let cfg = config.clone();
         Box::pin(async move { TokioRtuTransport::new(&cfg) })
@@ -229,7 +239,9 @@ fn make_rtu_factory(config: Arc<ModbusConfig>) -> ConnectFactory<TokioRtuTranspo
 /// Builds an ASCII [`ConnectFactory`] that opens a fresh serial connection each
 /// time it is called.
 #[cfg(feature = "serial-ascii")]
-fn make_ascii_factory(config: Arc<ModbusConfig>) -> ConnectFactory<TokioAsciiTransport> {
+fn make_ascii_factory<const PORT_PATH_LEN: usize>(
+    config: Arc<ModbusConfig<PORT_PATH_LEN>>,
+) -> ConnectFactory<TokioAsciiTransport> {
     Box::new(move || {
         let cfg = config.clone();
         Box::pin(async move { TokioAsciiTransport::new(&cfg) })
@@ -238,13 +250,17 @@ fn make_ascii_factory(config: Arc<ModbusConfig>) -> ConnectFactory<TokioAsciiTra
 
 /// Creates a full [`AsyncSerialClient`] for RTU mode.
 #[cfg(feature = "serial-rtu")]
-fn make_rtu_client(config: ModbusConfig) -> Result<AsyncSerialClient<false>, AsyncError> {
+fn make_rtu_client<const PORT_PATH_LEN: usize>(
+    config: ModbusConfig<PORT_PATH_LEN>,
+) -> Result<AsyncSerialClient<false>, AsyncError> {
     spawn_serial_task(make_rtu_factory(Arc::new(config)))
 }
 
 /// Creates a full [`AsyncSerialClient`] for ASCII mode.
 #[cfg(feature = "serial-ascii")]
-fn make_ascii_client(config: ModbusConfig) -> Result<AsyncSerialClient<true>, AsyncError> {
+fn make_ascii_client<const PORT_PATH_LEN: usize>(
+    config: ModbusConfig<PORT_PATH_LEN>,
+) -> Result<AsyncSerialClient<true>, AsyncError> {
     spawn_serial_task(make_ascii_factory(Arc::new(config)))
 }
 

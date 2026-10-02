@@ -110,8 +110,14 @@ impl<const N: usize, Mode> Registers<N, Mode> {
         bytes: &[u8],
     ) -> Result<Self, MbusError> {
         let mut reg = Self::new(from_address, quantity)?;
-        for (i, chunk) in bytes.chunks_exact(2).take(quantity as usize).enumerate() {
-            reg.values[i] = u16::from_be_bytes([chunk[0], chunk[1]]);
+        for (i, chunk) in bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .take(quantity as usize)
+            .enumerate()
+        {
+            reg.values[i] = u16::from_be_bytes(*chunk);
         }
         Ok(reg)
     }

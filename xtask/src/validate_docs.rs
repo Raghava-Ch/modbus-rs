@@ -657,8 +657,14 @@ fn validate_rust_blocks(
         mbus_async = mbus_async_path.display().to_string().replace('\\', "/"),
         mbus_gateway = mbus_gateway_path.display().to_string().replace('\\', "/"),
         mbus_network = mbus_network_path.display().to_string().replace('\\', "/"),
-        mbus_client_async = mbus_client_async_path.display().to_string().replace('\\', "/"),
-        mbus_server_async = mbus_server_async_path.display().to_string().replace('\\', "/"),
+        mbus_client_async = mbus_client_async_path
+            .display()
+            .to_string()
+            .replace('\\', "/"),
+        mbus_server_async = mbus_server_async_path
+            .display()
+            .to_string()
+            .replace('\\', "/"),
     );
 
     if let Err(e) = fs::write(&scratch_manifest, &manifest_src) {

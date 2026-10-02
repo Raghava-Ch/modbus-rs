@@ -72,6 +72,7 @@ jobs:
         run: npx napi build --platform --release --target ${{ matrix.settings.target }} --features nodejs-full --manifest-path ../Cargo.toml --js index.js --dts index.d.ts --output-dir dist && node scripts/postbuild.js
         env:
           CARGO_BUILD_TARGET: ${{ matrix.settings.target }}
+          MBUS_PORT_PATH_STRING_LEN: 128
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -1,3 +1,5 @@
+#![allow(clippy::clone_on_copy)]
+
 #[cfg(feature = "python-client")]
 pub mod client;
 pub mod errors;

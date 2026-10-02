@@ -20,6 +20,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── 0. Formatting ────────────────────────────────────────────────────────
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
   # ── 1. Feature-subset matrix (check + clippy) ─────────────────────────────
   feature-subsets:
     name: Feature subsets (check + clippy) (${{ matrix.os }})

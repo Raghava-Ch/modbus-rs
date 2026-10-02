@@ -16,6 +16,8 @@ use tokio::task::JoinHandle;
 use crate::nodejs::errors::{ERR_MODBUS_INVALID_ARGUMENT, to_napi_err};
 use crate::nodejs::runtime;
 
+use crate::PORT_PATH_STRING_LEN;
+
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
     unsafe { std::mem::transmute(p) }
 }
@@ -26,7 +28,7 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct SerialServerOptions {
-    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable)."]
     pub port_path: String,
     #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
@@ -101,7 +103,7 @@ fn parse_stop_bits(bits: u8) -> Result<u8> {
 fn build_serial_config(
     options: &SerialServerOptions,
     mode: SerialMode,
-) -> Result<ModbusSerialConfig> {
+) -> Result<ModbusSerialConfig<PORT_PATH_STRING_LEN>> {
     let baud_rate = parse_baud_rate(options.baud_rate)?;
     let data_bits = options
         .data_bits
@@ -121,8 +123,14 @@ fn build_serial_config(
         .unwrap_or(1);
     let response_timeout_ms = options.response_timeout_ms.unwrap_or(1000);
 
-    let port_path = heapless::String::try_from(options.port_path.as_str())
-        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+    let port_path =
+        heapless::String::<{ PORT_PATH_STRING_LEN }>::try_from(options.port_path.as_str())
+            .map_err(|_| {
+                napi::Error::new(
+                    Status::InvalidArg,
+                    format!("Port path too long (max {} chars)", PORT_PATH_STRING_LEN),
+                )
+            })?;
 
     Ok(ModbusSerialConfig {
         port_path,
@@ -284,5 +292,36 @@ impl AsyncSerialModbusServer {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_port_path_length_limit() {
+        let valid = SerialServerOptions {
+            port_path: "COM1".to_string(),
+            baud_rate: 9600,
+            data_bits: None,
+            parity: None,
+            stop_bits: None,
+            unit_id: 1,
+            response_timeout_ms: None,
+        };
+        assert!(build_serial_config(&valid, SerialMode::Rtu).is_ok());
+
+        let invalid = SerialServerOptions {
+            port_path: "a".repeat(crate::PORT_PATH_STRING_LEN + 1),
+            ..valid
+        };
+        let err = build_serial_config(&invalid, SerialMode::Rtu).unwrap_err();
+        assert_eq!(err.status, Status::InvalidArg);
+        assert!(err.reason.contains("Port path too long"));
+        assert!(
+            err.reason
+                .contains(&format!("max {} chars", crate::PORT_PATH_STRING_LEN))
+        );
     }
 }

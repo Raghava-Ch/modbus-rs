@@ -18,12 +18,6 @@
 //! we accept whatever the server returns; validation happens in the typed
 //! extractors in `client_core`.
 
-use mbus_core::{
-    data_unit::common::{Pdu, decompile_adu_frame},
-    errors::MbusError,
-    function_codes::public::FunctionCode,
-    transport::{TransportType, UnitIdOrSlaveAddr},
-};
 #[cfg(any(
     feature = "holding-registers",
     feature = "input-registers",
@@ -31,6 +25,12 @@ use mbus_core::{
     feature = "diagnostics"
 ))]
 use mbus_core::data_unit::common::be_bytes_to_u16_iter;
+use mbus_core::{
+    data_unit::common::{Pdu, decompile_adu_frame},
+    errors::MbusError,
+    function_codes::public::FunctionCode,
+    transport::{TransportType, UnitIdOrSlaveAddr},
+};
 
 use crate::client::response::ClientResponse;
 
@@ -318,8 +318,7 @@ fn decode_diagnostics(pdu: &Pdu) -> Result<ClientResponse, MbusError> {
     let sub_function = DiagnosticSubFunction::try_from(sfp.sub_function)?;
     let mut data: Vec<u16, MAX_PDU_DATA_LEN> = Vec::new();
     for val in be_bytes_to_u16_iter(sfp.payload) {
-        data.push(val)
-            .map_err(|_| MbusError::BufferLenMissmatch)?;
+        data.push(val).map_err(|_| MbusError::BufferLenMissmatch)?;
     }
     Ok(ClientResponse::DiagnosticsData { sub_function, data })
 }

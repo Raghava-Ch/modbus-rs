@@ -75,7 +75,7 @@ use modbus_rs::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = ModbusSerialConfig {
+    let config: ModbusSerialConfig = ModbusSerialConfig {
         port_path: "/dev/ttyUSB0"
             .try_into()
             .map_err(|_| anyhow!("serial port path exceeds 64 bytes"))?,

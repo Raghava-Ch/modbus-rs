@@ -55,7 +55,12 @@ struct HookedApp {
 impl TrafficNotifier for HookedApp {}
 
 impl HookedApp {
-    fn on_run_enable_write(&mut self, address: u16, old: bool, new: CoilState) -> Result<(), MbusError> {
+    fn on_run_enable_write(
+        &mut self,
+        address: u16,
+        old: bool,
+        new: CoilState,
+    ) -> Result<(), MbusError> {
         self.audit_log.push(format!(
             "single coil hook: addr={} old={} new={:?}",
             address, old, new
@@ -141,7 +146,10 @@ fn main() -> Result<(), MbusError> {
     println!("1. Single FC05 write uses on_write_0 and can reject");
     let disable_result = app.write_single_coil_request(1, unit_id(1), 0, CoilState::Off);
     println!("   disabling run_enable while compressor is running -> {disable_result:?}");
-    println!("   run_enable after rejection -> {:?}", app.coils.run_enable);
+    println!(
+        "   run_enable after rejection -> {:?}",
+        app.coils.run_enable
+    );
 
     app.compressor_running = false;
     app.write_single_coil_request(2, unit_id(1), 0, CoilState::On)?;

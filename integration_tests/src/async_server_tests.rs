@@ -5,7 +5,6 @@
 //! encode → network → decode → app → encode → network → decode round-trip works.
 
 use anyhow::Result;
-use mbus_core::models::coil::CoilState;
 use mbus_async::AsyncTcpClient;
 #[cfg(feature = "file-record")]
 use mbus_async::client::SubRequest;
@@ -13,6 +12,7 @@ use mbus_async::client::SubRequest;
 use mbus_async::client::{ObjectId, ReadDeviceIdCode};
 use mbus_async::server::{AsyncAppHandler, AsyncTcpServer, ModbusRequest, ModbusResponse};
 use mbus_core::function_codes::public::FunctionCode;
+use mbus_core::models::coil::CoilState;
 use mbus_core::transport::UnitIdOrSlaveAddr;
 use std::future::Future;
 #[cfg(feature = "holding-registers")]

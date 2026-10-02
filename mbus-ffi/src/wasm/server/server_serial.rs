@@ -25,8 +25,8 @@ use wasm_bindgen::prelude::*;
 use super::binding_types::WasmSerialServerOptions;
 use super::handlers::JsServerHandlers;
 use super::task::WasmServerTask;
-use crate::wasm::wasm_types::ServerHandlers;
 use crate::wasm::client::helpers::{get_string, get_u8, get_u32};
+use crate::wasm::wasm_types::ServerHandlers;
 
 use std::sync::Mutex;
 

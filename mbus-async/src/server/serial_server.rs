@@ -88,8 +88,8 @@ pub type AsyncAsciiServer = AsyncSerialServer<mbus_serial::TokioAsciiTransport>;
 #[cfg(feature = "server-serial")]
 impl AsyncRtuServer {
     /// Construct an RTU server over the port described by `config`.
-    pub fn new_rtu(
-        config: &mbus_core::transport::ModbusConfig,
+    pub fn new_rtu<const PORT_PATH_LEN: usize>(
+        config: &mbus_core::transport::ModbusConfig<PORT_PATH_LEN>,
         unit: UnitIdOrSlaveAddr,
     ) -> Result<Self, AsyncServerError> {
         let transport =
@@ -101,8 +101,8 @@ impl AsyncRtuServer {
 #[cfg(feature = "server-serial")]
 impl AsyncAsciiServer {
     /// Construct an ASCII server over the port described by `config`.
-    pub fn new_ascii(
-        config: &mbus_core::transport::ModbusConfig,
+    pub fn new_ascii<const PORT_PATH_LEN: usize>(
+        config: &mbus_core::transport::ModbusConfig<PORT_PATH_LEN>,
         unit: UnitIdOrSlaveAddr,
     ) -> Result<Self, AsyncServerError> {
         let transport =

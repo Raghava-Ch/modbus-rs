@@ -40,8 +40,22 @@ impl CoilResponse for ClientApp {
         );
     }
 
-    fn read_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: modbus_rs::mbus_core::models::coil::CoilState) {}
-    fn write_single_coil_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: modbus_rs::mbus_core::models::coil::CoilState) {}
+    fn read_single_coil_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: modbus_rs::mbus_core::models::coil::CoilState,
+    ) {
+    }
+    fn write_single_coil_response(
+        &mut self,
+        _: u16,
+        _: UnitIdOrSlaveAddr,
+        _: u16,
+        _: modbus_rs::mbus_core::models::coil::CoilState,
+    ) {
+    }
     fn write_multiple_coils_response(&mut self, _: u16, _: UnitIdOrSlaveAddr, _: u16, _: u16) {}
 }
 

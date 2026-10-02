@@ -24,7 +24,7 @@
 //!   - Bit 2 (Address 12): 1 (ON)
 
 use crate::errors::MbusError;
-use crate::models::coil::{Coils, CoilState};
+use crate::models::coil::{CoilState, Coils};
 
 /// The maximum number of bytes required to store the bit-packed states of 2000 discrete inputs.
 ///

@@ -178,7 +178,14 @@ struct TestClientApp {
     coil_reads: RefCell<Vec<(u16, UnitIdOrSlaveAddr, Coils)>>,
     write_single_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     write_multiple_registers: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
-    write_single_coils: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, mbus_core::models::coil::CoilState)>>,
+    write_single_coils: RefCell<
+        Vec<(
+            u16,
+            UnitIdOrSlaveAddr,
+            u16,
+            mbus_core::models::coil::CoilState,
+        )>,
+    >,
     write_multiple_coils: RefCell<Vec<(u16, UnitIdOrSlaveAddr, u16, u16)>>,
     failed_requests: RefCell<Vec<(u16, UnitIdOrSlaveAddr, MbusError)>>,
 }
@@ -586,10 +593,18 @@ fn server_fc01_fc05_fc0f_coils_roundtrip_via_std_tcp_transport() {
     });
 
     let mut desired = Coils::new(0, 4).expect("create coil payload");
-    desired.set_value(0, mbus_core::models::coil::CoilState::On).expect("set c0");
-    desired.set_value(1, mbus_core::models::coil::CoilState::Off).expect("set c1");
-    desired.set_value(2, mbus_core::models::coil::CoilState::On).expect("set c2");
-    desired.set_value(3, mbus_core::models::coil::CoilState::Off).expect("set c3");
+    desired
+        .set_value(0, mbus_core::models::coil::CoilState::On)
+        .expect("set c0");
+    desired
+        .set_value(1, mbus_core::models::coil::CoilState::Off)
+        .expect("set c1");
+    desired
+        .set_value(2, mbus_core::models::coil::CoilState::On)
+        .expect("set c2");
+    desired
+        .set_value(3, mbus_core::models::coil::CoilState::Off)
+        .expect("set c3");
 
     client
         .write_multiple_coils(33, unit_id(1), 0, &desired)
@@ -797,7 +812,16 @@ fn server_handles_concurrent_clients_without_deadlock() {
             poll_until(&mut client, |c| !c.app().holding_reads.borrow().is_empty());
 
             client
-                .write_single_coil(base + 1, unit_id(1), 0, if i % 2 == 0 { mbus_core::models::coil::CoilState::On } else { mbus_core::models::coil::CoilState::Off })
+                .write_single_coil(
+                    base + 1,
+                    unit_id(1),
+                    0,
+                    if i % 2 == 0 {
+                        mbus_core::models::coil::CoilState::On
+                    } else {
+                        mbus_core::models::coil::CoilState::Off
+                    },
+                )
                 .expect("queue FC05 request");
             poll_until(&mut client, |c| {
                 !c.app().write_single_coils.borrow().is_empty()
