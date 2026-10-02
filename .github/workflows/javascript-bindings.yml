@@ -167,6 +167,9 @@ jobs:
           mkdir -p dist
           find artifacts/ -name '*.node' -exec cp {} dist/ \;
           chmod +x dist/*.node 2>/dev/null || true
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            codesign -f -s - dist/*.node 2>/dev/null || true
+          fi
           ls -la dist/
 
       - name: Install dependencies
