@@ -19,14 +19,16 @@ use mbus_core::function_codes::public::DiagnosticSubFunction;
 #[cfg(feature = "diagnostics")]
 use mbus_core::models::diagnostic::{ObjectId, ReadDeviceIdCode};
 
-use crate::nodejs::node_types::*;
 use crate::nodejs::errors::{
     ERR_MODBUS_INVALID_ARGUMENT, from_async_error, parse_backoff_strategy, to_napi_err,
 };
+use crate::nodejs::node_types::*;
 
 unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> {
     unsafe { std::mem::transmute(p) }
 }
+
+use crate::PORT_PATH_STRING_LEN;
 
 // ── Option structs ───────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ unsafe fn extend_lifetime<'a, 'b, T>(p: PromiseRaw<'a, T>) -> PromiseRaw<'b, T> 
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct RtuTransportOptions {
-    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable)."]
     pub port_path: String,
     #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
@@ -63,7 +65,7 @@ pub struct RtuTransportOptions {
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct AsciiTransportOptions {
-    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\")."]
+    #[doc = "Serial port path (e.g., \"/dev/ttyUSB0\", \"COM3\"). Note: The maximum path length is limited at compile time (default: 128 chars, configurable via the `MBUS_PORT_PATH_STRING_LEN` environment variable)."]
     pub port_path: String,
     #[doc = "Baud rate (e.g., 9600, 19200, 38400, 57600, 115200)."]
     pub baud_rate: u32,
@@ -167,8 +169,13 @@ fn build_rtu_config(options: &RtuTransportOptions) -> Result<ModbusSerialConfig>
         .transpose()?
         .unwrap_or(BackoffStrategy::Immediate);
 
-    let port_path = heapless::String::try_from(options.port_path.as_str())
-        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::try_from(options.port_path.as_str())
+        .map_err(|_| {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("Port path too long (max {} chars)", PORT_PATH_STRING_LEN),
+            )
+        })?;
 
     Ok(ModbusSerialConfig {
         port_path,
@@ -214,8 +221,13 @@ fn build_ascii_config(options: &AsciiTransportOptions) -> Result<ModbusSerialCon
         .transpose()?
         .unwrap_or(BackoffStrategy::Immediate);
 
-    let port_path = heapless::String::try_from(options.port_path.as_str())
-        .map_err(|_| napi::Error::new(Status::InvalidArg, "Port path too long (max 64 chars)"))?;
+    let port_path = heapless::String::<PORT_PATH_STRING_LEN>::try_from(options.port_path.as_str())
+        .map_err(|_| {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("Port path too long (max {} chars)", PORT_PATH_STRING_LEN),
+            )
+        })?;
 
     Ok(ModbusSerialConfig {
         port_path,

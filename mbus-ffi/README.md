@@ -162,6 +162,7 @@ MBUS_MAX_TCP_CLIENTS=10 MBUS_MAX_SERIAL_CLIENTS=10 cargo build -p mbus-ffi --fea
 
 - `MBUS_MAX_TCP_CLIENTS`: valid range `1..=255`
 - `MBUS_MAX_SERIAL_CLIENTS`: valid range `1..=255`
+- `MBUS_PORT_PATH_STRING_LEN`: valid range `>= 1` (default `64`), sets maximum length for serial port paths
 
 ### Build & Link
 `mbus-ffi` supports compiling directly to shared (`.so`/`.dylib`) and static (`.a`) libraries:

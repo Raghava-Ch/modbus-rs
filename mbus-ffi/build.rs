@@ -147,6 +147,25 @@ fn main() {
         Err(_) => 1, // default
     };
 
+    // ── MBUS_PORT_PATH_STRING_LEN ─────────────────────────────────────────────
+    //
+    // Controls the maximum serial port path string length.
+    // Default: 128. Valid range: >= 1.
+    println!("cargo::rerun-if-env-changed=MBUS_PORT_PATH_STRING_LEN");
+
+    let port_path_len: usize = match std::env::var("MBUS_PORT_PATH_STRING_LEN") {
+        Ok(val) => {
+            let n: usize = val.parse().unwrap_or_else(|_| {
+                panic!("MBUS_PORT_PATH_STRING_LEN must be a valid integer, got: \"{val}\"")
+            });
+            if n == 0 {
+                panic!("MBUS_PORT_PATH_STRING_LEN must be >= 1, got: 0");
+            }
+            n
+        }
+        Err(_) => 128, // default
+    };
+
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     let config_path = format!("{out_dir}/pool_config.rs");
     std::fs::write(
@@ -166,7 +185,10 @@ fn main() {
              pub(crate) const MAX_SERIAL_SERVERS: usize = {max_serial_servers};\n\
              /// Maximum number of gateway slots (set via `MBUS_MAX_GATEWAYS` env var, default 1).\n\
              #[allow(dead_code)]\n\
-             pub(crate) const MAX_GATEWAYS: usize = {max_gateways};\n"
+             pub(crate) const MAX_GATEWAYS: usize = {max_gateways};\n\
+             /// Maximum serial port path length (set via `MBUS_PORT_PATH_STRING_LEN` env var, default 128).\n\
+             #[allow(dead_code)]\n\
+             pub(crate) const PORT_PATH_STRING_LEN: usize = {port_path_len};\n"
         ),
     )
     .expect("failed to write pool_config.rs");

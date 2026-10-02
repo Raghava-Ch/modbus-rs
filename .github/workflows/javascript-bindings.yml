@@ -118,6 +118,7 @@ jobs:
         shell: bash
         env:
           CARGO_BUILD_TARGET: ${{ matrix.settings.target }}
+          MBUS_PORT_PATH_STRING_LEN: 128
 
       - name: List built native artifacts
         shell: bash

@@ -104,6 +104,8 @@ async function main() {
 main().catch(console.error);
 ```
 
+> **Note on Serial Port Path Length**: Serial port paths (`portPath`) are bounded at compile time. Pre-built binaries published to npm support paths up to **128 characters** (e.g., `/dev/serial/by-id/...` or Windows COM ports). Paths exceeding this limit throw an `InvalidArg` error. To build with a larger limit, see [Building with Custom Serial Port Path Length](#building-with-custom-serial-port-path-length).
+
 ### TCP Server
 
 ```javascript
@@ -271,6 +273,7 @@ try {
 ## Known Limitations
 
 - **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **64 routing entries**. Attempting to add more will throw at `bind()` time.
+- **Serial port path length**: Serial port paths (`portPath`) are bounded at compile time. Pre-built npm packages support paths up to **128 characters** (e.g., `/dev/serial/by-id/...` or `COM1..256`). Paths exceeding this limit throw an `InvalidArg` error. To increase this limit, see [Building with Custom Serial Port Path Length](#building-with-custom-serial-port-path-length).
 
 > *If any of these limitations are a high priority for your project, please [create a GitHub Issue](https://github.com/Raghava-Ch/modbus-rs/issues).*
 
@@ -371,6 +374,47 @@ Pre-built binaries are published for:
 
 Other targets can be built locally via `cargo build -p mbus-ffi --features nodejs,full`
 followed by `npm run build`.
+
+---
+
+## Building with Custom Serial Port Path Length
+
+The pre-built binaries on npm are compiled with a **128-character** limit for serial port paths (`portPath`). If your environment requires longer paths (such as nested `/dev/serial/by-path/...` symbolic links), you can compile the native module locally with a custom limit using the `MBUS_PORT_PATH_STRING_LEN` environment variable:
+
+### Prerequisites
+
+- Node.js >= 26 
+- Rust toolchain (`rustup`)
+
+### Build Steps
+
+1. Navigate to the JavaScript package directory:
+   ```bash
+   cd mbus-ffi/javascript
+   npm install
+   ```
+
+2. Set `MBUS_PORT_PATH_STRING_LEN` and rebuild the native module:
+
+   **Linux / macOS (Bash):**
+   ```bash
+   export MBUS_PORT_PATH_STRING_LEN=256
+   npm run build:nodejs
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   $env:MBUS_PORT_PATH_STRING_LEN = "256"
+   npm run build:nodejs
+   ```
+
+   **Windows (Command Prompt):**
+   ```cmd
+   set MBUS_PORT_PATH_STRING_LEN=256
+   npm run build:nodejs
+   ```
+
+3. The newly built native addon with the custom length will be placed in `dist/`.
 
 ---
 
