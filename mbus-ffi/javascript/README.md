@@ -270,6 +270,37 @@ try {
 
 ---
 
+## Request Cancellation (`AbortSignal`)
+
+All asynchronous read and write methods accept an optional standard Web API `signal: AbortSignal`:
+
+```javascript
+const controller = new AbortController();
+
+try {
+  const promise = client.readHoldingRegisters({
+    address: 0,
+    quantity: 10,
+    signal: controller.signal,
+  });
+
+  // Cancel operation mid-flight
+  controller.abort();
+
+  await promise;
+} catch (err) {
+  // Rejects immediately with an AbortError / Cancelled status
+  console.error('Operation cancelled:', err.message);
+}
+```
+
+- **Immediate Promise Rejection**: The JavaScript promise rejects immediately when `abort()` is triggered.
+- **Physical Bus Protection (RS-485 / Serial RTU & ASCII)**: Because half-duplex serial has no wire-level abort frame, the background Rust worker holds the physical bus lock in a "draining" state until the in-flight response arrives (and is discarded) or times out. Subsequent queued requests wait for this clean drain, preventing late responses from corrupting the RX buffer or causing CRC errors.
+
+For deep-dive architecture details, sequence diagrams, and multi-drop queue lifecycle, see [Request Cancellation & Half-Duplex Serial Safety](https://github.com/Raghava-Ch/modbus-rs/blob/main/documentation/javascript_bindings.md#request-cancellation-abortsignal--half-duplex-serial-safety) in the documentation.
+
+---
+
 ## Known Limitations
 
 - **Gateway route limit**: `AsyncTcpGateway` supports a maximum of **64 routing entries**. Attempting to add more will throw at `bind()` time.

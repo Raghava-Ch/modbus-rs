@@ -154,7 +154,89 @@ try {
   if (getModbusErrorCode(err) === ModbusErrorCode.TIMEOUT) {
     console.error('Request timed out (either in queue or on the wire):', err.message);
   }
+```
+
+### Request Cancellation (`AbortSignal`) & Half-Duplex Serial Safety
+
+All asynchronous read and write methods accept a standard Web API `signal?: AbortSignal`. Cancellation interacts with the two-phase queue architecture as follows:
+
+1. **Pre-flight Cancellation (Phase 1: Queued)**:
+   - If a request is aborted while waiting in the internal transmission queue, it is immediately pruned from `self.queued`.
+   - The JavaScript Promise rejects with an `AbortError` (`Status::Cancelled`).
+   - The request never touches the physical wire, incurring **zero bus delay** for subsequent transactions.
+
+2. **In-Flight Cancellation (Phase 2: Physical Wire - RS-485 Serial RTU / ASCII)**:
+   - Modbus RTU/ASCII over RS-485 is a **half-duplex, single-master bus**. The remote slave device does not possess a wire-level abort mechanism and will continue to process the command and transmit a response.
+   - When `controller.abort()` is called:
+     - The JavaScript Promise **rejects immediately** with `AbortError` so the user application is not blocked.
+     - The background Rust client task transitions the in-flight transaction into a **"draining"** state (`in_flight = 1`).
+     - The physical bus lock remains held until either the remote slave's late response arrives (where it is discarded and the UART RX buffer cleared) or `responseTimeoutMs` expires.
+     - Subsequent requests (e.g., Unit 3) remain queued and wait for the bus lock to release, guaranteeing that late responses from the aborted request cannot merge with new frames or cause `ChecksumError` / CRC failures.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Application (JS)
+    participant Task as Client Task (Worker)
+    participant Wire as RS-485 Bus / Slave
+
+    App->>Task: send(Unit 1)
+    Task->>Wire: Transmits Unit 1 request
+    Note over Task: State: In-Flight (Bus Locked)
+
+    App->>Task: abort(Unit 1)
+    Task-->>App: Rejects Unit 1 Promise (AbortError immediately)
+    Note over Task: State: Draining (Bus stays locked!)
+
+    App->>Task: send(Unit 3)
+    Note over Task: Unit 3 queued (waits for bus lock release)
+
+    Wire-->>Task: Unit 1 late response arrives (~100ms)
+    Note over Task: Discards Unit 1 response & clears RX buffer
+    Note over Task: Bus is now clean and idle
+
+    Task->>Wire: Transmits Unit 3 request
+    Wire-->>Task: Unit 3 response arrives
+    Task-->>App: Resolves Unit 3 Promise (Success)
+```
+
+#### Example: In-Flight Abort Handling
+
+```javascript
+import { AsyncRtuTransport } from 'modbus-rs';
+
+const transport = await AsyncRtuTransport.open({
+  portPath: '/dev/ttyUSB0',
+  baudRate: 19200,
+  responseTimeoutMs: 1000,
+});
+
+const client1 = transport.createClient({ unitId: 1 });
+const client3 = transport.createClient({ unitId: 3 });
+
+const controller = new AbortController();
+
+// 1. Dispatch slow request to Unit 1
+const p1 = client1.readHoldingRegisters({
+  address: 0,
+  quantity: 1,
+  signal: controller.signal,
+});
+
+// 2. Abort mid-flight after 20ms
+setTimeout(() => controller.abort(), 20);
+
+try {
+  await p1;
+} catch (err) {
+  // Rejects immediately at 20ms
+  console.log('Unit 1 cancelled:', err.message);
 }
+
+// 3. Immediately dispatch request to Unit 3
+// Unit 3 safely waits until Unit 1's late response is swallowed, then completes cleanly
+const regs3 = await client3.readHoldingRegisters({ address: 0, quantity: 1 });
+console.log('Unit 3 succeeded:', regs3);
 ```
 
 ## Examples

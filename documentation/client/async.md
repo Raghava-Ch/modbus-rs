@@ -168,6 +168,47 @@ When all `AsyncTcpClient` / `AsyncSerialClient` handles are dropped, the mpsc se
 The background Tokio task exits on the next iteration. Any in-flight `Future`s that are still
 being awaited resolve with `AsyncError::WorkerClosed`.
 
+### In-Flight Future Cancellation & Serial Bus Draining
+
+When a caller cancels or drops a request `Future` (e.g. via `tokio::select!`, a timeout wrapper, or `JoinHandle::abort()`), the corresponding `oneshot::Receiver` is dropped, closing the channel.
+
+- **TCP Transports**: In-flight requests are removed immediately from `self.pending`, freeing pipeline capacity.
+- **Serial Transports (RTU / ASCII)**: Because RS-485 is a half-duplex physical bus with no wire-level abort mechanism, dropping an in-flight slot prematurely would allow the next queued request to transmit while the remote slave is still responding to the aborted command. 
+
+To prevent RX buffer desynchronization and CRC errors (`ChecksumError`), `ClientTask` enforces **serial bus draining**:
+1. When `resp_tx.is_closed()` is detected on an in-flight serial request, the transaction is **retained** in `self.pending` (`in_flight = 1`).
+2. The physical bus remains locked until either:
+   - The remote slave's late response frame arrives (it is consumed, safely discarded, and the RX buffer cleared), or
+   - The request's `response_timeout_ms` deadline expires.
+3. Only after the bus is confirmed quiet does `ClientTask` decrement `in_flight = 0` and dispatch the next queued command.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Caller as User Task
+    participant Task as ClientTask (Tokio)
+    participant Bus as RS-485 Serial Bus
+
+    Caller->>Task: read_holding_registers(Unit 1)
+    Task->>Bus: Transmits Unit 1 frame
+    Note over Task: in_flight = 1 (Bus Locked)
+
+    Caller-->>Caller: Future dropped / aborted
+    Note over Task: Receiver closed, but is_serial = true
+    Note over Task: Retains slot in pending (draining)
+
+    Caller->>Task: read_holding_registers(Unit 3)
+    Note over Task: Unit 3 enqueued in self.queued
+
+    Bus-->>Task: Unit 1 late response arrives
+    Note over Task: Frame swallowed & discarded
+    Note over Task: in_flight = 0 (Bus Unlocked)
+
+    Task->>Bus: Transmits Unit 3 frame
+    Bus-->>Task: Unit 3 response arrives
+    Task-->>Caller: Unit 3 Future resolves with Ok(regs)
+```
+
 ---
 
 ## Checking Pending Requests

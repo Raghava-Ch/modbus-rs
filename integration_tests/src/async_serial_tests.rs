@@ -883,4 +883,3 @@ async fn test_rtu_in_flight_abort_silent_slave_unblocks_on_timeout() -> Result<(
 
     Ok(())
 }
-
