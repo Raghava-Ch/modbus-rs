@@ -396,13 +396,20 @@ impl<T: AsyncTransport + Send + 'static, const N: usize> ClientTask<T, N> {
         let now = tokio::time::Instant::now();
         let mut timed_out_keys = Vec::new();
         let mut aborted_keys = Vec::new();
+        let is_serial = T::TRANSPORT_TYPE.is_serial_type();
 
         for (&txn_id, entry) in &self.pending {
-            if entry.resp_tx.is_closed() {
-                aborted_keys.push(txn_id);
-            } else if entry.deadline.is_some_and(|deadline| now >= deadline) {
+            if entry.deadline.is_some_and(|deadline| now >= deadline) {
                 timed_out_keys.push(txn_id);
+            } else if entry.resp_tx.is_closed() && !is_serial {
+                // TCP has transaction IDs and is full-duplex: safe to prune immediately.
+                aborted_keys.push(txn_id);
             }
+            // For serial transports, if resp_tx.is_closed() but deadline hasn't elapsed,
+            // we intentionally keep the entry in self.pending so in_flight remains 1.
+            // This holds the bus locked until either:
+            // 1) The late response arrives and is safely consumed & discarded in `process_frame`, or
+            // 2) The turnaround deadline expires (silent unit), caught by the timeout branch above.
         }
 
         for txn_id in timed_out_keys {

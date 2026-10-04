@@ -806,3 +806,81 @@ async fn test_queue_and_response_timeout_dynamic_runtime_reconfiguration() -> Re
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_rtu_in_flight_abort_swallows_late_response() -> Result<()> {
+    // Unit 1 replies after 80ms, Unit 3 replies after 5ms.
+    let bus = SimulatedRtuBus::new(99, Duration::from_millis(80));
+    let mut cfg = rtu_config("/dev/mock");
+    cfg.response_timeout_ms = 300;
+    let config = ModbusConfig::Serial(cfg);
+    let client = AsyncRtuClient::new_with_transport(bus, config, Duration::from_millis(1))?;
+    client.connect().await?;
+
+    let c1 = client.clone();
+    let c2 = client.clone();
+
+    // 1. Dispatch request to Unit 1 (slow unit)
+    let h1 = tokio::spawn(async move { c1.read_holding_registers(1, 0, 1).await });
+
+    // 2. Wait until request 1 is on the wire, then abort it mid-flight
+    tokio::time::sleep(Duration::from_millis(15)).await;
+    h1.abort();
+    let r1 = h1.await;
+    assert!(r1.is_err() && r1.unwrap_err().is_cancelled());
+
+    // 3. Immediately dispatch request to Unit 3
+    let r3 = c2.read_holding_registers(3, 0, 1).await;
+
+    // Unit 3 must succeed after Unit 1's late response is swallowed, without ChecksumError or UnitIdMismatch
+    assert!(
+        r3.is_ok(),
+        "Unit 3 read failed after Unit 1 in-flight abort: {:?}",
+        r3.err()
+    );
+    let regs = r3.unwrap();
+    assert_eq!(regs.quantity(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_rtu_in_flight_abort_silent_slave_unblocks_on_timeout() -> Result<()> {
+    // Unit 2 is completely silent (never replies).
+    let bus = SimulatedRtuBus::new(2, Duration::from_millis(10));
+    let mut cfg = rtu_config("/dev/mock");
+    cfg.response_timeout_ms = 80;
+    let config = ModbusConfig::Serial(cfg);
+    let client = AsyncRtuClient::new_with_transport(bus, config, Duration::from_millis(1))?;
+    client.connect().await?;
+
+    let c1 = client.clone();
+    let c2 = client.clone();
+
+    // 1. Dispatch to silent unit
+    let h1 = tokio::spawn(async move { c1.read_holding_registers(2, 0, 1).await });
+
+    // 2. Abort while in-flight
+    tokio::time::sleep(Duration::from_millis(15)).await;
+    h1.abort();
+
+    // 3. Immediately dispatch to healthy unit 1
+    let t0 = std::time::Instant::now();
+    let r1 = c2.read_holding_registers(1, 0, 1).await;
+    let elapsed = t0.elapsed();
+
+    assert!(
+        r1.is_ok(),
+        "Healthy unit read failed after silent unit abort: {:?}",
+        r1.err()
+    );
+    // Verified that it waited for the silent unit turnaround window (~80ms) and unblocked
+    assert!(
+        elapsed >= Duration::from_millis(50),
+        "Elapsed: {:?}",
+        elapsed
+    );
+
+    Ok(())
+}
+
